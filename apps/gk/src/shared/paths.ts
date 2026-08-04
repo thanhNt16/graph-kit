@@ -6,18 +6,27 @@ function unsafePath(message: string): GraphKitError {
   return new GraphKitError("UNSAFE_PATH", message);
 }
 
-/** Decode repeatedly so double-encoded traversal (%252e) cannot hide `..`. */
+function hasTraversal(value: string): boolean {
+  return value.split(/[\\/]/).some((segment) => segment === "..");
+}
+
+/** Decode until stable; each successful encoded-octet pass strictly shortens input. */
 function decodeAll(input: string): string {
   let value = input;
-  for (let i = 0; i < 10; i++) {
-    const decoded = decodeURIComponent(value);
+  for (;;) {
+    if (hasTraversal(value)) throw unsafePath(`Traversal rejected: ${input}`);
+    let decoded: string;
+    try {
+      decoded = decodeURIComponent(value);
+    } catch {
+      throw unsafePath(`Malformed encoded path: ${input}`);
+    }
     if (decoded === value) return value;
     value = decoded;
   }
-  return value;
 }
 
-/** Realpath of the deepest existing ancestor of `path` plus any missing suffix. */
+/** Realpath deepest existing ancestor, preserving a missing suffix. */
 async function realpathOfExisting(path: string): Promise<string> {
   let current = path;
   const missing: string[] = [];
@@ -34,25 +43,16 @@ async function realpathOfExisting(path: string): Promise<string> {
   }
 }
 
-/**
- * Resolve `relative` under `base`, rejecting `..`, absolute segments, and
- * symlinks that resolve outside `base`. The returned path is always inside the
- * real `base` directory.
- */
+/** Resolve a relative path inside base, rejecting traversal, rooted paths, and escaping symlinks. */
 export async function safeResolve(base: string, relativePath: string): Promise<string> {
   const decoded = decodeAll(relativePath);
-  if (isAbsolute(decoded)) throw unsafePath(`Absolute path rejected: ${relative}`);
-  const segments = decoded.split(/[\\/]/).filter((s) => s !== "" && s !== ".");
-  if (segments.includes("..")) throw unsafePath(`Traversal rejected: ${relative}`);
-
-  const realBase = await realpathOfExisting(base);
-  const target = resolve(realBase, ...segments);
-  const resolved = await realpathOfExisting(target);
-
-  const rel = relative(realBase, resolved);
-  if (rel === "") return realBase;
-  if (rel === ".." || rel.startsWith(`..${sep}`) || isAbsolute(rel)) {
-    throw unsafePath(`Path escapes base: ${relative}`);
+  if (isAbsolute(decoded) || /^([A-Za-z]:[\\/]|\\\\|\\)/.test(decoded) || hasTraversal(decoded)) {
+    throw unsafePath(`Unsafe path rejected: ${relativePath}`);
   }
-  return resolved;
+  const realBase = await realpathOfExisting(base);
+  const target = resolve(realBase, ...decoded.split(/[\\/]/).filter((s) => s !== "" && s !== "."));
+  const resolved = await realpathOfExisting(target);
+  const rel = relative(realBase, resolved);
+  if (rel === "" || (rel !== ".." && !rel.startsWith(`..${sep}`) && !isAbsolute(rel))) return resolved;
+  throw unsafePath(`Path escapes base: ${relativePath}`);
 }

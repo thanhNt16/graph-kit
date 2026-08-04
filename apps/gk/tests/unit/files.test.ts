@@ -2,7 +2,8 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdtemp, readdir, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { appendEvent, withDirectoryLock, writeJsonAtomic } from "../../src/shared/files.js";
+import { appendEvent, writeJsonAtomic } from "../../src/shared/files.js";
+import { withDirectoryLock } from "../../src/shared/lock.js";
 
 let dir: string;
 
@@ -23,8 +24,7 @@ describe("writeJsonAtomic", () => {
   test("leaves no .tmp-* siblings behind", async () => {
     const target = join(dir, "run.json");
     await writeJsonAtomic(target, { a: 1 });
-    const entries = await readdir(dir);
-    expect(entries).toEqual(["run.json"]);
+    expect(await readdir(dir)).toEqual(["run.json"]);
   });
 
   test("refuses to overwrite an immutable checkpoint", async () => {
@@ -33,6 +33,30 @@ describe("writeJsonAtomic", () => {
     await expect(writeJsonAtomic(target, { v: 2 }, true)).rejects.toMatchObject({
       code: "MODIFIED_TARGET",
     });
+  });
+
+  test("concurrent immutable writers: exactly one succeeds", async () => {
+    const target = join(dir, "checkpoint.json");
+    const results = await Promise.allSettled([
+      writeJsonAtomic(target, { v: 1 }, true),
+      writeJsonAtomic(target, { v: 2 }, true),
+    ]);
+    const ok = results.filter((r) => r.status === "fulfilled").length;
+    const rejected = results.filter((r) => r.status === "rejected");
+    expect(ok).toBe(1);
+    expect(rejected.length).toBe(1);
+    expect(rejected[0].status).toBe("rejected");
+    if (rejected[0].status === "rejected") {
+      expect((rejected[0].reason as { code?: string }).code).toBe("MODIFIED_TARGET");
+    }
+    expect(await readdir(dir)).toEqual(["checkpoint.json"]);
+  });
+
+  test("failed write cleans up its temp directory", async () => {
+    const target = join(dir, "sub", "run.json");
+    await expect(writeJsonAtomic(target, { a: 1 })).rejects.toThrow();
+    const entries = await readdir(dir);
+    expect(entries.filter((e) => e.includes(".tmp-"))).toEqual([]);
   });
 });
 
@@ -43,6 +67,18 @@ describe("appendEvent", () => {
     await appendEvent(log, { seq: 2 });
     const lines = (await readFile(log, "utf8")).trim().split("\n");
     expect(lines.map((l) => JSON.parse(l))).toEqual([{ seq: 1 }, { seq: 2 }]);
+  });
+
+  test("only whole lines survive and no temp remains", async () => {
+    const log = join(dir, "events.jsonl");
+    await appendEvent(log, { a: 1 });
+    await appendEvent(log, { b: 2 });
+    const content = await readFile(log, "utf8");
+    expect(content.endsWith("\n")).toBe(true);
+    for (const line of content.split("\n").filter((l) => l.length > 0)) {
+      expect(() => JSON.parse(line)).not.toThrow();
+    }
+    expect(await readdir(dir)).toEqual(["events.jsonl"]);
   });
 });
 
@@ -58,5 +94,14 @@ describe("withDirectoryLock", () => {
       });
     };
     await Promise.all([record(1), record(2), record(3)]);
+  });
+
+  test("releases the lock when the callback throws", async () => {
+    await expect(
+      withDirectoryLock(dir, async () => {
+        throw new Error("boom");
+      }),
+    ).rejects.toThrow("boom");
+    await withDirectoryLock(dir, async () => {});
   });
 });

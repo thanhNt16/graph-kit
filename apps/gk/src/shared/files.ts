@@ -1,47 +1,69 @@
-import { open, rename } from "node:fs/promises";
+import { link, mkdtemp, open, readFile, rename, rm, unlink } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
-import lockfile from "proper-lockfile";
 import { GraphKitError } from "../errors.js";
+import { withDirectoryLock } from "./lock.js";
 
-/** Write `value` as JSON to `path` atomically: temp file + fsync + rename. */
-export async function writeJsonAtomic(path: string, value: unknown, immutable = false): Promise<void> {
-  if (immutable) {
-    try {
-      await open(path, "r");
-      throw new GraphKitError("MODIFIED_TARGET", `Refusing to overwrite immutable file: ${path}`);
-    } catch (err) {
-      if (err instanceof GraphKitError) throw err;
-      // ENOENT — file does not exist, proceed.
+/** Collision-safe sibling temp dir for `path`; caller writes a `data` file inside. */
+async function tempDirFor(path: string): Promise<string> {
+  return mkdtemp(join(dirname(path), `.${basename(path)}.tmp-${process.pid}-`));
+}
+
+/**
+ * Publish `source` to `target` without ever replacing an existing file.
+ * Hard link is atomic and fails with EEXIST if `target` exists; the temp
+ * source is then unlinked. Exactly one concurrent writer succeeds.
+ */
+async function publishCreateOnly(source: string, target: string): Promise<void> {
+  try {
+    await link(source, target);
+  } catch (err) {
+    await unlink(source).catch(() => {});
+    if ((err as { code?: string }).code === "EEXIST") {
+      throw new GraphKitError("MODIFIED_TARGET", `Refusing to overwrite immutable file: ${target}`);
     }
+    throw err;
   }
-
-  const tmp = join(dirname(path), `.${basename(path)}.tmp-${process.pid}`);
-  const handle = await open(tmp, "w");
-  try {
-    await handle.writeFile(JSON.stringify(value, null, 2));
-    await handle.sync();
-  } finally {
-    await handle.close();
-  }
-  await rename(tmp, path);
+  await unlink(source).catch(() => {});
 }
 
-/** Append `event` as one JSON line to `path`, creating it if needed. */
+/** Atomic write of raw `content`: sibling temp file + fsync + rename (or create-only publish). */
+async function writeFileAtomic(path: string, content: string, immutable: boolean): Promise<void> {
+  const tempDir = await tempDirFor(path);
+  const tmp = join(tempDir, "data");
+  try {
+    const handle = await open(tmp, "w");
+    try {
+      await handle.writeFile(content);
+      await handle.sync();
+    } finally {
+      await handle.close();
+    }
+    if (immutable) {
+      await publishCreateOnly(tmp, path);
+    } else {
+      await rename(tmp, path);
+    }
+  } finally {
+    await rm(tempDir, { recursive: true, force: true });
+  }
+}
+
+/** Write `value` as JSON to `path` atomically. If `immutable`, never overwrites. */
+export async function writeJsonAtomic(path: string, value: unknown, immutable = false): Promise<void> {
+  await writeFileAtomic(path, JSON.stringify(value, null, 2), immutable);
+}
+
+/**
+ * Append `event` as a whole JSON line to `path`, crash-safe: read existing
+ * content, append exactly one line in memory, then atomic temp+rename. Never
+ * leaves a truncated line or a temp file behind.
+ */
 export async function appendEvent(path: string, event: unknown): Promise<void> {
-  const handle = await open(path, "a");
-  try {
-    await handle.writeFile(`${JSON.stringify(event)}\n`);
-  } finally {
-    await handle.close();
-  }
-}
-
-/** Run `fn` while holding an exclusive lock on `dir`; release on exit. */
-export async function withDirectoryLock<T>(dir: string, fn: () => Promise<T>): Promise<T> {
-  const release = await lockfile.lock(dir, { realpath: false, retries: { retries: 20 } });
-  try {
-    return await fn();
-  } finally {
-    await release();
-  }
+  await withDirectoryLock(dirname(path), async () => {
+    const existing = await readFile(path, "utf8").catch((err) => {
+      if ((err as { code?: string }).code === "ENOENT") return "";
+      throw err;
+    });
+    await writeFileAtomic(path, `${existing}${JSON.stringify(event)}\n`, false);
+  });
 }
