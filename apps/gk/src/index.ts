@@ -5,7 +5,7 @@ import { GraphKitError } from "./errors.js";
 async function main() {
   const cli = createCli();
   try {
-    cli.cli.parse(process.argv.slice(2), { run: true });
+    cli.cli.parse(process.argv, { run: true });
   } catch (err) {
     if (err instanceof GraphKitError) {
       const envelope = fail(err.code, err.message, err.recoverable, err.details);

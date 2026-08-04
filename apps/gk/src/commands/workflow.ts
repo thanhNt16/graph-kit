@@ -387,6 +387,7 @@ export async function submitWorkflow(
             lease: spec.lease,
             actor: spec.actor ?? "human",
             timestamp: new Date().toISOString(),
+            details: { action: output, verdict: spec.verdict ?? "passed" },
           },
         };
       }
@@ -413,6 +414,7 @@ export async function submitWorkflow(
             lease: spec.lease,
             actor: spec.actor ?? "worker",
             timestamp: new Date().toISOString(),
+            details: { verdict, work_item: spec.work_item, output },
           },
         };
       }
@@ -556,19 +558,43 @@ export async function executeWorkflow(
       d.run.verdict = decision.verdict;
       d.run.status = "done";
       d.run.current_nodes = [];
-      return d;
+      return {
+        documents: d,
+        event: {
+          type: "command",
+          node: completed,
+          timestamp: new Date().toISOString(),
+          details: { argv, exit_code },
+        },
+      };
     }
     d.run.iteration += 1;
     if (workflow.limits?.max_iterations && d.run.iteration > workflow.limits.max_iterations) {
       d.run.verdict = "limit-exceeded";
       d.run.status = "done";
       d.run.current_nodes = [];
-      return d;
+      return {
+        documents: d,
+        event: {
+          type: "command",
+          node: completed,
+          timestamp: new Date().toISOString(),
+          details: { argv, exit_code },
+        },
+      };
     }
     if (decision.failures !== undefined) d.run.failures = decision.failures;
     d.run.current_nodes = decision.next;
     d.run.completed_deterministic_nodes = [...(d.run.completed_deterministic_nodes ?? []), completed];
-    return d;
+    return {
+      documents: d,
+      event: {
+        type: "command",
+        node: completed,
+        timestamp: new Date().toISOString(),
+        details: { argv, exit_code },
+      },
+    };
   });
   return { argv, shell: false, stdout, stderr, exit_code };
 }

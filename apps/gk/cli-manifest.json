@@ -1,0 +1,78 @@
+{
+  "cli": "gk",
+  "version": "0.1.0",
+  "commands": [
+    {
+      "name": "template list",
+      "options": ["--json"]
+    },
+    {
+      "name": "template inspect",
+      "options": ["--json"]
+    },
+    {
+      "name": "template new",
+      "options": ["--json"]
+    },
+    {
+      "name": "template validate",
+      "options": ["--json"]
+    },
+    {
+      "name": "template render",
+      "options": ["--json"]
+    },
+    {
+      "name": "template install",
+      "options": ["--json"]
+    },
+    {
+      "name": "template diff",
+      "options": ["--json"]
+    },
+    {
+      "name": "template update",
+      "options": ["--json"]
+    },
+    {
+      "name": "template remove",
+      "options": ["--json"]
+    },
+    {
+      "name": "workflow start",
+      "options": ["--json"]
+    },
+    {
+      "name": "workflow next",
+      "options": ["--json"]
+    },
+    {
+      "name": "workflow execute",
+      "options": ["--json"]
+    },
+    {
+      "name": "workflow submit",
+      "options": ["--json"]
+    },
+    {
+      "name": "workflow status",
+      "options": ["--json"]
+    },
+    {
+      "name": "workflow trace",
+      "options": ["--json"]
+    },
+    {
+      "name": "workflow graph",
+      "options": ["--json"]
+    },
+    {
+      "name": "evidence report",
+      "options": ["--json"]
+    },
+    {
+      "name": "manifest generate",
+      "options": ["--json"]
+    }
+  ]
+}
