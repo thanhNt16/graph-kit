@@ -1,9 +1,58 @@
 # Task 6 Report: Workflow Contracts, Submission, Parallel Fan-In, Human Resume
 
+# Task 6 Report: Workflow Contracts, Submission, Parallel Fan-In, Human Resume
+
 ## Status
+
+FIX ROUND 3 DONE. Commit `d55bcca` (implementation). Prior: `fbdd78d`, `a5eae0c`, `964ce0c`.
+
+## Test evidence (actual command output — Round 3)
+
+```
+$ bun test tests/integration/workflow.test.ts
+ 22 pass
+ 0 fail
+ 86 expect() calls
+Ran 22 tests across 1 file.
+
+$ bun test
+ 112 pass
+ 0 fail
+ 288 expect() calls
+Ran 112 tests across 11 files.
+
+$ bun run typecheck   → OK (tsc --noEmit clean)
+$ bun run lint        → OK (biome check, 35 files, no fixes applied)
+$ bun run build       → OK (dist/index.js, 5 modules)
+```
+
+## Fixes per finding (Round 3)
+
+1. **CRITICAL — concurrent join/next race fixed (stale-mutation guard).** `mutateRun` accepts an optional `skip` result: when the join/router mutator detects `d.run.current_nodes[0] !== captured current || status !== "running"`, it returns documents unchanged with `skip: true` — no event, no checkpoint, no iteration increment. Caller re-reads/recurses so the returned contract reflects the actual current node. Test "concurrent next at join advances exactly once": `max_iterations: 1` (would prematurely `limit-exceeded` on double-advance), two `Promise.all(next, next)` → both agent contracts, `current_nodes` stays `summarize`, `iteration` increments exactly once, exactly one join `command` event/checkpoint.
+
+2. **CRITICAL — post-dispatch expiry deadlock fixed (fanout-authoritative dispatch).** Dispatch now keeps `current_nodes` on the fanout, not the worker — the fanout stays the dispatch authority so the expiry-recovery branch is always reachable at `next`. `submitWorkflow` resolves the submitting worker via the lease record (`d.leases.find(id).node`) while the cursor remains on the fanout; non-fanout agent behavior unchanged (lease absent → current node). Tests: "waits at fanout while one required item remains in flight" (empty-wait dispatch before expiry); new "post-dispatch expiry reissues while fanout remains authoritative" (dispatch → stale lease via time-rewrite → next reissues fresh lease, cursor stays `fan`, distinct lease ID); "expired in-flight lease is recovered…" still green (old lease `status: "expired"`, reissue, old submit rejected `LEASE_EXPIRED` with reject event code/actor/lease/node).
+
+3. **REJECTION GAP closed.** Missing output-schema path now wraps in `rejectEvent(SCHEMA_VIOLATION)` before throw; submit catch handles every GraphKitError uniformly; pre-lock non-agent/unknown-target also logged. Human paused-node submission re-allowed via `status === "paused" && human` guard in the mutator.
+
+## Files changed (Round 3)
+
+- `src/runtime/store.ts` — `MutationResult.skip` opt-out (skip event/checkpoint inside `mutateRun`)
+- `src/commands/workflow.ts` — stale guard on join/router; fanout-authoritative dispatch; lease-driven submit node resolution; schema-miss reject logging
+- `tests/integration/workflow.test.ts` — +2 tests (join race, post-dispatch expiry), 22 total
+
+## Concerns
+
+- `MutationResult.skip` is an internal escape hatch; only the join/router stale path uses it. Store unit tests unaffected.
+- Cursor-on-fanout means chain (non-fan) agents resolve submit by cursor; fan workers resolve via lease. Getting the distinction wrong in a future caller would silently target the wrong node — documented in `submitWorkflow` comment block.
+- `fanoutTarget` untargeted-agent topology heuristic retained; `required_evidence: []` until Task 9.
+
+---
+
+## Status (Round 2)
 
 FIX ROUND 2 DONE. Commits: `fbdd78d` (implementation), `5ecb33a`/`a5eae0c` (prior).
 
+## Test evidence (Round 2)
 ## Test evidence (actual command output)
 
 `cd apps/gk && bun test` → `110 pass, 0 fail` (11 files; includes 20 workflow integration tests).
