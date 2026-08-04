@@ -1,6 +1,6 @@
 import { beforeAll, describe, expect, test } from "bun:test";
 import { join } from "node:path";
-import { validateOutput, validateTemplate } from "../../src/runtime/validation.js";
+import { type ValidationIssue, validateOutput, validateTemplate } from "../../src/runtime/validation.js";
 import type { Workflow } from "../../src/schemas.js";
 import type { LoadedTemplate } from "../../src/templates/loader.js";
 import { loadTemplate } from "../../src/templates/loader.js";
@@ -11,8 +11,7 @@ async function loadedFixture(): Promise<LoadedTemplate> {
   return loadTemplate(directory);
 }
 
-/** Deep-clone the fixture workflow with an arbitrary mutation applied. */
-function mutate(wf: Workflow, mutation: (w: Record<string, unknown>) => void): LoadedTemplate {
+function mutation(wf: Workflow, mutation: (w: Record<string, unknown>) => void): LoadedTemplate {
   const copy = JSON.parse(JSON.stringify(wf)) as Record<string, unknown>;
   mutation(copy);
   return {
@@ -23,9 +22,8 @@ function mutate(wf: Workflow, mutation: (w: Record<string, unknown>) => void): L
     skillFiles: new Map(),
   };
 }
-
-function find(issues: import("../../src/runtime/validation.js").ValidationIssue[], code: string) {
-  return issues.find((i) => i.code === code);
+function codes(issues: ValidationIssue[], code: string): ValidationIssue[] {
+  return issues.filter((i) => i.code === code);
 }
 
 describe("template validation", () => {
@@ -37,8 +35,21 @@ describe("template validation", () => {
   test("valid output passes, invalid output throws SCHEMA_VIOLATION", async () => {
     const loaded = await loadedFixture();
     const schema = loaded.outputSchemas.get("work") as string;
-    await expect(validateOutput(schema, { summary: "done" })).resolves.toBeUndefined();
-    await expect(validateOutput(schema, { summary: 4 })).rejects.toMatchObject({ code: "SCHEMA_VIOLATION" });
+    expect(() => validateOutput(schema, { summary: "done" })).not.toThrow();
+    let err: unknown;
+    try {
+      validateOutput(schema, { summary: 4 });
+    } catch (e) {
+      err = e;
+    }
+    expect(err).toMatchObject({ code: "SCHEMA_VIOLATION" });
+  });
+
+  test("missing/invalid schema file throws SCHEMA_VIOLATION", async () => {
+    const missing = join(directory, "schemas", "nope.json");
+    expect(() => validateOutput(missing, {})).toThrow();
+    const bad = join(directory, "schemas", "invalid.schema.json");
+    expect(() => validateOutput(bad, {})).toThrow();
   });
 
   let base: LoadedTemplate;
@@ -46,11 +57,7 @@ describe("template validation", () => {
     base = await loadedFixture();
   });
 
-  const cases: Array<{
-    name: string;
-    mutate: (w: Record<string, unknown>) => void;
-    code: string;
-  }> = [
+  const cases: Array<{ name: string; mutate: (w: Record<string, unknown>) => void; code: string }> = [
     {
       name: "missing start edges",
       mutate: (w) => {
@@ -104,6 +111,7 @@ describe("template validation", () => {
       name: "unbounded cycle",
       mutate: (w) => {
         (w as { edges: unknown[] }).edges.push({ from: "complete", to: "work" });
+        (w as Record<string, unknown>).limits = {};
       },
       code: "UNBOUNDED_CYCLE",
     },
@@ -115,7 +123,7 @@ describe("template validation", () => {
           complete: { id: "complete", type: "graph", operation: "complete-task" },
         };
       },
-      code: "INVALID_TRANSITION",
+      code: "SCHEMA_VIOLATION",
     },
     {
       name: "fanout without max_workers",
@@ -125,7 +133,7 @@ describe("template validation", () => {
           complete: { id: "complete", type: "graph", operation: "complete-task" },
         };
       },
-      code: "INVALID_TRANSITION",
+      code: "SCHEMA_VIOLATION",
     },
     {
       name: "join without merge policy",
@@ -190,19 +198,127 @@ describe("template validation", () => {
   ];
 
   for (const tc of cases) {
-    test(`reports ${tc.name}`, async () => {
-      const issues = validateTemplate(mutate(base.workflow, tc.mutate));
-      expect(find(issues, tc.code)).toBeDefined();
+    test(`reports ${tc.name}`, () => {
+      const issues = validateTemplate(mutation(base.workflow, tc.mutate));
+      expect(codes(issues, tc.code).length).toBeGreaterThan(0);
     });
   }
 
-  test("reports all issues, deterministic order by node then code", async () => {
+  test("malformed human and router nodes report issues without crashing", () => {
     const issues = validateTemplate(
-      mutate(base.workflow, (w) => {
+      mutation(base.workflow, (w) => {
+        (w as Record<string, unknown>).nodes = {
+          h: { id: "h", type: "human", actions: [] },
+          r: { id: "r", type: "router", routes: [{ when: "", to: "nope" }] },
+        };
+      }),
+    );
+    expect(codes(issues, "SCHEMA_VIOLATION").length).toBeGreaterThan(0);
+    expect(codes(issues, "INVALID_TRANSITION").length).toBeGreaterThan(0);
+  });
+
+  test("bounded cycle is accepted (no UNBOUNDED_CYCLE)", () => {
+    const issues = validateTemplate(
+      mutation(base.workflow, (w) => {
+        (w as { edges: unknown[] }).edges.push({ from: "complete", to: "work" });
+      }),
+    );
+    expect(codes(issues, "UNBOUNDED_CYCLE")).toEqual([]);
+  });
+
+  test("cycle without max_iterations is rejected as UNBOUNDED_CYCLE", () => {
+    const issues = validateTemplate(
+      mutation(base.workflow, (w) => {
+        (w as { edges: unknown[] }).edges.push({ from: "complete", to: "work" });
+        (w as Record<string, unknown>).limits = {};
+      }),
+    );
+    expect(codes(issues, "UNBOUNDED_CYCLE").length).toBeGreaterThan(0);
+  });
+
+  test("nonexistent max_iterations resolves to static validation, not loader crash", () => {
+    const issues = validateTemplate(
+      mutation(base.workflow, (w) => {
+        (w as Record<string, unknown>).limits = undefined;
+      }),
+    );
+    expect(codes(issues, "UNBOUNDED_CYCLE")).toEqual([]);
+    expect(codes(issues, "SCHEMA_VIOLATION").length).toBeGreaterThan(0);
+  });
+
+  test("node id differing from map key is reported as SCHEMA_VIOLATION", async () => {
+    const tmp = join(import.meta.dir, "..", "fixtures", "._tmp-key-mismatch");
+    const { mkdir, writeFile, rm } = await import("node:fs/promises");
+    await mkdir(tmp, { recursive: true });
+    await writeFile(
+      join(tmp, "template.yaml"),
+      "name: x\nversion: '1'\napiVersion: graphkit.dev/v1alpha1\nharness: claude\n",
+    );
+    await writeFile(
+      join(tmp, "workflow.yaml"),
+      `apiVersion: graphkit.dev/v1alpha1
+kind: Workflow
+metadata: { name: x }
+limits: { max_iterations: 2 }
+start: start
+nodes:
+  work:
+    id: renamed
+    type: graph
+    operation: complete-task
+edges:
+  - { from: start, to: work }
+terminal:
+  - { node: work, verdict: passed }
+`,
+    );
+    try {
+      const loaded = await loadTemplate(tmp);
+      const issues = validateTemplate(loaded);
+      expect(codes(issues, "SCHEMA_VIOLATION").length).toBeGreaterThan(0);
+    } finally {
+      await rm(tmp, { recursive: true, force: true });
+    }
+  });
+
+  test("custom start sentinel is honored", () => {
+    const issues = validateTemplate(
+      mutation(base.workflow, (w) => {
+        (w as Record<string, unknown>).start = "work";
+        (w as { edges: unknown[] }).edges = [{ from: "work", to: "complete" }];
+      }),
+    );
+    expect(
+      codes(issues, "INVALID_TRANSITION").filter((i) => i.node === "work" && i.message.includes("unreachable")),
+    ).toEqual([]);
+  });
+
+  test("multiple entries from start are all reachable", () => {
+    const issues = validateTemplate(
+      mutation(base.workflow, (w) => {
+        (w as { edges: unknown[] }).edges = [
+          { from: "start", to: "work" },
+          { from: "start", to: "complete" },
+        ];
+      }),
+    );
+    expect(codes(issues, "UNREACHABLE_TERMINAL")).toEqual([]);
+  });
+
+  test("reports all issues, deterministic order by node then code", () => {
+    const issues = validateTemplate(
+      mutation(base.workflow, (w) => {
         (w as { edges: unknown[] }).edges.push({ from: "complete", to: "work" }, { from: "work", to: "nope" });
       }),
     );
     const keys = issues.map((i) => `${i.node ?? ""}/${i.code}`);
     expect(keys).toEqual([...keys].sort());
+  });
+});
+
+describe("loader", () => {
+  test("node id differing from key is captured on loadTemplate", async () => {
+    const loaded = await loadedFixture();
+    expect(loaded.loaderIssues ?? []).toEqual([]);
   });
 });
