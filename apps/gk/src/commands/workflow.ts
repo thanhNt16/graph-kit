@@ -59,17 +59,17 @@ function workItem(item: unknown): string {
 function fanoutTarget(workflow: Workflow, fanId: string): string {
   const fan = nodeFor(workflow, fanId);
   if (fan.type !== "fanout") throw new GraphKitError("INVALID_TRANSITION", `'${fanId}' is not a fanout`);
-  // Find the agent whose save_as field holds the fanout's work items — that's the
-  // worker that reports results for each item. No declarative edge, so scan.
   const agents = Object.values(workflow.nodes).filter(
     (n): n is Workflow["nodes"][string] & { type: "agent" } => n.type === "agent",
   );
-  for (const agent of agents) {
-    if (agent.output.save_as === fan.from) return agent.id;
+  const targeted = new Set(
+    workflow.edges.flatMap((edge) => (edge.from === fanId ? [] : Array.isArray(edge.to) ? edge.to : [edge.to])),
+  );
+  const candidates = agents.filter((agent) => !targeted.has(agent.id));
+  if (candidates.length !== 1) {
+    throw new GraphKitError("SCHEMA_VIOLATION", `fanout '${fanId}' requires one unambiguously untargeted agent worker`);
   }
-  // Fallback: first agent node
-  if (agents.length) return agents[0].id;
-  throw new GraphKitError("INVALID_TRANSITION", `fanout '${fanId}' has no agent worker node`);
+  return candidates[0].id;
 }
 
 /** The join node that collects a fanout's field, if any. */
@@ -125,7 +125,7 @@ function emptyDispatch(loaded: LoadedTemplate, fanId: string): DispatchContract 
   };
 }
 
-/** Build a dispatch contract, issuing one fresh lease per available slot. Pure. */
+/** Build a dispatch contract, issuing one fresh lease per available slot. Call under the run lock. */
 function dispatchContract(
   loaded: LoadedTemplate,
   run: Run,
@@ -292,9 +292,17 @@ export async function nextWorkflow(project: string, loaded: LoadedTemplate, runI
     }
     case "join":
     case "router": {
-      const decision = selectTransition({ workflow, run, scope, completed: current });
-      if ("terminal" in decision) return { kind: "terminal", verdict: decision.verdict };
-      return deterministicOrAgent(loaded, run, decision.next[0], state);
+      // Persist the completed join/router transition under the lock so the run's
+      // current node becomes the chosen successor (e.g. an aggregator agent).
+      // Recurse so the returned contract reflects the new current node.
+      await mutateRun(project, runId, (d) => {
+        const nextDocs = advance(workflow, d, current, "passed", {});
+        return {
+          documents: nextDocs,
+          event: { type: "command", node: current, timestamp: new Date().toISOString() },
+        };
+      });
+      return nextWorkflow(project, loaded, runId);
     }
     default:
       throw new GraphKitError("INVALID_TRANSITION", `no contract for node '${current}'`);
@@ -305,35 +313,6 @@ function stripInputs(state: Record<string, unknown>): Record<string, unknown> {
   const { [INPUTS_KEY]: _inputs, ...rest } = state;
   void _inputs;
   return rest;
-}
-
-/** Wrap a following node as a contract; falls back to an empty deterministic shell. */
-function deterministicOrAgent(
-  loaded: LoadedTemplate,
-  run: Run,
-  next: string,
-  state: Record<string, unknown>,
-): WorkflowContract {
-  const workflow = loaded.workflow;
-  const node = nodeFor(workflow, next);
-  if (node.type === "agent")
-    return {
-      kind: "agent",
-      node: next,
-      objective: node.objective,
-      context: { inputs: (state["__inputs"] as Record<string, unknown>) ?? {}, state: stripInputs(state) },
-      tool_allowlist: node.tools,
-      skill: node.skill,
-      limits: workflow.limits ?? {},
-      required_evidence: [],
-      output_schema: loaded.outputSchemas.get(next) ?? "",
-      output_save_as: node.output.save_as,
-      submit_argv: [...SUBMIT_CMD, run.run_id, next],
-    };
-  if (node.type === "graph") return { kind: "deterministic", node: next, argv: [node.operation] };
-  if (node.type === "command") return { kind: "deterministic", node: next, argv: node.command };
-  if (node.type === "validator") return { kind: "deterministic", node: next, argv: node.checks };
-  return { kind: "deterministic", node: next, argv: [] };
 }
 
 export async function submitWorkflow(
@@ -348,7 +327,7 @@ export async function submitWorkflow(
   const node = before.run.current_nodes[0];
   if (before.run.status === "done" || !node || !workflow.nodes[node]) {
     const err = new GraphKitError("INVALID_TRANSITION", "run is no longer accepting submissions");
-    await reject(project, runId, err.code, node ?? "start", spec, err);
+    await rejectEvent(project, runId, err.code, node ?? "start", spec, err);
     throw err;
   }
   const nodeDef = nodeFor(workflow, node);
@@ -361,14 +340,14 @@ export async function submitWorkflow(
     try {
       validateOutput(schema, output);
     } catch (err) {
-      await reject(project, runId, "SCHEMA_VIOLATION", node, spec, err);
+      await rejectEvent(project, runId, "SCHEMA_VIOLATION", node, spec, err);
       throw err;
     }
     saveAs = nodeDef.output.save_as;
   }
   if (nodeDef.type === "human" && typeof output !== "string") {
     const err = new GraphKitError("SCHEMA_VIOLATION", "human submission must be an action string");
-    await reject(project, runId, "SCHEMA_VIOLATION", node, spec, err);
+    await rejectEvent(project, runId, "SCHEMA_VIOLATION", node, spec, err);
     throw err;
   }
 
@@ -441,16 +420,14 @@ export async function submitWorkflow(
       };
     });
   } catch (err) {
-    if (err instanceof GraphKitError && (err.code === "LEASE_INVALID" || err.code === "LEASE_EXPIRED")) {
-      await reject(project, runId, err.code, node, spec, err);
-    }
+    if (err instanceof GraphKitError) await rejectEvent(project, runId, err.code, node, spec, err);
     throw err;
   }
 
   return { documents: result.documents, state: result.documents.state, run: result.documents.run };
 }
 
-async function reject(
+async function rejectEvent(
   project: string,
   runId: string,
   code: string,
@@ -463,7 +440,7 @@ async function reject(
     run_id: runId,
     node,
     lease: spec.lease,
-    actor: spec.actor,
+    actor: spec.actor ?? (code === "INVALID_TRANSITION" ? "system" : undefined),
     timestamp: new Date().toISOString(),
     details: { code, message: cause instanceof Error ? cause.message : String(cause), work_item: spec.work_item },
   });

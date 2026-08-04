@@ -227,6 +227,10 @@ describe("workflow contracts", () => {
     expect(agg.output_schema).toContain("result.schema.json");
     expect(agg.output_save_as).toBe("result");
     expect(agg.submit_argv).toEqual(["gk", "workflow", "submit", "r1", "summarize"]);
+    await submitWorkflow(project, loaded, "r1", { summary: "all done" }, { actor: "aggregator" });
+    const after = await readRun(project, "r1");
+    expect(after.state.result).toEqual({ summary: "all done" });
+    expect(after.run.current_nodes).toEqual(["done"]);
   });
 });
 
@@ -359,6 +363,47 @@ describe("parallel dispatch and fan-in", () => {
     expect((await readRun(project, "r1")).run.verdict).toBeNull();
   });
 
+  test("fanout with ambiguous agent worker rejects", async () => {
+    const ambiguous = makeLoaded({
+      apiVersion: "graphkit.dev/v1alpha1",
+      kind: "Workflow",
+      metadata: { name: "ambiguous" },
+      inputs: {},
+      limits: { max_iterations: 10, max_workers: 2 },
+      state: { items: { merge: "append_unique", identity: "name" } },
+      start: "start",
+      nodes: {
+        fan: { id: "fan", type: "fanout", from: "items", max_workers: 2 },
+        work: {
+          id: "work",
+          type: "agent",
+          skill: "worker",
+          objective: "Process.",
+          tools: [],
+          output: { schema: "schemas/result.schema.json", save_as: "result" },
+        },
+        work2: {
+          id: "work2",
+          type: "agent",
+          skill: "worker",
+          objective: "Process too.",
+          tools: [],
+          output: { schema: "schemas/result.schema.json", save_as: "result2" },
+        },
+        join: { id: "join", type: "join", merge: "items" },
+        done: { id: "done", type: "graph", operation: "complete-task" },
+      },
+      edges: [
+        { from: "start", to: "fan" },
+        { from: "fan", to: "join" },
+        { from: "join", to: "done" },
+      ],
+      terminal: [{ node: "done", verdict: "passed" }],
+    });
+    await startWorkflow(project, ambiguous, { items: [{ name: "i1" }] }, "r1");
+    await expect(nextWorkflow(project, ambiguous, "r1")).rejects.toMatchObject({ code: "SCHEMA_VIOLATION" });
+  });
+
   test("fan-in joins once all-settled with explicit merge policy", async () => {
     const loaded = fanLoaded();
     await startWorkflow(project, loaded, { items: [{ name: "i1" }, { name: "i2" }, { name: "i3" }] }, "r1");
@@ -478,6 +523,40 @@ describe("parallel dispatch and fan-in", () => {
     const docs = await readRun(project, "r1");
     expect(docs.run.current_nodes).toEqual(["complete"]);
     expect(docs.run.verdict).toBeNull();
+    const reject = (await readEvents()).filter((e) => e.type === "reject").at(-1);
+    expect(reject).toMatchObject({
+      type: "reject",
+      node: "complete",
+      actor: "system",
+      details: { code: "INVALID_TRANSITION" },
+    });
+  });
+
+  test("worker submit event and latest checkpoint carry lease and actor", async () => {
+    const loaded = fanLoaded();
+    await startWorkflow(project, loaded, { items: [{ name: "i1" }, { name: "i2" }] }, "r1");
+    const dispatch = await nextWorkflow(project, loaded, "r1");
+    if (dispatch.kind !== "dispatch") throw new Error("expected dispatch");
+    const a = dispatch.items[0];
+    await submitWorkflow(
+      project,
+      loaded,
+      "r1",
+      { summary: "s1" },
+      { lease: a.lease.id, work_item: a.work_item, node: a.node, verdict: "passed", actor: "worker" },
+    );
+    const events = await readEvents();
+    const submit = events.find((e) => e.type === "submit" && e.lease === a.lease.id);
+    expect(submit).toMatchObject({ type: "submit", node: "work", lease: a.lease.id, actor: "worker" });
+    const { readdir, readFile } = await import("node:fs/promises");
+    const cpDir = join(project, ".graphkit", "runs", "r1", "checkpoints");
+    const newest = (await readdir(cpDir))
+      .filter((f) => f.endsWith(".json"))
+      .sort()
+      .at(-1) as string;
+    const cp = JSON.parse(await readFile(join(cpDir, newest), "utf8"));
+    expect(cp.provenance.actor).toBe("worker");
+    expect(cp.provenance.lease).toBe(a.lease.id);
   });
 
   test("concurrent Promise.all submits serialize under the lock", async () => {
