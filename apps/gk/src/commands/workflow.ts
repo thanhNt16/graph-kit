@@ -253,7 +253,6 @@ export async function nextWorkflow(project: string, loaded: LoadedTemplate, runI
           for (const item of contract.items) {
             d.run.in_flight[item.work_item] = item.lease.id;
             d.leases.push(item.lease);
-            d.run.current_nodes = [item.node];
           }
         } else if (!fanIsComplete(workflow, current, d)) {
           d.run.current_nodes = [current];
@@ -292,13 +291,13 @@ export async function nextWorkflow(project: string, loaded: LoadedTemplate, runI
     }
     case "join":
     case "router": {
-      // Persist the completed join/router transition under the lock so the run's
-      // current node becomes the chosen successor (e.g. an aggregator agent).
-      // Recurse so the returned contract reflects the new current node.
       await mutateRun(project, runId, (d) => {
-        const nextDocs = advance(workflow, d, current, "passed", {});
+        // Stale guard: a concurrent caller may already have advanced this node.
+        if (d.run.current_nodes[0] !== current || d.run.status !== "running") {
+          return { documents: d, event: { type: "command", node: current, timestamp: "" }, skip: true };
+        }
         return {
-          documents: nextDocs,
+          documents: advance(workflow, d, current, "passed", {}),
           event: { type: "command", node: current, timestamp: new Date().toISOString() },
         };
       });
@@ -330,13 +329,20 @@ export async function submitWorkflow(
     await rejectEvent(project, runId, err.code, node ?? "start", spec, err);
     throw err;
   }
-  const nodeDef = nodeFor(workflow, node);
+  // The mutating node: when the run cursor sits on a fanout, the lease records
+  // which worker submitted (cursor stays on the fanout; submit is by lease).
+  const effectiveNodeId = spec.lease ? (before.leases.find((l) => l.id === spec.lease)?.node ?? node) : node;
+  const nodeDef = workflow.nodes[effectiveNodeId];
 
   // Validate output against the schema BEFORE taking the mutation lock.
   let saveAs: string | undefined;
   if (nodeDef.type === "agent") {
-    const schema = loaded.outputSchemas.get(node);
-    if (!schema) throw new GraphKitError("SCHEMA_VIOLATION", "no output schema for agent node");
+    const schema = loaded.outputSchemas.get(effectiveNodeId);
+    if (!schema) {
+      const err = new GraphKitError("SCHEMA_VIOLATION", "no output schema for agent node");
+      await rejectEvent(project, runId, "SCHEMA_VIOLATION", node, spec, err);
+      throw err;
+    }
     try {
       validateOutput(schema, output);
     } catch (err) {
@@ -347,7 +353,7 @@ export async function submitWorkflow(
   }
   if (nodeDef.type === "human" && typeof output !== "string") {
     const err = new GraphKitError("SCHEMA_VIOLATION", "human submission must be an action string");
-    await rejectEvent(project, runId, "SCHEMA_VIOLATION", node, spec, err);
+    await rejectEvent(project, runId, "SCHEMA_VIOLATION", node ?? effectiveNodeId, spec, err);
     throw err;
   }
 
@@ -355,11 +361,16 @@ export async function submitWorkflow(
   try {
     result = await mutateRun(project, runId, (d) => {
       const current = d.run.current_nodes[0];
-      let cur =
-        current === workflow.start && spec.lease
-          ? nodeFor(workflow, d.leases.find((l) => l.id === spec.lease)?.node ?? current)
-          : nodeFor(workflow, current);
-      if (cur.type === "fanout" && spec.lease) cur = nodeFor(workflow, fanoutTarget(workflow, cur.id));
+      if (
+        !current ||
+        !workflow.nodes[current] ||
+        (d.run.status !== "running" && !(d.run.status === "paused" && workflow.nodes[current].type === "human"))
+      ) {
+        throw new GraphKitError("INVALID_TRANSITION", `run is no longer accepting submissions`);
+      }
+      // Resolve cur by lease first; fall back to cursor node.
+      const leaseRecord = spec.lease ? d.leases.find((l) => l.id === spec.lease) : undefined;
+      const cur = leaseRecord ? nodeFor(workflow, leaseRecord.node) : nodeFor(workflow, current);
 
       if (spec.lease) {
         validateLease({ leases: d.leases, now: Date.now(), id: spec.lease, work_item: spec.work_item ?? "" });
@@ -420,7 +431,7 @@ export async function submitWorkflow(
       };
     });
   } catch (err) {
-    if (err instanceof GraphKitError) await rejectEvent(project, runId, err.code, node, spec, err);
+    if (err instanceof GraphKitError) await rejectEvent(project, runId, err.code, node ?? effectiveNodeId, spec, err);
     throw err;
   }
 

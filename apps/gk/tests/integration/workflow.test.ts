@@ -363,6 +363,81 @@ describe("parallel dispatch and fan-in", () => {
     expect((await readRun(project, "r1")).run.verdict).toBeNull();
   });
 
+  test("concurrent next at join advances exactly once", async () => {
+    const raceLoaded = makeLoaded({
+      apiVersion: "graphkit.dev/v1alpha1",
+      kind: "Workflow",
+      metadata: { name: "race" },
+      inputs: {},
+      limits: { max_iterations: 1, max_workers: 2 },
+      state: { items: { merge: "append_unique", identity: "name" }, result: { merge: "replace" } },
+      start: "start",
+      nodes: {
+        fan: { id: "fan", type: "fanout", from: "items", max_workers: 2 },
+        work: {
+          id: "work",
+          type: "agent",
+          skill: "worker",
+          objective: "Process.",
+          tools: [],
+          output: { schema: "schemas/result.schema.json", save_as: "result" },
+        },
+        join: { id: "join", type: "join", merge: "items" },
+        summarize: {
+          id: "summarize",
+          type: "agent",
+          skill: "worker",
+          objective: "Aggregate.",
+          tools: [],
+          output: { schema: "schemas/result.schema.json", save_as: "result" },
+        },
+        done: { id: "done", type: "graph", operation: "complete-task" },
+      },
+      edges: [
+        { from: "start", to: "fan" },
+        { from: "fan", to: "join" },
+        { from: "join", to: "summarize" },
+        { from: "summarize", to: "done" },
+      ],
+      terminal: [{ node: "done", verdict: "passed" }],
+    });
+    await startWorkflow(project, raceLoaded, { items: [{ name: "i1" }, { name: "i2" }] }, "r1");
+    const d = await nextWorkflow(project, raceLoaded, "r1");
+    if (d.kind !== "dispatch") throw new Error("expected dispatch");
+    const [a, b] = d.items;
+    await submitWorkflow(
+      project,
+      raceLoaded,
+      "r1",
+      { summary: "s1" },
+      { lease: a.lease.id, work_item: a.work_item, node: a.node, verdict: "passed" },
+    );
+    await submitWorkflow(
+      project,
+      raceLoaded,
+      "r1",
+      { summary: "s2" },
+      { lease: b.lease.id, work_item: b.work_item, node: b.node, verdict: "passed" },
+    );
+    // now at join: two concurrent next calls
+    const results = await Promise.all([
+      nextWorkflow(project, raceLoaded, "r1"),
+      nextWorkflow(project, raceLoaded, "r1"),
+    ]);
+    const docs = await readRun(project, "r1");
+    expect(docs.run.current_nodes).toEqual(["summarize"]);
+    expect(docs.run.iteration).toBe(1);
+    for (const r of results) expect(r.kind).toBe("agent");
+    const { readdir, readFile } = await import("node:fs/promises");
+    const cpDir = join(project, ".graphkit", "runs", "r1", "checkpoints");
+    const cps = (await readdir(cpDir)).filter((f) => f.endsWith(".json")).filter((f) => f.startsWith("000"));
+    const joins = JSON.parse(await readFile(join(cpDir, cps.at(-1) as string), "utf8"));
+    void joins;
+    const events = await readEvents();
+    const joinEvents = events.filter((e) => e.node === "join" && e.type === "command");
+    expect(joinEvents.length).toBe(1);
+  });
+
   test("fanout with ambiguous agent worker rejects", async () => {
     const ambiguous = makeLoaded({
       apiVersion: "graphkit.dev/v1alpha1",
@@ -510,6 +585,26 @@ describe("parallel dispatch and fan-in", () => {
     ).rejects.toMatchObject({ code: "LEASE_EXPIRED" });
     const events = await readEvents();
     expect(events.some((e) => e.type === "reject" && e.lease === "L1")).toBe(true);
+  });
+
+  test("post-dispatch expiry reissues while fanout remains authoritative", async () => {
+    const loaded = fanLoaded();
+    await startWorkflow(project, loaded, { items: [{ name: "i1" }] }, "r1");
+    const first = await nextWorkflow(project, loaded, "r1");
+    if (first.kind !== "dispatch") throw new Error("expected dispatch");
+    expect((await readRun(project, "r1")).run.current_nodes).toEqual(["fan"]);
+    // Make the active lease stale without changing the cursor.
+    await mutateRun(project, "r1", (d) => {
+      const lease = d.leases[0];
+      lease.expires_at = new Date(Date.now() - 1).toISOString();
+      return d;
+    });
+    const replacement = await nextWorkflow(project, loaded, "r1");
+    expect(replacement.kind).toBe("dispatch");
+    if (replacement.kind !== "dispatch") throw new Error("expected dispatch");
+    expect(replacement.items).toHaveLength(1);
+    expect(replacement.items[0].lease.id).not.toBe(first.items[0].lease.id);
+    expect((await readRun(project, "r1")).run.current_nodes).toEqual(["fan"]);
   });
 
   test("submit after run advanced to non-agent node is rejected with provenance", async () => {
