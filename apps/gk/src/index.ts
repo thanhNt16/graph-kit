@@ -2,10 +2,8 @@ import { createCli } from "./cli/command-registry.js";
 import { fail } from "./cli/output.js";
 import { GraphKitError } from "./errors.js";
 
-const VERSION = "0.1.0";
-
 async function main() {
-  const cli = createCli(VERSION);
+  const cli = createCli();
   try {
     cli.cli.parse(process.argv.slice(2), { run: true });
   } catch (err) {
