@@ -53,17 +53,28 @@ export async function writeJsonAtomic(path: string, value: unknown, immutable = 
   await writeFileAtomic(path, JSON.stringify(value, null, 2), immutable);
 }
 
+/** Write raw text to `path` atomically. If `immutable`, never overwrites. */
+export async function writeTextAtomic(path: string, content: string, immutable = false): Promise<void> {
+  await writeFileAtomic(path, content, immutable);
+}
+
 /**
  * Append `event` as a whole JSON line to `path`, crash-safe: read existing
  * content, append exactly one line in memory, then atomic temp+rename. Never
  * leaves a truncated line or a temp file behind.
  */
 export async function appendEvent(path: string, event: unknown): Promise<void> {
-  await withDirectoryLock(dirname(path), async () => {
-    const existing = await readFile(path, "utf8").catch((err) => {
-      if ((err as { code?: string }).code === "ENOENT") return "";
-      throw err;
-    });
-    await writeFileAtomic(path, `${existing}${JSON.stringify(event)}\n`, false);
+  await withDirectoryLock(dirname(path), () => appendEventUnlocked(path, event));
+}
+
+/**
+ * Append without acquiring a lock. Callers must already hold the directory
+ * lock (e.g. inside `mutateRun`) to avoid interleaving appends.
+ */
+export async function appendEventUnlocked(path: string, event: unknown): Promise<void> {
+  const existing = await readFile(path, "utf8").catch((err) => {
+    if ((err as { code?: string }).code === "ENOENT") return "";
+    throw err;
   });
+  await writeFileAtomic(path, `${existing}${JSON.stringify(event)}\n`, false);
 }
