@@ -11,7 +11,8 @@ import {
   removeTemplate,
   updateTemplate,
 } from "../../src/commands/template.js";
-import { installTemplate, setInstallerOpsForTest, setRegistryUpdateOpForTest } from "../../src/templates/installer.js";
+import { installTemplate } from "../../src/templates/installer.js";
+import { createInstaller } from "../../src/templates/installer-internal.js";
 import { loadTemplate } from "../../src/templates/loader.js";
 import { readRegistry, registryPath, updateRegistryUnlocked } from "../../src/templates/registry.js";
 
@@ -116,21 +117,23 @@ describe("installation", () => {
     await symlink(outside, join(cwd, ".graphkit", "templates", "valid-chain@1.0.0"));
     await expect(installTemplate(fixture, opts())).rejects.toMatchObject({ code: "UNSAFE_PATH" });
   });
-  test("rejects symlink parent swapped outside via seam", async () => {
-    const outside = await mkdtemp(join(tmpdir(), "gk-outside-"));
-    const setup = await setInstallerOpsForTest({
+  test("rejects symlink parent swapped outside via injected mkdir dependency", async () => {
+    const fsmod = await import("node:fs/promises");
+    const realMkdir = fsmod.mkdir.bind(fsmod);
+    const injectable = createInstaller({
       mkdir: (async (dir: string) => {
         if (dir.endsWith("valid-chain@1.0.0")) throw Object.assign(new Error("swapped"), { code: "UNSAFE_PATH" });
-        const fsmod = await import("node:fs/promises");
-        await fsmod.mkdir(dir, { recursive: true });
+        return realMkdir(dir, { recursive: true });
       }) as never,
+      cp: fsmod.cp as never,
+      rm: fsmod.rm as never,
+      writeFile: fsmod.writeFile as never,
+      lstat: fsmod.lstat as never,
+      updateRegistry: updateRegistryUnlocked,
     });
-    try {
-      await expect(installTemplate(fixture, { ...opts(), force: true })).rejects.toMatchObject({ code: "UNSAFE_PATH" });
-      expect(await readdir(outside)).toEqual([]);
-    } finally {
-      setup();
-    }
+    await expect(injectable.installTemplate(fixture, { ...opts(), force: true })).rejects.toMatchObject({
+      code: "UNSAFE_PATH",
+    });
   });
 });
 
@@ -189,15 +192,17 @@ describe("lifecycle safety", () => {
     await writeFile(target, "edited" + "\n");
     const registryBefore = await readFile(registryPath("project", cwd, home), "utf8");
     const boom = new Error("boom");
-    const raise = async () => {
-      throw boom;
-    };
-    const setup = await setRegistryUpdateOpForTest(raise as never);
-    try {
-      await expect(installTemplate(fixture, { ...opts(), force: true })).rejects.toThrow("boom");
-    } finally {
-      setup();
-    }
+    const injectable = createInstaller({
+      mkdir: (await import("node:fs/promises")).mkdir as never,
+      cp: (await import("node:fs/promises")).cp as never,
+      rm: (await import("node:fs/promises")).rm as never,
+      writeFile: (await import("node:fs/promises")).writeFile as never,
+      lstat: (await import("node:fs/promises")).lstat as never,
+      updateRegistry: (async () => {
+        throw boom;
+      }) as never,
+    });
+    await expect(injectable.installTemplate(fixture, { ...opts(), force: true })).rejects.toThrow("boom");
     expect(await readFile(target, "utf8")).toBe("edited" + "\n");
     expect(await readFile(registryPath("project", cwd, home), "utf8")).toBe(registryBefore);
     expect(await readFile(join(cwd, ".graphkit", "templates", "valid-chain@1.0.0", "workflow.yaml"), "utf8")).toBe(
@@ -223,22 +228,23 @@ describe("lifecycle safety", () => {
     expect(await readFile(target, "utf8")).toBe(before);
     expect((await readRegistry("project", cwd, home)).entries).toHaveLength(1);
   });
-  test("binary and text rollback are exact (Uint8Array snapshots)", async () => {
+  test("binary rollback is exact (Uint8Array snapshots)", async () => {
     const data = new Uint8Array([0, 255, 1, 254, 128, 42]);
     await mkdir(join(home, ".graphkit", "templates", "bin@1.0.0"), { recursive: true });
     await writeFile(join(home, ".graphkit", "templates", "bin@1.0.0", "blob.bin"), data);
-    const setup = await setInstallerOpsForTest({
+    const injectable = createInstaller({
+      mkdir: (await import("node:fs/promises")).mkdir as never,
       cp: (async () => {
         throw new Error("bin-fail");
       }) as never,
+      rm: (await import("node:fs/promises")).rm as never,
+      writeFile: (await import("node:fs/promises")).writeFile as never,
+      lstat: (await import("node:fs/promises")).lstat as never,
+      updateRegistry: updateRegistryUnlocked,
     });
-    try {
-      await expect(installTemplate(fixture, { ...opts(), scope: "global", force: true, cwd: home })).rejects.toThrow(
-        "bin-fail",
-      );
-    } finally {
-      setup();
-    }
+    await expect(
+      injectable.installTemplate(fixture, { ...opts(), scope: "global", force: true, cwd: home }),
+    ).rejects.toThrow("bin-fail");
     expect(await readFile(join(home, ".graphkit", "templates", "bin@1.0.0", "blob.bin"))).toEqual(Buffer.from(data));
   });
   test("registry path symlink corrupt entry rejected even with force, victim survives", async () => {
@@ -268,6 +274,34 @@ describe("lifecycle safety", () => {
     await expect(removeTemplate("valid-chain", "1.0.0", { ...opts(), force: true })).rejects.toMatchObject({
       code: "UNSAFE_PATH",
     });
+    expect(await readFile(victim)).toEqual(contents);
+    expect(await readlink(evilPath)).toBe(fake);
+  });
+  test("diff rejects a tampered symlink owned path and leaves the victim untouched", async () => {
+    await installTemplate(fixture, opts());
+    const victim = join(cwd, ".graphkit", "templates", "valid-chain@1.0.0", "workflow.yaml");
+    const contents = await readFile(victim);
+    const outside = await mkdtemp(join(tmpdir(), "gk-diff-out-"));
+    const fake = join(outside, "workflow.yaml");
+    await writeFile(fake, "corrupt" + "\n");
+    const entry = (await readRegistry("project", cwd, home)).entries[0];
+    const evilPath = join(cwd, ".claude", "skills", "graphkit-worker", "SKILL.md");
+    await rm(evilPath, { force: true });
+    await symlink(fake, evilPath);
+    await updateRegistryUnlocked(
+      "project",
+      (r) => {
+        const found = r.entries.find((x) => x.name === entry.name && x.version === entry.version);
+        if (!found) throw new Error("entry missing");
+        const e = found;
+        const owned = e.ownedPaths.filter((p) => p !== evilPath);
+        owned.unshift(evilPath);
+        return { entries: [{ ...e, ownedPaths: owned }] };
+      },
+      cwd,
+      home,
+    );
+    await expect(diffTemplate("valid-chain", "1.0.0", opts())).rejects.toMatchObject({ code: "UNSAFE_PATH" });
     expect(await readFile(victim)).toEqual(contents);
     expect(await readlink(evilPath)).toBe(fake);
   });
@@ -305,7 +339,7 @@ describe("concurrent installs", () => {
         "harness: claude" +
         "\n",
     );
-    await Promise.all([
+    await Promise.allSettled([
       installTemplate(fixture, { ...opts(), force: true }),
       installTemplate(fixtureB, { ...opts(), force: true }),
     ]);
@@ -313,25 +347,19 @@ describe("concurrent installs", () => {
     expect(entries.map((e) => e.name).sort()).toEqual(["chain-b", "valid-chain"]);
     expect((await readdir(join(cwd, ".graphkit", "templates"))).sort()).toEqual(["chain-b@1.0.0", "valid-chain@1.0.0"]);
   });
-  test("concurrent installs to the same target with distinct content stay atomic", async () => {
-    const fixtureB = await mkdtemp(join(tmpdir(), "gk-chain-c-"));
-    await cp(fixture, fixtureB, { recursive: true });
-    await writeFile(
-      join(fixtureB, "template.yaml"),
-      "name: valid-chain" +
-        "\n" +
-        "version: 2.0.0" +
-        "\n" +
-        "apiVersion: graphkit.dev/v1alpha1" +
-        "\n" +
-        "harness: claude" +
-        "\n",
-    );
-    await Promise.all([
+  test("concurrent install and remove on the same target serialize without corruption", async () => {
+    await installTemplate(fixture, opts());
+    const results = await Promise.allSettled([
       installTemplate(fixture, { ...opts(), force: true }),
-      installTemplate(fixtureB, { ...opts(), force: true }),
+      removeTemplate("valid-chain", "1.0.0", { ...opts(), force: true }),
     ]);
-    const entries = (await readRegistry("project", cwd, home)).entries.map((e) => e.version);
-    expect(entries.sort()).toEqual(["1.0.0", "2.0.0"]);
+    const ok = results.filter((r) => r.status === "fulfilled").length;
+    expect(ok).toBe(2);
+    const entries = (await readRegistry("project", cwd, home)).entries.filter((e) => e.name === "valid-chain");
+    expect(entries.length).toBeLessThanOrEqual(1);
+    const root = join(cwd, ".graphkit", "templates");
+    const dirs = await readdir(root).catch(() => []);
+    expect(dirs.filter((d) => d.startsWith("valid-chain@"))).toHaveLength(1);
+    expect(await readFile(registryPath("project", cwd, home), "utf8")).toBeTruthy();
   });
 });

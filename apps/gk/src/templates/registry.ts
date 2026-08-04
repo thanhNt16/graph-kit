@@ -21,6 +21,14 @@ export interface Registry {
 export function registryPath(scope: InstallScope, cwd = process.cwd(), home = homedir()) {
   return scope === "global" ? join(home, ".graphkit", "registry.json") : join(cwd, ".graphkit", "registry.json");
 }
+export function installLockPath(home = homedir()) {
+  return join(home, ".graphkit");
+}
+export async function withInstallLock<T>(home: string, fn: () => Promise<T>): Promise<T> {
+  const path = installLockPath(home);
+  await mkdir(dirname(path), { recursive: true });
+  return withDirectoryLock(path, fn);
+}
 export async function readRegistryUnlocked(
   scope: InstallScope,
   cwd = process.cwd(),
@@ -54,9 +62,7 @@ export async function updateRegistry(
   cwd = process.cwd(),
   home = homedir(),
 ) {
-  const dir = dirname(registryPath(scope, cwd, home));
-  await mkdir(dir, { recursive: true });
-  return withDirectoryLock(dir, () => updateRegistryUnlocked(scope, mutate, cwd, home));
+  return withInstallLock(home, () => updateRegistryUnlocked(scope, mutate, cwd, home));
 }
 export async function allRegistryEntries(cwd = process.cwd(), home = homedir()) {
   const [project, global] = await Promise.all([

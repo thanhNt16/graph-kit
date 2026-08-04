@@ -4,10 +4,16 @@ import { join, resolve } from "node:path";
 import { renderClaudeSkills } from "../adapters/claude.js";
 import { GraphKitError } from "../errors.js";
 import { validateTemplate } from "../runtime/validation.js";
-import { type InstallOptions, installTemplate, removeOwnedPaths } from "../templates/installer.js";
+import { type InstallOptions, installTemplate, removeOwnedPaths, validateOwnedPath } from "../templates/installer.js";
 import { loadTemplate } from "../templates/loader.js";
 import { checksumFile } from "../templates/manifest.js";
-import { allRegistryEntries, type InstallScope, readRegistry, updateRegistry } from "../templates/registry.js";
+import {
+  allRegistryEntries,
+  type InstallScope,
+  readRegistry,
+  updateRegistryUnlocked,
+  withInstallLock,
+} from "../templates/registry.js";
 
 function base(scope: InstallScope, cwd: string, home: string) {
   return scope === "global" ? home : cwd;
@@ -98,17 +104,20 @@ export async function diffTemplate(name: string, version: string, options: Insta
   const scope = options.scope ?? "project";
   const cwd = resolve(options.cwd ?? process.cwd());
   const home = resolve(options.home ?? homedir());
-  const entry = (await readRegistry(scope, cwd, home)).entries.find((e) => e.name === name && e.version === version);
-  if (!entry) throw new GraphKitError("SCHEMA_VIOLATION", `template ${name}@${version} is not installed`);
-  const modified: string[] = [];
-  for (const path of entry.ownedPaths) {
-    try {
-      if ((await checksumFile(path)) !== entry.targetChecksums[path]) modified.push(path);
-    } catch {
-      modified.push(path);
+  return withInstallLock(home, async () => {
+    const entry = (await readRegistry(scope, cwd, home)).entries.find((e) => e.name === name && e.version === version);
+    if (!entry) throw new GraphKitError("SCHEMA_VIOLATION", `template ${name}@${version} is not installed`);
+    const modified: string[] = [];
+    for (const path of entry.ownedPaths) {
+      await validateOwnedPath(path, scope, cwd, home, entry.name, entry.version);
+      try {
+        if ((await checksumFile(path)) !== entry.targetChecksums[path]) modified.push(path);
+      } catch {
+        modified.push(path);
+      }
     }
-  }
-  return { modified, ownedPaths: entry.ownedPaths, targetChecksums: entry.targetChecksums };
+    return { modified, ownedPaths: entry.ownedPaths, targetChecksums: entry.targetChecksums };
+  });
 }
 
 export async function updateTemplate(source: string, options: InstallOptions = {}) {
@@ -119,34 +128,37 @@ export async function removeTemplate(name: string, version: string, options: Ins
   const scope = options.scope ?? "project";
   const cwd = resolve(options.cwd ?? process.cwd());
   const home = resolve(options.home ?? homedir());
-  const entry = (await readRegistry(scope, cwd, home)).entries.find((e) => e.name === name && e.version === version);
-  if (!entry) return { removed: [], modified: [] };
-  const modified: string[] = [];
-  for (const path of entry.ownedPaths) {
-    try {
-      if ((await checksumFile(path)) !== entry.targetChecksums[path]) modified.push(path);
-    } catch {
-      modified.push(path);
+  return withInstallLock(home, async () => {
+    const entry = (await readRegistry(scope, cwd, home)).entries.find((e) => e.name === name && e.version === version);
+    if (!entry) return { removed: [], modified: [] };
+    const modified: string[] = [];
+    for (const path of entry.ownedPaths) {
+      await validateOwnedPath(path, scope, cwd, home, entry.name, entry.version);
+      try {
+        if ((await checksumFile(path)) !== entry.targetChecksums[path]) modified.push(path);
+      } catch {
+        modified.push(path);
+      }
     }
-  }
-  if (modified.length && !options.force)
-    throw new GraphKitError("MODIFIED_TARGET", "refusing to remove modified template targets", true, modified);
-  if (!options.dryRun) {
-    await removeOwnedPaths(entry.ownedPaths, scope, cwd, home, entry.name, entry.version);
-    const removed = [...entry.ownedPaths];
-    await updateRegistry(
-      scope,
-      (r) => ({
-        entries: r.entries.filter(
-          (e) => !(e.name === entry.name && e.version === entry.version && e.scope === entry.scope),
-        ),
-      }),
-      cwd,
-      home,
-    );
-    return { removed, modified };
-  }
-  return { removed: entry.ownedPaths, modified };
+    if (modified.length && !options.force)
+      throw new GraphKitError("MODIFIED_TARGET", "refusing to remove modified template targets", true, modified);
+    if (!options.dryRun) {
+      await removeOwnedPaths(entry.ownedPaths, scope, cwd, home, entry.name, entry.version);
+      const removed = [...entry.ownedPaths];
+      await updateRegistryUnlocked(
+        scope,
+        (r) => ({
+          entries: r.entries.filter(
+            (e) => !(e.name === entry.name && e.version === entry.version && e.scope === entry.scope),
+          ),
+        }),
+        cwd,
+        home,
+      );
+      return { removed, modified };
+    }
+    return { removed: entry.ownedPaths, modified };
+  });
 }
 
 export async function lookupTemplate(name: string, version: string, cwd = process.cwd(), home = homedir()) {
