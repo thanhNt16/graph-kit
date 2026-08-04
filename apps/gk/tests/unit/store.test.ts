@@ -21,6 +21,7 @@ beforeEach(async () => {
     in_flight: {},
     iteration: 0,
     failures: 0,
+    completed_deterministic_nodes: [],
     verdict: null,
   };
 });
@@ -146,5 +147,62 @@ describe("crash resume", () => {
     const restored = await resumeRun(project, "run-1");
     // falls back to 0000-start
     expect(restored.state).toEqual({ count: 0 });
+  });
+});
+
+describe("createRun idempotency and checkpoint indexing", () => {
+  test("second createRun refuses and leaves all live docs and checkpoint unchanged", async () => {
+    await createRun(project, run, { count: 0 }, []);
+    const dir = join(project, ".graphkit", "runs", "run-1");
+    const before = {
+      run: await readFile(join(dir, "run.json"), "utf8"),
+      state: await readFile(join(dir, "state.json"), "utf8"),
+      leases: await readFile(join(dir, "leases.json"), "utf8"),
+      start: await readFile(join(dir, "checkpoints", "0000-start.json"), "utf8"),
+    };
+    await expect(createRun(project, { ...run, run_id: "run-1" }, { count: 99 }, [])).rejects.toThrow("MODIFIED_TARGET");
+    expect(await readFile(join(dir, "run.json"), "utf8")).toBe(before.run);
+    expect(await readFile(join(dir, "state.json"), "utf8")).toBe(before.state);
+    expect(await readFile(join(dir, "state.json"), "utf8")).not.toContain("99");
+    expect(await readFile(join(dir, "checkpoints", "0000-start.json"), "utf8")).toBe(before.start);
+    expect(await listCheckpoints()).toEqual(["0000-start.json"]);
+  });
+
+  test("next checkpoint number is max index + 1, not file count", async () => {
+    await createRun(project, run, {}, []);
+    await mutateRun(project, "run-1", (d) => ({
+      documents: d,
+      event: { type: "dispatch", timestamp: "2026-01-01T00:00:00.000Z" },
+    }));
+    // inject a gap: manually add checkpoint 0005
+    const dir = join(project, ".graphkit", "runs", "run-1", "checkpoints");
+    const fake = JSON.parse(await readFile(join(dir, "0001-alpha.json"), "utf8"));
+    fake.provenance.checkpoint = "0005-alpha";
+    await writeJsonAtomic(join(dir, "0005-alpha.json"), fake, false);
+    await mutateRun(project, "run-1", (d) => ({
+      documents: d,
+      event: { type: "submit", timestamp: "2026-01-01T00:00:00.000Z" },
+    }));
+    const names = await listCheckpoints();
+    expect(names).toContain("0005-alpha.json");
+    expect(names).toContain("0006-alpha.json");
+    expect(names).not.toContain("0002-alpha.json");
+  });
+
+  test("concurrent resume rewrites serialize under the directory lock", async () => {
+    await createRun(project, run, { count: 0 }, []);
+    await mutateRun(project, "run-1", (d) => {
+      d.state.count = 1;
+      return { documents: d, event: { type: "dispatch", timestamp: "2026-01-01T00:00:00.000Z" } };
+    });
+    // corrupt live state so each resumeRun must rewrite from checkpoint
+    await writeFile(join(project, ".graphkit", "runs", "run-1", "state.json"), "{ not json");
+    // Two concurrent resume rewrites must serialize; both succeed and neither
+    // observes a torn half-written document.
+    const results = await Promise.all([resumeRun(project, "run-1"), resumeRun(project, "run-1")]);
+    for (const docs of results) expect(docs.run).toBeDefined();
+    // final state.json is valid JSON written by the last lock holder
+    const finalState = JSON.parse(await readFile(join(project, ".graphkit", "runs", "run-1", "state.json"), "utf8"));
+    expect(finalState).toEqual({ count: 1 });
   });
 });

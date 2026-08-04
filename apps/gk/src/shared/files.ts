@@ -67,11 +67,8 @@ export async function appendEvent(path: string, event: unknown): Promise<void> {
   await withDirectoryLock(dirname(path), () => appendEventUnlocked(path, event));
 }
 
-/**
- * Append without acquiring a lock. Callers must already hold the directory
- * lock (e.g. inside `mutateRun`) to avoid interleaving appends.
- */
-export async function appendEventUnlocked(path: string, event: unknown): Promise<void> {
+/** Append while the caller already holds the directory lock. */
+async function appendEventUnlocked(path: string, event: unknown): Promise<void> {
   const existing = await readFile(path, "utf8").catch((err) => {
     if ((err as { code?: string }).code === "ENOENT") return "";
     throw err;

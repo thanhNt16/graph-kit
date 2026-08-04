@@ -11,6 +11,7 @@ function makeRun(overrides: Partial<Run> = {}): Run {
     in_flight: {},
     iteration: 0,
     failures: 0,
+    completed_deterministic_nodes: [],
     verdict: null,
     ...overrides,
   };
@@ -60,27 +61,84 @@ describe("selectTransition", () => {
     });
   });
 
-  test("on_error fallback", () => {
+  test("on_error fallback carries incremented failures", () => {
     const wf = makeWorkflow({
       nodes: { a: { id: "a", type: "command", command: ["true"] }, b: { id: "b", type: "command", command: ["true"] } },
       edges: [{ from: "a", to: "b", on_error: "b" }],
     });
-    expect(selectTransition({ workflow: wf, run: makeRun(), scope: {}, failed: "a" })).toEqual({ next: ["b"] });
+    expect(selectTransition({ workflow: wf, run: makeRun({ failures: 0 }), scope: {}, failed: "a" })).toEqual({
+      next: ["b"],
+      failures: 1,
+    });
   });
 
-  test("bounded retry reroutes to same node", () => {
+  test("bounded retry reroutes within max and increments failures", () => {
     const wf = makeWorkflow({
       nodes: { a: { id: "a", type: "command", command: ["true"] } },
       edges: [{ from: "a", to: "a", retry: { max: 3, on: ["failed"] } }],
     });
-    const decision = selectTransition({
-      workflow: wf,
-      run: makeRun({ failures: 1 }),
-      scope: {},
-      failed: "a",
-      verdict: "failed",
+    expect(
+      selectTransition({ workflow: wf, run: makeRun({ failures: 1 }), scope: {}, failed: "a", verdict: "failed" }),
+    ).toEqual({ next: ["a"], retry: true, failures: 2 });
+    // exactly at max: still retry
+    expect(
+      selectTransition({ workflow: wf, run: makeRun({ failures: 2 }), scope: {}, failed: "a", verdict: "failed" }),
+    ).toEqual({ next: ["a"], retry: true, failures: 3 });
+    // over max: no retry, terminal failed
+    expect(
+      selectTransition({ workflow: wf, run: makeRun({ failures: 3 }), scope: {}, failed: "a", verdict: "failed" }),
+    ).toEqual({ terminal: true, verdict: "failed" });
+  });
+
+  test("retry over max falls back to on_error target", () => {
+    const wf = makeWorkflow({
+      nodes: { a: { id: "a", type: "command", command: ["true"] }, b: { id: "b", type: "command", command: ["true"] } },
+      edges: [{ from: "a", to: "a", retry: { max: 1, on: ["failed"] }, on_error: "b" }],
     });
-    expect(decision).toEqual({ next: ["a"], retry: true });
+    expect(
+      selectTransition({ workflow: wf, run: makeRun({ failures: 0 }), scope: {}, failed: "a", verdict: "failed" }),
+    ).toEqual({ next: ["a"], retry: true, failures: 1 });
+    expect(
+      selectTransition({ workflow: wf, run: makeRun({ failures: 1 }), scope: {}, failed: "a", verdict: "failed" }),
+    ).toEqual({ next: ["b"], failures: 2 });
+  });
+
+  test("deterministic node skipped after completion", () => {
+    const wf = makeWorkflow({
+      nodes: { a: { id: "a", type: "command", command: ["true"] }, b: { id: "b", type: "command", command: ["true"] } },
+      edges: [{ from: "a", to: "b" }],
+    });
+    const run = makeRun({ completed_deterministic_nodes: ["a"], current_nodes: ["a"] });
+    expect(selectTransition({ workflow: wf, run, scope: {}, completed: "a" })).toEqual({ next: ["b"] });
+  });
+
+  test("settled chain advances until unsettled node", () => {
+    const wf = makeWorkflow({
+      nodes: {
+        a: { id: "a", type: "command", command: ["true"] },
+        b: { id: "b", type: "command", command: ["true"] },
+        c: { id: "c", type: "command", command: ["true"] },
+      },
+      edges: [
+        { from: "a", to: "b" },
+        { from: "b", to: "c" },
+      ],
+    });
+    const run = makeRun({ completed_deterministic_nodes: ["a", "b"], current_nodes: ["a"] });
+    expect(selectTransition({ workflow: wf, run, scope: {}, completed: "a" })).toEqual({ next: ["c"] });
+  });
+
+  test("fully settled chain returns terminal verdict", () => {
+    const wf = makeWorkflow({
+      nodes: { a: { id: "a", type: "command", command: ["true"] }, b: { id: "b", type: "command", command: ["true"] } },
+      edges: [{ from: "a", to: "b" }],
+      terminal: [{ node: "b", verdict: "passed" }],
+    });
+    const run = makeRun({ completed_deterministic_nodes: ["a", "b"], current_nodes: ["a"] });
+    expect(selectTransition({ workflow: wf, run, scope: {}, completed: "a" })).toEqual({
+      terminal: true,
+      verdict: "passed",
+    });
   });
 
   test("terminal verdict", () => {

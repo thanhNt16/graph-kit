@@ -1,5 +1,6 @@
 import { mkdir, readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
+import { GraphKitError } from "../errors.js";
 import { type Event, type Lease, LeaseSchema, type Run, RunSchema } from "../schemas.js";
 import { appendEventUnlocked, writeJsonAtomic, writeTextAtomic } from "../shared/files.js";
 import { withDirectoryLock } from "../shared/lock.js";
@@ -65,6 +66,12 @@ export async function createRun(
 ): Promise<Run> {
   const parsed = RunSchema.parse(run);
   const dir = runDir(project, parsed.run_id);
+  await mkdir(runsDir(project), { recursive: true });
+  const existing = await readFile(join(dir, "run.json"), "utf8").catch((err: unknown) => {
+    if ((err as { code?: string }).code === "ENOENT") return "";
+    throw err;
+  });
+  if (existing) throw new GraphKitError("MODIFIED_TARGET", `MODIFIED_TARGET: run already exists: ${parsed.run_id}`);
   await mkdir(checkpointDir(project, parsed.run_id), { recursive: true });
   await writeJsonAtomic(join(dir, "run.json"), parsed);
   await writeJsonAtomic(join(dir, "state.json"), state);
@@ -95,15 +102,17 @@ export async function readRun(project: string, runId: string): Promise<RunDocume
  * atomic against `mutateRun`.
  */
 export async function appendRunEvent(project: string, runId: string, event: Event): Promise<void> {
-  await withDirectoryLock(runDir(project, runId), () =>
-    appendEventUnlocked(join(runDir(project, runId), "events.jsonl"), { ...event, run_id: runId }),
-  );
+  const dir = runDir(project, runId);
+  await withDirectoryLock(dir, () => appendEventUnlocked(join(dir, "events.jsonl"), { ...event, run_id: runId }));
 }
 
 /**
  * One mutation, one lock: reads current documents, applies the pure mutator,
  * writes current documents atomically, appends exactly one event, then writes
- * the next immutable numbered checkpoint.
+ * the next immutable numbered checkpoint. Writes the checkpoint and current
+ * documents before appending the event, so a crash before the event append
+ * leaves durable state and a durable checkpoint but no ghost event referencing
+ * an absent checkpoint.
  */
 export async function mutateRun(project: string, runId: string, mutator: RunMutator): Promise<MutationResult> {
   const dir = runDir(project, runId);
@@ -119,11 +128,13 @@ export async function mutateRun(project: string, runId: string, mutator: RunMuta
       state: result.documents.state,
       leases: result.documents.leases.map((lease) => LeaseSchema.parse(lease)),
     };
-    const number = (await readdir(checkpointDir(project, runId))).filter((name) => /^\d{4}-/.test(name)).length;
+    const numbers = (await readdir(checkpointDir(project, runId)))
+      .filter((name) => /^\d{4}-/.test(name))
+      .map((name) => Number(name.slice(0, 4)));
+    const number = numbers.length ? Math.max(...numbers) + 1 : 0;
     const node = docs.run.current_nodes[0] ?? "start";
     const checkpoint = checkpointName(number, node);
     const event = { ...result.event, run_id: runId, checkpoint } as Event;
-    await appendEventUnlocked(join(dir, "events.jsonl"), event);
     await writeJsonAtomic(join(dir, "run.json"), docs.run);
     await writeJsonAtomic(join(dir, "state.json"), docs.state);
     await writeJsonAtomic(join(dir, "leases.json"), docs.leases);
@@ -136,6 +147,7 @@ export async function mutateRun(project: string, runId: string, mutator: RunMuta
       checkpoint,
     };
     await writeJsonAtomic(join(dir, "checkpoints", `${checkpoint}.json`), { ...docs, provenance }, true);
+    await appendEventUnlocked(join(dir, "events.jsonl"), event);
     return { documents: docs, event };
   });
 }
@@ -143,33 +155,37 @@ export async function mutateRun(project: string, runId: string, mutator: RunMuta
 /**
  * Restore run documents. Prefers the live documents; if any is corrupt, walks
  * numbered checkpoints newest-first and rewrites documents from the newest
- * valid checkpoint. Never repeats a node already settled in that checkpoint.
+ * valid checkpoint. Rewrites happen while holding the run directory lock so
+ * resume mutations serialize against `mutateRun`. Never repeats a node already
+ * settled in that checkpoint.
  */
 export async function resumeRun(project: string, runId: string): Promise<RunDocuments> {
   const dir = runDir(project, runId);
-  try {
-    return await readDocs(dir);
-  } catch {
-    const files = (await readdir(join(dir, "checkpoints")))
-      .filter((name) => /^\d{4}-.*\.json$/.test(name))
-      .sort()
-      .reverse();
-    for (const file of files) {
-      try {
-        const value = JSON.parse(await readFile(join(dir, "checkpoints", file), "utf8")) as RunCheckpoint;
-        const docs = {
-          run: RunSchema.parse(value.run),
-          state: value.state,
-          leases: Array.isArray(value.leases) ? value.leases.map((lease) => LeaseSchema.parse(lease)) : [],
-        };
-        await writeJsonAtomic(join(dir, "run.json"), docs.run);
-        await writeJsonAtomic(join(dir, "state.json"), docs.state);
-        await writeJsonAtomic(join(dir, "leases.json"), docs.leases);
-        return docs;
-      } catch {
-        // corrupt checkpoint; walk backward
+  return withDirectoryLock(dir, async () => {
+    try {
+      return await readDocs(dir);
+    } catch {
+      const files = (await readdir(join(dir, "checkpoints")))
+        .filter((name) => /^\d{4}-.*\.json$/.test(name))
+        .sort()
+        .reverse();
+      for (const file of files) {
+        try {
+          const value = JSON.parse(await readFile(join(dir, "checkpoints", file), "utf8")) as RunCheckpoint;
+          const docs = {
+            run: RunSchema.parse(value.run),
+            state: value.state,
+            leases: Array.isArray(value.leases) ? value.leases.map((lease) => LeaseSchema.parse(lease)) : [],
+          };
+          await writeJsonAtomic(join(dir, "run.json"), docs.run);
+          await writeJsonAtomic(join(dir, "state.json"), docs.state);
+          await writeJsonAtomic(join(dir, "leases.json"), docs.leases);
+          return docs;
+        } catch {
+          // corrupt checkpoint; walk backward
+        }
       }
+      throw new Error(`No valid checkpoint for run ${runId}`);
     }
-    throw new Error(`No valid checkpoint for run ${runId}`);
-  }
+  });
 }

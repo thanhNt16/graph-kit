@@ -173,6 +173,7 @@ export const RunSchema = z.object({
   in_flight: z.record(z.string(), z.string()).default({}), // work_item -> lease id
   iteration: z.number().int().nonnegative().default(0),
   failures: z.number().int().nonnegative().default(0),
+  completed_deterministic_nodes: z.array(NodeIdSchema).default([]),
   verdict: z.union([VerdictSchema, z.null()]).default(null),
 });
 export type Run = z.infer<typeof RunSchema>;
