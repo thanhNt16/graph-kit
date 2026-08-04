@@ -1,11 +1,13 @@
-import { cp, mkdir, mkdtemp, readdir, readFile, realpath, rm, stat, writeFile } from "node:fs/promises";
-import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
+import { cp, lstat, mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
+import { homedir } from "node:os";
+import { dirname, join, relative, resolve, sep } from "node:path";
 import { type RenderedSkill, renderClaudeSkills } from "../adapters/claude.js";
 import { GraphKitError } from "../errors.js";
+import { withDirectoryLock } from "../shared/lock.js";
 import { safeResolve } from "../shared/paths.js";
 import { type LoadedTemplate, loadTemplate } from "./loader.js";
 import { checksumFile, templateChecksum } from "./manifest.js";
-import { type InstallScope, type RegistryEntry, updateRegistry } from "./registry.js";
+import { type InstallScope, type RegistryEntry, registryPath, updateRegistryUnlocked } from "./registry.js";
 
 export interface InstallOptions {
   scope?: InstallScope;
@@ -23,6 +25,44 @@ export interface InstallResult {
   sourceChecksum: string;
   installSource: string;
 }
+interface Built {
+  loaded: LoadedTemplate;
+  files: string[];
+  skills: RenderedSkill[];
+  sourceChecksum: string;
+}
+interface Pair {
+  staged: string;
+  dest: string;
+  base: string;
+  content: Uint8Array;
+}
+interface Snapshot {
+  exists: boolean;
+  data?: Uint8Array;
+}
+
+const realFs = { mkdir, cp, rm, writeFile, lstat };
+let ops = realFs;
+let registryUpdateOp = updateRegistryUnlocked;
+export function setRegistryUpdateOpForTest(next: typeof updateRegistryUnlocked): () => void {
+  const old = registryUpdateOp;
+  registryUpdateOp = next;
+  return () => {
+    registryUpdateOp = old;
+  };
+}
+export function setInstallerOpsForTest(next: Partial<typeof realFs>): () => void {
+  const old = ops;
+  ops = { ...ops, ...next };
+  return () => {
+    ops = old;
+  };
+}
+export function installerOpsForTest(): typeof realFs {
+  return ops;
+}
+
 function base(scope: InstallScope, cwd: string, home: string) {
   return scope === "global" ? home : cwd;
 }
@@ -32,25 +72,18 @@ function templateBase(scope: InstallScope, cwd: string, home: string) {
 function skillBase(scope: InstallScope, cwd: string, home: string) {
   return join(base(scope, cwd, home), ".claude", "skills");
 }
-interface Built {
-  loaded: LoadedTemplate;
-  files: string[];
-  skills: RenderedSkill[];
-  sourceChecksum: string;
-}
-interface Stage {
-  staged: string;
-  dest: string;
-  newContent: string;
+function fail(message: string): never {
+  throw new GraphKitError("UNSAFE_PATH", message);
 }
 
 export async function buildPackage(source: string): Promise<Built> {
   const loaded = await loadTemplate(source),
     files: string[] = [];
   async function walk(dir: string): Promise<void> {
-    for (const entry of await readdir(await safeResolve(source, dir || "."), { withFileTypes: true })) {
+    const absolute = await safeResolve(source, dir || ".");
+    for (const entry of await readdir(absolute, { withFileTypes: true })) {
       const rel = dir ? `${dir}/${entry.name}` : entry.name;
-      if (entry.isSymbolicLink()) throw new GraphKitError("UNSAFE_PATH", `symlink rejected: ${rel}`);
+      if (entry.isSymbolicLink()) fail(`symlink rejected: ${rel}`);
       if (entry.isDirectory()) await walk(rel);
       else if (entry.isFile()) files.push(rel);
     }
@@ -64,192 +97,218 @@ export async function buildPackage(source: string): Promise<Built> {
   };
 }
 
-/** Compute logical dest paths, rejecting traversal and symlink escapes. */
-async function destPaths(build: Built, scope: InstallScope, cwd: string, home: string): Promise<string[]> {
-  const tBase = templateBase(scope, cwd, home);
-  const sBase = skillBase(scope, cwd, home);
-  const rels = [
-    ...build.files.map((rel) => `${build.loaded.manifest.name}@${build.loaded.manifest.version}/${rel}`),
-    ...build.skills.map((skill) => skill.relativePath),
-  ];
-  const out: string[] = [];
-  for (const rel of rels) {
-    const logical = join(
-      scope === "global" ? home : cwd,
-      rel.startsWith("graphkit-") ? ".claude/skills" : ".graphkit/templates",
-      rel,
-    );
-    // Traversal / absolute / encoded containment via safeResolve on the base.
-    const baseDir = rel.startsWith("graphkit-") ? sBase : tBase;
-    await safeResolve(baseDir, rel);
-    // Symlink-escape: the deepest existing ancestor of the destination must stay under the base.
-    await assertUnder(baseDir, logical);
-    out.push(logical);
+async function validateTarget(dest: string, baseDir: string): Promise<void> {
+  const rel = relative(resolve(baseDir), resolve(dest));
+  if (!rel || rel === ".." || rel.startsWith(`..${sep}`)) fail(`target escapes base: ${dest}`);
+  const parts = rel.split(sep);
+  let current = resolve(baseDir);
+  for (const part of parts) {
+    current = join(current, part);
+    try {
+      const st = await ops.lstat(current);
+      if (st.isSymbolicLink()) fail(`symlink target: ${current}`);
+      if (current !== dest && !st.isDirectory()) fail(`parent is not directory: ${current}`);
+      if (current === dest && st.isDirectory()) fail(`directory collision: ${current}`);
+    } catch (e) {
+      if ((e as { code?: string }).code !== "ENOENT") throw e;
+    }
   }
+  await safeResolve(baseDir, rel);
+}
+
+async function pairs(build: Built, scope: InstallScope, cwd: string, home: string, dryRun = false): Promise<Pair[]> {
+  const tBase = templateBase(scope, cwd, home),
+    sBase = skillBase(scope, cwd, home);
+  if (!dryRun) {
+    await ops.mkdir(tBase, { recursive: true });
+    await ops.mkdir(sBase, { recursive: true });
+  }
+  const staging = dryRun ? "" : await mkdtemp(join(base(scope, cwd, home), `.gk-install-${process.pid}-`));
+  const out: Pair[] = [];
+  for (const rel of build.files) {
+    const dest = join(tBase, `${build.loaded.manifest.name}@${build.loaded.manifest.version}`, rel);
+    await validateTarget(dest, tBase);
+    const data = await readFile(await safeResolve(build.loaded.directory, rel));
+    if (!dryRun) {
+      const staged = join(staging, rel);
+      await mkdir(dirname(staged), { recursive: true });
+      await writeFile(staged, data);
+      out.push({ staged, dest, base: tBase, content: data });
+    } else out.push({ staged: "", dest, base: tBase, content: data });
+  }
+  for (const skill of build.skills) {
+    const dest = join(sBase, skill.relativePath);
+    await validateTarget(dest, sBase);
+    const data = new TextEncoder().encode(skill.content);
+    if (!dryRun) {
+      const staged = join(staging, skill.relativePath);
+      await mkdir(dirname(staged), { recursive: true });
+      await writeFile(staged, data);
+      out.push({ staged, dest, base: sBase, content: data });
+    } else out.push({ staged: "", dest, base: sBase, content: data });
+  }
+  if (!dryRun) await loadTemplate(staging);
   return out;
 }
 
-/** Realpath the deepest existing ancestor of `path`, preserving any missing suffix. */
-async function realpathOfExisting(path: string): Promise<string> {
-  let current = path;
-  const missing: string[] = [];
-  for (;;) {
-    try {
-      const resolved = await realpath(current);
-      return missing.length ? join(resolved, ...missing.reverse()) : resolved;
-    } catch {
-      const parent = dirname(current);
-      if (parent === current) throw new GraphKitError("UNSAFE_PATH", `no existing ancestor for ${path}`);
-      missing.push(current.slice(parent.length + 1));
-      current = parent;
-    }
+async function snapshot(path: string): Promise<Snapshot> {
+  try {
+    const st = await ops.lstat(path);
+    if (st.isSymbolicLink() || st.isDirectory()) fail(`unsafe target: ${path}`);
+    return { exists: true, data: await readFile(path) };
+  } catch (e) {
+    if ((e as { code?: string }).code === "ENOENT") return { exists: false };
+    throw e;
   }
 }
-async function assertUnder(baseDir: string, target: string): Promise<void> {
-  const realBase = await realpathOfExisting(baseDir);
-  const realTarget = await realpathOfExisting(target);
-  const rel = relative(realBase, realTarget);
-  if (rel === ".." || rel.startsWith(`..${sep}`) || isAbsolute(rel))
-    throw new GraphKitError("UNSAFE_PATH", `symlink escape at ${target}`);
-}
-async function stage(build: Built, scope: InstallScope, cwd: string, home: string, dryRun = false): Promise<Stage[]> {
-  if (dryRun) {
-    const dests = await destPaths(build, scope, cwd, home);
-    return dests.map((dest) => ({ staged: "", dest, newContent: "" }));
+async function restore(path: string, snap: Snapshot, baseDir: string) {
+  await validateTarget(path, baseDir);
+  if (!snap.exists) await ops.rm(path, { force: true });
+  else {
+    await ops.mkdir(dirname(path), { recursive: true });
+    await ops.writeFile(path, snap.data ?? new Uint8Array());
   }
-  const staging = await mkdtemp(join(base(scope, cwd, home), `.gk-install-${process.pid}-`)),
-    out: Stage[] = [];
-  const dests = await destPaths(build, scope, cwd, home);
-  const sourceFiles = build.files;
-  const skillFiles = build.skills;
-  let i = 0;
-  for (const rel of sourceFiles) {
-    const staged = join(staging, rel);
-    await mkdir(dirname(staged), { recursive: true });
-    await cp(await safeResolve(build.loaded.directory, rel), staged);
-    out.push({ staged, dest: dests[i], newContent: await readFile(staged, "utf8") });
-    i++;
-  }
-  for (const skill of skillFiles) {
-    const staged = join(staging, skill.relativePath);
-    await mkdir(dirname(staged), { recursive: true });
-    await writeFile(staged, skill.content);
-    out.push({ staged, dest: dests[i], newContent: skill.content });
-    i++;
-  }
-  // Validate the fully staged template renders and references resolve before touching targets.
-  await loadTemplate(staging);
-  return out;
 }
 
 export async function installTemplate(
   source: string,
   options: InstallOptions = {},
-): Promise<InstallResult | { dryRun: true; name: string; version: string; scope: InstallScope; ownedPaths: string[] }> {
+): Promise<
+  | InstallResult
+  | { dryRun: true; name: string; version: string; scope: InstallScope; ownedPaths: string[]; changedPaths: string[] }
+> {
   const scope = options.scope ?? "project",
-    cwd = options.cwd ?? process.cwd(),
-    home = options.home ?? process.env.HOME ?? process.cwd(),
+    cwd = resolve(options.cwd ?? process.cwd()),
+    home = resolve(options.home ?? process.env.HOME ?? homedir()),
     build = await buildPackage(source),
-    pairs = await stage(build, scope, cwd, home, options.dryRun === true),
-    dests = pairs.map((p) => p.dest);
-  if (options.dryRun)
-    return {
-      dryRun: true,
-      name: build.loaded.manifest.name,
-      version: build.loaded.manifest.version,
-      scope,
-      ownedPaths: dests,
-    };
-  // Snapshot current target contents for rollback; refuse non-force writes to differing files.
-  const snapshots = new Map<string, string | undefined>(),
-    promoted: string[] = [],
-    checksums: Record<string, string> = {};
-  for (const pair of pairs) {
-    let current: string | undefined;
+    lockDir = join(home, ".graphkit");
+  await mkdir(lockDir, { recursive: true });
+  return withDirectoryLock(lockDir, async () => {
+    const ps = await pairs(build, scope, cwd, home, options.dryRun === true),
+      changedPaths: string[] = [],
+      snapshots = new Map<string, Snapshot>();
+    for (const p of ps) {
+      const s = await snapshot(p.dest);
+      snapshots.set(p.dest, s);
+      if (s.exists && Buffer.compare(Buffer.from(s.data ?? new Uint8Array()), Buffer.from(p.content)) !== 0)
+        changedPaths.push(p.dest);
+    }
+    if (changedPaths.length && !options.force)
+      throw new GraphKitError(
+        "MODIFIED_TARGET",
+        `refusing to overwrite modified target: ${changedPaths[0]}`,
+        true,
+        changedPaths,
+      );
+    if (options.dryRun)
+      return {
+        dryRun: true,
+        name: build.loaded.manifest.name,
+        version: build.loaded.manifest.version,
+        scope,
+        ownedPaths: ps.map((p) => p.dest),
+        changedPaths,
+      };
+    const registryFile = registryPath(scope, cwd, home),
+      registrySnap = await snapshot(registryFile),
+      promoted: Pair[] = [];
     try {
-      current = await readFile(pair.dest, "utf8");
-    } catch {
-      current = undefined;
-    }
-    snapshots.set(pair.dest, current);
-    if (current !== undefined && !options.force && current !== pair.newContent)
-      throw new GraphKitError("MODIFIED_TARGET", `refusing to overwrite modified target: ${pair.dest}`, true);
-  }
-  try {
-    for (const pair of pairs) {
-      await mkdir(dirname(pair.dest), { recursive: true });
-      await cp(pair.staged, pair.dest);
-      promoted.push(pair.dest);
-      checksums[pair.dest] = await checksumFile(pair.dest);
-    }
-  } catch (error) {
-    for (const p of [...promoted].reverse()) {
-      const old = snapshots.get(p);
-      if (old === undefined) await rm(p, { force: true });
-      else {
-        await mkdir(dirname(p), { recursive: true });
-        await writeFile(p, old);
+      for (const p of ps) {
+        await validateTarget(p.dest, p.base);
+        await ops.mkdir(dirname(p.dest), { recursive: true });
+        // Re-check after mkdir: a parent may have been swapped for a symlink
+        // between the first check and the write.
+        await validateTarget(p.dest, p.base);
+        await ops.cp(p.staged, p.dest);
+        promoted.push(p);
       }
+      const checksums: Record<string, string> = {};
+      for (const p of ps) checksums[p.dest] = await checksumFile(p.dest);
+      const entry: RegistryEntry = {
+        name: build.loaded.manifest.name,
+        version: build.loaded.manifest.version,
+        scope,
+        installSource: resolve(source),
+        sourceChecksum: build.sourceChecksum,
+        targetChecksums: checksums,
+        ownedPaths: ps.map((p) => p.dest),
+      };
+      await registryUpdateOp(
+        scope,
+        (r) => ({
+          entries: [...r.entries.filter((e) => !(e.name === entry.name && e.version === entry.version)), entry],
+        }),
+        cwd,
+        home,
+      );
+      return entry;
+    } catch (error) {
+      for (const p of [...promoted].reverse())
+        await restore(p.dest, snapshots.get(p.dest) ?? { exists: false }, p.base);
+      await restore(registryFile, registrySnap, join(base(scope, cwd, home), ".graphkit"));
+      throw error;
+    } finally {
+      await rm(dirname(ps[0]?.staged ?? join(base(scope, cwd, home), ".gk-install-none")), {
+        recursive: true,
+        force: true,
+      }).catch(() => {});
     }
-    throw error;
-  }
-  const entry: RegistryEntry = {
-    name: build.loaded.manifest.name,
-    version: build.loaded.manifest.version,
-    scope,
-    installSource: resolve(source),
-    sourceChecksum: build.sourceChecksum,
-    targetChecksums: checksums,
-    ownedPaths: dests,
-  };
-  await updateRegistry(
-    scope,
-    (r) => ({ entries: [...r.entries.filter((e) => !(e.name === entry.name && e.version === entry.version)), entry] }),
-    cwd,
-    home,
-  );
-  return entry;
+  });
 }
 
+async function validateOwnedPath(
+  path: string,
+  scope: InstallScope,
+  cwd: string,
+  home: string,
+  name: string,
+  version: string,
+): Promise<string> {
+  const t = templateBase(scope, cwd, home),
+    s = skillBase(scope, cwd, home),
+    tr = relative(t, path),
+    sr = relative(s, path);
+  const allowed =
+    (tr.startsWith(`${name}@${version}${sep}`) && !tr.includes(`${sep}${sep}`)) ||
+    sr.startsWith(`graphkit-${name}${sep}`) ||
+    sr.startsWith("graphkit-");
+  if (!allowed) fail(`registry path not allowed: ${path}`);
+  const b = path.startsWith(s) ? s : t;
+  await validateTarget(path, b);
+  return path;
+}
 export async function removeOwnedPaths(
   ownedPaths: string[],
   scope: InstallScope,
   cwd: string,
   home: string,
+  name = "",
+  version = "",
 ): Promise<void> {
-  const tBase = templateBase(scope, cwd, home);
-  const sBase = skillBase(scope, cwd, home);
-  await Promise.all(ownedPaths.map((path) => rm(path, { force: true }).catch(() => {})));
-  // Recursively remove any now-empty template and skill directory trees.
-  for (const base of [tBase, sBase]) {
-    let entries: string[];
-    try {
-      entries = await readdir(base);
-    } catch {
-      continue;
+  for (const path of ownedPaths) {
+    await validateOwnedPath(path, scope, cwd, home, name, version);
+    await ops.rm(path, { force: true });
+  }
+  await cleanup(scope, cwd, home);
+}
+async function pruneEmpty(dir: string): Promise<void> {
+  let entries: string[];
+  try {
+    entries = await readdir(dir);
+  } catch {
+    return;
+  }
+  for (const e of entries) {
+    const p = join(dir, e);
+    const st = await lstat(p);
+    if (st.isDirectory()) {
+      await pruneEmpty(p);
+      if ((await readdir(p)).length === 0) await rm(p, { recursive: true, force: true });
     }
-    for (const entry of entries) {
-      const child = join(base, entry);
-      try {
-        if ((await stat(child)).isDirectory()) {
-          const remaining = await readdir(child);
-          // If any files survive, skip
-          const hasFiles = (
-            await Promise.all(
-              remaining.map(async (e) => {
-                try {
-                  return (await stat(join(child, e))).isFile();
-                } catch {
-                  return false;
-                }
-              }),
-            )
-          ).some(Boolean);
-          if (!hasFiles && remaining.every((e) => e === (undefined as unknown as string))) {
-          } // placeholder
-          if (!hasFiles) await rm(child, { recursive: true, force: true });
-        }
-      } catch {}
-    }
+  }
+}
+async function cleanup(scope: InstallScope, cwd: string, home: string) {
+  for (const root of [templateBase(scope, cwd, home), skillBase(scope, cwd, home)]) {
+    await pruneEmpty(root);
   }
 }

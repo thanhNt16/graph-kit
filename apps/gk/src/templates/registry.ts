@@ -21,7 +21,11 @@ export interface Registry {
 export function registryPath(scope: InstallScope, cwd = process.cwd(), home = homedir()) {
   return scope === "global" ? join(home, ".graphkit", "registry.json") : join(cwd, ".graphkit", "registry.json");
 }
-export async function readRegistry(scope: InstallScope, cwd = process.cwd(), home = homedir()): Promise<Registry> {
+export async function readRegistryUnlocked(
+  scope: InstallScope,
+  cwd = process.cwd(),
+  home = homedir(),
+): Promise<Registry> {
   const path = registryPath(scope, cwd, home);
   try {
     const raw = JSON.parse(await readFile(path, "utf8"));
@@ -31,21 +35,33 @@ export async function readRegistry(scope: InstallScope, cwd = process.cwd(), hom
     throw new GraphKitError("SCHEMA_VIOLATION", "invalid template registry", false, error);
   }
 }
-export async function updateRegistry(
+export const readRegistry = readRegistryUnlocked;
+export async function updateRegistryUnlocked(
   scope: InstallScope,
-  mutate: (registry: Registry) => Registry,
+  mutate: (r: Registry) => Registry,
   cwd = process.cwd(),
   home = homedir(),
 ) {
   const path = registryPath(scope, cwd, home);
   await mkdir(dirname(path), { recursive: true });
-  return withDirectoryLock(dirname(path), async () => {
-    const next = mutate(await readRegistry(scope, cwd, home));
-    await writeJsonAtomic(path, next);
-    return next;
-  });
+  const next = mutate(await readRegistryUnlocked(scope, cwd, home));
+  await writeJsonAtomic(path, next);
+  return next;
+}
+export async function updateRegistry(
+  scope: InstallScope,
+  mutate: (r: Registry) => Registry,
+  cwd = process.cwd(),
+  home = homedir(),
+) {
+  const dir = dirname(registryPath(scope, cwd, home));
+  await mkdir(dir, { recursive: true });
+  return withDirectoryLock(dir, () => updateRegistryUnlocked(scope, mutate, cwd, home));
 }
 export async function allRegistryEntries(cwd = process.cwd(), home = homedir()) {
-  const [project, global] = await Promise.all([readRegistry("project", cwd, home), readRegistry("global", cwd, home)]);
+  const [project, global] = await Promise.all([
+    readRegistryUnlocked("project", cwd, home),
+    readRegistryUnlocked("global", cwd, home),
+  ]);
   return [...project.entries, ...global.entries];
 }

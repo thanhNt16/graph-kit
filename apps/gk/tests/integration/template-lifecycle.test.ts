@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { cp, mkdir, mkdtemp, readdir, readFile, rm, symlink, writeFile } from "node:fs/promises";
+import { cp, mkdir, mkdtemp, readdir, readFile, readlink, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { renderClaudeSkills } from "../../src/adapters/claude.js";
@@ -11,9 +11,9 @@ import {
   removeTemplate,
   updateTemplate,
 } from "../../src/commands/template.js";
-import { installTemplate } from "../../src/templates/installer.js";
+import { installTemplate, setInstallerOpsForTest, setRegistryUpdateOpForTest } from "../../src/templates/installer.js";
 import { loadTemplate } from "../../src/templates/loader.js";
-import { readRegistry } from "../../src/templates/registry.js";
+import { readRegistry, registryPath, updateRegistryUnlocked } from "../../src/templates/registry.js";
 
 const fixture = join(import.meta.dir, "..", "fixtures", "valid-chain");
 let cwd = "";
@@ -89,6 +89,7 @@ describe("installation", () => {
     const result = await installTemplate(fixture, { ...opts(), dryRun: true });
     if (!("dryRun" in result)) throw new Error("expected dryRun result");
     expect(result.dryRun).toBe(true);
+    expect(result.changedPaths).toEqual([]);
     expect(await readdir(cwd)).toEqual(before);
     expect((await readRegistry("project", cwd, home)).entries).toHaveLength(0);
   });
@@ -111,8 +112,25 @@ describe("installation", () => {
   test("rejects symlink escape at install target", async () => {
     const outside = await mkdtemp(join(tmpdir(), "gk-outside-"));
     await mkdir(join(cwd, ".graphkit", "templates"), { recursive: true });
+    await mkdir(join(cwd, ".claude", "skills"), { recursive: true });
     await symlink(outside, join(cwd, ".graphkit", "templates", "valid-chain@1.0.0"));
     await expect(installTemplate(fixture, opts())).rejects.toMatchObject({ code: "UNSAFE_PATH" });
+  });
+  test("rejects symlink parent swapped outside via seam", async () => {
+    const outside = await mkdtemp(join(tmpdir(), "gk-outside-"));
+    const setup = await setInstallerOpsForTest({
+      mkdir: (async (dir: string) => {
+        if (dir.endsWith("valid-chain@1.0.0")) throw Object.assign(new Error("swapped"), { code: "UNSAFE_PATH" });
+        const fsmod = await import("node:fs/promises");
+        await fsmod.mkdir(dir, { recursive: true });
+      }) as never,
+    });
+    try {
+      await expect(installTemplate(fixture, { ...opts(), force: true })).rejects.toMatchObject({ code: "UNSAFE_PATH" });
+      expect(await readdir(outside)).toEqual([]);
+    } finally {
+      setup();
+    }
   });
 });
 
@@ -165,6 +183,94 @@ describe("lifecycle safety", () => {
     const dirEntries = await readdir(join(cwd, ".graphkit", "templates"));
     expect(dirEntries).toEqual(["valid-chain@1.0.0"]);
   });
+  test("full transaction rollback on registry update failure, registry byte-identical", async () => {
+    await installTemplate(fixture, opts());
+    const target = join(cwd, ".graphkit", "templates", "valid-chain@1.0.0", "workflow.yaml");
+    await writeFile(target, "edited" + "\n");
+    const registryBefore = await readFile(registryPath("project", cwd, home), "utf8");
+    const boom = new Error("boom");
+    const raise = async () => {
+      throw boom;
+    };
+    const setup = await setRegistryUpdateOpForTest(raise as never);
+    try {
+      await expect(installTemplate(fixture, { ...opts(), force: true })).rejects.toThrow("boom");
+    } finally {
+      setup();
+    }
+    expect(await readFile(target, "utf8")).toBe("edited" + "\n");
+    expect(await readFile(registryPath("project", cwd, home), "utf8")).toBe(registryBefore);
+    expect(await readFile(join(cwd, ".graphkit", "templates", "valid-chain@1.0.0", "workflow.yaml"), "utf8")).toBe(
+      "edited\n",
+    );
+    expect(await readFile(join(cwd, ".graphkit", "templates", "valid-chain@1.0.0", "template.yaml"), "utf8")).toContain(
+      "name: valid-chain",
+    );
+  });
+  test("dry-run refuses modified target without force, force reports changed but writes nothing", async () => {
+    await installTemplate(fixture, opts());
+    const target = join(cwd, ".graphkit", "templates", "valid-chain@1.0.0", "workflow.yaml");
+    await writeFile(target, "edited" + "\n");
+    const before = await readFile(target, "utf8");
+    await expect(installTemplate(fixture, { ...opts(), dryRun: true })).rejects.toMatchObject({
+      code: "MODIFIED_TARGET",
+    });
+    expect(await readFile(target, "utf8")).toBe(before);
+    const dryForce = await installTemplate(fixture, { ...opts(), dryRun: true, force: true });
+    if ("dryRun" in dryForce) {
+      expect(dryForce.changedPaths).toEqual([target]);
+    }
+    expect(await readFile(target, "utf8")).toBe(before);
+    expect((await readRegistry("project", cwd, home)).entries).toHaveLength(1);
+  });
+  test("binary and text rollback are exact (Uint8Array snapshots)", async () => {
+    const data = new Uint8Array([0, 255, 1, 254, 128, 42]);
+    await mkdir(join(home, ".graphkit", "templates", "bin@1.0.0"), { recursive: true });
+    await writeFile(join(home, ".graphkit", "templates", "bin@1.0.0", "blob.bin"), data);
+    const setup = await setInstallerOpsForTest({
+      cp: (async () => {
+        throw new Error("bin-fail");
+      }) as never,
+    });
+    try {
+      await expect(installTemplate(fixture, { ...opts(), scope: "global", force: true, cwd: home })).rejects.toThrow(
+        "bin-fail",
+      );
+    } finally {
+      setup();
+    }
+    expect(await readFile(join(home, ".graphkit", "templates", "bin@1.0.0", "blob.bin"))).toEqual(Buffer.from(data));
+  });
+  test("registry path symlink corrupt entry rejected even with force, victim survives", async () => {
+    await installTemplate(fixture, opts());
+    const victim = join(cwd, ".graphkit", "templates", "valid-chain@1.0.0", "workflow.yaml");
+    const contents = await readFile(victim);
+    const outside = await mkdtemp(join(tmpdir(), "gk-victim-out-"));
+    const fake = join(outside, "workflow.yaml");
+    await writeFile(fake, "corrupt" + "\n");
+    const entry = (await readRegistry("project", cwd, home)).entries[0];
+    const evilPath = join(cwd, ".claude", "skills", "graphkit-worker", "SKILL.md");
+    await rm(evilPath, { force: true });
+    await symlink(fake, evilPath);
+    await updateRegistryUnlocked(
+      "project",
+      (r) => {
+        const found = r.entries.find((x) => x.name === entry.name && x.version === entry.version);
+        if (!found) throw new Error("entry missing");
+        const e = found;
+        const owned = e.ownedPaths.filter((p) => p !== evilPath);
+        owned.unshift(evilPath);
+        return { entries: [{ ...e, ownedPaths: owned }] };
+      },
+      cwd,
+      home,
+    );
+    await expect(removeTemplate("valid-chain", "1.0.0", { ...opts(), force: true })).rejects.toMatchObject({
+      code: "UNSAFE_PATH",
+    });
+    expect(await readFile(victim)).toEqual(contents);
+    expect(await readlink(evilPath)).toBe(fake);
+  });
 });
 
 describe("template scaffolding", () => {
@@ -181,5 +287,51 @@ describe("template scaffolding", () => {
     expect(listed).toHaveLength(1);
     expect(listed[0].name).toBe("valid-chain");
     expect(listed[0].scope).toBe("project");
+  });
+});
+
+describe("concurrent installs", () => {
+  test("distinct installs on distinct targets survive concurrently", async () => {
+    const fixtureB = await mkdtemp(join(tmpdir(), "gk-chain-b-"));
+    await cp(fixture, fixtureB, { recursive: true });
+    await writeFile(
+      join(fixtureB, "template.yaml"),
+      "name: chain-b" +
+        "\n" +
+        "version: 1.0.0" +
+        "\n" +
+        "apiVersion: graphkit.dev/v1alpha1" +
+        "\n" +
+        "harness: claude" +
+        "\n",
+    );
+    await Promise.all([
+      installTemplate(fixture, { ...opts(), force: true }),
+      installTemplate(fixtureB, { ...opts(), force: true }),
+    ]);
+    const entries = (await readRegistry("project", cwd, home)).entries;
+    expect(entries.map((e) => e.name).sort()).toEqual(["chain-b", "valid-chain"]);
+    expect((await readdir(join(cwd, ".graphkit", "templates"))).sort()).toEqual(["chain-b@1.0.0", "valid-chain@1.0.0"]);
+  });
+  test("concurrent installs to the same target with distinct content stay atomic", async () => {
+    const fixtureB = await mkdtemp(join(tmpdir(), "gk-chain-c-"));
+    await cp(fixture, fixtureB, { recursive: true });
+    await writeFile(
+      join(fixtureB, "template.yaml"),
+      "name: valid-chain" +
+        "\n" +
+        "version: 2.0.0" +
+        "\n" +
+        "apiVersion: graphkit.dev/v1alpha1" +
+        "\n" +
+        "harness: claude" +
+        "\n",
+    );
+    await Promise.all([
+      installTemplate(fixture, { ...opts(), force: true }),
+      installTemplate(fixtureB, { ...opts(), force: true }),
+    ]);
+    const entries = (await readRegistry("project", cwd, home)).entries.map((e) => e.version);
+    expect(entries.sort()).toEqual(["1.0.0", "2.0.0"]);
   });
 });

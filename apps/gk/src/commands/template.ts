@@ -4,29 +4,22 @@ import { join, resolve } from "node:path";
 import { renderClaudeSkills } from "../adapters/claude.js";
 import { GraphKitError } from "../errors.js";
 import { validateTemplate } from "../runtime/validation.js";
-import { installTemplate, removeOwnedPaths } from "../templates/installer.js";
+import { type InstallOptions, installTemplate, removeOwnedPaths } from "../templates/installer.js";
 import { loadTemplate } from "../templates/loader.js";
 import { checksumFile } from "../templates/manifest.js";
 import { allRegistryEntries, type InstallScope, readRegistry, updateRegistry } from "../templates/registry.js";
 
-export interface InstallOptions {
-  scope?: InstallScope;
-  cwd?: string;
-  home?: string;
-  force?: boolean;
-  dryRun?: boolean;
+function base(scope: InstallScope, cwd: string, home: string) {
+  return scope === "global" ? home : cwd;
+}
+function templateBase(scope: InstallScope, cwd: string, home: string) {
+  return join(base(scope, cwd, home), ".graphkit", "templates");
 }
 export interface TemplateInfo {
   name: string;
   version: string;
   directory: string;
   scope?: InstallScope;
-}
-function base(scope: InstallScope, cwd: string, home: string) {
-  return scope === "global" ? home : cwd;
-}
-function templateBase(scope: InstallScope, cwd: string, home: string) {
-  return join(base(scope, cwd, home), ".graphkit", "templates");
 }
 
 export async function inspectTemplate(directory: string) {
@@ -139,7 +132,7 @@ export async function removeTemplate(name: string, version: string, options: Ins
   if (modified.length && !options.force)
     throw new GraphKitError("MODIFIED_TARGET", "refusing to remove modified template targets", true, modified);
   if (!options.dryRun) {
-    await removeOwnedPaths(entry.ownedPaths, scope, cwd, home);
+    await removeOwnedPaths(entry.ownedPaths, scope, cwd, home, entry.name, entry.version);
     const removed = [...entry.ownedPaths];
     await updateRegistry(
       scope,
