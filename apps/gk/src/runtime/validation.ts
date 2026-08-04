@@ -17,20 +17,22 @@ const ajv = new Ajv2020({ allErrors: true, strict: true });
 addFormats(ajv);
 const schemaCache = new Map<string, ReturnType<Ajv2020["compile"]>>();
 
-/** Synchronous output-schema boundary, wrapping all failures consistently. */
-export function validateOutput(schemaPath: string, value: unknown): void {
+function compileSchema(schemaPath: string): ReturnType<Ajv2020["compile"]> {
+  const cached = schemaCache.get(schemaPath);
+  if (cached) return cached;
   try {
-    let validate = schemaCache.get(schemaPath);
-    if (!validate) {
-      validate = ajv.compile(JSON.parse(readFileSync(schemaPath, "utf8")));
-      schemaCache.set(schemaPath, validate);
-    }
-    if (!validate(value))
-      throw new GraphKitError("SCHEMA_VIOLATION", "output schema violation", false, validate.errors);
+    const validate = ajv.compile(JSON.parse(readFileSync(schemaPath, "utf8")));
+    schemaCache.set(schemaPath, validate);
+    return validate;
   } catch (error) {
-    if (error instanceof GraphKitError) throw error;
     throw new GraphKitError("SCHEMA_VIOLATION", "output schema could not be read, parsed, or compiled", false, error);
   }
+}
+
+/** Synchronous output-schema boundary, wrapping all failures consistently. */
+export function validateOutput(schemaPath: string, value: unknown): void {
+  const validate = compileSchema(schemaPath);
+  if (!validate(value)) throw new GraphKitError("SCHEMA_VIOLATION", "output schema violation", false, validate.errors);
 }
 
 function compare(a: string, b: string): number {
@@ -91,6 +93,13 @@ export function validateTemplate(loaded: LoadedTemplate): ValidationIssue[] {
     issues.push({ code, message, node, details });
   };
   for (const item of loaded.loaderIssues ?? []) issue(item.code, item.message, item.node, item.details);
+  for (const [node, schemaPath] of [...loaded.outputSchemas.entries()].sort(([a], [b]) => compare(a, b))) {
+    try {
+      compileSchema(schemaPath);
+    } catch (error) {
+      issue("SCHEMA_VIOLATION", `output schema for node '${node}' could not be read, parsed, or compiled`, node, error);
+    }
+  }
 
   // Validate malformed nodes, then skip all type-specific access for them.
   const validNodes = new Map<string, Workflow["nodes"][string]>();
