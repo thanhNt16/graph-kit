@@ -2,19 +2,19 @@
 
 ## Status
 
-FIX ROUND 1 DONE. Commit `a5eae0c`.
+FIX ROUND 2 DONE. Commits: `fbdd78d` (implementation), `5ecb33a`/`a5eae0c` (prior).
 
 ## Test evidence (actual command output)
 
-`cd apps/gk && bun test` → `108 pass, 0 fail` (11 files; includes 18 workflow integration tests).
+`cd apps/gk && bun test` → `110 pass, 0 fail` (11 files; includes 20 workflow integration tests).
 
 Focused suite:
 ```
 $ bun test tests/integration/workflow.test.ts
- 18 pass
+ 20 pass
  0 fail
- 69 expect() calls
-Ran 18 tests across 1 file.
+ 76 expect() calls
+Ran 20 tests across 1 file.
 ```
 
 Gate checks:
@@ -31,7 +31,31 @@ $ bun run build       → OK (dist/index.js, 5 modules)
 - `src/schemas.ts` — `LeaseStatusSchema` includes `"expired"`
 - `tests/integration/workflow.test.ts` — 5 new tests + actor assertion
 
-## Fixes per finding
+## Fixes per finding (Round 2)
+
+1. **HIGH — join→agent deadlock fixed.** `nextWorkflow` join/router case now persists the transition under `mutateRun` via `advance` (set current_nodes to the chosen successor, apply iteration/failure counters, checkpoint/event) and recurses. The returned agent contract reflects the real current node. Idempotency preserved: repeated `next` after join advances only once (next call sees unsubmitted agent and returns its contract, never re-advancing). Aggregator test now full-cycle: settle fanout → next returns `summarize` agent contract → submit via contract success → `state.result` saved, run advances to `done`.
+
+2. **REJECTION EVENT centralized.** `submitWorkflow` catch now calls `rejectEvent` for every GraphKitError (previously only lease codes); reject helper stamps `type: "reject"`, `node`, `lease`, `actor` (defaults "system" for `INVALID_TRANSITION`), `details.code`, `details.work_item`. Late-submit test asserts reject event content, not only thrown code.
+
+3. **Submit event + checkpoint provenance lease/actor verified.** New test reads event log and newest checkpoint: worker submit carries `type: "submit"`, `node: "work"`, `lease`, `actor: "worker"`; checkpoint `provenance.actor`/`provenance.lease` match.
+
+4. **`dispatchContract` comment updated** — "Call under the run lock" (was misleading "Pure").
+
+5. **Unambiguous fanout worker resolution.** `fanoutTarget` now computes agents targeted by any non-fanout edge; requires exactly one untargeted agent candidate or throws `SCHEMA_VIOLATION` — no first-agent fallback. Ambiguity test: two untargeted agents → `SCHEMA_VIOLATION` on `next`.
+
+6. **Poll/expiry preserved** (from Round 1): expired in-flight lease marked `status: "expired"`, removed from `in_flight`, reissued under fresh lease; old lease submission rejected `LEASE_EXPIRED` + reject event. No deadlock.
+
+7. **Dead code removed.** Unused `deterministicOrAgent` deleted (join/router persist via `advance` + recursion). `stripInputs` retained for agent context output.
+
+## Concerns
+
+- `fanoutTarget` topology heuristic (untargeted-agent scan) is robust for current templates; explicit `from_agent` schema field would be cleaner but deferred.
+- `rejectEvent` / `submit` events use existing Event enum; extended provenance types beyond `EventTypeSchema` not added.
+- `required_evidence` still `[]` until Task 9.
+
+---
+
+## Fixes per finding (Round 1)
 
 1. **CRITICAL — premature join eliminated.** `fanIsComplete` now requires ALL original items to be `settled` (not in-flight). If items remain in flight, `nextWorkflow` returns a dispatch contract with `items: []` (wait/poll), keeping `current_nodes` on the fanout node. Test "waits at fanout while one required item remains in flight" proves this.
 
@@ -53,5 +77,4 @@ $ bun run build       → OK (dist/index.js, 5 modules)
 ## Concerns
 
 - 2 concurrent `nextWorkflow` calls: one gets leases + changes current_nodes to agent; the other re-reads after lock release and sees `current_nodes=["work"]` → returns agent contract via `nextWorkflow` recursion. Second stuck call may return dispatch or agent. Test proves leases union unique.
-- `fanoutTarget` heuristics (`save_as` match) are fragile for custom templates; explicit `from_agent` field on fanout node would be cleaner but schema change deferred.
 - Evidence-key provenance / `required_evidence` still `[]` until Task 9.
