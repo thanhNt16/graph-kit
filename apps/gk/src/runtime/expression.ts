@@ -205,13 +205,35 @@ class Parser {
   }
 }
 
-type Node =
+export type ExpressionNode =
   | { kind: "ref"; path: string[] }
   | { kind: "lit"; value: unknown }
-  | { kind: "not"; operand: Node }
-  | { kind: "and"; left: Node; right: Node }
-  | { kind: "or"; left: Node; right: Node }
-  | { kind: "cmp"; op: string; left: Node; right: Node };
+  | { kind: "not"; operand: ExpressionNode }
+  | { kind: "and"; left: ExpressionNode; right: ExpressionNode }
+  | { kind: "or"; left: ExpressionNode; right: ExpressionNode }
+  | { kind: "cmp"; op: string; left: ExpressionNode; right: ExpressionNode };
+
+type Node = ExpressionNode;
+
+export function parseCondition(expression: string): ExpressionNode {
+  const cleaned = expression.trim();
+  if (cleaned === "") return { kind: "lit", value: true };
+  return new Parser(tokenize(cleaned)).parse();
+}
+
+export function conditionReferences(expression: string): string[][] {
+  const refs: string[][] = [];
+  const visit = (node: ExpressionNode): void => {
+    if (node.kind === "ref") refs.push(node.path);
+    else if (node.kind === "not") visit(node.operand);
+    else if (node.kind === "and" || node.kind === "or" || node.kind === "cmp") {
+      visit(node.left);
+      visit(node.right);
+    }
+  };
+  visit(parseCondition(expression));
+  return refs;
+}
 
 function unsupported(message: string): GraphKitError {
   return new GraphKitError("ERR_EXPRESSION", message);
