@@ -57,11 +57,19 @@ function workItem(item: unknown): string {
 
 /** The single agent worker node a fanout dispatches work to. */
 function fanoutTarget(workflow: Workflow, fanId: string): string {
-  nodeFor(workflow, fanId);
-  const agents = Object.values(workflow.nodes).filter((n) => n.type === "agent");
-  if (agents.length !== 1)
-    throw new GraphKitError("INVALID_TRANSITION", "fanout requires exactly one agent worker node");
-  return agents[0].id;
+  const fan = nodeFor(workflow, fanId);
+  if (fan.type !== "fanout") throw new GraphKitError("INVALID_TRANSITION", `'${fanId}' is not a fanout`);
+  // Find the agent whose save_as field holds the fanout's work items — that's the
+  // worker that reports results for each item. No declarative edge, so scan.
+  const agents = Object.values(workflow.nodes).filter(
+    (n): n is Workflow["nodes"][string] & { type: "agent" } => n.type === "agent",
+  );
+  for (const agent of agents) {
+    if (agent.output.save_as === fan.from) return agent.id;
+  }
+  // Fallback: first agent node
+  if (agents.length) return agents[0].id;
+  throw new GraphKitError("INVALID_TRANSITION", `fanout '${fanId}' has no agent worker node`);
 }
 
 /** The join node that collects a fanout's field, if any. */
@@ -82,15 +90,39 @@ function fanParent(workflow: Workflow, nodeId: string): string | undefined {
   return undefined;
 }
 
-/** Whether every item in the fanout source field is settled or in flight. */
+/** Whether every required fanout item has a settled lease. */
 function fanIsComplete(workflow: Workflow, fanId: string, d: RunDocuments): boolean {
-  void workflow;
   const fan = nodeFor(workflow, fanId);
   if (fan.type !== "fanout") return true;
-  const items = (d.state[fan.from] as unknown[] | undefined) ?? [];
-  const originalItems = (d.state[`${FAN_ITEMS_PREFIX}${fan.from}`] as unknown[] | undefined) ?? items;
+  const items = (d.state[`${FAN_ITEMS_PREFIX}${fan.from}`] as unknown[] | undefined) ?? [];
   const settled = new Set(d.leases.filter((l) => l.status === "settled").map((l) => l.work_item));
-  return originalItems.every((item) => settled.has(workItem(item)));
+  return items.every((item) => settled.has(workItem(item)));
+}
+
+/** Expired workers become failed evidence and are eligible for re-dispatch. */
+function recoverExpiredLeases(d: RunDocuments, now: number): void {
+  for (const lease of d.leases) {
+    if (lease.status === "active" && Date.parse(lease.expires_at) <= now) {
+      lease.status = "expired";
+      if (d.run.in_flight[lease.work_item] === lease.id) delete d.run.in_flight[lease.work_item];
+    }
+  }
+}
+
+function emptyDispatch(loaded: LoadedTemplate, fanId: string): DispatchContract {
+  const workflow = loaded.workflow;
+  const fan = nodeFor(workflow, fanId);
+  if (fan.type !== "fanout") throw new GraphKitError("INVALID_TRANSITION", `'${fanId}' is not a fanout`);
+  const target = fanoutTarget(workflow, fanId);
+  const worker = nodeFor(workflow, target);
+  if (worker.type !== "agent") throw new GraphKitError("INVALID_TRANSITION", "fanout worker is not an agent");
+  return {
+    kind: "dispatch",
+    worker_skill: worker.skill,
+    items: [],
+    concurrency_ceiling: Math.min(fan.max_workers, workflow.limits?.max_workers ?? fan.max_workers),
+    join_merge_policy: workflow.state?.[fan.from]?.merge ?? "append",
+  };
 }
 
 /** Build a dispatch contract, issuing one fresh lease per available slot. Pure. */
@@ -184,7 +216,7 @@ export async function startWorkflow(
 export async function nextWorkflow(project: string, loaded: LoadedTemplate, runId: string): Promise<WorkflowContract> {
   const workflow = loaded.workflow;
   const docs = await readRun(project, runId);
-  const { run, state, leases } = docs;
+  const { run, state } = docs;
   const scope = scopeFor(workflow, run, state);
 
   if (run.status === "done") return { kind: "terminal", verdict: run.verdict ?? "failed" };
@@ -212,35 +244,34 @@ export async function nextWorkflow(project: string, loaded: LoadedTemplate, runI
         submit_argv: [...SUBMIT_CMD, runId, node.id],
       };
     case "fanout": {
-      const contract = dispatchContract(loaded, run, leases, state, current);
-      if (contract.items.length) {
-        await mutateRun(project, runId, (d) => {
+      let issuedContract: DispatchContract | undefined;
+      const result = await mutateRun(project, runId, (d) => {
+        recoverExpiredLeases(d, Date.now());
+        const contract = dispatchContract(loaded, d.run, d.leases, d.state, current);
+        issuedContract = contract;
+        if (contract.items.length) {
           for (const item of contract.items) {
             d.run.in_flight[item.work_item] = item.lease.id;
             d.leases.push(item.lease);
             d.run.current_nodes = [item.node];
           }
-          return {
-            documents: d,
-            event: {
-              type: "dispatch",
-              node: current,
-              details: { items: contract.items.map((i) => i.work_item) },
-              timestamp: new Date().toISOString(),
-            },
-          };
-        });
-        return contract;
-      }
-      // All items settled: open the join (a required checkpointed transition).
-      const join = joinFor(workflow, current);
-      await mutateRun(project, runId, (d) => {
-        d.run.current_nodes = [join];
+        } else if (!fanIsComplete(workflow, current, d)) {
+          d.run.current_nodes = [current];
+        } else {
+          d.run.current_nodes = [joinFor(workflow, current)];
+        }
         return {
           documents: d,
-          event: { type: "dispatch", node: join, details: { join: true }, timestamp: new Date().toISOString() },
+          event: {
+            type: "dispatch",
+            node: current,
+            details: { items: contract.items.map((i) => i.work_item) },
+            timestamp: new Date().toISOString(),
+          },
         };
       });
+      if (issuedContract?.items.length) return issuedContract;
+      if (!fanIsComplete(workflow, current, result.documents)) return emptyDispatch(loaded, current);
       return nextWorkflow(project, loaded, runId);
     }
     case "command":
@@ -263,7 +294,7 @@ export async function nextWorkflow(project: string, loaded: LoadedTemplate, runI
     case "router": {
       const decision = selectTransition({ workflow, run, scope, completed: current });
       if ("terminal" in decision) return { kind: "terminal", verdict: decision.verdict };
-      return deterministicOrAgent(workflow, run, decision.next[0]);
+      return deterministicOrAgent(loaded, run, decision.next[0], state);
     }
     default:
       throw new GraphKitError("INVALID_TRANSITION", `no contract for node '${current}'`);
@@ -277,19 +308,25 @@ function stripInputs(state: Record<string, unknown>): Record<string, unknown> {
 }
 
 /** Wrap a following node as a contract; falls back to an empty deterministic shell. */
-function deterministicOrAgent(workflow: Workflow, run: Run, next: string): WorkflowContract {
+function deterministicOrAgent(
+  loaded: LoadedTemplate,
+  run: Run,
+  next: string,
+  state: Record<string, unknown>,
+): WorkflowContract {
+  const workflow = loaded.workflow;
   const node = nodeFor(workflow, next);
   if (node.type === "agent")
     return {
       kind: "agent",
       node: next,
       objective: node.objective,
-      context: {},
+      context: { inputs: (state["__inputs"] as Record<string, unknown>) ?? {}, state: stripInputs(state) },
       tool_allowlist: node.tools,
       skill: node.skill,
       limits: workflow.limits ?? {},
       required_evidence: [],
-      output_schema: "",
+      output_schema: loaded.outputSchemas.get(next) ?? "",
       output_save_as: node.output.save_as,
       submit_argv: [...SUBMIT_CMD, run.run_id, next],
     };
@@ -309,6 +346,11 @@ export async function submitWorkflow(
   const workflow = loaded.workflow;
   const before = await readRun(project, runId);
   const node = before.run.current_nodes[0];
+  if (before.run.status === "done" || !node || !workflow.nodes[node]) {
+    const err = new GraphKitError("INVALID_TRANSITION", "run is no longer accepting submissions");
+    await reject(project, runId, err.code, node ?? "start", spec, err);
+    throw err;
+  }
   const nodeDef = nodeFor(workflow, node);
 
   // Validate output against the schema BEFORE taking the mutation lock.
@@ -346,7 +388,18 @@ export async function submitWorkflow(
         if (spec.work_item) delete d.run.in_flight[spec.work_item];
       }
 
-      if (cur.type === "human") return finishHuman(workflow, d, cur.id, spec);
+      if (cur.type === "human") {
+        return {
+          documents: finishHuman(workflow, d, cur.id, spec),
+          event: {
+            type: "submit",
+            node: cur.id,
+            lease: spec.lease,
+            actor: spec.actor ?? "human",
+            timestamp: new Date().toISOString(),
+          },
+        };
+      }
       if (cur.type !== "agent")
         throw new GraphKitError("INVALID_TRANSITION", `cannot submit output to node '${current}'`);
 
@@ -361,11 +414,31 @@ export async function submitWorkflow(
           name: `${spec.work_item ?? workItem(output)}:${verdict}`,
         };
         if (declaration) d.state[fan.from] = mergeStateField(declaration, d.state[fan.from], [value]);
-        return advance(workflow, d, cur.id, "passed", spec);
+        const docs = advance(workflow, d, cur.id, "passed", spec);
+        return {
+          documents: docs,
+          event: {
+            type: "submit",
+            node: cur.id,
+            lease: spec.lease,
+            actor: spec.actor ?? "worker",
+            timestamp: new Date().toISOString(),
+          },
+        };
       }
       const declaration = workflow.state ? workflow.state[saveAs as string] : undefined;
       if (declaration) d.state[saveAs as string] = mergeStateField(declaration, d.state[saveAs as string], output);
-      return advance(workflow, d, cur.id, "passed", spec);
+      const docs = advance(workflow, d, cur.id, "passed", spec);
+      return {
+        documents: docs,
+        event: {
+          type: "submit",
+          node: cur.id,
+          lease: spec.lease,
+          actor: spec.actor ?? "worker",
+          timestamp: new Date().toISOString(),
+        },
+      };
     });
   } catch (err) {
     if (err instanceof GraphKitError && (err.code === "LEASE_INVALID" || err.code === "LEASE_EXPIRED")) {

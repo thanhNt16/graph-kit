@@ -3,7 +3,7 @@ import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { executeWorkflow, nextWorkflow, startWorkflow, submitWorkflow } from "../../src/commands/workflow.js";
-import { createRun, readRun } from "../../src/runtime/store.js";
+import { createRun, mutateRun, readRun } from "../../src/runtime/store.js";
 import type { Run, Workflow } from "../../src/schemas.js";
 import type { LoadedTemplate } from "../../src/templates/loader.js";
 import { loadTemplate } from "../../src/templates/loader.js";
@@ -162,6 +162,72 @@ describe("workflow contracts", () => {
     expect(result.shell).toBe(false);
     expect(result.exit_code).toBe(0);
   });
+
+  test("join advances to aggregator agent with full contract", async () => {
+    const loaded = makeLoaded({
+      apiVersion: "graphkit.dev/v1alpha1",
+      kind: "Workflow",
+      metadata: { name: "agg" },
+      inputs: {},
+      limits: { max_iterations: 10, max_workers: 2 },
+      state: { items: { merge: "append_unique", identity: "name" }, result: { merge: "replace" } },
+      start: "start",
+      nodes: {
+        fan: { id: "fan", type: "fanout", from: "items", max_workers: 2 },
+        work: {
+          id: "work",
+          type: "agent",
+          skill: "worker",
+          objective: "Process item.",
+          tools: [],
+          output: { schema: "schemas/result.schema.json", save_as: "result" },
+        },
+        join: { id: "join", type: "join", merge: "items" },
+        summarize: {
+          id: "summarize",
+          type: "agent",
+          skill: "worker",
+          objective: "Aggregate item results.",
+          tools: [],
+          output: { schema: "schemas/result.schema.json", save_as: "result" },
+        },
+        done: { id: "done", type: "graph", operation: "complete-task" },
+      },
+      edges: [
+        { from: "start", to: "fan" },
+        { from: "fan", to: "join" },
+        { from: "join", to: "summarize" },
+        { from: "summarize", to: "done" },
+      ],
+      terminal: [{ node: "done", verdict: "passed" }],
+    });
+    await startWorkflow(project, loaded, { items: [{ name: "i1" }, { name: "i2" }] }, "r1");
+    const dispatch = await nextWorkflow(project, loaded, "r1");
+    if (dispatch.kind !== "dispatch") throw new Error("expected dispatch");
+    const [a, b] = dispatch.items;
+    await submitWorkflow(
+      project,
+      loaded,
+      "r1",
+      { summary: "s1" },
+      { lease: a.lease.id, work_item: a.work_item, node: a.node, verdict: "passed" },
+    );
+    await submitWorkflow(
+      project,
+      loaded,
+      "r1",
+      { summary: "s2" },
+      { lease: b.lease.id, work_item: b.work_item, node: b.node, verdict: "passed" },
+    );
+    const agg = await nextWorkflow(project, loaded, "r1");
+    expect(agg.kind).toBe("agent");
+    if (agg.kind !== "agent") throw new Error(`expected agent, got ${agg.kind}`);
+    expect(agg.node).toBe("summarize");
+    expect(agg.objective).toBe("Aggregate item results.");
+    expect(agg.output_schema).toContain("result.schema.json");
+    expect(agg.output_save_as).toBe("result");
+    expect(agg.submit_argv).toEqual(["gk", "workflow", "submit", "r1", "summarize"]);
+  });
 });
 
 describe("submission gates", () => {
@@ -172,6 +238,9 @@ describe("submission gates", () => {
     expect(result.state.result).toEqual({ summary: "done" });
     expect(result.run.current_nodes).toEqual(["complete"]);
     expect(result.run.status).toBe("running");
+    const events = await readEvents();
+    const submit = events.find((e) => e.type === "submit");
+    expect(submit).toMatchObject({ type: "submit", actor: "worker" });
   });
 
   test("malformed output does not mutate run and appends rejection", async () => {
@@ -269,6 +338,27 @@ describe("parallel dispatch and fan-in", () => {
     expect(dispatch.items.map((i) => i.work_item).sort()).toEqual(["i1", "i2"]);
   });
 
+  test("waits at fanout while one required item remains in flight", async () => {
+    const loaded = fanLoaded();
+    await startWorkflow(project, loaded, { items: [{ name: "i1" }, { name: "i2" }] }, "r1");
+    const dispatch = await nextWorkflow(project, loaded, "r1");
+    if (dispatch.kind !== "dispatch") throw new Error("expected dispatch");
+    const [a] = dispatch.items;
+    await submitWorkflow(
+      project,
+      loaded,
+      "r1",
+      { summary: "s1" },
+      { lease: a.lease.id, work_item: a.work_item, node: a.node, verdict: "passed" },
+    );
+    const wait = await nextWorkflow(project, loaded, "r1");
+    expect(wait.kind).toBe("dispatch");
+    if (wait.kind !== "dispatch") throw new Error("expected dispatch wait");
+    expect(wait.items).toEqual([]);
+    expect((await readRun(project, "r1")).run.current_nodes).toEqual(["fan"]);
+    expect((await readRun(project, "r1")).run.verdict).toBeNull();
+  });
+
   test("fan-in joins once all-settled with explicit merge policy", async () => {
     const loaded = fanLoaded();
     await startWorkflow(project, loaded, { items: [{ name: "i1" }, { name: "i2" }, { name: "i3" }] }, "r1");
@@ -316,6 +406,78 @@ describe("parallel dispatch and fan-in", () => {
     expect(names).toContain("i2:failed");
     expect(names).toContain("i3:passed");
     expect(names).toHaveLength(6);
+  });
+
+  test("concurrent Promise.all next calls never double-issue a lease", async () => {
+    const loaded = fanLoaded();
+    await startWorkflow(project, loaded, { items: [{ name: "i1" }, { name: "i2" }, { name: "i3" }] }, "r1");
+    const results = await Promise.all([nextWorkflow(project, loaded, "r1"), nextWorkflow(project, loaded, "r1")]);
+    const dispatches = results.filter((r) => r.kind === "dispatch");
+    expect(dispatches.length).toBeGreaterThan(0);
+    const leased = dispatches.flatMap((d) => d.items.map((i) => i.work_item));
+    expect(new Set(leased).size).toBe(leased.length);
+    // no duplicate active lease per work item
+    const docs = await readRun(project, "r1");
+    const inflight = Object.values(docs.run.in_flight ?? {});
+    expect(new Set(inflight).size).toBe(inflight.length);
+  });
+
+  test("expired in-flight lease is recovered, reissued, and old submission rejected", async () => {
+    const now = Date.now();
+    const loaded = fanLoaded();
+    await createRun(
+      project,
+      { ...runFor("r1"), current_nodes: ["fan"] },
+      { items: [{ name: "i1" }], __inputs: {}, __fan_items__items: [{ name: "i1" }] },
+      [
+        {
+          id: "L1",
+          work_item: "i1",
+          node: "work",
+          issued_at: new Date(now - 60_000).toISOString(),
+          expires_at: new Date(now - 30_000).toISOString(),
+          status: "active",
+        },
+      ],
+    );
+    await mutateRun(project, "r1", (d) => {
+      Object.assign(d.run.in_flight, { i1: "L1" });
+      return d;
+    });
+    const reissue = await nextWorkflow(project, loaded, "r1");
+    expect(reissue.kind).toBe("dispatch");
+    if (reissue.kind !== "dispatch") throw new Error("expected dispatch");
+    expect(reissue.items.map((i) => i.work_item)).toEqual(["i1"]);
+    const fresh = reissue.items[0].lease;
+    expect(fresh.id).not.toBe("L1");
+    const docs = await readRun(project, "r1");
+    const expired = docs.leases.find((l) => l.id === "L1");
+    expect(expired?.status).toBe("expired");
+    expect(docs.leases.find((l) => l.id === fresh.id)?.status).toBe("active");
+    await expect(
+      submitWorkflow(
+        project,
+        loaded,
+        "r1",
+        { summary: "x" },
+        { lease: "L1", work_item: "i1", node: "work", verdict: "passed" },
+      ),
+    ).rejects.toMatchObject({ code: "LEASE_EXPIRED" });
+    const events = await readEvents();
+    expect(events.some((e) => e.type === "reject" && e.lease === "L1")).toBe(true);
+  });
+
+  test("submit after run advanced to non-agent node is rejected with provenance", async () => {
+    const loaded = await loadTemplate(root);
+    await startWorkflow(project, loaded, { task: "x" }, "r1");
+    await submitWorkflow(project, loaded, "r1", { summary: "done" });
+    // Run has advanced to `complete`; a late submit must reject rather than mutate.
+    await expect(submitWorkflow(project, loaded, "r1", { summary: "late" })).rejects.toMatchObject({
+      code: "INVALID_TRANSITION",
+    });
+    const docs = await readRun(project, "r1");
+    expect(docs.run.current_nodes).toEqual(["complete"]);
+    expect(docs.run.verdict).toBeNull();
   });
 
   test("concurrent Promise.all submits serialize under the lock", async () => {

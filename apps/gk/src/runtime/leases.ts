@@ -38,8 +38,9 @@ export function validateLease(input: ValidateInput): Lease {
   if (!lease) throw new GraphKitError("LEASE_INVALID", "unknown lease");
   if (lease.work_item !== input.work_item)
     throw new GraphKitError("LEASE_INVALID", "lease bound to different work item");
+  if (Date.parse(lease.expires_at) <= input.now || lease.status === "expired")
+    throw new GraphKitError("LEASE_EXPIRED", "lease expired");
   if (lease.status !== "active") throw new GraphKitError("LEASE_INVALID", "lease already settled");
-  if (Date.parse(lease.expires_at) <= input.now) throw new GraphKitError("LEASE_EXPIRED", "lease expired");
   return lease;
 }
 

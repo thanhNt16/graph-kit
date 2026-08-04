@@ -180,7 +180,7 @@ export type Run = z.infer<typeof RunSchema>;
 
 // ── Lease ───────────────────────────────────────────────────────────────
 
-export const LeaseStatusSchema = z.enum(["active", "settled"]);
+export const LeaseStatusSchema = z.enum(["active", "settled", "expired"]);
 export type LeaseStatus = z.infer<typeof LeaseStatusSchema>;
 
 export const LeaseSchema = z.object({
