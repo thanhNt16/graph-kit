@@ -2,7 +2,7 @@ import { mkdir, readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { GraphKitError } from "../errors.js";
 import { type Event, type Lease, LeaseSchema, type Run, RunSchema } from "../schemas.js";
-import { appendEventUnlocked, writeJsonAtomic, writeTextAtomic } from "../shared/files.js";
+import { writeJsonAtomic, writeTextAtomic } from "../shared/files.js";
 import { withDirectoryLock } from "../shared/lock.js";
 
 /** The three mutable run documents. */
@@ -44,6 +44,20 @@ function checkpointName(n: number, node: string): string {
 
 async function readJson<T>(path: string, parse: (value: unknown) => T): Promise<T> {
   return parse(JSON.parse(await readFile(path, "utf8")));
+}
+
+/**
+ * Append one whole event line to the run event log. Only call while holding
+ * the run directory lock (via `withDirectoryLock`); reuses the exported atomic
+ * text writer so the append is crash-safe. Kept private to store.ts so the
+ * unsafe read-modify-write append is never exposed as a public shared primitive.
+ */
+async function appendEventWithinLock(path: string, event: unknown): Promise<void> {
+  const existing = await readFile(path, "utf8").catch((err: unknown) => {
+    if ((err as { code?: string }).code === "ENOENT") return "";
+    throw err;
+  });
+  await writeTextAtomic(path, `${existing}${JSON.stringify(event)}\n`, false);
 }
 
 async function readDocs(dir: string): Promise<RunDocuments> {
@@ -103,7 +117,7 @@ export async function readRun(project: string, runId: string): Promise<RunDocume
  */
 export async function appendRunEvent(project: string, runId: string, event: Event): Promise<void> {
   const dir = runDir(project, runId);
-  await withDirectoryLock(dir, () => appendEventUnlocked(join(dir, "events.jsonl"), { ...event, run_id: runId }));
+  await withDirectoryLock(dir, () => appendEventWithinLock(join(dir, "events.jsonl"), { ...event, run_id: runId }));
 }
 
 /**
@@ -147,7 +161,7 @@ export async function mutateRun(project: string, runId: string, mutator: RunMuta
       checkpoint,
     };
     await writeJsonAtomic(join(dir, "checkpoints", `${checkpoint}.json`), { ...docs, provenance }, true);
-    await appendEventUnlocked(join(dir, "events.jsonl"), event);
+    await appendEventWithinLock(join(dir, "events.jsonl"), event);
     return { documents: docs, event };
   });
 }

@@ -80,6 +80,17 @@ describe("appendEvent", () => {
     }
     expect(await readdir(dir)).toEqual(["events.jsonl"]);
   });
+
+  test("concurrent public appends preserve every whole event line", async () => {
+    const log = join(dir, "events.jsonl");
+    await Promise.all(Array.from({ length: 3 }, (_, seq) => appendEvent(log, { seq })));
+    const lines = (await readFile(log, "utf8"))
+      .trim()
+      .split("\n")
+      .map((line) => JSON.parse(line));
+    expect(lines).toHaveLength(3);
+    expect(new Set(lines.map((event) => event.seq))).toEqual(new Set([0, 1, 2]));
+  });
 });
 
 describe("withDirectoryLock", () => {
