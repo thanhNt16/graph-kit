@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { type ErrorCode, GraphKitError } from "../../src/errors.js";
 import { mergeStateField } from "../../src/runtime/merges.js";
+import type { MergePolicy } from "../../src/schemas.js";
 
 function expectCode(fn: () => unknown, code: ErrorCode) {
   try {
@@ -38,5 +39,25 @@ describe("merge policies", () => {
   test("rejects undeclared and conflicting merges", () => {
     expectCode(() => mergeStateField(undefined, 1, 2), "ERR_UNDECLARED_MERGE");
     expectCode(() => mergeStateField({ merge: "reject_conflict" }, "a", "b"), "ERR_MERGE_CONFLICT");
+  });
+  test("first write accepts incoming under every policy", () => {
+    const incoming = { id: "a", n: 3 };
+    const cases: Array<{
+      declaration: { merge: MergePolicy; identity?: string };
+      previous: unknown;
+      expected: unknown;
+    }> = [
+      { declaration: { merge: "replace" }, previous: undefined, expected: incoming },
+      { declaration: { merge: "append" }, previous: undefined, expected: [incoming] },
+      { declaration: { merge: "append_unique", identity: "id" }, previous: undefined, expected: [incoming] },
+      { declaration: { merge: "first" }, previous: undefined, expected: incoming },
+      { declaration: { merge: "maximum" }, previous: undefined, expected: incoming },
+      { declaration: { merge: "minimum" }, previous: undefined, expected: incoming },
+      { declaration: { merge: "merge_object" }, previous: undefined, expected: incoming },
+      { declaration: { merge: "reject_conflict" }, previous: undefined, expected: incoming },
+    ];
+    for (const { declaration, previous, expected } of cases) {
+      expect(mergeStateField(declaration, previous, incoming)).toEqual(expected);
+    }
   });
 });

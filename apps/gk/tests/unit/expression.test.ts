@@ -35,4 +35,23 @@ describe("expressions", () => {
       expectCode(() => evaluateCondition(expression, scope), "ERR_EXPRESSION");
     }
   });
+  test("rejects prototype traversal in conditions and templates", () => {
+    const sub = (expr: string) => `${String.fromCharCode(36)}{{ ${expr} }}`;
+    for (const expression of [
+      "inputs.constructor.constructor",
+      "inputs.__proto__",
+      "state.prototype",
+      "inputs.constructor",
+      "inputs.__proto__.x",
+    ]) {
+      expectCode(() => evaluateCondition(expression, scope), "ERR_EXPRESSION");
+      expectCode(() => resolveTemplate(sub(expression), scope), "ERR_EXPRESSION");
+    }
+  });
+  test("rejects excessive nesting depth", () => {
+    const expr = "!".repeat(200).concat("state.ok");
+    const parens = "(".repeat(200).concat("state.ok").concat(")".repeat(200));
+    expectCode(() => evaluateCondition(expr, scope), "ERR_EXPRESSION");
+    expectCode(() => evaluateCondition(parens, scope), "ERR_EXPRESSION");
+  });
 });

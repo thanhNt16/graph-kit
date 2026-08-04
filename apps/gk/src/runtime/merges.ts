@@ -41,12 +41,16 @@ export function mergeStateField(
     throw new GraphKitError("ERR_UNDECLARED_MERGE", "no merge policy declared for state field");
   }
   const policy: MergePolicy = declaration.merge;
+  const isFirstWrite = previous === undefined;
   switch (policy) {
     case "replace":
       return incoming;
     case "append":
-      return (Array.isArray(previous) ? previous : []).concat(Array.isArray(incoming) ? incoming : []);
+      return isFirstWrite
+        ? [incoming]
+        : (Array.isArray(previous) ? previous : []).concat(Array.isArray(incoming) ? incoming : []);
     case "append_unique":
+      if (isFirstWrite) return [incoming];
       return applyAppendUnique(
         declaration,
         Array.isArray(previous) ? previous : [],
@@ -55,16 +59,17 @@ export function mergeStateField(
     case "first":
       return previous === undefined ? incoming : previous;
     case "maximum":
-      return compareForPolicy(previous, incoming, "maximum") >= 0 ? previous : incoming;
+      return isFirstWrite ? incoming : compareForPolicy(previous, incoming, "maximum") >= 0 ? previous : incoming;
     case "minimum":
-      return compareForPolicy(previous, incoming, "minimum") <= 0 ? previous : incoming;
-    case "merge_object": {
+      return isFirstWrite ? incoming : compareForPolicy(previous, incoming, "minimum") <= 0 ? previous : incoming;
+    case "merge_object":
+      if (isFirstWrite) return incoming;
       if (typeof previous !== "object" || typeof incoming !== "object" || previous === null || incoming === null) {
         throw conflict("merge_object requires object values");
       }
       return { ...(previous as Record<string, unknown>), ...(incoming as Record<string, unknown>) };
-    }
     case "reject_conflict":
+      if (isFirstWrite) return incoming;
       if (JSON.stringify(previous) !== JSON.stringify(incoming)) throw conflict("conflicting values");
       return previous;
   }

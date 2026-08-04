@@ -16,6 +16,13 @@ type Token = { type: "ident" | "string" | "number" | "op" | "lparen" | "rparen" 
 
 const WHITESPACE = /\s/;
 
+// Max AST nesting depth for `!` and parentheses. Boring, documented constant;
+// guards against raw RangeError stack overflow from adversarial input.
+const MAX_DEPTH = 128;
+
+// Path segments that would enable prototype traversal / object hijacking.
+const FORBIDDEN_SEGMENTS = new Set(["__proto__", "constructor", "prototype"]);
+
 function tokenize(src: string): Token[] {
   const tokens: Token[] = [];
   let i = 0;
@@ -90,7 +97,17 @@ function tokenize(src: string): Token[] {
 
 class Parser {
   private pos = 0;
+  private depth = 0;
   constructor(private tokens: Token[]) {}
+
+  private enterDepth(): void {
+    this.depth++;
+    if (this.depth > MAX_DEPTH) throw unsupported("expression nesting exceeds maximum depth");
+  }
+
+  private leaveDepth(): void {
+    this.depth--;
+  }
 
   private peek(): Token {
     return this.tokens[this.pos];
@@ -128,7 +145,10 @@ class Parser {
   private not(): Node {
     if (this.peek().type === "op" && this.peek().value === "!") {
       this.next();
-      return { kind: "not", operand: this.not() };
+      this.enterDepth();
+      const operand = this.not();
+      this.leaveDepth();
+      return { kind: "not", operand };
     }
     return this.comparison();
   }
@@ -148,7 +168,9 @@ class Parser {
     const t = this.peek();
     if (t.type === "lparen") {
       this.next();
+      this.enterDepth();
       const inner = this.or();
+      this.leaveDepth();
       if (this.peek().type !== "rparen") throw unsupported("expected ')'");
       this.next();
       return inner;
@@ -166,6 +188,7 @@ class Parser {
         this.next();
         const prop = this.next();
         if (prop.type !== "ident") throw unsupported("expected property name after '.'");
+        if (FORBIDDEN_SEGMENTS.has(prop.value)) throw unsupported("forbidden property path segment");
         path.push(prop.value);
       }
       return { kind: "ref", path };
