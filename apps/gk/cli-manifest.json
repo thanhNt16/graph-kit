@@ -4,74 +4,92 @@
   "commands": [
     {
       "name": "template list",
+      "description": "list installed templates",
       "options": ["--json"]
     },
     {
       "name": "template inspect",
+      "description": "inspect a template",
       "options": ["--json"]
     },
     {
       "name": "template new",
-      "options": ["--json"]
+      "description": "create a template",
+      "options": ["--json", "--name <name>", "--version <version>"]
     },
     {
       "name": "template validate",
+      "description": "validate a template",
       "options": ["--json"]
     },
     {
       "name": "template render",
+      "description": "render Claude skills",
       "options": ["--json"]
     },
     {
       "name": "template install",
-      "options": ["--json"]
+      "description": "install a template",
+      "options": ["--json", "--global", "--force", "--dry-run"]
     },
     {
       "name": "template diff",
-      "options": ["--json"]
+      "description": "diff an installed template",
+      "options": ["--json", "--global"]
     },
     {
       "name": "template update",
-      "options": ["--json"]
+      "description": "update a template",
+      "options": ["--json", "--global", "--force", "--dry-run"]
     },
     {
       "name": "template remove",
-      "options": ["--json"]
+      "description": "remove a template",
+      "options": ["--json", "--global", "--force", "--dry-run"]
     },
     {
       "name": "workflow start",
-      "options": ["--json"]
+      "description": "start a workflow",
+      "options": ["--json", "--inputs <json>"]
     },
     {
       "name": "workflow next",
+      "description": "get the next contract",
       "options": ["--json"]
     },
     {
       "name": "workflow execute",
+      "description": "execute a deterministic node",
       "options": ["--json"]
     },
     {
       "name": "workflow submit",
-      "options": ["--json"]
+      "description": "submit contract output",
+      "options": ["--json", "--lease <id>", "--work-item <id>", "--node <id>", "--verdict <verdict>", "--actor <name>"]
     },
     {
       "name": "workflow status",
+      "description": "show current run status",
       "options": ["--json"]
     },
     {
       "name": "workflow trace",
+      "description": "show events in order",
       "options": ["--json"]
     },
     {
       "name": "workflow graph",
-      "options": ["--json"]
+      "description": "render Mermaid graph",
+      "options": ["--json", "--format <format> (default: mermaid)"]
     },
     {
       "name": "evidence report",
+      "description": "show evidence report",
       "options": ["--json"]
     },
     {
       "name": "manifest generate",
+      "description": "generate CLI manifest",
       "options": ["--json"]
     }
   ]

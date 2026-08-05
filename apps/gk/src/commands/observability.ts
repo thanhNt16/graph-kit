@@ -31,14 +31,13 @@ export interface EvidenceEntry {
 
 export interface CommandEvidence {
   node: string;
-  argv: string[];
+  executable: string;
   exit_code: number;
 }
 
 export interface ArtifactEvidence {
   node: string;
   save_as: string;
-  value: unknown;
 }
 
 export interface HumanAction {
@@ -92,7 +91,12 @@ export async function evidenceReport(
       .filter((e) => e.kind === "command")
       .map((e) => ({
         node: e.node ?? "",
-        argv: (e.details as { argv?: string[] } | undefined)?.argv ?? [],
+        executable:
+          e.details &&
+          typeof e.details === "object" &&
+          typeof (e.details as Record<string, unknown>).executable === "string"
+            ? ((e.details as Record<string, unknown>).executable as string)
+            : "",
         exit_code: e.exit_code ?? 0,
       })),
     human_actions: entries
@@ -168,37 +172,52 @@ function foldEvent(event: Event): EvidenceEntry {
   return base;
 }
 
+/** Stable item identity for branch evidence: `work_item ?? lease ?? node`. */
+function branchItem(event: Event, fallbackNode: string): string {
+  if (event.type === "submit" && event.details && typeof event.details === "object") {
+    const details = event.details as Record<string, unknown>;
+    if (typeof details.work_item === "string" && details.work_item) return details.work_item;
+  }
+  if (event.lease) return event.lease;
+  return event.node ?? fallbackNode;
+}
+
 /** Two flanks of every branch: where it sits now and where it failed along the way. */
 function branchEvidence(run: Run, leases: Lease[], events: Event[]): EvidenceBranches {
-  const failedNodes = new Set<string>();
+  const failed = new Set<string>();
+  const now = Date.now();
   for (const event of events) {
-    if (event.type === "reject") failedNodes.add(event.node ?? "");
+    if (event.type === "reject") failed.add(branchItem(event, event.node ?? ""));
     if (
       event.type === "submit" &&
       event.details &&
       typeof event.details === "object" &&
       (event.details as Record<string, unknown>).verdict === "failed"
     ) {
-      failedNodes.add(event.node ?? "");
+      failed.add(branchItem(event, event.node ?? ""));
+    }
+    if (event.type === "command" && event.details && typeof event.details === "object") {
+      const details = event.details as Record<string, unknown>;
+      if (typeof details.exit_code === "number" && details.exit_code !== 0) {
+        failed.add(typeof details.node === "string" ? details.node : (event.node ?? ""));
+      }
     }
   }
-  for (const lease of leases) if (lease.status === "expired") failedNodes.add(lease.node);
+  for (const lease of leases) {
+    const stale = lease.status === "expired" || (lease.status === "active" && Date.parse(lease.expires_at) <= now);
+    if (stale) failed.add(lease.work_item ?? lease.id);
+  }
   const pending = new Set(run.current_nodes);
   return {
     pending: [...pending],
     completed: run.completed_deterministic_nodes ?? [],
-    failed: [...failedNodes].filter(Boolean),
+    failed: [...failed].filter(Boolean),
   };
 }
 
-/** Deterministic output surface: artifacts reachable from declared save_as keys. */
+/** Deterministic output surface: artifact identities, never payload values. */
 function artifactEvidence(state: Record<string, unknown>): ArtifactEvidence[] {
-  return Object.keys(state).map((key) => {
-    const value = state[key];
-    const node =
-      value !== null && typeof value === "object" && "node" in value ? String((value as { node: unknown }).node) : "";
-    return { node, save_as: key, value };
-  });
+  return Object.keys(state).map((key) => ({ node: "", save_as: key }));
 }
 
 export interface MermaidEdge {
@@ -221,13 +240,28 @@ function conditionLabel(edge: { when?: string; on_error?: string | string[]; ver
   return undefined;
 }
 
+/** Deterministic, injective n0..nN mapping; original node id kept as an escaped label. */
+export function escapeNodeId(id: string): string {
+  return `n${Array.from(new Set(id.split("")))
+    .map((c) => c.charCodeAt(0))
+    .join("_")}_${id.length}`;
+}
+function quote(value: string): string {
+  return `"${value.replace(/"/g, '\\"')}"`;
+}
+
 export async function mermaidGraph(loaded: LoadedTemplate, project: string, runId: string): Promise<MermaidGraph> {
   const { workflow } = loaded;
-  const nodes = Object.values(workflow.nodes).map((node) => ({ id: node.id, class: node.type, label: node.type }));
+  const nodes = Object.values(workflow.nodes).map((node) => ({
+    id: escapeNodeId(node.id),
+    class: node.type,
+    label: node.id,
+  }));
+  const idOf = (id: string) => escapeNodeId(id);
   const edges: MermaidEdge[] = [];
   for (const edge of workflow.edges) {
     const targets = Array.isArray(edge.to) ? edge.to : [edge.to];
-    for (const target of targets) edges.push({ from: edge.from, to: target, label: conditionLabel(edge) });
+    for (const target of targets) edges.push({ from: idOf(edge.from), to: idOf(target), label: conditionLabel(edge) });
   }
   let status = "unknown";
   let verdict: Verdict | null = null;
@@ -236,7 +270,7 @@ export async function mermaidGraph(loaded: LoadedTemplate, project: string, runI
     const run = (await readRun(project, runId)).run;
     status = run.status;
     verdict = run.verdict;
-    current = run.current_nodes[0] ?? null;
+    current = run.current_nodes[0] ? idOf(run.current_nodes[0]) : null;
   } catch {
     // static topology when run does not exist
   }
@@ -245,12 +279,14 @@ export async function mermaidGraph(loaded: LoadedTemplate, project: string, runI
 
 export function renderMermaid(graph: MermaidGraph): string {
   const rendered: string[] = ["flowchart TD"];
-  for (const node of graph.nodes) rendered.push(`    ${node.id}[${node.id} ${node.label}]`);
+  for (const node of graph.nodes) rendered.push(`    ${node.id}[${quote(`${node.label} ${node.class}`)}]`);
   for (const edge of graph.edges) {
-    const label = edge.label ? ` -- "${edge.label}"` : "";
+    const label = edge.label ? ` -- ${quote(`label: ${edge.label}`)}` : "";
     rendered.push(`    ${edge.from} --> ${edge.to}${label}`);
   }
-  const stateLine = graph.verdict ? `    status[${graph.status}/${graph.verdict}]` : `    status[${graph.status}]`;
+  const stateLine = graph.verdict
+    ? `    status[${quote(`status: ${graph.status}/${graph.verdict}`)}]`
+    : `    status[${quote(`status: ${graph.status}`)}]`;
   rendered.push(stateLine);
   if (graph.current) rendered.push(`    status --> ${graph.current}`);
   return `${rendered.join("\n")}\n`;

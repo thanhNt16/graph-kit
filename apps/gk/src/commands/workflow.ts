@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+import { basename } from "node:path";
 import { GraphKitError } from "../errors.js";
 import type { DispatchContract, WorkflowContract } from "../runtime/contracts.js";
 import type { Scope } from "../runtime/expression.js";
@@ -414,7 +416,7 @@ export async function submitWorkflow(
             lease: spec.lease,
             actor: spec.actor ?? "worker",
             timestamp: new Date().toISOString(),
-            details: { verdict, work_item: spec.work_item, output },
+            details: receipt(verdict, spec.work_item, true),
           },
         };
       }
@@ -429,6 +431,7 @@ export async function submitWorkflow(
           lease: spec.lease,
           actor: spec.actor ?? "worker",
           timestamp: new Date().toISOString(),
+          details: receipt(verdict, spec.work_item, false),
         },
       };
     });
@@ -440,13 +443,28 @@ export async function submitWorkflow(
   return { documents: result.documents, state: result.documents.state, run: result.documents.run };
 }
 
+const RECEIPT_LIMIT = 128;
+function receipt(verdict: Verdict, work_item: string | undefined, fanout: boolean): Record<string, unknown> {
+  return {
+    verdict,
+    ...(work_item ? { work_item: work_item.slice(0, RECEIPT_LIMIT) } : {}),
+    ...(fanout ? { artifact_keys: ["fanout-result"] } : {}),
+  };
+}
+function safeCommandReceipt(argv: string[], exit_code: number, node: string): Record<string, unknown> {
+  return {
+    executable: (basename(argv[0] ?? node) || node).slice(0, RECEIPT_LIMIT),
+    node: node.slice(0, RECEIPT_LIMIT),
+    exit_code,
+  };
+}
 async function rejectEvent(
   project: string,
   runId: string,
   code: string,
   node: string,
   spec: SubmitSpec,
-  cause: unknown,
+  _cause: unknown,
 ): Promise<void> {
   await appendRunEvent(project, runId, {
     type: "reject",
@@ -455,8 +473,16 @@ async function rejectEvent(
     lease: spec.lease,
     actor: spec.actor ?? (code === "INVALID_TRANSITION" ? "system" : undefined),
     timestamp: new Date().toISOString(),
-    details: { code, message: cause instanceof Error ? cause.message : String(cause), work_item: spec.work_item },
+    details: { code, work_item: spec.work_item?.slice(0, RECEIPT_LIMIT) },
   });
+}
+
+export function outputHash(output: unknown): string {
+  return createHash("sha256").update(JSON.stringify(output)).digest("hex");
+}
+
+export function commandReceipt(argv: string[], exit_code: number, node: string): Record<string, unknown> {
+  return safeCommandReceipt(argv, exit_code, node);
 }
 
 function finishHuman(workflow: Workflow, d: RunDocuments, nodeId: string, spec: SubmitSpec): RunDocuments {
@@ -564,7 +590,7 @@ export async function executeWorkflow(
           type: "command",
           node: completed,
           timestamp: new Date().toISOString(),
-          details: { argv, exit_code },
+          details: safeCommandReceipt(argv, exit_code, completed),
         },
       };
     }
@@ -579,7 +605,7 @@ export async function executeWorkflow(
           type: "command",
           node: completed,
           timestamp: new Date().toISOString(),
-          details: { argv, exit_code },
+          details: safeCommandReceipt(argv, exit_code, completed),
         },
       };
     }
@@ -592,7 +618,7 @@ export async function executeWorkflow(
         type: "command",
         node: completed,
         timestamp: new Date().toISOString(),
-        details: { argv, exit_code },
+        details: safeCommandReceipt(argv, exit_code, completed),
       },
     };
   });

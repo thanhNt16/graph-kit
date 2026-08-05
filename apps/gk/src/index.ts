@@ -1,22 +1,24 @@
-import { createCli } from "./cli/command-registry.js";
+import { createCli, toGraphKitError } from "./cli/command-registry.js";
 import { fail } from "./cli/output.js";
-import { GraphKitError } from "./errors.js";
 
 async function main() {
   const cli = createCli();
   try {
     cli.cli.parse(process.argv, { run: true });
   } catch (err) {
-    if (err instanceof GraphKitError) {
-      const envelope = fail(err.code, err.message, err.recoverable, err.details);
-      console.error(JSON.stringify(envelope));
-      process.exitCode = 1;
-    } else {
-      const envelope = fail("SCHEMA_VIOLATION", err instanceof Error ? err.message : String(err));
-      console.error(JSON.stringify(envelope));
-      process.exitCode = 1;
-    }
+    const error = toGraphKitError(err);
+    console.log(JSON.stringify(fail(error.code, error.message, error.recoverable, error.details)));
+    process.exitCode = 1;
   }
 }
 
 void main();
+
+process.on("uncaughtException", (err) => {
+  console.log(JSON.stringify(fail("SCHEMA_VIOLATION", err.message)));
+  process.exitCode = 1;
+});
+process.on("unhandledRejection", (reason) => {
+  console.log(JSON.stringify(fail("SCHEMA_VIOLATION", reason instanceof Error ? reason.message : String(reason))));
+  process.exitCode = 1;
+});
