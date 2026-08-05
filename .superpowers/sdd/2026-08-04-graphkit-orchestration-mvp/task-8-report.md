@@ -89,3 +89,43 @@ $ bun run build
 $ bun build src/index.ts --target=node --outdir=dist
   index.js  1.17 MB  (entry point)
 ```
+
+---
+
+## Fix round 2 (review: Important)
+
+## Status
+
+DONE. Commit `4373837` (code), report appended.
+
+## Addressed
+
+1. IMPORTANT — HUMAN SUBMIT LEAK. Human submit validates the action against template-declared `actions` exactly; undeclared action rejected `SCHEMA_VIOLATION` (one envelope, nonzero). Persisted receipt is only `{ action: bounded action, verdict }`, never the raw payload. Central evidence sanitizer `sanitizeDetails`/`sanitizeEvent` allowlists receipt fields per event type (submit: verdict/work_item/artifact_keys/action; reject: code/work_item; command: executable/node/exit_code; dispatch: item identities) and drops unknown/legacy keys. Evidence report and trace both emit sanitized events. Tests: undeclared secret human payload rejected and absent from events/trace/evidence; declared action bounded and present; manually injected legacy `details.secret` dropped from evidence and trace.
+2. IMPORTANT — MERMAID IDS. `escapeNodeId` removed. `mermaidGraph` builds a deterministic sorted `n0, n1, ...` mapping over workflow node ids; status node separate; edges use the map. `renderMermaid` quotes labels escaping backslash, quote, CR/LF, and control chars so output stays one-line. Tests: distinct `aab`/`aba`-style ids get distinct n-ids; newline/backslash/quote label renders one-line quoted; real workflow maps each node to unique sorted n-id.
+3. YAGNI — removed unused exports `GLOBAL_OPTION_FLAGS`, `outputHash`, `commandReceipt`.
+
+## Test evidence (actual command output)
+
+```
+$ bun test tests/integration/cli.test.ts
+ 29 pass
+ 0 fail
+ 141 expect() calls
+
+$ bun test
+ 163 pass
+ 0 fail
+ 506 expect() calls
+ Ran 163 tests across 13 files. [19.34s]
+
+$ bun run typecheck
+$ tsc --noEmit
+
+$ bun run lint
+$ biome check .
+Checked 45 files in 47ms. No fixes applied.
+
+$ bun run build
+$ bun build src/index.ts --target=node --outdir=dist
+  index.js  1.17 MB  (entry point)
+```
