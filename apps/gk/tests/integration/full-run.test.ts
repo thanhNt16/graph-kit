@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { cp, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
+import { cp, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { evidenceReport } from "../../src/commands/observability.js";
@@ -95,7 +95,7 @@ for (const name of TEMPLATES) {
       expect(report.verdict).toBe("passed");
       expect(report.events).toBeGreaterThan(0);
       // required_evidence is carried on every agent contract.
-      for (const [id, node] of Object.entries((await loadValidated(name)).workflow.nodes)) {
+      for (const [, node] of Object.entries((await loadValidated(name)).workflow.nodes)) {
         if (node.type === "agent") {
           expect(node.output.evidence).toBeInstanceOf(Array);
           expect((node.output.evidence as string[]).length).toBeGreaterThan(0);

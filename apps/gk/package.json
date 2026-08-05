@@ -10,7 +10,7 @@
     "typecheck": "tsc --noEmit",
     "lint": "biome check .",
     "test": "bun test",
-    "ci:local": "bun run typecheck && bun run lint && bun run build && bun test"
+    "ci:local": "bun run typecheck && bun run lint && bun run build && bun test && bun run scripts/check-cli-parity.ts && bun run src/index.ts template validate templates/task-execute-verify --json && bun run src/index.ts template validate templates/orchestrator-worker --json"
   },
   "dependencies": {
     "ajv": "^8.17.1",
