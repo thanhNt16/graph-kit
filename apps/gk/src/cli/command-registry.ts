@@ -136,21 +136,6 @@ export const CLI_COMMANDS: readonly CommandDescriptor[] = [
   { path: "manifest generate", description: "generate CLI manifest", options: [] },
 ];
 export const COMMAND_NAMES = CLI_COMMANDS.map(({ path }) => path);
-export const GLOBAL_OPTION_FLAGS = [
-  "--json",
-  "--inputs <json>",
-  "--lease <id>",
-  "--work-item <id>",
-  "--node <id>",
-  "--verdict <verdict>",
-  "--actor <name>",
-  "--name <name>",
-  "--version <version>",
-  "--global",
-  "--force",
-  "--dry-run",
-  "--format <format>",
-];
 export interface CliManifest {
   cli: string;
   version: string;

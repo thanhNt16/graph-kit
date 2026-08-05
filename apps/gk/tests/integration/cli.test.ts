@@ -656,4 +656,137 @@ describe("mermaid escaping", () => {
     expect(mermaid).toContain('"a weird node command"');
     expect(mermaid).not.toContain("a weird node[");
   });
+
+  test("distinct ids aab and aba map to distinct n-ids; control chars escaped and one-line", async () => {
+    const { renderMermaid } = await import("../../src/commands/observability.js");
+    const mermaid = renderMermaid({
+      nodes: [
+        { id: "n0", class: "command", label: "aab" },
+        { id: "n1", class: "command", label: 'a"b\\c\nd' },
+      ],
+      edges: [{ from: "n0", to: "n1", label: 'x"y' }],
+      status: "running",
+      verdict: null,
+      current: "n1",
+    });
+    expect(mermaid).toContain('n0["aab command"]');
+    expect(mermaid).toContain('n1["a\\"b\\\\c\\nd command"]');
+    expect(mermaid).toContain(' -- "label: x\\"y"');
+    expect(mermaid.split("\n").every((line) => !line.includes("\n"))).toBe(true);
+    expect(mermaid.split("\n").filter((line) => /^ {4}n\d+\[/.test(line)).length).toBe(2);
+  });
+
+  test("real workflow graph maps each node to a unique n-id in sorted order", async () => {
+    const { mermaidGraph } = await import("../../src/commands/observability.js");
+    const loaded = await loadTemplate(fixture);
+    const graph = await mermaidGraph(loaded, project, "no-such-run");
+    const ids = graph.nodes.map((n) => n.id);
+    expect(new Set(ids).size).toBe(ids.length);
+    expect(ids).toEqual(["n0", "n1"]);
+    expect(graph.nodes.map((n) => n.label)).toEqual(["complete", "work"]);
+    expect(new Set(graph.nodes.map((n) => n.id)).size).toBe(2);
+    expect(graph.nodes.find((n) => n.label === "complete")?.id).toBe("n0");
+    expect(graph.nodes.find((n) => n.label === "work")?.id).toBe("n1");
+  });
+});
+
+describe("human action receipts and legacy payload sanitization", () => {
+  const humanWf = () => {
+    const wf = join(project, "hum");
+    return mkdir(join(wf, "schemas"), { recursive: true }).then(async () => {
+      await writeFile(join(wf, "schemas", "result.schema.json"), "{}");
+      await writeFile(
+        join(wf, "template.yaml"),
+        `${["name: hum", "version: 1.0.0", "apiVersion: graphkit.dev/v1alpha1", "harness: claude"].join("\n")}\n`,
+      );
+      await writeFile(
+        join(wf, "workflow.yaml"),
+        `${[
+          "apiVersion: graphkit.dev/v1alpha1",
+          "kind: Workflow",
+          "metadata: { name: hum }",
+          "limits: { max_iterations: 2, max_workers: 1 }",
+          "state: {}",
+          "start: start",
+          "nodes:",
+          "  review:",
+          "    type: human",
+          "    prompt: Approve?",
+          "    actions: [approve, reject]",
+          "  done: { type: graph, operation: complete-task }",
+          "edges:",
+          "  - { from: start, to: review }",
+          "  - { from: review, to: done }",
+          "terminal:",
+          "  - { node: done, verdict: passed }",
+        ].join("\n")}\n`,
+      );
+      return wf;
+    });
+  };
+
+  test("undeclared human action is rejected, absent from events and evidence", async () => {
+    const wf = await humanWf();
+    await runCli(["workflow", "start", wf, "h1"]);
+    const secret = "super-secret-action-xyz";
+    const { code, stdout } = await runCli(["workflow", "submit", wf, "h1", secret]);
+    expect(code).not.toBe(0);
+    expect(stdout).toMatchObject({ ok: false, error: { code: "SCHEMA_VIOLATION" } });
+    const { readFile } = await import("node:fs/promises");
+    const log = await readFile(join(project, ".graphkit", "runs", "h1", "events.jsonl"), "utf8");
+    expect(log).not.toContain(secret);
+    const ev = await runCli(["evidence", "report", wf, "h1"]);
+    expect(JSON.stringify(ev.stdout)).not.toContain(secret);
+  });
+
+  test("declared human action is bounded and present as receipt", async () => {
+    const wf = await humanWf();
+    await runCli(["workflow", "start", wf, "h2"]);
+    const ok = await runCli(["workflow", "submit", wf, "h2", "approve", "--actor", "reviewer"]);
+    expect(ok.code).toBe(0);
+    const { readFile } = await import("node:fs/promises");
+    const log = await readFile(join(project, ".graphkit", "runs", "h2", "events.jsonl"), "utf8");
+    expect(log).toContain('"action":"approve"');
+    const ev = await runCli(["evidence", "report", wf, "h2"]);
+    expect(JSON.stringify(ev.stdout)).toContain('"action":"approve"');
+    const tr = await runCli(["workflow", "trace", "h2"]);
+    expect(JSON.stringify(tr.stdout)).toContain('"action":"approve"');
+  });
+
+  test("manually injected legacy details.secret is dropped from evidence and trace", async () => {
+    const { createRun, appendRunEvent } = await import("../../src/runtime/store.js");
+    const secret = "legacy-secret-payload";
+    await createRun(
+      project,
+      {
+        run_id: "legacy",
+        template: "t",
+        harness: "claude",
+        status: "running",
+        current_nodes: ["work"],
+        pending_items: [],
+        in_flight: {},
+        iteration: 0,
+        failures: 0,
+        completed_deterministic_nodes: [],
+        verdict: null,
+      },
+      {},
+      [],
+    );
+    await appendRunEvent(project, "legacy", {
+      type: "submit",
+      run_id: "legacy",
+      node: "work",
+      lease: "L1",
+      timestamp: new Date().toISOString(),
+      details: { verdict: "passed", work_item: "i1", secret, raw_output: { leak: secret } },
+    });
+    const { evidenceReport, traceRun } = await import("../../src/commands/observability.js");
+    const report = await evidenceReport(project, "legacy", undefined);
+    expect(JSON.stringify(report)).not.toContain(secret);
+    expect(report.entries[0].details).toEqual({ verdict: "passed", work_item: "i1" });
+    const trace = await traceRun(project, "legacy");
+    expect(JSON.stringify(trace)).not.toContain(secret);
+  });
 });

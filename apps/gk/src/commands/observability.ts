@@ -65,6 +65,70 @@ export interface EvidenceReport {
   events: number;
 }
 
+const RECEIPT_LIMIT = 128;
+
+/** Allowlisted receipt details per event type; unknown/legacy keys are dropped. */
+export function sanitizeDetails(event: Event): Record<string, unknown> | undefined {
+  if (event.details === undefined) return undefined;
+  if (event.details === null || typeof event.details !== "object" || Array.isArray(event.details)) return undefined;
+  const raw = event.details as Record<string, unknown>;
+  const allowed: Record<string, unknown> = {};
+  const bounded = (value: unknown): string | undefined =>
+    typeof value === "string" ? value.slice(0, RECEIPT_LIMIT) : undefined;
+  switch (event.type) {
+    case "submit": {
+      const verdict = raw.verdict;
+      if (typeof verdict === "string") allowed.verdict = verdict.slice(0, RECEIPT_LIMIT);
+      const action = bounded(raw.action);
+      if (action !== undefined) allowed.action = action;
+      const work_item = bounded(raw.work_item);
+      if (work_item !== undefined) allowed.work_item = work_item;
+      if (Array.isArray(raw.artifact_keys))
+        allowed.artifact_keys = raw.artifact_keys
+          .slice(0, 8)
+          .map(bounded)
+          .filter((v): v is string => v !== undefined);
+      break;
+    }
+    case "reject": {
+      const code = bounded(raw.code);
+      if (code !== undefined) allowed.code = code;
+      const work_item = bounded(raw.work_item);
+      if (work_item !== undefined) allowed.work_item = work_item;
+      break;
+    }
+    case "command": {
+      const executable = bounded(raw.executable);
+      if (executable !== undefined) allowed.executable = executable;
+      const node = bounded(raw.node);
+      if (node !== undefined) allowed.node = node;
+      const exit_code = raw.exit_code;
+      if (typeof exit_code === "number" && Number.isInteger(exit_code)) allowed.exit_code = exit_code;
+      break;
+    }
+    case "dispatch": {
+      if (Array.isArray(raw.items))
+        allowed.items = raw.items
+          .slice(0, 64)
+          .map(bounded)
+          .filter((v): v is string => v !== undefined);
+      break;
+    }
+    default:
+      return undefined;
+  }
+  return Object.keys(allowed).length ? allowed : undefined;
+}
+
+/** Sanitized event: keep envelope + receipt details only, drop raw/legacy payload keys. */
+export function sanitizeEvent(event: Event): Event {
+  const clean: Record<string, unknown> = { ...event };
+  delete clean.details;
+  const sanitized = sanitizeDetails(event);
+  if (sanitized) clean.details = sanitized;
+  return clean as unknown as Event;
+}
+
 /** Immutable evidence: the append-only event log, folded without hiding failed attempts. */
 export async function evidenceReport(
   project: string,
@@ -141,43 +205,43 @@ export async function readEventLog(project: string, runId: string): Promise<Even
 
 export async function traceRun(project: string, runId: string): Promise<TraceLine[]> {
   const events = await readEventLog(project, runId);
-  return events.map((event, seq) => ({ seq, event }));
+  return events.map((event, seq) => ({ seq, event: sanitizeEvent(event) }));
 }
 
 function foldEvent(event: Event): EvidenceEntry {
-  const base: EvidenceEntry = { kind: "error", timestamp: event.timestamp };
-  switch (event.type) {
+  const clean = sanitizeEvent(event);
+  const base: EvidenceEntry = { kind: "error", timestamp: clean.timestamp };
+  switch (clean.type) {
     case "dispatch":
     case "human":
     case "submit":
     case "command":
     case "reject":
     case "error":
-      base.kind = event.type;
+      base.kind = clean.type;
       break;
   }
-  if (event.node !== undefined) base.node = event.node;
-  if (event.lease !== undefined) base.lease = event.lease;
-  if (event.actor !== undefined) base.actor = event.actor;
-  if (event.details !== undefined) base.details = event.details;
-  if (event.type === "submit" && event.details && typeof event.details === "object") {
-    const details = event.details as Record<string, unknown>;
-    if (typeof details.verdict === "string") base.verdict = details.verdict as Verdict;
-    if (typeof details.work_item === "string") base.work_item = details.work_item;
+  if (clean.node !== undefined) base.node = clean.node;
+  if (clean.lease !== undefined) base.lease = clean.lease;
+  if (clean.actor !== undefined) base.actor = clean.actor;
+  const details = clean.details;
+  if (details !== undefined) base.details = details;
+  if (clean.type === "submit" && details && typeof details === "object") {
+    const record = details as Record<string, unknown>;
+    if (typeof record.verdict === "string") base.verdict = record.verdict as Verdict;
+    if (typeof record.work_item === "string") base.work_item = record.work_item;
   }
-  if (event.type === "command" && event.details && typeof event.details === "object") {
-    const details = event.details as Record<string, unknown>;
-    if (typeof details.exit_code === "number") base.exit_code = details.exit_code;
+  if (clean.type === "command" && details && typeof details === "object") {
+    const record = details as Record<string, unknown>;
+    if (typeof record.exit_code === "number") base.exit_code = record.exit_code;
   }
   return base;
 }
 
 /** Stable item identity for branch evidence: `work_item ?? lease ?? node`. */
 function branchItem(event: Event, fallbackNode: string): string {
-  if (event.type === "submit" && event.details && typeof event.details === "object") {
-    const details = event.details as Record<string, unknown>;
-    if (typeof details.work_item === "string" && details.work_item) return details.work_item;
-  }
+  const details = sanitizeDetails(event);
+  if (details && typeof details.work_item === "string" && details.work_item) return details.work_item;
   if (event.lease) return event.lease;
   return event.node ?? fallbackNode;
 }
@@ -187,20 +251,11 @@ function branchEvidence(run: Run, leases: Lease[], events: Event[]): EvidenceBra
   const failed = new Set<string>();
   const now = Date.now();
   for (const event of events) {
+    const details = sanitizeDetails(event);
     if (event.type === "reject") failed.add(branchItem(event, event.node ?? ""));
-    if (
-      event.type === "submit" &&
-      event.details &&
-      typeof event.details === "object" &&
-      (event.details as Record<string, unknown>).verdict === "failed"
-    ) {
-      failed.add(branchItem(event, event.node ?? ""));
-    }
-    if (event.type === "command" && event.details && typeof event.details === "object") {
-      const details = event.details as Record<string, unknown>;
-      if (typeof details.exit_code === "number" && details.exit_code !== 0) {
-        failed.add(typeof details.node === "string" ? details.node : (event.node ?? ""));
-      }
+    if (event.type === "submit" && details?.verdict === "failed") failed.add(branchItem(event, event.node ?? ""));
+    if (event.type === "command" && details && details.exit_code !== 0) {
+      failed.add(typeof details.node === "string" ? details.node : (event.node ?? ""));
     }
   }
   for (const lease of leases) {
@@ -240,24 +295,27 @@ function conditionLabel(edge: { when?: string; on_error?: string | string[]; ver
   return undefined;
 }
 
-/** Deterministic, injective n0..nN mapping; original node id kept as an escaped label. */
-export function escapeNodeId(id: string): string {
-  return `n${Array.from(new Set(id.split("")))
-    .map((c) => c.charCodeAt(0))
-    .join("_")}_${id.length}`;
-}
 function quote(value: string): string {
-  return `"${value.replace(/"/g, '\\"')}"`;
+  const escaped = Array.from(value)
+    .map((char) => {
+      const code = char.charCodeAt(0);
+      if (char === "\\") return "\\\\";
+      if (char === '"') return '\\"';
+      if (char === "\n") return "\\n";
+      if (char === "\r") return "\\r";
+      if (code < 0x20 || code === 0x7f) return `\\u${code.toString(16).padStart(4, "0")}`;
+      return char;
+    })
+    .join("");
+  return `"${escaped}"`;
 }
 
 export async function mermaidGraph(loaded: LoadedTemplate, project: string, runId: string): Promise<MermaidGraph> {
   const { workflow } = loaded;
-  const nodes = Object.values(workflow.nodes).map((node) => ({
-    id: escapeNodeId(node.id),
-    class: node.type,
-    label: node.id,
-  }));
-  const idOf = (id: string) => escapeNodeId(id);
+  const ids = Object.keys(workflow.nodes).sort();
+  const idMap = new Map(ids.map((id, index) => [id, `n${index}`]));
+  const idOf = (id: string) => idMap.get(id) ?? `n${idMap.size}`;
+  const nodes = ids.map((nodeId) => ({ id: idOf(nodeId), class: workflow.nodes[nodeId].type, label: nodeId }));
   const edges: MermaidEdge[] = [];
   for (const edge of workflow.edges) {
     const targets = Array.isArray(edge.to) ? edge.to : [edge.to];

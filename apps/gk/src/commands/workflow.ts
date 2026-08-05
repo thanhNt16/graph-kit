@@ -1,4 +1,3 @@
-import { createHash } from "node:crypto";
 import { basename } from "node:path";
 import { GraphKitError } from "../errors.js";
 import type { DispatchContract, WorkflowContract } from "../runtime/contracts.js";
@@ -381,6 +380,9 @@ export async function submitWorkflow(
       }
 
       if (cur.type === "human") {
+        const action = typeof output === "string" ? output : "";
+        const declared = (cur.actions ?? []).includes(action);
+        if (!declared) throw new GraphKitError("SCHEMA_VIOLATION", `undeclared human action '${action}'`);
         return {
           documents: finishHuman(workflow, d, cur.id, spec),
           event: {
@@ -389,7 +391,7 @@ export async function submitWorkflow(
             lease: spec.lease,
             actor: spec.actor ?? "human",
             timestamp: new Date().toISOString(),
-            details: { action: output, verdict: spec.verdict ?? "passed" },
+            details: { action: action.slice(0, RECEIPT_LIMIT), verdict: spec.verdict ?? "passed" },
           },
         };
       }
@@ -475,14 +477,6 @@ async function rejectEvent(
     timestamp: new Date().toISOString(),
     details: { code, work_item: spec.work_item?.slice(0, RECEIPT_LIMIT) },
   });
-}
-
-export function outputHash(output: unknown): string {
-  return createHash("sha256").update(JSON.stringify(output)).digest("hex");
-}
-
-export function commandReceipt(argv: string[], exit_code: number, node: string): Record<string, unknown> {
-  return safeCommandReceipt(argv, exit_code, node);
 }
 
 function finishHuman(workflow: Workflow, d: RunDocuments, nodeId: string, spec: SubmitSpec): RunDocuments {
