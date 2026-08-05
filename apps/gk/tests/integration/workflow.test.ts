@@ -317,13 +317,7 @@ describe("submission gates", () => {
       },
     ]);
     await expect(
-      submitWorkflow(
-        project,
-        loaded,
-        "r1",
-        { summary: "x" },
-        { lease: "L1", work_item: "i1", verdict: "passed" },
-      ),
+      submitWorkflow(project, loaded, "r1", { summary: "x" }, { lease: "L1", work_item: "i1", verdict: "passed" }),
     ).rejects.toMatchObject({ code: "LEASE_EXPIRED" });
   });
 });
@@ -516,7 +510,7 @@ describe("parallel dispatch and fan-in", () => {
       {
         lease: third.items[0].lease.id,
         work_item: third.items[0].work_item,
-                verdict: "passed",
+        verdict: "passed",
       },
     );
     expect(all.run.current_nodes).toEqual(["join"]);
@@ -574,13 +568,7 @@ describe("parallel dispatch and fan-in", () => {
     expect(expired?.status).toBe("expired");
     expect(docs.leases.find((l) => l.id === fresh.id)?.status).toBe("active");
     await expect(
-      submitWorkflow(
-        project,
-        loaded,
-        "r1",
-        { summary: "x" },
-        { lease: "L1", work_item: "i1", verdict: "passed" },
-      ),
+      submitWorkflow(project, loaded, "r1", { summary: "x" }, { lease: "L1", work_item: "i1", verdict: "passed" }),
     ).rejects.toMatchObject({ code: "LEASE_EXPIRED" });
     const events = await readEvents();
     expect(events.some((e) => e.type === "reject" && e.lease === "L1")).toBe(true);

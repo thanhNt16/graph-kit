@@ -1,1 +1,13 @@
-{"$schema":"https://json-schema.org/draft/2020-12/schema","$id":"orchestrator-worker/items.schema.json","title":"Work items","type":"array","minItems":1,"items":{"type":"object","additionalProperties":false,"required":["name","task"],"properties":{"name":{"type":"string","minLength":1},"task":{"type":"string","minLength":1}}}}
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "orchestrator-worker/items.schema.json",
+  "title": "Work items",
+  "type": "array",
+  "minItems": 1,
+  "items": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": ["name", "task"],
+    "properties": { "name": { "type": "string", "minLength": 1 }, "task": { "type": "string", "minLength": 1 } }
+  }
+}

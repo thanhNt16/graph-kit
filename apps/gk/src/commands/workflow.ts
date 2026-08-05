@@ -184,14 +184,6 @@ export async function startWorkflow(
     verdict: null,
   };
   await createRun(project, run, { ...inputs, [INPUTS_KEY]: inputs }, []);
-  // Snapshot each fanout's source items so the fan-in pending set is stable even
-  // though the merged field accumulates decorated results.
-  await mutateRun(project, runId, (d) => {
-    for (const node of Object.values(workflow.nodes)) {
-      if (node.type === "fanout") d.state[`${FAN_ITEMS_PREFIX}${node.from}`] = d.state[node.from] ?? [];
-    }
-    return d;
-  });
   // Advance past the virtual start sentinel so the first node is concrete.
   await mutateRun(project, runId, (d) => {
     const decision = selectTransition({
@@ -246,6 +238,15 @@ export async function nextWorkflow(project: string, loaded: LoadedTemplate, runI
     case "fanout": {
       let issuedContract: DispatchContract | undefined;
       const result = await mutateRun(project, runId, (d) => {
+        const fan = nodeFor(workflow, current);
+        if (fan.type !== "fanout") throw new GraphKitError("INVALID_TRANSITION", `'${current}' is not a fanout`);
+        const snapshotKey = `${FAN_ITEMS_PREFIX}${fan.from}`;
+        if (!(snapshotKey in d.state)) {
+          const source = d.state[fan.from];
+          if (!Array.isArray(source))
+            throw new GraphKitError("SCHEMA_VIOLATION", `fanout '${current}' source '${fan.from}' is not an array`);
+          d.state[snapshotKey] = structuredClone(source);
+        }
         recoverExpiredLeases(d, Date.now());
         const contract = dispatchContract(loaded, d.run, d.leases, d.state, current);
         issuedContract = contract;

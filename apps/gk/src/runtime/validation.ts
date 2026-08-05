@@ -51,9 +51,7 @@ function buildAdjacency(wf: Workflow): Map<string, string[]> {
 
   // Fanout worker execution is implicit in the template: the runtime dispatches
   // the one agent not targeted by normal edges, then converges on the matching join.
-  const normallyTargeted = new Set(
-    wf.edges.flatMap((edge) => (Array.isArray(edge.to) ? edge.to : [edge.to])),
-  );
+  const normallyTargeted = new Set(wf.edges.flatMap((edge) => (Array.isArray(edge.to) ? edge.to : [edge.to])));
   const implicitWorkers = Object.values(wf.nodes).filter(
     (node) => node.type === "agent" && !normallyTargeted.has(node.id),
   );

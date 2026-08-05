@@ -235,7 +235,6 @@ describe("evidence, trace and Mermaid read models", () => {
     expect(data.data.map((l) => l.seq)).toEqual(data.data.map((_, index) => index));
     expect(data.data.map((l) => l.event.type)).toEqual([
       "command",
-      "command",
       "dispatch",
       "submit",
       "submit",

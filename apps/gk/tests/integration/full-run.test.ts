@@ -1,14 +1,14 @@
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { cp, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { evidenceReport } from "../../src/commands/observability.js";
 import { executeWorkflow, nextWorkflow, startWorkflow, submitWorkflow } from "../../src/commands/workflow.js";
 import type { WorkflowContract } from "../../src/runtime/contracts.js";
 import { resumeRun } from "../../src/runtime/store.js";
-import { loadTemplate } from "../../src/templates/loader.js";
 import { validateTemplate } from "../../src/runtime/validation.js";
 import { installTemplate } from "../../src/templates/installer.js";
-import { evidenceReport } from "../../src/commands/observability.js";
+import { loadTemplate } from "../../src/templates/loader.js";
 
 const TEMPLATES = ["task-execute-verify", "orchestrator-worker"];
 
@@ -40,8 +40,16 @@ const OUTPUTS: Record<string, unknown> = {
     evaluate: { summary: "ok", verdict: "passed", approval: false, evidence: [{ key: "tests", value: "pass" }] },
   },
   "orchestrator-worker": {
-    "load-context": [{ name: "a", task: "a" }, { name: "b", task: "b" }],
-    plan: { summary: [{ name: "a", task: "a" }, { name: "b", task: "b" }] },
+    "load-context": [
+      { name: "a", task: "a" },
+      { name: "b", task: "b" },
+    ],
+    plan: {
+      summary: [
+        { name: "a", task: "a" },
+        { name: "b", task: "b" },
+      ],
+    },
     "execute-workers": { summary: "done", evidence: [{ key: "tests", value: "pass" }] },
     aggregate: { summary: "aggregated", evidence: [{ key: "tests", value: "pass" }] },
     evaluate: { summary: "ok", verdict: "passed", approval: false, evidence: [{ key: "tests", value: "pass" }] },
@@ -51,7 +59,7 @@ const OUTPUTS: Record<string, unknown> = {
 /** Drive a template to its terminal verdict, auto-playing contracts. */
 async function driveToTerminal(name: string, inputs: Record<string, unknown>, runId: string): Promise<string> {
   await startWorkflow(project, await loadValidated(name), inputs, runId);
-  const outputs = OUTPUTS[name];
+  const outputs: Record<string, unknown> = OUTPUTS[name] as Record<string, unknown>;
   for (let i = 0; i < 200; i++) {
     const contract: WorkflowContract = await nextWorkflow(project, await loadValidated(name), runId);
     if (contract.kind === "terminal") return contract.verdict;
@@ -80,9 +88,7 @@ for (const name of TEMPLATES) {
     test("runs end-to-end to a passed terminal and writes replayable evidence", async () => {
       const runId = `e2e-${runSeq++}`;
       const inputs =
-        name === "task-execute-verify"
-          ? { task: "t1", objective: "ship" }
-          : { objective: "ship", tasks: ["a", "b"] };
+        name === "task-execute-verify" ? { task: "t1", objective: "ship" } : { objective: "ship", tasks: ["a", "b"] };
       const verdict = await driveToTerminal(name, inputs, runId);
       expect(verdict).toBe("passed");
       const report = await evidenceReport(project, runId, await loadValidated(name));
@@ -100,9 +106,7 @@ for (const name of TEMPLATES) {
     test("crash after a checkpoint is reconstructed by resumeRun and completes", async () => {
       const runId = `crash-${runSeq++}`;
       const inputs =
-        name === "task-execute-verify"
-          ? { task: "t1", objective: "ship" }
-          : { objective: "ship", tasks: ["a", "b"] };
+        name === "task-execute-verify" ? { task: "t1", objective: "ship" } : { objective: "ship", tasks: ["a", "b"] };
       await startWorkflow(project, await loadValidated(name), inputs, runId);
       // Simulate a crash mid-run: truncate the live documents so resumeRun must
       // fall back to the newest valid checkpoint.
@@ -113,7 +117,7 @@ for (const name of TEMPLATES) {
       const resumed = await resumeRun(project, runId);
       expect(resumed.run.run_id).toBe(runId);
       // Continue from the reconstructed state to a terminal.
-      const outputs = OUTPUTS[name];
+      const outputs: Record<string, unknown> = OUTPUTS[name] as Record<string, unknown>;
       for (let i = 0; i < 200; i++) {
         const contract = await nextWorkflow(project, await loadValidated(name), runId);
         if (contract.kind === "terminal") break;
@@ -164,11 +168,9 @@ for (const name of TEMPLATES) {
       const installedDir = join(project, ".graphkit", "templates", "fork-test@1.0.0");
       const runId = `fork-${runSeq++}`;
       const inputs =
-        name === "task-execute-verify"
-          ? { task: "t1", objective: "ship" }
-          : { objective: "ship", tasks: ["a", "b"] };
+        name === "task-execute-verify" ? { task: "t1", objective: "ship" } : { objective: "ship", tasks: ["a", "b"] };
       await startWorkflow(project, await loadTemplate(installedDir), inputs, runId);
-      const outputs = OUTPUTS[name];
+      const outputs: Record<string, unknown> = OUTPUTS[name] as Record<string, unknown>;
       for (let i = 0; i < 200; i++) {
         const contract = await nextWorkflow(project, await loadTemplate(installedDir), runId);
         if (contract.kind === "terminal") break;

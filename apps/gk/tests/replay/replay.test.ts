@@ -1,14 +1,14 @@
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { parse } from "yaml";
 import { executeWorkflow, nextWorkflow, startWorkflow, submitWorkflow } from "../../src/commands/workflow.js";
 import type { WorkflowContract } from "../../src/runtime/contracts.js";
 import { issueLeases, validateLease } from "../../src/runtime/leases.js";
 import { mergeStateField } from "../../src/runtime/merges.js";
-import { loadTemplate } from "../../src/templates/loader.js";
 import { validateTemplate } from "../../src/runtime/validation.js";
+import { loadTemplate } from "../../src/templates/loader.js";
 
 /**
  * Test-only replay driver. Deliberately NOT a public CLI command: it drives a
@@ -121,8 +121,16 @@ for (const templateName of ["task-execute-verify", "orchestrator-worker"]) {
           inputs: { objective: "x", tasks: ["a", "b"] },
           overrides: {
             __default__: { summary: "done", evidence: [{ key: "k", value: "v" }] },
-            "load-context": [{ name: "a", task: "a" }, { name: "b", task: "b" }],
-            plan: { summary: [{ name: "a", task: "a" }, { name: "b", task: "b" }] },
+            "load-context": [
+              { name: "a", task: "a" },
+              { name: "b", task: "b" },
+            ],
+            plan: {
+              summary: [
+                { name: "a", task: "a" },
+                { name: "b", task: "b" },
+              ],
+            },
             evaluate: { summary: "ok", verdict: "passed", approval: false, evidence: [{ key: "k", value: "v" }] },
           },
           expect_terminal: "passed",
@@ -133,17 +141,23 @@ for (const templateName of ["task-execute-verify", "orchestrator-worker"]) {
       const expired = issueLeases([{ work_item: "w", node: "n", now: Date.now() }]);
       const past = new Date(Date.now() - 1).toISOString();
       expired[0].expires_at = past;
-      expect(() =>
-        validateLease({ leases: expired, now: Date.now(), id: expired[0].id, work_item: "w" }),
-      ).toThrow("lease expired");
+      expect(() => validateLease({ leases: expired, now: Date.now(), id: expired[0].id, work_item: "w" })).toThrow(
+        "lease expired",
+      );
     });
 
     test("merge policies: append_unique flattens array writes and dedupes by identity", () => {
       const decl = { merge: "append_unique" as const, identity: "name" };
-      const first = mergeStateField(decl, undefined, [{ name: "a", task: "a" }, { name: "b", task: "b" }]);
+      const first = mergeStateField(decl, undefined, [
+        { name: "a", task: "a" },
+        { name: "b", task: "b" },
+      ]);
       expect(Array.isArray(first)).toBe(true);
       expect(first).toHaveLength(2);
-      const second = mergeStateField(decl, first, [{ name: "b", task: "b2" }, { name: "c", task: "c" }]);
+      const second = mergeStateField(decl, first, [
+        { name: "b", task: "b2" },
+        { name: "c", task: "c" },
+      ]);
       expect(second).toEqual([
         { name: "a", task: "a" },
         { name: "b", task: "b" },
