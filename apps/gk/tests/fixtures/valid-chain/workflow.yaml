@@ -2,7 +2,7 @@ apiVersion: graphkit.dev/v1alpha1
 kind: Workflow
 metadata: { name: valid-chain }
 inputs: { task: { type: string, required: true } }
-limits: { max_iterations: 2, max_workers: 1, max_failures: 1 }
+limits: { max_iterations: 2, max_workers: 1 }
 state: { result: { merge: replace } }
 start: start
 nodes:

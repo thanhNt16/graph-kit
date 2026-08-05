@@ -103,6 +103,24 @@ describe("selectTransition", () => {
     ).toEqual({ next: ["b"], failures: 2 });
   });
 
+  test("multi-edge error routing selects retry and separate on_error edges", () => {
+    const wf = makeWorkflow({
+      nodes: { a: { id: "a", type: "command", command: ["true"] }, b: { id: "b", type: "command", command: ["true"] } },
+      edges: [
+        { from: "a", to: "a", retry: { max: 1, on: ["failed"] } },
+        { from: "a", to: "b", on_error: "b" },
+      ],
+    });
+    expect(selectTransition({ workflow: wf, run: makeRun(), scope: {}, failed: "a", verdict: "failed" })).toEqual({
+      next: ["a"],
+      retry: true,
+      failures: 1,
+    });
+    expect(
+      selectTransition({ workflow: wf, run: makeRun({ failures: 1 }), scope: {}, failed: "a", verdict: "failed" }),
+    ).toEqual({ next: ["b"], failures: 2 });
+  });
+
   test("deterministic node skipped after completion", () => {
     const wf = makeWorkflow({
       nodes: { a: { id: "a", type: "command", command: ["true"] }, b: { id: "b", type: "command", command: ["true"] } },

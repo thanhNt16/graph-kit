@@ -2,7 +2,7 @@ apiVersion: graphkit.dev/v1alpha1
 kind: Workflow
 metadata: { name: orchestrator-worker }
 inputs: { objective: { type: string, required: true }, tasks: { type: array, required: true } }
-limits: { max_iterations: 8, max_workers: 2, max_failures: 4 }
+limits: { max_iterations: 8, max_workers: 2 }
 state:
   plan: { merge: replace }
   items: { merge: append_unique, identity: name }

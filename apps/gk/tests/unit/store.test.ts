@@ -113,6 +113,15 @@ describe("run layout and mutation", () => {
 });
 
 describe("crash resume", () => {
+  test("resumeRun fails quickly when run does not exist", async () => {
+    const started = performance.now();
+    await expect(resumeRun(project, "missing")).rejects.toMatchObject({
+      code: "SCHEMA_VIOLATION",
+      message: "run not found: missing",
+    });
+    expect(performance.now() - started).toBeLessThan(1000);
+  });
+
   test("resumeRun restores newest valid checkpoint after corrupt state", async () => {
     await createRun(project, run, { count: 0 }, []);
     await mutateRun(project, "run-1", (d) => {

@@ -114,7 +114,7 @@ describe("evidence, trace and Mermaid read models", () => {
         "apiVersion: graphkit.dev/v1alpha1",
         "kind: Workflow",
         "metadata: { name: mixed }",
-        "limits: { max_iterations: 4, max_workers: 2, max_failures: 2 }",
+        "limits: { max_iterations: 4, max_workers: 2 }",
         "state: { items: { merge: append_unique, identity: name }, result: { merge: replace } }",
         "start: start",
         "nodes:",

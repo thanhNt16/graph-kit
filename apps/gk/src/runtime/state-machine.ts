@@ -108,13 +108,20 @@ export function selectTransition(input: TransitionInput): TransitionDecision {
 }
 
 function routeOnError(workflow: Workflow, from: string, verdict: Verdict, failures: number): TransitionDecision {
-  const edge = (workflow.edges ?? []).find((e) => e.from === from);
+  const edges = workflow.edges ?? [];
   const candidateFailures = failures + 1;
-  // Bounded retry: only retry within `retry.max`; the candidate counter is
-  // incremented before eligibility is evaluated.
-  if (edge?.retry && edge.retry.max > 0 && edge.retry.on.includes(verdict) && candidateFailures <= edge.retry.max) {
-    return { next: [from], retry: true, failures: candidateFailures };
+  // Prefer the retry edge when present so a multi-edge node (a retry edge
+  // plus a separate on_error edge) never picks the wrong edge by array
+  // order; matches how selectTransition filters forward edges.
+  const retryEdge = edges.find((e) => e.from === from && e.retry);
+  if (retryEdge?.retry) {
+    if (retryEdge.retry.on.includes(verdict) && candidateFailures <= retryEdge.retry.max) {
+      return { next: [from], retry: true, failures: candidateFailures };
+    }
+    // retry exhausted or verdict not retried: fall through to on_error edge.
   }
-  if (edge?.on_error) return { next: targets(edge.on_error), failures: candidateFailures };
+  const onErrorEdge =
+    edges.find((e) => e.from === from && !e.retry && e.on_error) ?? edges.find((e) => e.from === from && e.on_error);
+  if (onErrorEdge?.on_error) return { next: targets(onErrorEdge.on_error), failures: candidateFailures };
   return { terminal: true, verdict: "failed" };
 }

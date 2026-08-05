@@ -111,7 +111,6 @@ export type Edge = z.infer<typeof EdgeSchema>;
 export const LimitsSchema = z.object({
   max_iterations: z.number().int().positive().optional(),
   max_workers: z.number().int().positive().optional(),
-  max_failures: z.number().int().nonnegative().optional(),
 });
 export type Limits = z.infer<typeof LimitsSchema>;
 

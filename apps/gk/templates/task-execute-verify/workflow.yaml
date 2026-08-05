@@ -2,7 +2,7 @@ apiVersion: graphkit.dev/v1alpha1
 kind: Workflow
 metadata: { name: task-execute-verify }
 inputs: { task: { type: string, required: true }, objective: { type: string, required: true } }
-limits: { max_iterations: 8, max_workers: 1, max_failures: 3 }
+limits: { max_iterations: 8, max_workers: 1 }
 state:
   plan: { merge: replace }
   result: { merge: replace }

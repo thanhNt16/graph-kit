@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdtemp, readdir, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { appendEvent, writeJsonAtomic } from "../../src/shared/files.js";
+import { writeJsonAtomic } from "../../src/shared/files.js";
 import { withDirectoryLock } from "../../src/shared/lock.js";
 
 let dir: string;
@@ -60,40 +60,13 @@ describe("writeJsonAtomic", () => {
   });
 });
 
-describe("appendEvent", () => {
-  test("appends JSON lines in order", async () => {
-    const log = join(dir, "events.jsonl");
-    await appendEvent(log, { seq: 1 });
-    await appendEvent(log, { seq: 2 });
-    const lines = (await readFile(log, "utf8")).trim().split("\n");
-    expect(lines.map((l) => JSON.parse(l))).toEqual([{ seq: 1 }, { seq: 2 }]);
-  });
-
-  test("only whole lines survive and no temp remains", async () => {
-    const log = join(dir, "events.jsonl");
-    await appendEvent(log, { a: 1 });
-    await appendEvent(log, { b: 2 });
-    const content = await readFile(log, "utf8");
-    expect(content.endsWith("\n")).toBe(true);
-    for (const line of content.split("\n").filter((l) => l.length > 0)) {
-      expect(() => JSON.parse(line)).not.toThrow();
-    }
-    expect(await readdir(dir)).toEqual(["events.jsonl"]);
-  });
-
-  test("concurrent public appends preserve every whole event line", async () => {
-    const log = join(dir, "events.jsonl");
-    await Promise.all(Array.from({ length: 3 }, (_, seq) => appendEvent(log, { seq })));
-    const lines = (await readFile(log, "utf8"))
-      .trim()
-      .split("\n")
-      .map((line) => JSON.parse(line));
-    expect(lines).toHaveLength(3);
-    expect(new Set(lines.map((event) => event.seq))).toEqual(new Set([0, 1, 2]));
-  });
-});
-
 describe("withDirectoryLock", () => {
+  test("creates a missing lock directory", async () => {
+    const missing = join(dir, "nested", "lock");
+    await withDirectoryLock(missing, async () => {});
+    expect(await readdir(missing)).toEqual([]);
+  });
+
   test("runs callbacks whose lock spans never overlap across concurrent workers", async () => {
     const active: number[] = [];
     const record = async (id: number) => {

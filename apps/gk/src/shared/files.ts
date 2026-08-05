@@ -1,7 +1,6 @@
-import { link, mkdtemp, open, readFile, rename, rm, unlink } from "node:fs/promises";
+import { link, mkdtemp, open, rename, rm, unlink } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
 import { GraphKitError } from "../errors.js";
-import { withDirectoryLock } from "./lock.js";
 
 /** Collision-safe sibling temp dir for `path`; caller writes a `data` file inside. */
 async function tempDirFor(path: string): Promise<string> {
@@ -56,22 +55,4 @@ export async function writeJsonAtomic(path: string, value: unknown, immutable = 
 /** Write raw text to `path` atomically. If `immutable`, never overwrites. */
 export async function writeTextAtomic(path: string, content: string, immutable = false): Promise<void> {
   await writeFileAtomic(path, content, immutable);
-}
-
-/**
- * Append `event` as a whole JSON line to `path`, crash-safe: read existing
- * content, append exactly one line in memory, then atomic temp+rename. Never
- * leaves a truncated line or a temp file behind.
- */
-export async function appendEvent(path: string, event: unknown): Promise<void> {
-  await withDirectoryLock(dirname(path), () => appendEventUnlocked(path, event));
-}
-
-/** Append while the caller already holds the directory lock. */
-async function appendEventUnlocked(path: string, event: unknown): Promise<void> {
-  const existing = await readFile(path, "utf8").catch((err) => {
-    if ((err as { code?: string }).code === "ENOENT") return "";
-    throw err;
-  });
-  await writeFileAtomic(path, `${existing}${JSON.stringify(event)}\n`, false);
 }

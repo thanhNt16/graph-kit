@@ -1,3 +1,2 @@
 name: task-execute-verify
 max_iterations: 4
-max_failures: 3

@@ -178,6 +178,12 @@ export async function mutateRun(project: string, runId: string, mutator: RunMuta
  */
 export async function resumeRun(project: string, runId: string): Promise<RunDocuments> {
   const dir = runDir(project, runId);
+  const runJson = join(dir, "run.json");
+  const exists = await readFile(runJson, "utf8").catch((err: unknown) => {
+    if ((err as { code?: string }).code === "ENOENT") return null;
+    throw err;
+  });
+  if (exists === null) throw new GraphKitError("SCHEMA_VIOLATION", `run not found: ${runId}`);
   return withDirectoryLock(dir, async () => {
     try {
       return await readDocs(dir);
