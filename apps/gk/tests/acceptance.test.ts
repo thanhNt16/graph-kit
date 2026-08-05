@@ -3,11 +3,9 @@ import { cp, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { parse } from "yaml";
-import { evidenceReport, mermaidGraph, renderMermaid } from "../src/commands/observability.js";
+import { evidenceReport, mermaidGraph, readEventLog, renderMermaid } from "../src/commands/observability.js";
+import { inspectTemplate } from "../src/commands/template.js";
 import { executeWorkflow, nextWorkflow, startWorkflow, submitWorkflow } from "../src/commands/workflow.js";
-import { validateLease } from "../src/runtime/leases.js";
-import { readRun } from "../src/runtime/store.js";
-import { validateTemplate } from "../src/runtime/validation.js";
 import { installTemplate } from "../src/templates/installer.js";
 import { loadTemplate } from "../src/templates/loader.js";
 import { readRegistry } from "../src/templates/registry.js";
@@ -19,13 +17,13 @@ function templateDir(name: string): string {
 }
 async function loadValidated(name: string) {
   const loaded = await loadTemplate(templateDir(name));
-  const issues = validateTemplate(loaded);
+  const issues = (await inspectTemplate(templateDir(name))).issues;
   expect(issues, issues.map((i) => `${i.code}: ${i.message}`).join("\n")).toEqual([]);
   return loaded;
 }
 async function loadTemplateDir(dir: string) {
   const loaded = await loadTemplate(dir);
-  expect(validateTemplate(loaded)).toEqual([]);
+  expect((await inspectTemplate(dir)).issues).toEqual([]);
   return loaded;
 }
 
@@ -126,6 +124,17 @@ async function drive(
 async function newProject(prefix: string): Promise<string> {
   return mkdtemp(join(tmpdir(), `gk-accept-${prefix}-`));
 }
+async function readRunFiles(
+  project: string,
+  runId: string,
+): Promise<{ run: Record<string, unknown>; state: Record<string, unknown>; leases: unknown[] }> {
+  const dir = join(project, ".graphkit", "runs", runId);
+  return {
+    run: JSON.parse(await readFile(join(dir, "run.json"), "utf8")),
+    state: JSON.parse(await readFile(join(dir, "state.json"), "utf8")),
+    leases: JSON.parse(await readFile(join(dir, "leases.json"), "utf8")),
+  };
+}
 
 async function start(project: string, name: string, inputs: Record<string, unknown>, runId: string): Promise<void> {
   await startWorkflow(project, await loadValidated(name), inputs, runId);
@@ -191,21 +200,33 @@ describe("acceptance", () => {
   describe("AC02 bundled validation; unreachable/unbounded rejection", () => {
     test("both bundles validate clean and a broken fork fails closed", async () => {
       for (const name of TEMPLATES) {
-        expect(validateTemplate(await loadValidated(name))).toEqual([]);
+        expect((await inspectTemplate(templateDir(name))).issues).toEqual([]);
       }
-      // Reachability and boundedness are enforced: a fork that loses the start
-      // edge leaves nodes unreachable, and a boundedness defect on a retry
-      // cycle is rejected.
       const fork = await mkdtemp(join(tmpdir(), "gk-accept-validate-"));
       const source = templateDir("task-execute-verify");
       await cp(source, fork, { recursive: true });
       const wfPath = join(fork, "workflow.yaml");
-      const wf = parse(await readFile(wfPath, "utf8")) as { edges: Array<{ from: string; to: string }> };
+      const wf = parse(await readFile(wfPath, "utf8")) as {
+        edges: Array<{ from: string; to: string }>;
+        limits: { max_iterations: number };
+      };
       wf.edges = wf.edges.filter((e) => e.from !== "start");
       await writeFile(wfPath, JSON.stringify(wf));
-      const issues = validateTemplate(await loadTemplate(fork));
-      expect(issues.some((i) => i.code === "UNREACHABLE_TERMINAL" || i.code === "INVALID_TRANSITION")).toBe(true);
+      const unreachable = (await inspectTemplate(fork)).issues;
+      expect(unreachable.some((i) => i.code === "UNREACHABLE_TERMINAL" || i.code === "INVALID_TRANSITION")).toBe(true);
+      const boundedFork = await mkdtemp(join(tmpdir(), "gk-accept-unbounded-"));
+      await cp(source, boundedFork, { recursive: true });
+      const boundedPath = join(boundedFork, "workflow.yaml");
+      const bounded = parse(await readFile(boundedPath, "utf8")) as {
+        edges: Array<{ from: string; to: string }>;
+        limits?: { max_iterations: number };
+      };
+      delete bounded.limits;
+      bounded.edges.push({ from: "verify", to: "plan" });
+      await writeFile(boundedPath, JSON.stringify(bounded));
+      expect((await inspectTemplate(boundedFork)).issues.some((i) => i.code === "UNBOUNDED_CYCLE")).toBe(true);
       await rm(fork, { recursive: true, force: true });
+      await rm(boundedFork, { recursive: true, force: true });
     });
   });
 
@@ -244,10 +265,11 @@ describe("acceptance", () => {
       }
     });
 
-    test("the workflow module exposes exactly the four agent entry points, nothing more", async () => {
+    test("the workflow module exports exactly the four agent entry points, nothing more", async () => {
       const mod = await import("../src/commands/workflow.js");
-      const exported = Object.keys(mod).filter((k) => AGENT_ENTRY_POINTS.has(k));
-      expect(exported.sort()).toEqual([...AGENT_ENTRY_POINTS].sort());
+      // No filtering: the complete runtime export set must be exactly the four
+      // entry points (type-only interfaces are erased and do not appear).
+      expect(Object.keys(mod).sort()).toEqual([...AGENT_ENTRY_POINTS].sort());
       // startWorkflow is exported directly (used by gk), not via a subprocess
       // harness, so a model is never invoked.
       expect(typeof mod.startWorkflow).toBe("function");
@@ -259,7 +281,7 @@ describe("acceptance", () => {
       const project = await newProject("transition");
       const name = "task-execute-verify";
       await start(project, name, inputsFor(name), "ac05");
-      const before = await readRun(project, "ac05");
+      const before = await readRunFiles(project, "ac05");
       expect(before.run.current_nodes).toEqual(["load-context"]);
       // next (the sole transition authority) moves the cursor.
       const c = await nextWorkflow(project, await loadValidated(name), "ac05");
@@ -267,8 +289,8 @@ describe("acceptance", () => {
       if (c.kind === "agent") expect(c.node).toBe("load-context");
       // submit through gk's authority, then cursor advances.
       await submitWorkflow(project, await loadValidated(name), "ac05", OUTPUTS[name]["load-context"], {});
-      const after = await readRun(project, "ac05");
-      expect(after.run.current_nodes[0]).not.toBe("load-context");
+      const after = await readRunFiles(project, "ac05");
+      expect((after.run.current_nodes as string[] | undefined)?.[0]).not.toBe("load-context");
     });
   });
 
@@ -297,7 +319,7 @@ describe("acceptance", () => {
           return (REPLAY[name][node] ?? {}) as Record<string, unknown>;
         },
       );
-      const run = (await readRun(project, runId)).run;
+      const run = (await readRunFiles(project, runId)).run;
       expect(run.verdict).toBe("blocked");
     });
   });
@@ -326,7 +348,7 @@ describe("acceptance", () => {
           return (REPLAY[name][node] ?? {}) as Record<string, unknown>;
         },
       );
-      const run = (await readRun(project, runId)).run;
+      const run = (await readRunFiles(project, runId)).run;
       expect(run.status).toBe("done");
       expect(run.verdict).toBe("limit-exceeded");
     });
@@ -358,7 +380,7 @@ describe("acceptance", () => {
         },
       );
       expect(paused).toBe(true); // a human pause was actually reached and resumed
-      const run = (await readRun(project, runId)).run;
+      const run = (await readRunFiles(project, runId)).run;
       expect(run.status).toBe("done");
       expect(run.verdict).toBe("passed");
     });
@@ -382,7 +404,7 @@ describe("acceptance", () => {
         });
       }
       // Both worker results were merged, not overwritten: identity is the name.
-      const state = (await readRun(project, runId)).state;
+      const state = (await readRunFiles(project, runId)).state;
       expect(Array.isArray(state.items)).toBe(true);
       expect((state.items as unknown[]).length).toBeGreaterThanOrEqual(2);
     });
@@ -408,13 +430,39 @@ describe("acceptance", () => {
           work_item: item.work_item,
         }),
       ).rejects.toMatchObject({ code: "LEASE_INVALID" });
-      const log = await readFile(join(project, ".graphkit", "runs", runId, "events.jsonl"), "utf8");
-      expect(log).toContain("reject");
+      const events = await readEventLog(project, runId);
+      expect(
+        events.some(
+          (e) => e.type === "reject" && (e.details as { code?: string } | undefined)?.code === "LEASE_INVALID",
+        ),
+      ).toBe(true);
       // The lease status document is the staleness source of truth.
-      const leases = (await readRun(project, runId)).leases;
-      expect(() => validateLease({ leases, now: Date.now(), id: item.lease.id, work_item: item.work_item })).toThrow(
-        "already settled",
-      );
+      const leases = (await readRunFiles(project, runId)).leases;
+      const settled = leases.find((l) => (l as { id?: string }).id === item.lease.id);
+      expect((settled as { status?: string }).status).toBe("settled");
+    });
+    test("an expired lease is rejected through the submit boundary", async () => {
+      const name = "orchestrator-worker";
+      const project = await newProject("lease-expired");
+      const runId = "ac10b";
+      await start(project, name, inputsFor(name), runId);
+      const dispatch = await reachDispatch(project, name, runId);
+      if (dispatch.kind !== "dispatch") throw new Error("expected dispatch");
+      const item = dispatch.items[0];
+      // Force the lease expiry forward so the submit path sees it as stale.
+      const dir = join(project, ".graphkit", "runs", runId);
+      const leasesPath = join(dir, "leases.json");
+      const leases = JSON.parse(await readFile(leasesPath, "utf8")) as Array<{ id: string; expires_at: string }>;
+      const target = leases.find((l) => l.id === item.lease.id);
+      if (!target) throw new Error("lease not found");
+      target.expires_at = new Date(Date.now() - 60_000).toISOString();
+      await writeFile(leasesPath, JSON.stringify(leases));
+      await expect(
+        submitWorkflow(project, await loadValidated(name), runId, OUTPUTS[name]["execute-workers"], {
+          lease: item.lease.id,
+          work_item: item.work_item,
+        }),
+      ).rejects.toMatchObject({ code: "LEASE_EXPIRED" });
     });
   });
 
@@ -492,12 +540,34 @@ describe("acceptance", () => {
       const loaded = await loadTemplateDir(fork);
       const project = await newProject("fork");
       await startWorkflow(project, loaded, inputsFor(name), "ac14");
-      // The fork runs through the same runtime as its source; the first agent
-      // contract proves the forked topology is executable without touching gk.
-      const contract = await nextWorkflow(project, loaded, "ac14");
-      expect(["agent", "dispatch", "deterministic", "paused"]).toContain(contract.kind);
+      let verdict: string | undefined;
+      for (let i = 0; i < 100 && !verdict; i++) {
+        const contract = await nextWorkflow(project, loaded, "ac14");
+        if (contract.kind === "terminal") {
+          verdict = contract.verdict;
+          break;
+        }
+        if (contract.kind === "deterministic") await executeWorkflow(project, loaded, "ac14");
+        else if (contract.kind === "paused")
+          await submitWorkflow(project, loaded, "ac14", contract.actions[0] as string, {});
+        else if (contract.kind === "dispatch") {
+          for (const item of contract.items)
+            await submitWorkflow(project, loaded, "ac14", OUTPUTS[name]["execute-workers"], {
+              lease: item.lease.id,
+              work_item: item.work_item,
+            });
+        } else {
+          await submitWorkflow(project, loaded, "ac14", OUTPUTS[name][contract.node], {});
+        }
+      }
+      expect(verdict).toBe("passed");
+      const forkRun = await readRunFiles(project, "ac14");
+      expect(forkRun.run.run_id).toBe("ac14");
+      expect(JSON.stringify(forkRun.state)).toContain("implemented");
       await rm(fork, { recursive: true, force: true });
       await rm(project, { recursive: true, force: true });
+      // Source template remains untouched; fork evidence came from its own run.
+      expect((await inspectTemplate(templateDir(name))).issues).toEqual([]);
     });
   });
 });
