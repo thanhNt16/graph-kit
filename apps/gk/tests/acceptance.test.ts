@@ -154,7 +154,7 @@ async function firstAgent(name: string, runId: string) {
     contract = await nextWorkflow(project, await loadValidated(name), runId);
   }
   expect(contract.kind).toBe("agent");
-  return { project, contract: contract as import("../src/runtime/contracts.js").AgentContract };
+  return { project, contract };
 }
 function inputsFor(name: string): Record<string, unknown> {
   return name === "orchestrator-worker" ? { objective: "ship", tasks: ["a", "b"] } : { task: "t1", objective: "ship" };
@@ -525,8 +525,8 @@ describe("acceptance", () => {
   });
 
   describe("AC14 forked template without source changes", () => {
-    test("a renamed fork installs and runs without touching gk source", async () => {
-      const name = "task-execute-verify";
+    test("a renamed orchestrator fork installs and runs without touching gk source", async () => {
+      const name = "orchestrator-worker";
       const fork = await mkdtemp(join(tmpdir(), "gk-accept-fork-"));
       const { cp } = await import("node:fs/promises");
       await cp(templateDir(name), fork, { recursive: true });
@@ -538,35 +538,74 @@ describe("acceptance", () => {
         (await readFile(wfPath, "utf8")).replace(/metadata: { name: .+ }/, "metadata: { name: fork-test }"),
       );
       const loaded = await loadTemplateDir(fork);
-      const project = await newProject("fork");
-      await startWorkflow(project, loaded, inputsFor(name), "ac14");
-      let verdict: string | undefined;
-      for (let i = 0; i < 100 && !verdict; i++) {
-        const contract = await nextWorkflow(project, loaded, "ac14");
-        if (contract.kind === "terminal") {
-          verdict = contract.verdict;
-          break;
+      expect(loaded.manifest.name).toBe("fork-test");
+      expect(loaded.workflow.metadata.name).toBe("fork-test");
+
+      // Drive strictly by contract kind; a dispatch must produce settled worker
+      // evidence before the join is allowed to advance.
+      async function runTemplate(
+        template: Awaited<ReturnType<typeof loadTemplateDir>>,
+        project: string,
+        runId: string,
+      ): Promise<{ dispatched: boolean; evidence: Awaited<ReturnType<typeof evidenceReport>> }> {
+        await startWorkflow(project, template, inputsFor(name), runId);
+        let verdict: string | undefined;
+        let dispatched = false;
+        let deliveredItems = 0;
+        for (let i = 0; i < 200 && !verdict; i++) {
+          const contract = await nextWorkflow(project, template, runId);
+          switch (contract.kind) {
+            case "terminal":
+              verdict = contract.verdict;
+              break;
+            case "deterministic":
+              await executeWorkflow(project, template, runId);
+              break;
+            case "paused":
+              await submitWorkflow(project, template, runId, contract.actions[0] as string, {});
+              break;
+            case "dispatch":
+              dispatched = true;
+              for (const item of contract.items) {
+                deliveredItems += 1;
+                await submitWorkflow(project, template, runId, OUTPUTS[name]["execute-workers"], {
+                  lease: item.lease.id,
+                  work_item: item.work_item,
+                });
+              }
+              break;
+            case "agent":
+              await submitWorkflow(project, template, runId, OUTPUTS[name][contract.node], {});
+              break;
+            default: {
+              const exhaustive: never = contract;
+              throw new Error(`driven contract kind not handled: ${(exhaustive as { kind: string }).kind}`);
+            }
+          }
         }
-        if (contract.kind === "deterministic") await executeWorkflow(project, loaded, "ac14");
-        else if (contract.kind === "paused")
-          await submitWorkflow(project, loaded, "ac14", contract.actions[0] as string, {});
-        else if (contract.kind === "dispatch") {
-          for (const item of contract.items)
-            await submitWorkflow(project, loaded, "ac14", OUTPUTS[name]["execute-workers"], {
-              lease: item.lease.id,
-              work_item: item.work_item,
-            });
-        } else {
-          await submitWorkflow(project, loaded, "ac14", OUTPUTS[name][contract.node], {});
-        }
+        expect(verdict).toBe("passed");
+        expect(dispatched).toBe(true);
+        expect(deliveredItems).toBeGreaterThan(0);
+        return { dispatched, evidence: await evidenceReport(project, runId, template) };
       }
-      expect(verdict).toBe("passed");
-      const forkRun = await readRunFiles(project, "ac14");
-      expect(forkRun.run.run_id).toBe("ac14");
-      expect(JSON.stringify(forkRun.state)).toContain("implemented");
-      await rm(fork, { recursive: true, force: true });
-      await rm(project, { recursive: true, force: true });
-      // Source template remains untouched; fork evidence came from its own run.
+
+      const forkProject = await newProject("fork");
+      const sourceProject = await newProject("source");
+      const source = await loadValidated(name);
+      const forkResult = await runTemplate(loaded, forkProject, "ac14-fork");
+      const sourceResult = await runTemplate(source, sourceProject, "ac14-source");
+      // The fork produced its own fulfilled dispatch and terminal evidence,
+      // distinct from the parallel source run.
+      expect(forkResult.dispatched).toBe(true);
+      expect(forkResult.evidence.template).toBe("fork-test");
+      expect(forkResult.evidence.run_id).toBe("ac14-fork");
+      expect(forkResult.evidence.entries.length).toBeGreaterThan(0);
+      expect(sourceResult.evidence.template).toBe(name);
+      expect(sourceResult.evidence.run_id).toBe("ac14-source");
+      expect(sourceResult.evidence.entries.length).toBeGreaterThan(0);
+      expect(forkResult.evidence.run_id).not.toBe(sourceResult.evidence.run_id);
+      expect(forkResult.evidence.entries).not.toEqual(sourceResult.evidence.entries);
+      // Source template remains untouched; fork ran from its own directory.
       expect((await inspectTemplate(templateDir(name))).issues).toEqual([]);
     });
   });
