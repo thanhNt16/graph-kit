@@ -7,6 +7,7 @@ export const NodeIdSchema = z.string().min(1);
 export const OutputDeclarationSchema = z.object({
   schema: z.string().min(1), // path to a template JSON Schema
   save_as: z.string().min(1),
+  evidence: z.array(z.string().min(1)).default([]),
 });
 
 export const AgentNodeSchema = z.object({

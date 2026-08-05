@@ -25,7 +25,7 @@ export interface RunCheckpoint extends RunDocuments {
 export type RunEventInput = Omit<Event, "run_id" | "checkpoint"> & { run_id?: string; checkpoint?: string };
 export interface MutationResult {
   documents: RunDocuments;
-  event: RunEventInput;
+  event?: RunEventInput;
   /** Return current documents without writing event/checkpoint (stale optimistic mutation). */
   skip?: boolean;
 }
@@ -136,7 +136,7 @@ export async function mutateRun(project: string, runId: string, mutator: RunMuta
     const before = await readDocs(dir);
     const raw = mutator(before);
     const result: MutationResult =
-      "event" in raw
+      "documents" in raw
         ? raw
         : { documents: raw, event: { type: "command", run_id: runId, timestamp: new Date().toISOString() } };
     const docs = {
@@ -144,7 +144,7 @@ export async function mutateRun(project: string, runId: string, mutator: RunMuta
       state: result.documents.state,
       leases: result.documents.leases.map((lease) => LeaseSchema.parse(lease)),
     };
-    if (result.skip) return { documents: docs, event: result.event };
+    if (result.skip) return { documents: docs, ...(result.event ? { event: result.event } : {}) };
     const numbers = (await readdir(checkpointDir(project, runId)))
       .filter((name) => /^\d{4}-/.test(name))
       .map((name) => Number(name.slice(0, 4)));

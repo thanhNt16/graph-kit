@@ -65,7 +65,7 @@
     {
       "name": "workflow submit",
       "description": "submit contract output",
-      "options": ["--json", "--lease <id>", "--work-item <id>", "--node <id>", "--verdict <verdict>", "--actor <name>"]
+      "options": ["--json", "--lease <id>", "--work-item <id>", "--verdict <verdict>", "--actor <name>"]
     },
     {
       "name": "workflow status",

@@ -120,7 +120,6 @@ export const CLI_COMMANDS: readonly CommandDescriptor[] = [
     options: [
       { flag: "--lease <id>", description: "lease ID" },
       { flag: "--work-item <id>", description: "leased work item" },
-      { flag: "--node <id>", description: "workflow node" },
       { flag: "--verdict <verdict>", description: "submission verdict" },
       { flag: "--actor <name>", description: "submission actor" },
     ],
@@ -183,7 +182,6 @@ function submitSpec(opts: Record<string, unknown>): SubmitSpec {
   return {
     lease: opts?.lease as string,
     work_item: opts?.workItem as string,
-    node: opts?.node as string,
     verdict: opts?.verdict as SubmitSpec["verdict"],
     actor: opts?.actor as string,
   };
@@ -276,7 +274,6 @@ export function createCli() {
   cli.option("--inputs <json>", "workflow input JSON");
   cli.option("--lease <id>", "lease ID");
   cli.option("--work-item <id>", "leased work item");
-  cli.option("--node <id>", "workflow node");
   cli.option("--verdict <verdict>", "submission verdict");
   cli.option("--actor <name>", "submission actor");
   cli.option("--name <name>", "template name");

@@ -1,0 +1,8 @@
+name: parallel-conflict
+inputs: { task: task-1, objective: reject conflict }
+overrides:
+  load-context: { summary: [{ id: ctx, task: load }] }
+  plan: { summary: [{ id: impl, task: implement }] }
+  implement: { summary: attempted, evidence: [{ key: tests, value: conflict }] }
+  evaluate: { summary: conflict, verdict: blocked, approval: false, evidence: [{ key: tests, value: blocked }] }
+expect_terminal: blocked

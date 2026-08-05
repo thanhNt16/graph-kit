@@ -42,20 +42,17 @@ export function mergeStateField(
   }
   const policy: MergePolicy = declaration.merge;
   const isFirstWrite = previous === undefined;
+  // `append`/`append_unique` accept a single incoming value OR a batch array,
+  // flattening array payloads (fanout item lists) so the merged field stays a
+  // flat list of items rather than becoming nested `[[item], ...]`.
+  const batch = Array.isArray(incoming) ? incoming : [incoming];
   switch (policy) {
     case "replace":
       return incoming;
     case "append":
-      return isFirstWrite
-        ? [incoming]
-        : (Array.isArray(previous) ? previous : []).concat(Array.isArray(incoming) ? incoming : []);
+      return (Array.isArray(previous) ? previous : []).concat(batch);
     case "append_unique":
-      if (isFirstWrite) return [incoming];
-      return applyAppendUnique(
-        declaration,
-        Array.isArray(previous) ? previous : [],
-        Array.isArray(incoming) ? incoming : [],
-      );
+      return applyAppendUnique(declaration, Array.isArray(previous) ? previous : [], batch);
     case "first":
       return previous === undefined ? incoming : previous;
     case "maximum":

@@ -52,7 +52,7 @@ describe("run layout and mutation", () => {
         event: { type: "dispatch", node: "alpha", actor: "tester", timestamp: "2026-01-01T00:00:00.000Z" },
       };
     });
-    expect(result.event.checkpoint).toBe("0001-alpha");
+    expect(result.event?.checkpoint).toBe("0001-alpha");
     expect(result.documents.state.count).toBe(1);
 
     const events = (await readFile(join(project, ".graphkit", "runs", "run-1", "events.jsonl"), "utf8"))

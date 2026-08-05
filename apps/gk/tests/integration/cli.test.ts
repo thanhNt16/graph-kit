@@ -179,7 +179,7 @@ describe("evidence, trace and Mermaid read models", () => {
     // human action, then command execution
     const human = await runCli(["workflow", "next", workflow, "m1"]);
     expect(human.stdout).toMatchObject({ data: { kind: "paused", node: "review" } });
-    await runCli(["workflow", "submit", workflow, "m1", "approve", "--node", "review", "--actor", "reviewer"]);
+    await runCli(["workflow", "submit", workflow, "m1", "approve", "--actor", "reviewer"]);
     const next = await runCli(["workflow", "next", workflow, "m1"]);
     expect(next.stdout).toMatchObject({ data: { kind: "deterministic", node: "cmd" } });
     await runCli(["workflow", "execute", workflow, "m1"]);

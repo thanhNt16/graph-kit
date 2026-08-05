@@ -57,7 +57,7 @@ function fanLoaded(): LoadedTemplate {
         skill: "worker",
         objective: "Process item.",
         tools: [],
-        output: { schema: "schemas/result.schema.json", save_as: "result" },
+        output: { schema: "schemas/result.schema.json", save_as: "result", evidence: [] },
       },
       join: { id: "join", type: "join", merge: "items" },
       done: { id: "done", type: "graph", operation: "complete-task" },
@@ -87,7 +87,7 @@ function chainLoaded(): LoadedTemplate {
         skill: "worker",
         objective: "Complete the task.",
         tools: [],
-        output: { schema: "schemas/result.schema.json", save_as: "result" },
+        output: { schema: "schemas/result.schema.json", save_as: "result", evidence: [] },
       },
       complete: { id: "complete", type: "graph", operation: "complete-task" },
     },
@@ -180,7 +180,7 @@ describe("workflow contracts", () => {
           skill: "worker",
           objective: "Process item.",
           tools: [],
-          output: { schema: "schemas/result.schema.json", save_as: "result" },
+          output: { schema: "schemas/result.schema.json", save_as: "result", evidence: [] },
         },
         join: { id: "join", type: "join", merge: "items" },
         summarize: {
@@ -189,7 +189,7 @@ describe("workflow contracts", () => {
           skill: "worker",
           objective: "Aggregate item results.",
           tools: [],
-          output: { schema: "schemas/result.schema.json", save_as: "result" },
+          output: { schema: "schemas/result.schema.json", save_as: "result", evidence: [] },
         },
         done: { id: "done", type: "graph", operation: "complete-task" },
       },
@@ -210,14 +210,14 @@ describe("workflow contracts", () => {
       loaded,
       "r1",
       { summary: "s1" },
-      { lease: a.lease.id, work_item: a.work_item, node: a.node, verdict: "passed" },
+      { lease: a.lease.id, work_item: a.work_item, verdict: "passed" },
     );
     await submitWorkflow(
       project,
       loaded,
       "r1",
       { summary: "s2" },
-      { lease: b.lease.id, work_item: b.work_item, node: b.node, verdict: "passed" },
+      { lease: b.lease.id, work_item: b.work_item, verdict: "passed" },
     );
     const agg = await nextWorkflow(project, loaded, "r1");
     expect(agg.kind).toBe("agent");
@@ -271,7 +271,7 @@ describe("submission gates", () => {
       loaded,
       "r1",
       { summary: "s" },
-      { lease: first.lease.id, work_item: first.work_item, node: first.node, verdict: "passed" },
+      { lease: first.lease.id, work_item: first.work_item, verdict: "passed" },
     );
     await expect(
       submitWorkflow(
@@ -279,7 +279,7 @@ describe("submission gates", () => {
         loaded,
         "r1",
         { summary: "again" },
-        { lease: first.lease.id, work_item: first.work_item, node: first.node, verdict: "passed" },
+        { lease: first.lease.id, work_item: first.work_item, verdict: "passed" },
       ),
     ).rejects.toMatchObject({ code: "LEASE_INVALID" });
     const events = await readEvents();
@@ -298,7 +298,7 @@ describe("submission gates", () => {
         loaded,
         "r1",
         { summary: "x" },
-        { lease: first.lease.id, work_item: "i2", node: first.node, verdict: "passed" },
+        { lease: first.lease.id, work_item: "i2", verdict: "passed" },
       ),
     ).rejects.toMatchObject({ code: "LEASE_INVALID" });
   });
@@ -322,7 +322,7 @@ describe("submission gates", () => {
         loaded,
         "r1",
         { summary: "x" },
-        { lease: "L1", work_item: "i1", node: "work", verdict: "passed" },
+        { lease: "L1", work_item: "i1", verdict: "passed" },
       ),
     ).rejects.toMatchObject({ code: "LEASE_EXPIRED" });
   });
@@ -353,7 +353,7 @@ describe("parallel dispatch and fan-in", () => {
       loaded,
       "r1",
       { summary: "s1" },
-      { lease: a.lease.id, work_item: a.work_item, node: a.node, verdict: "passed" },
+      { lease: a.lease.id, work_item: a.work_item, verdict: "passed" },
     );
     const wait = await nextWorkflow(project, loaded, "r1");
     expect(wait.kind).toBe("dispatch");
@@ -380,7 +380,7 @@ describe("parallel dispatch and fan-in", () => {
           skill: "worker",
           objective: "Process.",
           tools: [],
-          output: { schema: "schemas/result.schema.json", save_as: "result" },
+          output: { schema: "schemas/result.schema.json", save_as: "result", evidence: [] },
         },
         join: { id: "join", type: "join", merge: "items" },
         summarize: {
@@ -389,7 +389,7 @@ describe("parallel dispatch and fan-in", () => {
           skill: "worker",
           objective: "Aggregate.",
           tools: [],
-          output: { schema: "schemas/result.schema.json", save_as: "result" },
+          output: { schema: "schemas/result.schema.json", save_as: "result", evidence: [] },
         },
         done: { id: "done", type: "graph", operation: "complete-task" },
       },
@@ -410,14 +410,14 @@ describe("parallel dispatch and fan-in", () => {
       raceLoaded,
       "r1",
       { summary: "s1" },
-      { lease: a.lease.id, work_item: a.work_item, node: a.node, verdict: "passed" },
+      { lease: a.lease.id, work_item: a.work_item, verdict: "passed" },
     );
     await submitWorkflow(
       project,
       raceLoaded,
       "r1",
       { summary: "s2" },
-      { lease: b.lease.id, work_item: b.work_item, node: b.node, verdict: "passed" },
+      { lease: b.lease.id, work_item: b.work_item, verdict: "passed" },
     );
     // now at join: two concurrent next calls
     const results = await Promise.all([
@@ -455,7 +455,7 @@ describe("parallel dispatch and fan-in", () => {
           skill: "worker",
           objective: "Process.",
           tools: [],
-          output: { schema: "schemas/result.schema.json", save_as: "result" },
+          output: { schema: "schemas/result.schema.json", save_as: "result", evidence: [] },
         },
         work2: {
           id: "work2",
@@ -463,7 +463,7 @@ describe("parallel dispatch and fan-in", () => {
           skill: "worker",
           objective: "Process too.",
           tools: [],
-          output: { schema: "schemas/result.schema.json", save_as: "result2" },
+          output: { schema: "schemas/result.schema.json", save_as: "result2", evidence: [] },
         },
         join: { id: "join", type: "join", merge: "items" },
         done: { id: "done", type: "graph", operation: "complete-task" },
@@ -492,14 +492,14 @@ describe("parallel dispatch and fan-in", () => {
       loaded,
       "r1",
       { summary: "s1" },
-      { lease: a.lease.id, work_item: a.work_item, node: a.node, verdict: "passed" },
+      { lease: a.lease.id, work_item: a.work_item, verdict: "passed" },
     );
     await submitWorkflow(
       project,
       loaded,
       "r1",
       { summary: "s2" },
-      { lease: b.lease.id, work_item: b.work_item, node: b.node, verdict: "failed" },
+      { lease: b.lease.id, work_item: b.work_item, verdict: "failed" },
     );
     // slot freed: next dispatch re-issues remaining i3
     const third = await nextWorkflow(project, loaded, "r1");
@@ -516,8 +516,7 @@ describe("parallel dispatch and fan-in", () => {
       {
         lease: third.items[0].lease.id,
         work_item: third.items[0].work_item,
-        node: third.items[0].node,
-        verdict: "passed",
+                verdict: "passed",
       },
     );
     expect(all.run.current_nodes).toEqual(["join"]);
@@ -580,7 +579,7 @@ describe("parallel dispatch and fan-in", () => {
         loaded,
         "r1",
         { summary: "x" },
-        { lease: "L1", work_item: "i1", node: "work", verdict: "passed" },
+        { lease: "L1", work_item: "i1", verdict: "passed" },
       ),
     ).rejects.toMatchObject({ code: "LEASE_EXPIRED" });
     const events = await readEvents();
@@ -638,11 +637,11 @@ describe("parallel dispatch and fan-in", () => {
       loaded,
       "r1",
       { summary: "s1" },
-      { lease: a.lease.id, work_item: a.work_item, node: a.node, verdict: "passed", actor: "worker" },
+      { lease: a.lease.id, work_item: a.work_item, verdict: "passed", actor: "worker" },
     );
     const events = await readEvents();
     const submit = events.find((e) => e.type === "submit" && e.lease === a.lease.id);
-    expect(submit).toMatchObject({ type: "submit", node: "work", lease: a.lease.id, actor: "worker" });
+    expect(submit).toMatchObject({ type: "submit", lease: a.lease.id, actor: "worker" });
     const { readdir, readFile } = await import("node:fs/promises");
     const cpDir = join(project, ".graphkit", "runs", "r1", "checkpoints");
     const newest = (await readdir(cpDir))
@@ -666,14 +665,14 @@ describe("parallel dispatch and fan-in", () => {
         loaded,
         "r1",
         { summary: "s1" },
-        { lease: a.lease.id, work_item: a.work_item, node: a.node, verdict: "passed" },
+        { lease: a.lease.id, work_item: a.work_item, verdict: "passed" },
       ),
       submitWorkflow(
         project,
         loaded,
         "r1",
         { summary: "s2" },
-        { lease: b.lease.id, work_item: b.work_item, node: b.node, verdict: "passed" },
+        { lease: b.lease.id, work_item: b.work_item, verdict: "passed" },
       ),
     ]);
     const { readFile } = await import("node:fs/promises");
@@ -698,7 +697,7 @@ describe("bounded retry and human gate", () => {
         skill: "worker",
         objective: "Attempt.",
         tools: [],
-        output: { schema: "schemas/result.schema.json", save_as: "result" },
+        output: { schema: "schemas/result.schema.json", save_as: "result", evidence: [] },
       },
     },
     edges: [
@@ -750,7 +749,7 @@ describe("bounded retry and human gate", () => {
     });
     const docs = await readRun(project, "r1");
     expect(docs.run.status).toBe("paused");
-    await submitWorkflow(project, humanWorkflow, "r1", "approve", { node: "review", actor: "reviewer" });
+    await submitWorkflow(project, humanWorkflow, "r1", "approve", { actor: "reviewer" });
     const resumed = await nextWorkflow(project, humanWorkflow, "r1");
     expect(resumed).toMatchObject({ kind: "deterministic", node: "done", argv: ["complete-task"] });
   });

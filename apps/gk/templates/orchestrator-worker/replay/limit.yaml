@@ -1,0 +1,8 @@
+name: limit
+inputs: { objective: stop at iteration limit, tasks: [a] }
+overrides:
+  load-context: [{ name: a, task: ta }]
+  plan: { summary: [{ name: a, task: ta }] }
+  __default__: { summary: attempted, evidence: [{ key: tests, value: attempt }] }
+  evaluate: { summary: retrying, verdict: retry, approval: false, evidence: [{ key: tests, value: retry }] }
+expect_terminal: limit-exceeded

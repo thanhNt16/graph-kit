@@ -13,14 +13,16 @@ export interface ValidationIssue {
   message: string;
   details?: unknown;
 }
-const ajv = new Ajv2020({ allErrors: true, strict: true });
-addFormats(ajv);
 const schemaCache = new Map<string, ReturnType<Ajv2020["compile"]>>();
 
 function compileSchema(schemaPath: string): ReturnType<Ajv2020["compile"]> {
   const cached = schemaCache.get(schemaPath);
   if (cached) return cached;
   try {
+    // One AJV instance per root schema permits installed/forked templates to
+    // retain the same canonical $id without colliding in a global registry.
+    const ajv = new Ajv2020({ allErrors: true, strict: true });
+    addFormats(ajv);
     const validate = ajv.compile(JSON.parse(readFileSync(schemaPath, "utf8")));
     schemaCache.set(schemaPath, validate);
     return validate;
@@ -40,11 +42,27 @@ function compare(a: string, b: string): number {
 }
 function buildAdjacency(wf: Workflow): Map<string, string[]> {
   const out = new Map<string, string[]>();
-  const add = (from: string, to: string) => out.set(from, [...(out.get(from) ?? []), to]);
+  const add = (from: string, to: string) => out.set(from, [...new Set([...(out.get(from) ?? []), to])]);
   for (const edge of wf.edges) {
     for (const target of Array.isArray(edge.to) ? edge.to : [edge.to]) add(edge.from, target);
     if (edge.on_error)
       for (const target of Array.isArray(edge.on_error) ? edge.on_error : [edge.on_error]) add(edge.from, target);
+  }
+
+  // Fanout worker execution is implicit in the template: the runtime dispatches
+  // the one agent not targeted by normal edges, then converges on the matching join.
+  const normallyTargeted = new Set(
+    wf.edges.flatMap((edge) => (Array.isArray(edge.to) ? edge.to : [edge.to])),
+  );
+  const implicitWorkers = Object.values(wf.nodes).filter(
+    (node) => node.type === "agent" && !normallyTargeted.has(node.id),
+  );
+  for (const [fanId, fan] of Object.entries(wf.nodes)) {
+    if (fan.type !== "fanout" || implicitWorkers.length !== 1) continue;
+    const worker = implicitWorkers[0];
+    const join = Object.values(wf.nodes).find((node) => node.type === "join" && node.merge === fan.from);
+    add(fanId, worker.id);
+    if (join) add(worker.id, join.id);
   }
   return out;
 }
@@ -111,7 +129,7 @@ export function validateTemplate(loaded: LoadedTemplate): ValidationIssue[] {
     } else validNodes.set(id, parsed.data);
   }
   const allowedOps = new Set(["complete-task", "branch", "dispatch", "emit"]);
-  const allowedSkills = new Set(["worker", "validator", "planner", "reviewer"]);
+  const allowedSkills = new Set(["worker", "validator", "planner", "reviewer", "orchestrator"]);
   for (const [id, node] of validNodes) {
     if (node.type === "graph" && !allowedOps.has(node.operation))
       issue("INVALID_TRANSITION", `unsupported graph operation '${node.operation}'`, id);

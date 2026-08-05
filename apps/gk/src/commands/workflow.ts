@@ -20,7 +20,6 @@ import type { LoadedTemplate } from "../templates/loader.js";
 export interface SubmitSpec {
   lease?: string;
   work_item?: string;
-  node?: string;
   verdict?: Verdict;
   actor?: string;
 }
@@ -239,7 +238,7 @@ export async function nextWorkflow(project: string, loaded: LoadedTemplate, runI
         tool_allowlist: node.tools,
         skill: node.skill,
         limits: workflow.limits ?? {},
-        required_evidence: [],
+        required_evidence: node.output.evidence,
         output_schema: loaded.outputSchemas.get(node.id) ?? "",
         output_save_as: node.output.save_as,
         submit_argv: [...SUBMIT_CMD, runId, node.id],
@@ -292,16 +291,17 @@ export async function nextWorkflow(project: string, loaded: LoadedTemplate, runI
     }
     case "join":
     case "router": {
-      await mutateRun(project, runId, (d) => {
+      const advanced = await mutateRun(project, runId, (d) => {
         // Stale guard: a concurrent caller may already have advanced this node.
         if (d.run.current_nodes[0] !== current || d.run.status !== "running") {
-          return { documents: d, event: { type: "command", node: current, timestamp: "" }, skip: true };
+          return { documents: d, skip: true };
         }
         return {
           documents: advance(workflow, d, current, "passed", {}),
           event: { type: "command", node: current, timestamp: new Date().toISOString() },
         };
       });
+      void advanced;
       return nextWorkflow(project, loaded, runId);
     }
     default:

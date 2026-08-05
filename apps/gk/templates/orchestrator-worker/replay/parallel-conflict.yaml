@@ -1,0 +1,8 @@
+name: parallel-conflict
+inputs: { objective: reject conflicting evidence, tasks: [a, b] }
+overrides:
+  load-context: [{ name: a, task: ta }, { name: b, task: tb }]
+  plan: { summary: [{ name: a, task: ta }, { name: b, task: tb }] }
+  __default__: { summary: conflict, evidence: [{ key: tests, value: conflict }] }
+  evaluate: { summary: conflict, verdict: blocked, approval: false, evidence: [{ key: tests, value: blocked }] }
+expect_terminal: blocked

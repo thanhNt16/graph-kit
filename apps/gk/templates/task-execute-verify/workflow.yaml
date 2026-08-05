@@ -1,0 +1,57 @@
+apiVersion: graphkit.dev/v1alpha1
+kind: Workflow
+metadata: { name: task-execute-verify }
+inputs: { task: { type: string, required: true }, objective: { type: string, required: true } }
+limits: { max_iterations: 8, max_workers: 1, max_failures: 3 }
+state:
+  plan: { merge: replace }
+  result: { merge: replace }
+  evaluation: { merge: replace }
+  evidence: { merge: append_unique, identity: key }
+start: start
+nodes:
+  load-context:
+    type: agent
+    skill: planner
+    objective: "Load the task and objective from inputs and reflect them back as a one-step context plan."
+    output: { schema: schemas/plan.schema.json, save_as: plan, evidence: [summary] }
+  plan:
+    type: agent
+    skill: planner
+    objective: "Turn the loaded context into a concrete one-step implementation plan."
+    output: { schema: schemas/plan.schema.json, save_as: plan, evidence: [summary] }
+  implement:
+    type: agent
+    skill: worker
+    objective: "Implement the current plan and report result evidence."
+    output: { schema: schemas/result.schema.json, save_as: result, evidence: [summary, evidence] }
+  verify:
+    type: validator
+    checks: [verify-result]
+  evaluate:
+    type: agent
+    skill: reviewer
+    objective: "Judge the result. Emit verdict passed/retry/blocked and whether human approval is required."
+    output: { schema: schemas/evaluation.schema.json, save_as: evaluation, evidence: [summary, verdict, approval, evidence] }
+  approve:
+    type: human
+    prompt: "A human gate is requested. Approve to continue or reject to fail the run."
+    actions: [approve, reject]
+  complete: { type: graph, operation: complete-task }
+  blocked: { type: graph, operation: complete-task }
+edges:
+  - { from: start, to: load-context }
+  - { from: load-context, to: plan }
+  - { from: plan, to: implement }
+  - { from: implement, to: verify }
+  - { from: verify, to: evaluate }
+  - { from: evaluate, to: approve, when: "state.evaluation.approval == true" }
+  - { from: evaluate, to: complete, when: "state.evaluation.approval == false && state.evaluation.verdict == 'passed'" }
+  - { from: evaluate, to: implement, when: "state.evaluation.verdict == 'retry'" }
+  - { from: evaluate, to: blocked, when: "state.evaluation.verdict == 'blocked'" }
+  - { from: approve, to: complete, when: "state.evaluation.verdict == 'passed'" }
+  - { from: approve, to: implement, when: "state.evaluation.verdict == 'retry'" }
+  - { from: approve, to: blocked, when: "state.evaluation.verdict == 'blocked'" }
+terminal:
+  - { node: complete, verdict: passed }
+  - { node: blocked, verdict: blocked }

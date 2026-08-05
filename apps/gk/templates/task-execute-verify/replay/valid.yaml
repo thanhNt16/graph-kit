@@ -1,0 +1,8 @@
+name: valid
+inputs: { task: task-1, objective: complete safely }
+overrides:
+  load-context: { summary: [{ id: ctx, task: load }] }
+  plan: { summary: [{ id: impl, task: implement }] }
+  implement: { summary: implemented, evidence: [{ key: tests, value: pass }] }
+  evaluate: { summary: approved, verdict: passed, approval: false, evidence: [{ key: tests, value: verified }] }
+expect_terminal: passed

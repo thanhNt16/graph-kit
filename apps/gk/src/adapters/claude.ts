@@ -17,6 +17,14 @@ const protocol = `## Authority protocol
 
 export function renderClaudeSkill(loaded: LoadedTemplate, skill: string): string {
   const description = `Run the ${loaded.manifest.name} GraphKit workflow through Claude Code`;
+  const evidence = Object.values(loaded.workflow.nodes)
+    .filter((node): node is Extract<typeof node, { type: "agent" }> => node.type === "agent")
+    .filter((node) => node.skill === skill)
+    .flatMap((node) => node.output.evidence)
+    .filter((key, index, keys) => keys.indexOf(key) === index);
+  const evidenceProtocol = evidence.length
+    ? `\nRequired evidence keys: ${evidence.join(", ")}. Return them in \`node.output.evidence\` as declared.`
+    : "";
   return `---
 name: graphkit-${skill}
 description: ${description}
@@ -24,7 +32,7 @@ when_to_use: Use when executing the ${loaded.manifest.name} workflow.
 user-invocable: true
 ---
 
-${protocol}`;
+${protocol}${evidenceProtocol}`;
 }
 
 export async function renderClaudeSkills(loaded: LoadedTemplate): Promise<RenderedSkill[]> {
