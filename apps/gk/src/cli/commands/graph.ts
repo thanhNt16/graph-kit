@@ -10,6 +10,7 @@ import { getTopologyConfigKeys, TOPOLOGY_NAMES, type TopologyName } from "../../
 import { fail, ok } from "../output.js";
 import { templatesDir } from "./kit.js";
 import { renderAscii } from "../ascii.js";
+import { renderSvg } from "../svg.js";
 
 export function loadGraph(file: string) {
   const raw = readFileSync(file, "utf-8");
@@ -452,6 +453,21 @@ export function registerGraphCommands(cli: CAC) {
           console.log(out);
         } catch (e) {
           console.log(JSON.stringify(fail("ASCII_ERROR", String(e))));
+          process.exit(1);
+        }
+      } else if (subcommand === "svg") {
+        const file = Array.isArray(args) ? args[0] : args;
+        try {
+          const resolved = file ?? join(process.cwd(), "graph.yaml");
+          const svg = renderSvg(resolved);
+          const outDir = join(process.cwd(), ".graphkit", "diagrams");
+          mkdirSync(outDir, { recursive: true });
+          const graph = YAML.parse(readFileSync(resolved, "utf-8"));
+          const outPath = join(outDir, `${graph.metadata?.name || "graph"}.svg`);
+          writeFileSync(outPath, svg);
+          console.log(JSON.stringify(ok({ svg: outPath })));
+        } catch (e) {
+          console.log(JSON.stringify(fail("SVG_ERROR", String(e))));
           process.exit(1);
         }
       } else {
