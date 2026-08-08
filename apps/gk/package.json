@@ -2,14 +2,19 @@
   "name": "@graphkit/gk",
   "version": "0.2.0",
   "type": "module",
-  "bin": { "gk": "dist/index.js" },
+  "bin": {
+    "gk": "dist/index.js"
+  },
   "scripts": {
     "build": "bun build src/index.ts --target=node --outdir=dist",
     "typecheck": "tsc --noEmit",
     "lint": "biome check .",
-    "test": "bun test"
+    "test": "bun test",
+    "ci:local": "bun run typecheck && bun run lint && bun run build && bun test"
   },
-  "files": ["claude/"],
+  "files": [
+    "claude/"
+  ],
   "dependencies": {
     "ajv": "^8.17.1",
     "ajv-formats": "^3.0.1",
