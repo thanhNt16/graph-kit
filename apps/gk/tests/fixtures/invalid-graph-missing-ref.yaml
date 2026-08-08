@@ -1,0 +1,20 @@
+apiVersion: graphkit.dev/v2
+kind: Graph
+metadata:
+  name: invalid-missing-ref
+topology: diamond
+inputs: {}
+nodes:
+  scouter:
+    agent: Software Architect
+    objective: "analyze codebase"
+    refs:
+      - path: does/not/exist.md
+        purpose: "some context"
+    depend_on: []
+  worker:
+    agent: Code Reviewer
+    objective: "audit files"
+    depend_on: [scouter]
+evidence:
+  required_keys: [report]

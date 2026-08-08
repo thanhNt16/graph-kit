@@ -1,0 +1,11 @@
+apiVersion: graphkit.dev/v2
+kind: Graph
+metadata:
+  name: invalid-no-agent
+topology: diamond
+inputs: {}
+nodes:
+  worker:
+    # agent field missing — zod rejects
+    objective: "review code"
+    depend_on: []
