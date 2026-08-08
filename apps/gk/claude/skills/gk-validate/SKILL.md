@@ -11,27 +11,27 @@ disable-model-invocation: false
 ## Purpose
 Gate-check a graph.yaml before compilation. Fails fast on first error.
 
-## Checks (in order)
-
-1. **Syntax**: YAML parses without error
-2. **Schema**: Conforms to graph.schema.ts (zod validation)
-3. **Topology**: Topology name is one of 6 canonical names
-4. **Agent binding**: Every node's `agent` matches a file in `claude/agents/`
-5. **Refs exist**: Every file in `refs[].path` exists on disk
-6. **Acyclic deps**: `depend_on` forms a DAG (no cycles)
-7. **Evidence keys**: Terminal nodes produce all `evidence.required_keys`
-8. **Loop exits**: Nodes with `loop.enabled: true` have `stop_when` or `exit_condition`
-9. **Constraints**: Constraint keys are known types
-
 ## Process
 
-1. Read `graph.yaml` from project root.
-2. Parse YAML (check 1: syntax).
-3. Validate against `GraphSchema` from `src/schemas/graph.schema.ts` (checks 2-3, 6: schema, topology, acyclic deps are enforced by zod superRefine).
-4. Run structural checks from `src/compiler/validate.ts` (checks 4-5, 7-9: agent binding, refs, evidence, loops).
-5. Report results.
+Run the `gk` CLI to validate — it performs all checks internally:
+
+```bash
+gk validate graph.yaml --json
+```
+
+The CLI runs 9 checks: YAML syntax, schema conformance (zod), topology name, agent binding (files in `.claude/agents/`), refs exist on disk, acyclic depend_on, evidence key coverage, loop exit conditions, constraint types.
+
+If the command is not found, the kit is not installed. Tell the user to run `gk init` or install via npm: `npm install -g @graphkit/gk`.
 
 ## Output
 
-- **PASS**: "Graph validated successfully. Ready for compile."
-- **FAIL**: List each finding with check name, path, and fix suggestion.
+- **PASS** (`status: "ok"`): "Graph validated successfully. Ready for compile."
+- **FAIL** (`status: "fail"`): Parse the `error.details.findings` array. Each finding has `check`, `path`, `message`. Report each to the user with a fix suggestion.
+
+## What to do on failure
+
+Read the findings, explain each in plain language, and suggest the fix. For example:
+- `agent-binding`: "Agent 'X' not found. Change to a name matching a file in .claude/agents/ (e.g. software-architect)."
+- `refs-exist`: "Ref path 'docs/foo.md' doesn't exist. Create it or remove the ref."
+- `cycle`: "depend_on has a cycle: a→b→a. Break the loop."
+- `loop-exit`: "Loop enabled but no stop_when or exit_condition. Add one."

@@ -1,6 +1,6 @@
 ---
 name: gk:compile
-description: Parse graph.yaml, resolve topology config, and emit a self-contained .workflow.js file. Use after gk:validate passes. Trigger: "compile graph", "build workflow", "gk compile".
+description: Compile graph.yaml into a self-contained .workflow.js file for Claude Code Workflows. Use after gk:validate passes. Trigger: "compile graph", "build workflow", "gk compile".
 when_to_use: A validated graph.yaml exists and the user wants to compile it into a .workflow.js for Claude Code Workflows execution.
 user-invocable: true
 disable-model-invocation: false
@@ -14,19 +14,31 @@ Compile a validated graph.yaml into a self-contained `.workflow.js` script that 
 
 ## Process
 
-1. Read `graph.yaml` from the project root.
-2. Parse YAML into the Graph schema (`GraphSchema.parse`).
-3. Run `validateGraph(graph, projectRoot)` from `src/compiler/validate.ts` — if any findings, STOP and report them. Do not compile with errors.
-4. Run `resolveTopologyConfig(graph.topology, graph.topology_config, templatesDir)` to resolve subgraph references.
-5. Run `compileGraph(graph, templatesDir)` to emit the `.workflow.js` string.
-6. Write to `.claude/workflows/{metadata.name}.workflow.js`.
-7. Report success with the output path.
+Run the `gk` CLI to compile — it validates, resolves subgraphs, and emits the script:
+
+```bash
+gk compile graph.yaml --json
+```
+
+The CLI does all of the following internally:
+1. Parses the YAML
+2. Validates against the schema (if it fails, the error tells you exactly what to fix — run `/gk:validate` first)
+3. Resolves subgraph template references (e.g. `topology_config.verify.template: adversarial-verification`)
+4. Inlines root + subgraph topology templates
+5. Writes `.claude/workflows/{metadata.name}.workflow.js`
+
+If the command is not found, the kit is not installed. Tell the user to run `gk init` or install via npm: `npm install -g @graphkit/gk`.
 
 ## Output
 
-Writes a single self-contained `.workflow.js` file containing:
+- **Success** (`status: "ok"`): The `data.compiled` field has the output path. Report it to the user.
+- **Failure** (`status: "fail"`): The error details contain validation findings. Fix the graph.yaml and re-run.
+
+## Compiled file contract
+
+The emitted `.workflow.js` is fully self-contained (zero kit imports):
 - `export const meta` — graph name and description
-- Inlined topology template function definitions (root + any subgraph templates, deduped)
+- Inlined `createXWorkflow(config)` function definitions (root + any subgraph templates)
 - `export default createXWorkflow(graphConfig)` — the entry point
 
-Zero imports from the kit. The file is fully self-contained.
+It can be executed via Claude Code's Workflow tool: `Workflow({ scriptPath: ".claude/workflows/{name}.workflow.js" })`.
