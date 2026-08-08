@@ -9,6 +9,7 @@ import { GraphSchema } from "../../schemas/graph.schema.js";
 import { getTopologyConfigKeys, TOPOLOGY_NAMES, type TopologyName } from "../../schemas/topology/index.js";
 import { fail, ok } from "../output.js";
 import { templatesDir } from "./kit.js";
+import { renderAscii } from "../ascii.js";
 
 export function loadGraph(file: string) {
   const raw = readFileSync(file, "utf-8");
@@ -427,6 +428,16 @@ export function registerGraphCommands(cli: CAC) {
         // Emit a valid graph.yaml template for the topology to stdout
         const template = graphTemplate(topology as TopologyName);
         console.log(template);
+      } else if (subcommand === "ascii") {
+        // Instant ASCII diagram — no model, no rendering pipeline
+        const file = Array.isArray(args) ? args[0] : args;
+        try {
+          const out = renderAscii(file ?? join(process.cwd(), "graph.yaml"));
+          console.log(out);
+        } catch (e) {
+          console.log(JSON.stringify(fail("ASCII_ERROR", String(e))));
+          process.exit(1);
+        }
       } else {
         console.log(
           JSON.stringify(
