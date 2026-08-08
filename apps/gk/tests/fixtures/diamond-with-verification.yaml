@@ -1,7 +1,7 @@
 apiVersion: graphkit.dev/v2
 kind: Graph
 metadata:
-  name: test-graph
+  name: audited-review
 topology: diamond
 inputs:
   repo_path:
@@ -11,14 +11,14 @@ nodes:
   scouter:
     agent: Software Architect
     model: opus
-    objective: Analyze the codebase
+    objective: Identify files to review
     tools: [Read, Glob, Grep]
     depend_on: []
-    evidence: [attack_surface]
+    evidence: [file_list]
   worker:
     agent: Code Reviewer
     model: sonnet
-    objective: Audit assigned files
+    objective: Review assigned files
     depend_on: [scouter]
     evidence: [findings]
   synthesizer:
@@ -27,6 +27,11 @@ nodes:
     objective: Merge findings into a report
     depend_on: [worker]
     evidence: [report]
+topology_config:
+  verify:
+    template: adversarial-verification
+    refuters: [QA Engineer, Code Reviewer]
+    survive_threshold: 2
 limits:
   max_workers: 3
 evidence:
