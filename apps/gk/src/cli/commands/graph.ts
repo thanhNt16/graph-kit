@@ -7,10 +7,10 @@ import { validateGraph } from "../../compiler/validate.js";
 import { GraphKitError } from "../../errors.js";
 import { GraphSchema } from "../../schemas/graph.schema.js";
 import { getTopologyConfigKeys, TOPOLOGY_NAMES, type TopologyName } from "../../schemas/topology/index.js";
-import { fail, ok } from "../output.js";
-import { templatesDir } from "./kit.js";
 import { renderAscii } from "../ascii.js";
+import { fail, ok } from "../output.js";
 import { renderSvg } from "../svg.js";
+import { templatesDir } from "./kit.js";
 
 export function loadGraph(file: string) {
   const raw = readFileSync(file, "utf-8");
@@ -348,11 +348,11 @@ metadata:
 topology: custom
 nodes:
   step-1:
-    agent: worker
+    agent: code-reviewer
     objective: "First step — no dependencies"
     depend_on: []
   step-2:
-    agent: worker
+    agent: code-reviewer
     objective: "Second step — depends on step-1"
     depend_on: [step-1]
 `,

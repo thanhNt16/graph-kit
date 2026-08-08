@@ -3,7 +3,17 @@
   "vcs": { "enabled": true, "clientKind": "git" },
   "files": {
     "ignoreUnknown": true,
-    "includes": ["**", "!dist", "!claude/templates", "!claude/skills/excalidraw-diagram", "!claude/hooks", "!**/.tmp-*"]
+    "includes": [
+      "**",
+      "!dist",
+      "!claude/templates",
+      "!claude/skills/excalidraw-diagram",
+      "!claude/hooks",
+      "!claude/topology",
+      "!.claude",
+      "!.graphkit",
+      "!**/.tmp-*"
+    ]
   },
   "formatter": {
     "enabled": true,
@@ -16,7 +26,8 @@
     "enabled": true,
     "rules": {
       "preset": "recommended",
-      "suspicious": { "noExplicitAny": "off" }
+      "suspicious": { "noExplicitAny": "off" },
+      "style": { "noNonNullAssertion": "off" }
     }
   }
 }

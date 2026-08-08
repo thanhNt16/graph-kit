@@ -1,8 +1,8 @@
 import { describe, expect, test } from "bun:test";
-import { compileGraph } from "../../src/compiler/emitter.js";
-import { GraphSchema } from "../../src/schemas/graph.schema.js";
 import { join } from "node:path";
 import YAML from "yaml";
+import { compileGraph } from "../../src/compiler/emitter.js";
+import { GraphSchema } from "../../src/schemas/graph.schema.js";
 
 const TEMPLATES = join(import.meta.dir, "..", "..", "claude", "templates");
 

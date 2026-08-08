@@ -24,7 +24,6 @@ const TEMPLATE_FN: Record<string, string> = {
   "research-and-build": "createCustomWorkflow",
 };
 
-
 export function compileGraph(graph: Graph, templatesDir: string): string {
   const resolved = resolveTopologyConfig(graph.topology, graph.topology_config, templatesDir);
 

@@ -32,14 +32,10 @@ function kitSourceDir(): string {
 
   const found = candidates.find((c) => existsSync(c));
   if (!found) {
-    throw new GraphKitError(
-      "KIT_SOURCE_MISSING",
-      "Bundled claude/ directory not found",
-      {
-        hint: "Set GK_KIT_DIR to the claude/ directory, or install the kit: sudo cp -r claude /usr/local/share/gk/claude",
-        tried: candidates,
-      },
-    );
+    throw new GraphKitError("KIT_SOURCE_MISSING", "Bundled claude/ directory not found", {
+      hint: "Set GK_KIT_DIR to the claude/ directory, or install the kit: sudo cp -r claude /usr/local/share/gk/claude",
+      tried: candidates,
+    });
   }
   return found;
 }

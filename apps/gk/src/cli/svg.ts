@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
-import YAML from "yaml";
 import dagre from "@dagrejs/dagre";
+import YAML from "yaml";
 
 const TIER_COLOR: Record<string, string> = {
   opus: "#a371f7",

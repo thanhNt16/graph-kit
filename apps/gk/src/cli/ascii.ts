@@ -54,11 +54,7 @@ function nodeBox(id: string, node: GraphNode): string[] {
 
   const width = Math.max(title.length, sub.length, ev.length, 14) + 4;
   const top = `+${"-".repeat(width - 2)}+`;
-  const lines = [
-    top,
-    boxLine(title, width),
-    boxLine(sub, width),
-  ];
+  const lines = [top, boxLine(title, width), boxLine(sub, width)];
   if (ev) lines.push(boxLine(ev, width));
   lines.push(top);
   return lines;
@@ -108,12 +104,7 @@ function fanOutConnector(centers: number[]): string[] {
   const stemPos = centers[0] + Math.floor((centers[centers.length - 1] - centers[0]) / 2);
   const bar = horizontalBar(centers);
   const drops = centers.reduce((acc, c) => [placeChar(acc[0], c, "|"), placeChar(acc[1], c, "v")], ["", ""]);
-  return [
-    " ".repeat(stemPos + 2) + "|",
-    bar,
-    drops[0],
-    drops[1],
-  ];
+  return [`${" ".repeat(stemPos + 2)}|`, bar, drops[0], drops[1]];
 }
 
 /**
@@ -125,13 +116,7 @@ function fanInConnector(centers: number[]): string[] {
   const stemPos = centers[0] + Math.floor((centers[centers.length - 1] - centers[0]) / 2);
   const bar = horizontalBar(centers);
   const rises = centers.reduce((acc, c) => [placeChar(acc[0], c, "|"), placeChar(acc[1], c, "^")], ["", ""]);
-  return [
-    rises[0],
-    rises[1],
-    bar,
-    " ".repeat(stemPos + 2) + "|",
-    " ".repeat(stemPos) + "    v",
-  ];
+  return [rises[0], rises[1], bar, `${" ".repeat(stemPos + 2)}|`, `${" ".repeat(stemPos)}    v`];
 }
 
 /**
@@ -168,7 +153,9 @@ export function renderAscii(graphFile: string): string {
 
   const out: string[] = [];
   out.push("");
-  out.push(`+-- ${graph.metadata.name} (${graph.topology}) ${"-".repeat(Math.max(0, 40 - graph.metadata.name.length - graph.topology.length))}+`);
+  out.push(
+    `+-- ${graph.metadata.name} (${graph.topology}) ${"-".repeat(Math.max(0, 40 - graph.metadata.name.length - graph.topology.length))}+`,
+  );
   if (graph.metadata.description) out.push(`| ${graph.metadata.description}`);
   out.push("");
 
@@ -186,7 +173,7 @@ export function renderAscii(graphFile: string): string {
         let line = "  ";
         for (let bi = 0; bi < boxes.length; bi++) {
           const bl = boxes[bi][li] ?? " ".repeat(boxWidths[bi]);
-          line += bl + "   ";
+          line += `${bl}   `;
         }
         out.push(line.trimEnd());
       }
