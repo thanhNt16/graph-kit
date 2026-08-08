@@ -40,7 +40,7 @@ evidence:
     const script = compileGraph(graph, TEMPLATES);
     expect(script).toContain("createCustomWorkflow");
     expect(script).toContain("export const meta");
-    expect(script).toContain("export default");
+    expect(script).toContain("return await _wf(_ctx)");
   });
 
   test("flow presets validate", () => {

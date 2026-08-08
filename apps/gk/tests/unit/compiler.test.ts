@@ -48,12 +48,15 @@ describe("compileGraph", () => {
     const graph = makeGraph("diamond");
     const output = compileGraph(graph, FIXTURES);
     expect(output).toContain("createDiamondWorkflow");
-    expect(output).toContain("export default createDiamondWorkflow(graphConfig)");
+    expect(output).toContain("const _wf = createDiamondWorkflow(graphConfig)");
+    expect(output).toContain("return await _wf(_ctx)");
     expect(output).toContain("export const meta");
     expect(output).toContain("graphConfig");
     // No imports from kit
     expect(output).not.toContain('from "');
     expect(output).not.toContain("require(");
+    // Only one export (meta) — Workflow tool doesn't allow multiple
+    expect(output.match(/^export /gm)?.length).toBe(1);
   });
 
   test("all 6 topologies compile", () => {
@@ -68,7 +71,7 @@ describe("compileGraph", () => {
     for (const topo of topologies) {
       const graph = makeGraph(topo);
       const output = compileGraph(graph, FIXTURES);
-      expect(output, `${topo} should contain create fn`).toContain("export default");
+      expect(output, `${topo} should contain create fn`).toContain("_wf");
       expect(output, `${topo} should contain meta`).toContain("export const meta");
     }
   });
@@ -101,7 +104,8 @@ describe("compileGraph", () => {
     const graph = makeGraph("custom");
     const output = compileGraph(graph, FIXTURES);
     expect(output).toContain("createCustomWorkflow");
-    expect(output).toContain("export default createCustomWorkflow(graphConfig)");
+    expect(output).toContain("const _wf = createCustomWorkflow(graphConfig)");
+    expect(output).toContain("return await _wf(_ctx)");
     expect(output).toContain("export const meta");
   });
 
@@ -111,7 +115,7 @@ describe("compileGraph", () => {
       const graph = makeGraph(preset);
       const output = compileGraph(graph, FIXTURES);
       expect(output, `${preset} should use createCustomWorkflow`).toContain("createCustomWorkflow");
-      expect(output, `${preset} should have export default`).toContain("export default");
+      expect(output, `${preset} should have execution shim`).toContain("return await _wf(_ctx)");
     }
   });
 });
