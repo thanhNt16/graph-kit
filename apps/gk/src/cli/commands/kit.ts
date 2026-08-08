@@ -9,13 +9,38 @@ import { fail, ok } from "../output.js";
 // Resolve relative to this module, not process.cwd().
 function kitSourceDir(): string {
   const here = dirname(fileURLToPath(import.meta.url));
+
+  // 1. Explicit env override
+  if (process.env.GK_KIT_DIR && existsSync(process.env.GK_KIT_DIR)) return process.env.GK_KIT_DIR;
+
   const candidates = [
+    // 2. Dev: src/cli/commands/ → apps/gk/claude/
     join(here, "..", "..", "claude"),
     join(here, "..", "..", "..", "claude"),
     join(here, "..", "..", "..", "..", "claude"),
+    // 3. npm package: dist/index.js → package-root/claude/ (npm link, npm install -g)
+    join(here, "..", "claude"),
+    join(here, "claude"),
+    // 4. Standalone binary layout: <bin>/../share/gk/claude/
+    join(dirname(process.execPath), "..", "share", "gk", "claude"),
+    // 5. User home install: ~/.graphkit/claude/
+    join(process.env.HOME ?? "", ".graphkit", "claude"),
+    // 6. cwd fallbacks (works from repo root)
+    join(process.cwd(), "claude"),
+    join(process.cwd(), "apps", "gk", "claude"),
   ];
+
   const found = candidates.find((c) => existsSync(c));
-  if (!found) throw new GraphKitError("KIT_SOURCE_MISSING", "Bundled claude/ directory not found");
+  if (!found) {
+    throw new GraphKitError(
+      "KIT_SOURCE_MISSING",
+      "Bundled claude/ directory not found",
+      {
+        hint: "Set GK_KIT_DIR to the claude/ directory, or install the kit: sudo cp -r claude /usr/local/share/gk/claude",
+        tried: candidates,
+      },
+    );
+  }
   return found;
 }
 
