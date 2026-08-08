@@ -56,6 +56,12 @@ export function installKit(targetDir: string): { installed: string[] } {
   // cpSync with recursive handles the whole tree; force: false → never clobber user edits
   cpSync(source, claudeDir, { recursive: true, force: false });
 
+  // settings.json is kit-owned infrastructure (hook config), always overwrite
+  const settingsSrc = join(source, "settings.json");
+  if (existsSync(settingsSrc)) {
+    cpSync(settingsSrc, join(claudeDir, "settings.json"), { force: true });
+  }
+
   const gkConfig = join(claudeDir, ".gk.json");
   if (!existsSync(gkConfig)) {
     writeFileSync(gkConfig, JSON.stringify({ codingLevel: 0, statusline: "full" }, null, 2));
