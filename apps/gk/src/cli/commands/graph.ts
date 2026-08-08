@@ -73,6 +73,7 @@ export function registerGraphCommands(cli: CAC) {
 
   cli
     .command("graph <subcommand> [args...]", "Graph lifecycle commands")
+    .option("--json", "JSON output")
     .action((subcommand: string, args: string | string[] | undefined) => {
       if (subcommand === "list") {
         console.log(JSON.stringify(ok({ topologies: TOPOLOGY_NAMES })));
