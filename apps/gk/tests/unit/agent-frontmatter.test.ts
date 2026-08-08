@@ -11,6 +11,7 @@ const AGENT_FILES = [
   "ui-ux-researcher.md",
   "agents-orchestrator.md",
   "document-generator.md",
+  "memory-curator.md",
 ];
 
 function parseFrontmatter(content: string): Record<string, unknown> {
@@ -36,7 +37,18 @@ function parseFrontmatter(content: string): Record<string, unknown> {
 }
 
 describe("Agent Frontmatter", () => {
-  test("all 7 agent files exist on disk", () => {
+  test("memory-curator agent has valid frontmatter", () => {
+    const files = readdirSync(AGENTS_DIR).filter((f) => f.endsWith(".md"));
+    expect(files).toContain("memory-curator.md");
+    const raw = readFileSync(join(AGENTS_DIR, "memory-curator.md"), "utf-8");
+    const fm = raw.split("---")[1];
+    expect(fm).toContain("name: Memory Curator");
+    expect(fm).toContain("model: opus");
+    expect(fm).toContain("curator");
+    expect(fm).toContain("memory_delta");
+  });
+
+  test("all 8 agent files exist on disk", () => {
     const actual = readdirSync(AGENTS_DIR).filter((f) => f.endsWith(".md") && f !== ".gitkeep");
     expect(actual.sort()).toEqual(AGENT_FILES.sort());
   });
