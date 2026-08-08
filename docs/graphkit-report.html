@@ -133,54 +133,68 @@
 <div class="section">
   <div class="section-label">Quick Start</div>
   <h2>Install from Source</h2>
-  <p>GraphKit isn't on npm yet. Clone and build from source, then install the kit into any project. Requires <a href="https://bun.sh" style="color:var(--sonnet)">Bun</a> and <a href="https://docs.claude.com/en/docs/claude-code" style="color:var(--sonnet)">Claude Code</a>.</p>
-  <div class="install-grid">
-    <div class="code-block">
-      <div class="code-header"><div class="code-dot" style="background:#f85149"></div><div class="code-dot" style="background:#d29922"></div><div class="code-dot" style="background:#3fb950"></div> 1. Clone &amp; build the CLI</div>
-      <div class="code-body"><span class="cmt"># Clone the repo</span>
+  <p>GraphKit isn't on npm yet. Clone, build, and install as a global <code>gk</code> command. Requires <a href="https://bun.sh" style="color:var(--sonnet)">Bun</a> and <a href="https://docs.claude.com/en/docs/claude-code" style="color:var(--sonnet)">Claude Code</a>.</p>
+
+  <div class="code-block">
+    <div class="code-header"><div class="code-dot" style="background:#f85149"></div><div class="code-dot" style="background:#d29922"></div><div class="code-dot" style="background:#3fb950"></div> 1. Clone &amp; build</div>
+    <div class="code-body"><span class="cmt"># Clone the repo</span>
 git clone https://github.com/user/graph-kit.git
 cd graph-kit/apps/gk
 
 <span class="cmt"># Install deps + build</span>
 bun install
-bun run build
+bun run build                <span class="cmt"># → dist/index.js (executable, with shebang)</span>
 
-<span class="cmt"># Verify it works</span>
-bun run src/index.ts --help
+<span class="cmt"># Run the full gate to verify</span>
+bun run ci:local             <span class="cmt"># → typecheck + lint + build + 105 tests</span></div>
+  </div>
 
-<span class="cmt"># Run the full gate</span>
-bun run ci:local
-<span class="cmt"># → typecheck + lint + build + 105 tests</span></div>
+  <div class="install-grid">
+    <div class="code-block">
+      <div class="code-header"><div class="code-dot" style="background:#f85149"></div><div class="code-dot" style="background:#d29922"></div><div class="code-dot" style="background:#3fb950"></div> 2a. Install globally (npm link)</div>
+      <div class="code-body"><span class="cmt"># From the apps/gk directory:</span>
+npm link
+
+<span class="cmt"># If you have a conflicting 'gk' alias</span>
+<span class="cmt"># (e.g. gk → gitk), remove it from ~/.zshrc:</span>
+<span class="kw">unalias</span> gk 2&gt;/dev/null
+
+<span class="cmt"># Verify — should show GraphKit help:</span>
+gk --help
+gk graph list --json</div>
     </div>
     <div class="code-block">
-      <div class="code-header"><div class="code-dot" style="background:#f85149"></div><div class="code-dot" style="background:#d29922"></div><div class="code-dot" style="background:#3fb950"></div> 2. Install the kit + test</div>
-      <div class="code-body"><span class="cmt"># Install kit into your project</span>
-cd /path/to/your-project
-bun run /path/to/graph-kit/apps/gk/src/index.ts init
+      <div class="code-header"><div class="code-dot" style="background:#f85149"></div><div class="code-dot" style="background:#d29922"></div><div class="code-dot" style="background:#3fb950"></div> 2b. Or: standalone binary</div>
+      <div class="code-body"><span class="cmt"># Build a standalone binary (no runtime needed):</span>
+bun run build:bin            <span class="cmt"># → dist/gk (58MB, self-contained)</span>
 
-<span class="cmt"># Or scaffold a new project</span>
-bun run /path/to/graph-kit/apps/gk/src/index.ts new --dir my-project
-cd my-project
+<span class="cmt"># Install to your PATH:</span>
+cp dist/gk /usr/local/bin/gk
+chmod +x /usr/local/bin/gk
 
-<span class="cmt"># Create a graph, validate, compile</span>
-bun run /path/to/graph-kit/apps/gk/src/index.ts graph list
-bun run /path/to/graph-kit/apps/gk/src/index.ts validate
-bun run /path/to/graph-kit/apps/gk/src/index.ts compile
-
-<span class="cmt"># In Claude Code, skills auto-discover:</span>
-<span class="cmt"># /gk-init-graph  /gk-validate  /gk-eval ...</span></div>
+<span class="cmt"># Verify:</span>
+gk --help
+gk graph list --json</div>
     </div>
   </div>
-  <div class="code-block" style="margin-top:1rem">
-    <div class="code-header"><div class="code-dot" style="background:#f85149"></div><div class="code-dot" style="background:#d29922"></div><div class="code-dot" style="background:#3fb950"></div> Tip: alias gk for convenience</div>
-    <div class="code-body"><span class="cmt"># Add to your ~/.zshrc or ~/.bashrc:</span>
-<span class="kw">alias</span> gk=<span class="str">"bun run /path/to/graph-kit/apps/gk/src/index.ts"</span>
 
-<span class="cmt"># Then use naturally:</span>
+  <div class="code-block" style="margin-top:1rem">
+    <div class="code-header"><div class="code-dot" style="background:#f85149"></div><div class="code-dot" style="background:#d29922"></div><div class="code-dot" style="background:#3fb950"></div> 3. Install the kit + use it</div>
+    <div class="code-body"><span class="cmt"># Install the kit into your project (agents, skills, hooks, rules):</span>
+cd /path/to/your-project
 gk init
-gk validate --json
-gk compile --json
-gk graph inspect diamond</div>
+
+<span class="cmt"># Or scaffold a new project from scratch:</span>
+gk new --dir my-project
+cd my-project
+
+<span class="cmt"># Define, validate, compile a graph:</span>
+gk validate graph.yaml --json
+gk compile graph.yaml --json    <span class="cmt"># → .claude/workflows/{name}.workflow.js</span>
+gk graph inspect diamond        <span class="cmt"># → see topology config keys</span>
+
+<span class="cmt"># Inside Claude Code, skills auto-discover from .claude/skills/:</span>
+<span class="cmt"># /gk-init-graph  /gk-validate  /gk-compile  /gk-eval  /gk-recall</span></div>
   </div>
 </div>
 

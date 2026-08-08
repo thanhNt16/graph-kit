@@ -6,7 +6,8 @@
     "gk": "dist/index.js"
   },
   "scripts": {
-    "build": "bun build src/index.ts --target=node --outdir=dist",
+    "build": "bun build src/index.ts --target=node --outdir=dist && chmod +x dist/index.js",
+    "build:bin": "bun build --compile src/index.ts --outfile=dist/gk",
     "typecheck": "tsc --noEmit",
     "lint": "biome check .",
     "test": "bun test",
