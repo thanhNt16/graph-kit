@@ -1,0 +1,32 @@
+apiVersion: graphkit.dev/v2
+kind: Graph
+metadata:
+  name: test-graph
+topology: diamond
+inputs:
+  repo_path:
+    type: string
+    required: true
+nodes:
+  scouter:
+    agent: Software Architect
+    model: opus
+    objective: Analyze the codebase
+    tools: [Read, Glob, Grep]
+    depend_on: []
+    evidence: [attack_surface]
+  worker:
+    agent: Code Reviewer
+    model: sonnet
+    objective: Audit assigned files
+    depend_on: [scouter]
+    evidence: [findings]
+  synthesizer:
+    agent: Software Architect
+    model: opus
+    depend_on: [worker]
+    evidence: [report]
+limits:
+  max_workers: 3
+evidence:
+  required_keys: [report]
