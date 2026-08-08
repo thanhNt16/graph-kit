@@ -11,6 +11,7 @@ const TEMPLATE_FN: Record<string, string> = {
   "generate-and-filter": "createGenerateFilterWorkflow",
   tournament: "createTournamentWorkflow",
   "memory-augmented": "createMemoryAugmentedWorkflow",
+  custom: "createCustomWorkflow",
 };
 
 export function compileGraph(graph: Graph, templatesDir: string): string {

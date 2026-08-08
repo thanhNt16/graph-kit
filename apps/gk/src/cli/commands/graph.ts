@@ -339,6 +339,22 @@ nodes:
 evidence:
   required_keys: [report]
 `,
+    custom: `apiVersion: graphkit.dev/v2
+kind: Graph
+metadata:
+  name: ${name}
+  description: Custom DAG — define any acyclic graph via depend_on
+topology: custom
+nodes:
+  step-1:
+    agent: worker
+    objective: "First step — no dependencies"
+    depend_on: []
+  step-2:
+    agent: worker
+    objective: "Second step — depends on step-1"
+    depend_on: [step-1]
+`,
   };
   return templates[topology];
 }

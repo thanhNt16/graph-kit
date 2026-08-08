@@ -6,6 +6,7 @@ export const TOPOLOGY_NAMES = [
   "generate-and-filter",
   "tournament",
   "memory-augmented",
+  "custom",
 ] as const;
 
 export type TopologyName = (typeof TOPOLOGY_NAMES)[number];
@@ -25,6 +26,7 @@ const TOPOLOGY_CONFIG_KEYS: Record<TopologyName, string[]> = {
     "memory.recall_topk",
     "memory.expire_policy",
   ],
+  custom: [],
 };
 
 export function getTopologyConfigKeys(topology: TopologyName): string[] {
