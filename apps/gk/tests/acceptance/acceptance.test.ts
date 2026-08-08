@@ -31,10 +31,10 @@ afterAll(() => {
 });
 
 describe("AC01: gk init installs claude/ with all agents, skills, hooks, rules", () => {
-  test("7 agents, 8 skills, 3 hooks, 3 rules installed", () => {
-    expect(readdirSync(join(TMP, ".claude", "agents")).filter((f) => f.endsWith(".md")).length).toBe(7);
-    expect(readdirSync(join(TMP, ".claude", "skills")).filter((f) => f.startsWith("gk-")).length).toBe(8);
-    expect(readdirSync(join(TMP, ".claude", "hooks")).filter((f) => f.endsWith(".cjs")).length).toBe(3);
+  test("8 agents, 10 skills, 4 hooks, 3 rules installed", () => {
+    expect(readdirSync(join(TMP, ".claude", "agents")).filter((f) => f.endsWith(".md")).length).toBe(8);
+    expect(readdirSync(join(TMP, ".claude", "skills")).filter((f) => f.startsWith("gk-")).length).toBe(10);
+    expect(readdirSync(join(TMP, ".claude", "hooks")).filter((f) => f.endsWith(".cjs")).length).toBe(4);
     expect(readdirSync(join(TMP, ".claude", "rules")).filter((f) => f.endsWith(".md")).length).toBe(3);
   });
 });

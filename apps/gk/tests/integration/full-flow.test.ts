@@ -28,15 +28,15 @@ describe("Full flow: init -> validate -> compile", () => {
     expect(installed).toContain("skills");
     expect(installed).toContain("hooks");
     expect(installed).toContain("rules");
-    // 7 agents
+    // 8 agents
     const agents = readdirSync(join(TMP, ".claude", "agents")).filter((f) => f.endsWith(".md"));
-    expect(agents.length).toBe(7);
-    // 8 gk-* skills
+    expect(agents.length).toBe(8);
+    // 10 gk-* skills
     const skills = readdirSync(join(TMP, ".claude", "skills")).filter((f) => f.startsWith("gk-"));
-    expect(skills.length).toBe(8);
-    // 3 hooks
+    expect(skills.length).toBe(10);
+    // 4 hooks
     const hooks = readdirSync(join(TMP, ".claude", "hooks")).filter((f) => f.endsWith(".cjs"));
-    expect(hooks.length).toBe(3);
+    expect(hooks.length).toBe(4);
     // 3 rules
     const rules = readdirSync(join(TMP, ".claude", "rules")).filter((f) => f.endsWith(".md"));
     expect(rules.length).toBe(3);

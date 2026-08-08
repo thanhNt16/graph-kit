@@ -1,7 +1,7 @@
 {
   "hooks": {
-    "PreToolUse": [],
-    "PostToolUse": [],
+    "PreToolUse": ["hooks/graph-state-guard.cjs"],
+    "PostToolUse": ["hooks/evidence-persist.cjs", "hooks/memory-persist.cjs"],
     "SubagentStart": ["hooks/lease-enforce.cjs"],
     "SubagentStop": [],
     "Stop": []
