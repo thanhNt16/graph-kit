@@ -21,6 +21,9 @@ Generate a valid `graph.yaml` in the project root from one of the 7 canonical to
    - "brainstorm", "ideas", "naming" → **generate-and-filter**
    - "rank", "compare", "best of" → **tournament**
    - "long-running", "remember", "cross-run" → **memory-augmented**
+   - "brainstorm", "plan", "execute", "test loop" → **sdd** or **superpowers** (flow presets built on custom topology)
+   - "research", "compare", "build" → **research-and-build** (flow preset: research → compare → build pipeline)
+   - "custom", "freeform", "my own flow" → **custom** (define any DAG via `depend_on`)
 
 2. **Scaffold a valid graph.yaml** by running the CLI — it emits a schema-correct template:
 
@@ -48,4 +51,13 @@ Generate a valid `graph.yaml` in the project root from one of the 7 canonical to
 Writes `graph.yaml` to project root. Does not overwrite existing files — if graph.yaml already exists, read it first and ask the user if they want to regenerate.
 
 ## Available topologies
-Run `gk graph list` to see all 7. Run `gk graph inspect <topology>` to see its config keys.
+Run `gk graph list` to see all topologies (7 canonical + custom + 3 flow presets). Run `gk graph inspect <topology>` to see its config keys.
+
+### Custom topology
+Use `topology: custom` to define any graph shape. The `depend_on` field controls execution order — nodes with no pending deps run in parallel. Node-level loops are supported via `loop: { enabled: true }`.
+
+### Flow presets
+Pre-built DAGs using custom topology:
+- **sdd** — Spec → Design → Develop → Review cycle
+- **superpowers** — Brainstorm → Plan → Execute → Verify loop
+- **research-and-build** — Research → Compare → Build pipeline

@@ -24,12 +24,6 @@ const TEMPLATE_FN: Record<string, string> = {
   "research-and-build": "createCustomWorkflow",
 };
 
-// Flow presets alias to the custom template file
-const TEMPLATE_ALIAS: Record<string, string> = {
-  sdd: "custom",
-  superpowers: "custom",
-  "research-and-build": "custom",
-};
 
 export function compileGraph(graph: Graph, templatesDir: string): string {
   const resolved = resolveTopologyConfig(graph.topology, graph.topology_config, templatesDir);

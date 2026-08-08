@@ -96,4 +96,22 @@ describe("compileGraph", () => {
     expect(script).toContain("createDiamondWorkflow"); // inner inlined
     expect(script).toContain('"__subgraph": "diamond"');
   });
+
+  test("custom topology compiles to createCustomWorkflow", () => {
+    const graph = makeGraph("custom");
+    const output = compileGraph(graph, FIXTURES);
+    expect(output).toContain("createCustomWorkflow");
+    expect(output).toContain("export default createCustomWorkflow(graphConfig)");
+    expect(output).toContain("export const meta");
+  });
+
+  test("flow presets map to createCustomWorkflow", () => {
+    const presets = ["sdd", "superpowers", "research-and-build"] as const;
+    for (const preset of presets) {
+      const graph = makeGraph(preset);
+      const output = compileGraph(graph, FIXTURES);
+      expect(output, `${preset} should use createCustomWorkflow`).toContain("createCustomWorkflow");
+      expect(output, `${preset} should have export default`).toContain("export default");
+    }
+  });
 });
