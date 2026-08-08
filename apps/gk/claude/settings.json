@@ -1,10 +1,30 @@
 {
   "hooks": {
-    "PreToolUse": ["hooks/graph-state-guard.cjs"],
-    "PostToolUse": ["hooks/evidence-persist.cjs", "hooks/memory-persist.cjs"],
-    "SubagentStart": ["hooks/lease-enforce.cjs"],
-    "SubagentStop": [],
-    "Stop": []
+    "PreToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          { "type": "command", "command": "node .claude/hooks/graph-state-guard.cjs" }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Write",
+        "hooks": [
+          { "type": "command", "command": "node .claude/hooks/evidence-persist.cjs" },
+          { "type": "command", "command": "node .claude/hooks/memory-persist.cjs" }
+        ]
+      }
+    ],
+    "SubagentStart": [
+      {
+        "matcher": "",
+        "hooks": [
+          { "type": "command", "command": "node .claude/hooks/lease-enforce.cjs" }
+        ]
+      }
+    ]
   },
   "skillListingBudgetFraction": 0.04,
   "skillListingMaxDescChars": 512
