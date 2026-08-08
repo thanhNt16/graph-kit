@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { EvalConfig } from "./eval.schema.js";
 
 const NodeRef = z.enum(["opus", "sonnet", "haiku", "fable"]);
 
@@ -31,6 +32,8 @@ const NodeDefSchema = z.object({
   loop: LoopConfig.optional().default(() => ({ enabled: false, max_rounds: 3 })),
   constraints: z.array(ConstraintValue).default([]),
   evidence: z.array(z.string()).default([]),
+  role: z.string().optional(),
+  eval: EvalConfig.optional(),
 });
 
 const LimitsSchema = z.object({
@@ -63,6 +66,7 @@ const TopologyName = z.enum([
   "loop-until-done",
   "generate-and-filter",
   "tournament",
+  "memory-augmented",
 ]);
 
 type NodeDef = z.infer<typeof NodeDefSchema>;
