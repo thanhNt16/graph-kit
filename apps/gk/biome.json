@@ -3,7 +3,7 @@
   "vcs": { "enabled": true, "clientKind": "git" },
   "files": {
     "ignoreUnknown": true,
-    "includes": ["**", "!dist", "!claude/templates", "!claude/skills/excalidraw-diagram", "!claude/hooks"]
+    "includes": ["**", "!dist", "!claude/templates", "!claude/skills/excalidraw-diagram", "!claude/hooks", "!**/.tmp-*"]
   },
   "formatter": {
     "enabled": true,
