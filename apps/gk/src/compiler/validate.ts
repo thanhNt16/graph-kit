@@ -66,5 +66,47 @@ export function validateGraph(graph: Graph, projectRoot: string): Finding[] {
     }
   }
 
+  // 5. memory-augmented topology contract
+  if (graph.topology === "memory-augmented") {
+    const tc = graph.topology_config as Record<string, any>;
+    const inner = tc?.inner;
+    if (!inner || typeof inner !== "object" || !("template" in inner)) {
+      findings.push({
+        check: "memory-inner",
+        path: "topology_config.inner",
+        message: "memory-augmented requires topology_config.inner.template (a base topology)",
+      });
+    }
+    const mem = tc?.memory as Record<string, any> | undefined;
+    const curatorNode = mem?.curator_node ?? "curator";
+    if (!graph.nodes[curatorNode]) {
+      findings.push({
+        check: "memory-curator-node",
+        path: `nodes.${curatorNode}`,
+        message: `memory-augmented memory.curator_node "${curatorNode}" is not defined in nodes`,
+      });
+    }
+  }
+
+  // 6. eval-gate node role contract
+  for (const [id, node] of Object.entries(graph.nodes)) {
+    if ((node as any).role === "eval-gate") {
+      if (!(node as any).eval) {
+        findings.push({
+          check: "eval-gate-config",
+          path: `nodes.${id}.eval`,
+          message: "eval-gate node requires an `eval` config block",
+        });
+      }
+      if (!node.depend_on || node.depend_on.length === 0) {
+        findings.push({
+          check: "eval-gate-depend_on",
+          path: `nodes.${id}.depend_on`,
+          message: "eval-gate node must depend_on at least one producer node",
+        });
+      }
+    }
+  }
+
   return findings;
 }
