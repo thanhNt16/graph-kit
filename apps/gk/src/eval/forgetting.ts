@@ -10,15 +10,15 @@ function ageDays(lastUsedAt: string, now: string): number {
 function recencyDecay(lastUsedAt: string, now: string): number {
   // half-life ~14 days
   const halfLife = 14;
-  return Math.pow(0.5, ageDays(lastUsedAt, now) / halfLife);
+  return 0.5 ** (ageDays(lastUsedAt, now) / halfLife);
 }
 
 export interface ActRInput {
-  relevance: number;      // 0..1 — to the current objective
-  connectivity: number;   // 0..1 — normalized graph degree
+  relevance: number; // 0..1 — to the current objective
+  connectivity: number; // 0..1 — normalized graph degree
   use_count: number;
-  last_used_at: string;   // ISO-8601
-  now: string;            // ISO-8601
+  last_used_at: string; // ISO-8601
+  now: string; // ISO-8601
 }
 
 export function actRScore(i: ActRInput): number {

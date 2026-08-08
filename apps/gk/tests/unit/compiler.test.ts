@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { mkdirSync, rmSync, readFileSync } from "node:fs";
+import { mkdirSync, readFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import YAML from "yaml";
 import { compileGraph } from "../../src/compiler/emitter.js";
@@ -93,7 +93,7 @@ describe("compileGraph", () => {
     const graph = GraphSchema.parse(YAML.parse(raw));
     const script = compileGraph(graph, FIXTURES);
     expect(script).toContain("createMemoryAugmentedWorkflow");
-    expect(script).toContain("createDiamondWorkflow");          // inner inlined
+    expect(script).toContain("createDiamondWorkflow"); // inner inlined
     expect(script).toContain('"__subgraph": "diamond"');
   });
 });

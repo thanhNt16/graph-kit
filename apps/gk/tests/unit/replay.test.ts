@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { runGolden } from "../../src/eval/replay.js";
 import { join } from "node:path";
+import { runGolden } from "../../src/eval/replay.js";
 
 const GOLDEN = join(import.meta.dir, "..", "..", "eval", "golden");
 

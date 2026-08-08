@@ -1,6 +1,6 @@
+import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { expect, test } from "bun:test";
 
 test("gk-recall SKILL.md has valid frontmatter", () => {
   const raw = readFileSync(join(import.meta.dir, "..", "..", "claude", "skills", "gk-recall", "SKILL.md"), "utf-8");

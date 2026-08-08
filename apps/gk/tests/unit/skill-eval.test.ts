@@ -1,6 +1,6 @@
+import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { expect, test } from "bun:test";
 
 test("gk-eval SKILL.md covers both modes + LLM-as-judge", () => {
   const raw = readFileSync(join(import.meta.dir, "..", "..", "claude", "skills", "gk-eval", "SKILL.md"), "utf-8");

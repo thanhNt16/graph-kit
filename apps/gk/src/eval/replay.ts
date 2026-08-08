@@ -1,7 +1,7 @@
-import { readFileSync, readdirSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import YAML from "yaml";
-import { scoreWorkProduct, scoreMemory } from "./rubrics.js";
+import { scoreMemory, scoreWorkProduct } from "./rubrics.js";
 
 export interface GoldenResult {
   id: string;
@@ -30,7 +30,10 @@ export function runGolden(dir: string): GoldenReport {
     }
     const expected = c.expected_verdict ?? "PASS";
     return {
-      id: c.id, category: c.category, expected, actual,
+      id: c.id,
+      category: c.category,
+      expected,
+      actual,
       pass: actual === expected,
     };
   });

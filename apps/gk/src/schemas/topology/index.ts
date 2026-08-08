@@ -17,7 +17,14 @@ const TOPOLOGY_CONFIG_KEYS: Record<TopologyName, string[]> = {
   "loop-until-done": ["scouter", "worker_batch", "stop_rule", "dedup", "dry_threshold"],
   "generate-and-filter": ["generators[]", "rubric", "keep_top", "dedup_keys", "scorer"],
   tournament: ["candidates[]", "judge", "rounds"],
-  "memory-augmented": ["inner.template", "memory.project", "memory.cadence", "memory.curator_node", "memory.recall_topk", "memory.expire_policy"],
+  "memory-augmented": [
+    "inner.template",
+    "memory.project",
+    "memory.cadence",
+    "memory.curator_node",
+    "memory.recall_topk",
+    "memory.expire_policy",
+  ],
 };
 
 export function getTopologyConfigKeys(topology: TopologyName): string[] {

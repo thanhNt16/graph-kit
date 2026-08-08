@@ -5,7 +5,7 @@ export const MemoryConfig = z
     project: z.string().default("graph-kit-memory"),
     cadence: z.enum(["on_node_complete", "every"]).default("on_node_complete"),
     every: z.number().int().min(1).optional(),
-    curator_node: z.string().default("curator"),   // node id in graph.yaml bound to Memory Curator
+    curator_node: z.string().default("curator"), // node id in graph.yaml bound to Memory Curator
     recall_topk: z.number().int().min(1).default(5),
     expire_policy: z.enum(["act_r", "manual"]).default("act_r"),
     null_intervention_allowed: z.boolean().default(true),

@@ -3,3 +3,4 @@ dist/
 .superpowers/
 **/.tmp-*/
 .graphkit/
+.claude/worktrees/

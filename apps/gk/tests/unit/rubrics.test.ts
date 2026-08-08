@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { scoreWorkProduct, scoreMemory } from "../../src/eval/rubrics.js";
+import { scoreMemory, scoreWorkProduct } from "../../src/eval/rubrics.js";
 
 describe("scoreWorkProduct", () => {
   test("MERGE when all required keys present and non-empty", () => {
@@ -13,11 +13,7 @@ describe("scoreWorkProduct", () => {
   });
 
   test("BLOCK when a required key is missing", () => {
-    const r = scoreWorkProduct(
-      { required_keys: ["findings", "test_results"] },
-      { findings: "x" },
-      "strict",
-    );
+    const r = scoreWorkProduct({ required_keys: ["findings", "test_results"] }, { findings: "x" }, "strict");
     expect(r.verdict).toBe("BLOCK");
     expect(r.scorecard.test_results).toBe("missing");
   });
@@ -30,22 +26,43 @@ describe("scoreWorkProduct", () => {
 
 describe("scoreMemory — Letta 2x2 with abstention weighting", () => {
   test("penalizes confident-from-stale more than admitting ignorance", () => {
-    const staleAnswered = scoreMemory({
-      adherence: 0.4, retrieval: 0.3, generalization: 0.5, hygiene: 0.5,
-      staleAnsweredFrom: 3, admittedIgnorance: 0,
-    }, { abstention_weighted: true });
-    const admitted = scoreMemory({
-      adherence: 0.4, retrieval: 0.3, generalization: 0.5, hygiene: 0.5,
-      staleAnsweredFrom: 0, admittedIgnorance: 3,
-    }, { abstention_weighted: true });
+    const staleAnswered = scoreMemory(
+      {
+        adherence: 0.4,
+        retrieval: 0.3,
+        generalization: 0.5,
+        hygiene: 0.5,
+        staleAnsweredFrom: 3,
+        admittedIgnorance: 0,
+      },
+      { abstention_weighted: true },
+    );
+    const admitted = scoreMemory(
+      {
+        adherence: 0.4,
+        retrieval: 0.3,
+        generalization: 0.5,
+        hygiene: 0.5,
+        staleAnsweredFrom: 0,
+        admittedIgnorance: 3,
+      },
+      { abstention_weighted: true },
+    );
     expect(admitted.overall).toBeGreaterThan(staleAnswered.overall);
   });
 
   test("abstention weighting off → equal scores", () => {
-    const a = scoreMemory({
-      adherence: 0.5, retrieval: 0.5, generalization: 0.5, hygiene: 0.5,
-      staleAnsweredFrom: 3, admittedIgnorance: 0,
-    }, { abstention_weighted: false });
+    const a = scoreMemory(
+      {
+        adherence: 0.5,
+        retrieval: 0.5,
+        generalization: 0.5,
+        hygiene: 0.5,
+        staleAnsweredFrom: 3,
+        admittedIgnorance: 0,
+      },
+      { abstention_weighted: false },
+    );
     expect(a.overall).toBeCloseTo(0.5, 2);
   });
 });

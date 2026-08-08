@@ -92,8 +92,10 @@ describe("validateGraph structural checks", () => {
 
   // --- memory-augmented + eval-gate (Task 6) ---
   const baseGraph = {
-    apiVersion: "graphkit.dev/v2", kind: "Graph",
-    metadata: { name: "g" }, topology: "memory-augmented",
+    apiVersion: "graphkit.dev/v2",
+    kind: "Graph",
+    metadata: { name: "g" },
+    topology: "memory-augmented",
     topology_config: { inner: { template: "diamond" }, memory: { curator_node: "curator" } },
     nodes: {
       scouter: { agent: "Software Architect", objective: "x" },
@@ -111,7 +113,8 @@ describe("validateGraph structural checks", () => {
 
   test("memory-augmented requires the curator node to exist", () => {
     const g = GraphSchema.parse({
-      ...baseGraph, topology_config: { inner: { template: "diamond" }, memory: { curator_node: "missing" } },
+      ...baseGraph,
+      topology_config: { inner: { template: "diamond" }, memory: { curator_node: "missing" } },
     });
     const findings = validateGraph(g, "/nonexistent-root");
     expect(findings.some((f) => f.check === "memory-curator-node")).toBe(true);
@@ -119,7 +122,8 @@ describe("validateGraph structural checks", () => {
 
   test("eval-gate requires eval config", () => {
     const g = GraphSchema.parse({
-      ...baseGraph, topology: "diamond",
+      ...baseGraph,
+      topology: "diamond",
       nodes: {
         worker: { agent: "Code Reviewer", objective: "x" },
         "eval-gate": { agent: "Code Reviewer", objective: "gate", role: "eval-gate", depend_on: ["worker"] },
@@ -131,10 +135,17 @@ describe("validateGraph structural checks", () => {
 
   test("eval-gate with eval config + depend_on passes its checks", () => {
     const g = GraphSchema.parse({
-      ...baseGraph, topology: "diamond",
+      ...baseGraph,
+      topology: "diamond",
       nodes: {
         worker: { agent: "Code Reviewer", objective: "x" },
-        "eval-gate": { agent: "Code Reviewer", objective: "gate", role: "eval-gate", depend_on: ["worker"], eval: { mode: "work_product" } },
+        "eval-gate": {
+          agent: "Code Reviewer",
+          objective: "gate",
+          role: "eval-gate",
+          depend_on: ["worker"],
+          eval: { mode: "work_product" },
+        },
       },
     });
     const findings = validateGraph(g, "/nonexistent-root");

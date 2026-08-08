@@ -31,10 +31,10 @@ export function scoreWorkProduct(
 }
 
 export interface MemoryState {
-  adherence: number;      // 0..1 — did actions respect recalled constraints
-  retrieval: number;      // 0..1 — were relevant memories actually fetched
+  adherence: number; // 0..1 — did actions respect recalled constraints
+  retrieval: number; // 0..1 — were relevant memories actually fetched
   generalization: number; // 0..1 — did distilled experience transfer
-  hygiene: number;        // 0..1 — no stale/contradictory/duplicate
+  hygiene: number; // 0..1 — no stale/contradictory/duplicate
   staleAnsweredFrom: number; // count: confidently answered from stale memory
   admittedIgnorance: number; // count: correctly said "I don't have that"
 }
