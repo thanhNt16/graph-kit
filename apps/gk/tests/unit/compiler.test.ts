@@ -1,11 +1,13 @@
 import { describe, expect, test } from "bun:test";
-import { mkdirSync, rmSync } from "node:fs";
+import { mkdirSync, rmSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import YAML from "yaml";
 import { compileGraph } from "../../src/compiler/emitter.js";
 import type { Graph } from "../../src/compiler/validate.js";
 import { GraphSchema } from "../../src/schemas/graph.schema.js";
 
 const FIXTURES = join(import.meta.dir, "..", "..", "claude", "templates");
+const YAML_FIXTURES = join(import.meta.dir, "..", "fixtures");
 const TMP = join(import.meta.dir, ".tmp-compiler");
 
 function _tmpDir() {
@@ -84,5 +86,14 @@ describe("compileGraph", () => {
     // Force bad topology by mutating after parse
     (graph as Record<string, unknown>).topology = "nonexistent";
     expect(() => compileGraph(graph, FIXTURES)).toThrow();
+  });
+
+  test("compiles memory-augmented wrapping diamond", () => {
+    const raw = readFileSync(join(YAML_FIXTURES, "memory-diamond.yaml"), "utf-8");
+    const graph = GraphSchema.parse(YAML.parse(raw));
+    const script = compileGraph(graph, FIXTURES);
+    expect(script).toContain("createMemoryAugmentedWorkflow");
+    expect(script).toContain("createDiamondWorkflow");          // inner inlined
+    expect(script).toContain('"__subgraph": "diamond"');
   });
 });

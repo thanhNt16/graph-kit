@@ -10,6 +10,7 @@ const TEMPLATE_FN: Record<string, string> = {
   "loop-until-done": "createLoopWorkflow",
   "generate-and-filter": "createGenerateFilterWorkflow",
   tournament: "createTournamentWorkflow",
+  "memory-augmented": "createMemoryAugmentedWorkflow",
 };
 
 export function compileGraph(graph: Graph, templatesDir: string): string {
