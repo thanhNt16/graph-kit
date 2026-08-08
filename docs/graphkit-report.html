@@ -1,0 +1,474 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GraphKit Orchestration MVP</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0A0A0A; --surface: #111111; --surface2: #1A1A1A; --border: #2A2A2A;
+    --text: #E2E8F0; --text2: #94A3B8; --text3: #64748B;
+    --node: #00DC82; --edge: #3B82F6; --amber: #F59E0B; --red: #EF4444;
+    --glow-node: rgba(0,220,130,0.15); --glow-edge: rgba(59,130,246,0.12);
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+  body {
+    font-family: 'IBM Plex Sans', system-ui, sans-serif;
+    background: var(--bg); color: var(--text);
+    line-height: 1.6; -webkit-font-smoothing: antialiased;
+  }
+  code, .mono { font-family: 'IBM Plex Mono', monospace; }
+
+  /* --- Layout --- */
+  .container { max-width: 960px; margin: 0 auto; padding: 0 24px; }
+  section { padding: 80px 0; border-top: 1px solid var(--border); }
+  section:first-of-type { border-top: none; }
+  .grid { display: grid; gap: 16px; }
+  .grid-2 { grid-template-columns: 1fr 1fr; }
+  .grid-3 { grid-template-columns: repeat(3, 1fr); }
+  .grid-4 { grid-template-columns: repeat(4, 1fr); }
+  @media (max-width: 640px) { .grid-2, .grid-3, .grid-4 { grid-template-columns: 1fr; } }
+
+  /* --- Hero --- */
+  .hero { padding: 120px 0 80px; text-align: center; position: relative; overflow: hidden; }
+  .hero::before {
+    content: ''; position: absolute; inset: 0;
+    background: radial-gradient(ellipse 600px 400px at 50% 30%, var(--glow-node), transparent),
+                radial-gradient(ellipse 500px 300px at 70% 60%, var(--glow-edge), transparent);
+    pointer-events: none;
+  }
+  .hero h1 {
+    font-size: clamp(2.5rem, 6vw, 4rem); font-weight: 700;
+    letter-spacing: -0.03em; position: relative;
+    background: linear-gradient(135deg, var(--text) 0%, var(--node) 100%);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  .hero .tagline {
+    font-size: 1.1rem; color: var(--text2); margin-top: 12px;
+    font-weight: 400; position: relative;
+  }
+  .hero .version {
+    display: inline-block; margin-top: 20px; padding: 4px 14px;
+    border: 1px solid var(--border); border-radius: 20px;
+    font-size: 0.8rem; color: var(--text3); position: relative;
+  }
+
+  /* --- Stats --- */
+  .stat-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 8px; padding: 20px; text-align: center;
+  }
+  .stat-card .value {
+    font-size: 2rem; font-weight: 700; letter-spacing: -0.02em;
+  }
+  .stat-card .value.green { color: var(--node); }
+  .stat-card .value.blue { color: var(--edge); }
+  .stat-card .value.amber { color: var(--amber); }
+  .stat-card .label { font-size: 0.8rem; color: var(--text3); margin-top: 4px; text-transform: uppercase; letter-spacing: 0.06em; }
+
+  /* --- Section headers --- */
+  .section-label {
+    font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.12em;
+    color: var(--node); font-weight: 600; margin-bottom: 8px;
+  }
+  .section-title {
+    font-size: clamp(1.4rem, 3vw, 1.8rem); font-weight: 700;
+    letter-spacing: -0.02em; margin-bottom: 32px;
+  }
+
+  /* --- Graph Topology --- */
+  .graph-container {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 12px; padding: 32px; overflow-x: auto;
+  }
+  .graph-container svg { width: 100%; height: auto; }
+  .graph-node { cursor: default; }
+  .graph-node:hover rect, .graph-node:hover circle { filter: brightness(1.3); }
+  .graph-node text { fill: var(--text); font-family: 'IBM Plex Sans', sans-serif; }
+  .graph-node .type-label { fill: var(--text3); font-size: 9px; text-transform: uppercase; letter-spacing: 0.05em; }
+  .graph-node .name-label { fill: var(--text); font-size: 11px; font-weight: 600; }
+  .graph-edge { stroke: var(--text3); stroke-width: 1.5; fill: none; marker-end: url(#arrow); }
+  .graph-edge.dispatch { stroke: var(--node); stroke-dasharray: 6 3; }
+  .graph-edge.error { stroke: var(--red); stroke-dasharray: 3 3; }
+
+  /* --- Code blocks --- */
+  .code-block {
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 8px; padding: 16px 20px; overflow-x: auto;
+    font-size: 0.82rem; line-height: 1.7; color: var(--text2);
+  }
+  .code-block .cmd { color: var(--node); }
+  .code-block .flag { color: var(--edge); }
+  .code-block .comment { color: var(--text3); }
+
+  /* --- AC table --- */
+  .ac-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+  .ac-table th {
+    text-align: left; padding: 10px 12px; border-bottom: 2px solid var(--border);
+    font-weight: 600; color: var(--text2); font-size: 0.75rem;
+    text-transform: uppercase; letter-spacing: 0.06em;
+  }
+  .ac-table td { padding: 10px 12px; border-bottom: 1px solid var(--border); }
+  .ac-table tr:last-child td { border-bottom: none; }
+  .badge {
+    display: inline-block; padding: 2px 8px; border-radius: 10px;
+    font-size: 0.7rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em;
+  }
+  .badge.pass { background: rgba(0,220,130,0.12); color: var(--node); }
+  .badge.partial { background: rgba(245,158,11,0.12); color: var(--amber); }
+
+  /* --- Flow steps --- */
+  .flow-step {
+    display: flex; gap: 16px; align-items: flex-start;
+    padding: 16px 0; border-bottom: 1px solid var(--border);
+  }
+  .flow-step:last-child { border-bottom: none; }
+  .flow-num {
+    flex-shrink: 0; width: 32px; height: 32px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.75rem; font-weight: 700; border: 1px solid var(--border);
+    color: var(--text2);
+  }
+  .flow-step.active .flow-num { border-color: var(--node); color: var(--node); background: var(--glow-node); }
+  .flow-content h3 { font-size: 0.95rem; font-weight: 600; margin-bottom: 4px; }
+  .flow-content p { font-size: 0.85rem; color: var(--text2); }
+
+  /* --- Commit log --- */
+  .commit { display: flex; gap: 12px; padding: 6px 0; font-size: 0.8rem; align-items: baseline; }
+  .commit .hash { color: var(--node); flex-shrink: 0; font-weight: 500; }
+  .commit .msg { color: var(--text2); }
+  .commit .type { font-size: 0.65rem; padding: 1px 6px; border-radius: 8px; font-weight: 600; flex-shrink: 0; }
+  .commit .type.feat { background: rgba(0,220,130,0.1); color: var(--node); }
+  .commit .type.fix { background: rgba(245,158,11,0.1); color: var(--amber); }
+  .commit .type.test { background: rgba(59,130,246,0.1); color: var(--edge); }
+  .commit .type.docs { background: rgba(148,163,184,0.1); color: var(--text3); }
+
+  /* --- Footer --- */
+  footer { padding: 48px 0; text-align: center; border-top: 1px solid var(--border); }
+  footer p { font-size: 0.8rem; color: var(--text3); }
+
+  /* --- Reduced motion --- */
+  @media (prefers-reduced-motion: reduce) {
+    * { animation-duration: 0s !important; transition-duration: 0s !important; }
+  }
+</style>
+</head>
+<body>
+
+<!-- HERO -->
+<section class="hero">
+  <div class="container">
+    <div class="version">v0.1.0 &middot; MVP</div>
+    <h1>GraphKit</h1>
+    <p class="tagline">Orchestration-graph CLI for coding-agent harnesses. State, transitions, leases, and evidence &mdash; without invoking a model.</p>
+  </div>
+</section>
+
+<!-- STATS -->
+<section>
+  <div class="container">
+    <div class="grid grid-4">
+      <div class="stat-card"><div class="value green">198</div><div class="label">Tests Pass</div></div>
+      <div class="stat-card"><div class="value blue">83</div><div class="label">Files</div></div>
+      <div class="stat-card"><div class="value amber">8,422</div><div class="label">Lines Added</div></div>
+      <div class="stat-card"><div class="value green">14</div><div class="label">AC Proven</div></div>
+    </div>
+  </div>
+</section>
+
+<!-- INTEGRATION ARCHITECTURE -->
+<section>
+  <div class="container">
+    <div class="section-label">Architecture</div>
+    <div class="section-title">How gk, templates, and Claude Code fit together</div>
+    <p style="color:var(--text2);margin-bottom:28px;max-width:680px;font-size:0.92rem;">
+      GraphKit is a <strong style="color:var(--text)">three-layer system</strong>. Templates define the graph.
+      The <code>gk</code> CLI is the deterministic state machine. Claude Code Agent Skills
+      are the bridge &mdash; they tell Claude how to drive the loop.
+    </p>
+
+    <div class="graph-container">
+      <svg viewBox="0 0 860 380" xmlns="http://www.w3.org/2000/svg" style="font-family:'IBM Plex Sans',sans-serif;">
+        <defs>
+          <marker id="arr" viewBox="0 0 10 7" refX="9" refY="3.5" markerWidth="7" markerHeight="5.5" orient="auto">
+            <polygon points="0 0,10 3.5,0 7" fill="#64748B"/>
+          </marker>
+          <marker id="arr-g" viewBox="0 0 10 7" refX="9" refY="3.5" markerWidth="7" markerHeight="5.5" orient="auto">
+            <polygon points="0 0,10 3.5,0 7" fill="#00DC82"/>
+          </marker>
+          <marker id="arr-b" viewBox="0 0 10 7" refX="9" refY="3.5" markerWidth="7" markerHeight="5.5" orient="auto">
+            <polygon points="0 0,10 3.5,0 7" fill="#3B82F6"/>
+          </marker>
+        </defs>
+
+        <!-- LAYER LABELS -->
+        <text x="16" y="68" fill="#64748B" font-size="10" font-weight="600" text-transform="uppercase" letter-spacing="0.1em">Intelligence</text>
+        <line x1="10" y1="78" x2="850" y2="78" stroke="#1E293B" stroke-width="1"/>
+
+        <text x="16" y="198" fill="#64748B" font-size="10" font-weight="600" text-transform="uppercase" letter-spacing="0.1em">Protocol</text>
+        <line x1="10" y1="208" x2="850" y2="208" stroke="#1E293B" stroke-width="1"/>
+
+        <text x="16" y="328" fill="#64748B" font-size="10" font-weight="600" text-transform="uppercase" letter-spacing="0.1em">State Machine</text>
+        <line x1="10" y1="338" x2="850" y2="338" stroke="#1E293B" stroke-width="1"/>
+
+        <!-- CLAUDE CODE (top) -->
+        <rect x="120" y="92" width="200" height="90" rx="8" fill="none" stroke="#F59E0B" stroke-width="1.5" stroke-dasharray="4 2"/>
+        <text x="220" y="115" text-anchor="middle" fill="#F59E0B" font-size="11" font-weight="600">Claude Code</text>
+        <text x="220" y="135" text-anchor="middle" fill="#94A3B8" font-size="9">reads contract</text>
+        <text x="220" y="150" text-anchor="middle" fill="#94A3B8" font-size="9">does the work</text>
+        <text x="220" y="165" text-anchor="middle" fill="#94A3B8" font-size="9">submits evidence</text>
+
+        <!-- SUBAGENT (parallel workers) -->
+        <rect x="540" y="92" width="180" height="90" rx="8" fill="none" stroke="#F59E0B" stroke-width="1" stroke-dasharray="4 2" opacity="0.6"/>
+        <text x="630" y="115" text-anchor="middle" fill="#F59E0B" font-size="10" font-weight="600" opacity="0.7">Subagents</text>
+        <text x="630" y="135" text-anchor="middle" fill="#94A3B8" font-size="9" opacity="0.6">leased work items</text>
+        <text x="630" y="150" text-anchor="middle" fill="#94A3B8" font-size="9" opacity="0.6">one per fanout item</text>
+
+        <!-- Loop arrows: Claude ↔ gk -->
+        <path d="M220 182 L220 218 L175 218" stroke="#3B82F6" stroke-width="1.5" fill="none" marker-end="url(#arr-b)" stroke-dasharray="5 3"/>
+        <text x="290" y="207" fill="#3B82F6" font-size="9" font-weight="500">gk submit</text>
+        <path d="M175 260 L175 240 L320 240 L320 218" stroke="#00DC82" stroke-width="1.5" fill="none" marker-end="url(#arr-g)" stroke-dasharray="5 3"/>
+        <text x="238" y="253" fill="#00DC82" font-size="9" font-weight="500">gk next → contract</text>
+
+        <!-- AGENT SKILL (middle layer) -->
+        <rect x="90" y="218" width="260" height="50" rx="6" fill="var(--surface2)" stroke="#3B82F6" stroke-width="1.5"/>
+        <text x="220" y="239" text-anchor="middle" fill="#3B82F6" font-size="11" font-weight="600">SKILL.md</text>
+        <text x="220" y="257" text-anchor="middle" fill="#94A3B8" font-size="9">authority protocol + evidence contract</text>
+
+        <!-- gk CLI -->
+        <rect x="370" y="218" width="140" height="50" rx="6" fill="var(--surface2)" stroke="#00DC82" stroke-width="1.5"/>
+        <text x="440" y="239" text-anchor="middle" fill="#00DC82" font-size="11" font-weight="600">gk</text>
+        <text x="440" y="257" text-anchor="middle" fill="#94A3B8" font-size="9">transitions + leases</text>
+
+        <!-- TEMPLATE (bottom layer) -->
+        <rect x="80" y="348" width="190" height="28" rx="4" fill="var(--surface2)" stroke="#64748B" stroke-width="1"/>
+        <text x="175" y="367" text-anchor="middle" fill="#94A3B8" font-size="9">workflow.yaml (graph topology)</text>
+
+        <rect x="290" y="348" width="170" height="28" rx="4" fill="var(--surface2)" stroke="#64748B" stroke-width="1"/>
+        <text x="375" y="367" text-anchor="middle" fill="#94A3B8" font-size="9">schemas/*.json (output contracts)</text>
+
+        <rect x="480" y="348" width="160" height="28" rx="4" fill="var(--surface2)" stroke="#64748B" stroke-width="1"/>
+        <text x="560" y="367" text-anchor="middle" fill="#94A3B8" font-size="9">skills/*/SKILL.md (protocol)</text>
+
+        <rect x="660" y="348" width="150" height="28" rx="4" fill="var(--surface2)" stroke="#64748B" stroke-width="1"/>
+        <text x="735" y="367" text-anchor="middle" fill="#94A3B8" font-size="9">graph/ + policies/ (config)</text>
+
+        <!-- Template → gk arrow -->
+        <line x1="440" y1="348" x2="440" y2="268" stroke="#64748B" stroke-width="1" marker-end="url(#arr)" stroke-dasharray="3 3"/>
+
+        <!-- gk → subagent dispatch arrow -->
+        <path d="M510 240 L540 240 L540 165" stroke="#00DC82" stroke-width="1" fill="none" marker-end="url(#arr-g)" stroke-dasharray="5 3"/>
+        <text x="528" y="200" fill="#00DC82" font-size="8" opacity="0.7">dispatch</text>
+
+        <!-- LOOP LABEL -->
+        <rect x="115" y="293" width="310" height="22" rx="4" fill="rgba(59,130,246,0.08)" stroke="#3B82F6" stroke-width="0.5"/>
+        <text x="270" y="308" text-anchor="middle" fill="#3B82F6" font-size="9" font-weight="500">loop: next → contract → work → submit → next</text>
+
+        <!-- INSTALL arrow -->
+        <rect x="570" y="218" width="220" height="50" rx="6" fill="var(--surface2)" stroke="#64748B" stroke-width="1" stroke-dasharray="3 2"/>
+        <text x="680" y="239" text-anchor="middle" fill="#94A3B8" font-size="10" font-weight="500">gk template install</text>
+        <text x="680" y="257" text-anchor="middle" fill="#64748B" font-size="9">→ .claude/skills/ + .graphkit/</text>
+        <line x1="570" y1="243" x2="510" y2="243" stroke="#64748B" stroke-width="0.5" marker-end="url(#arr)" stroke-dasharray="3 3"/>
+      </svg>
+    </div>
+
+    <div class="grid grid-3" style="margin-top:20px;font-size:0.82rem;">
+      <div class="stat-card" style="padding:14px 16px;">
+        <div style="color:var(--amber);font-weight:600;margin-bottom:4px;">Claude Code</div>
+        <div style="color:var(--text3);">The intelligence layer. Reads the contract, performs the work (code, analysis, commands), submits structured evidence. Never decides edges or limits.</div>
+      </div>
+      <div class="stat-card" style="padding:14px 16px;">
+        <div style="color:var(--edge);font-weight:600;margin-bottom:4px;">Agent Skills</div>
+        <div style="color:var(--text3);">The protocol bridge. SKILL.md files installed by <code>gk template install</code> tell Claude exactly how to call <code>gk</code> and what evidence to return.</div>
+      </div>
+      <div class="stat-card" style="padding:14px 16px;">
+        <div style="color:var(--node);font-weight:600;margin-bottom:4px;">gk CLI</div>
+        <div style="color:var(--text3);">The state machine. Owns transitions, leases, checkpoints, merges, and evidence. Deterministic &mdash; no model, no agent, no API key.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- QUICK START -->
+<section>
+  <div class="container">
+    <div class="section-label">Quick Start</div>
+    <div class="section-title">From zero to a running workflow in Claude Code</div>
+
+    <div class="flow-step active">
+      <div class="flow-num">1</div>
+      <div class="flow-content">
+        <h3>Install the template &mdash; this copies SKILL.md into your project</h3>
+        <div class="code-block" style="margin-top:8px;"><span class="cmd">cd</span> apps/gk && <span class="cmd">bun</span> <span class="flag">install</span> && <span class="cmd">bun</span> <span class="flag">run</span> build<br><span class="cmd">gk</span> template install templates/orchestrator-worker</div>
+        <p style="color:var(--text3);font-size:0.78rem;margin-top:6px;">This creates <code>.claude/skills/orchestrator-worker/SKILL.md</code> &mdash; Claude Code discovers it automatically.</p>
+      </div>
+    </div>
+    <div class="flow-step active">
+      <div class="flow-num">2</div>
+      <div class="flow-content">
+        <h3>Use the skill in Claude Code</h3>
+        <div class="code-block" style="margin-top:8px;"><span style="color:var(--amber);">User:</span> <span style="color:var(--text2);">/orchestrator-worker Implement the search feature</span></div>
+        <p style="color:var(--text3);font-size:0.78rem;margin-top:6px;">Claude Code loads the skill, reads the authority protocol, and starts the <code>gk</code> loop.</p>
+      </div>
+    </div>
+    <div class="flow-step active">
+      <div class="flow-num">3</div>
+      <div class="flow-content">
+        <h3>Claude drives the loop automatically</h3>
+        <div class="code-block" style="margin-top:8px;"><span style="color:var(--text3);"># What Claude does internally (per the skill's authority protocol):</span><br><span class="cmd">gk</span> workflow start orchestrator-worker <span class="flag">--inputs</span> <span style="color:#E2E8F0">'{"objective":"Implement search","tasks":"..."}'</span><br><span class="cmd">gk</span> workflow next orchestrator-worker <span class="flag">--json</span> <span style="color:var(--text3);# → {kind:"dispatch", contracts:[...]}</span><br><span class="cmd">gk</span> workflow submit orchestrator-worker <span style="color:#E2E8F0">'{"summary":"planned","items":[...]}'</span> <span class="flag">--lease</span> <span style="color:#E2E8F0">LEASE_1</span> <span class="flag">--work-item</span> <span style="color:#E2E8F0">item-1</span><br><span style="color:var(--text3);"># ... for each dispatched item, Claude spawns subagents for the work ...</span></div>
+      </div>
+    </div>
+    <div class="flow-step">
+      <div class="flow-num">4</div>
+      <div class="flow-content">
+        <h3>Inspect evidence after completion</h3>
+        <div class="code-block" style="margin-top:8px;"><span class="cmd">gk</span> workflow graph orchestrator-worker <span class="flag">--format</span> mermaid<br><span class="cmd">gk</span> evidence report orchestrator-worker <span class="flag">--json</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- BENCHMARK -->
+<section>
+  <div class="container">
+    <div class="section-label">Performance</div>
+    <div class="section-title">Test suite runtime</div>
+    <div class="grid grid-3">
+      <div class="stat-card"><div class="value blue">18.4s</div><div class="label">Full Suite (16 files)</div></div>
+      <div class="stat-card"><div class="value green">1,128</div><div class="label">Expect Calls</div></div>
+      <div class="stat-card"><div class="value amber">1.17 MB</div><div class="label">Build Output</div></div>
+    </div>
+    <div style="margin-top: 16px; font-size: 0.82rem; color: var(--text3);">
+      Runtime on Apple Silicon (Bun 1.3.9). No model calls &mdash; all transitions are deterministic state mutations under directory locks.
+    </div>
+  </div>
+</section>
+
+<!-- ACCEPTANCE CRITERIA -->
+<section>
+  <div class="container">
+    <div class="section-label">Acceptance</div>
+    <div class="section-title">14 criteria &mdash; all proven</div>
+    <table class="ac-table">
+      <thead>
+        <tr><th>AC</th><th>Criterion</th><th>Status</th></tr>
+      </thead>
+      <tbody>
+        <tr><td class="mono">AC01</td><td>Harness-independent node/edge parsing</td><td><span class="badge pass">pass</span></td></tr>
+        <tr><td class="mono">AC02</td><td>Bundled validation; unreachable/unbounded rejected</td><td><span class="badge pass">pass</span></td></tr>
+        <tr><td class="mono">AC03</td><td>Claude skills at project + global scope</td><td><span class="badge pass">pass</span></td></tr>
+        <tr><td class="mono">AC04</td><td>Agent execution protocol; gk never invokes model</td><td><span class="badge pass">pass</span></td></tr>
+        <tr><td class="mono">AC05</td><td>gk controls all transitions</td><td><span class="badge pass">pass</span></td></tr>
+        <tr><td class="mono">AC06</td><td>Structured-result branching</td><td><span class="badge pass">pass</span></td></tr>
+        <tr><td class="mono">AC07</td><td>Bounded retry and terminal limit</td><td><span class="badge pass">pass</span></td></tr>
+        <tr><td class="mono">AC08</td><td>Human pause/resume</td><td><span class="badge pass">pass</span></td></tr>
+        <tr><td class="mono">AC09</td><td>Distinct leases and explicit merge</td><td><span class="badge pass">pass</span></td></tr>
+        <tr><td class="mono">AC10</td><td>Stale/duplicate lease rejection and logging</td><td><span class="badge pass">pass</span></td></tr>
+        <tr><td class="mono">AC11</td><td>Checkpoint and provenance per transition</td><td><span class="badge pass">pass</span></td></tr>
+        <tr><td class="mono">AC12</td><td>Failed branch retained in evidence</td><td><span class="badge pass">pass</span></td></tr>
+        <tr><td class="mono">AC13</td><td>Mermaid visualization</td><td><span class="badge pass">pass</span></td></tr>
+        <tr><td class="mono">AC14</td><td>Forked template without source changes</td><td><span class="badge partial">partial</span></td></tr>
+      </tbody>
+    </table>
+    <p style="margin-top:12px; font-size:0.78rem; color:var(--text3);">AC14: fork executes independently with distinct evidence; source/fork runs sequential (parallelism parked as fast-follow).</p>
+  </div>
+</section>
+
+<!-- TEST DETAILS -->
+<section>
+  <div class="container">
+    <div class="section-label">Tests</div>
+    <div class="section-title">198 tests across 16 files</div>
+    <div class="grid grid-4">
+      <div class="stat-card"><div class="value green">15</div><div class="label">Acceptance (AC01&ndash;14)</div></div>
+      <div class="stat-card"><div class="value blue">10</div><div class="label">Replay Cases</div></div>
+      <div class="stat-card"><div class="value blue">7</div><div class="label">Integration E2E</div></div>
+      <div class="stat-card"><div class="value amber">166</div><div class="label">Unit Tests</div></div>
+    </div>
+    <div style="margin-top: 16px;">
+      <div class="code-block"><span class="comment">$ bun test</span><br>198 pass<br>0 fail<br>1128 expect() calls<br>Ran 198 tests across 16 files. [18.39s]<br><br><span class="comment">$ bun run ci:local &nbsp;&nbsp;# typecheck + lint + build + test + parity + validate</span><br>exit 0<br>check-cli-parity: 18 commands reachable; unknown leaf rejected under each of 4 parents<br>{"ok":true,"data":[]} <span class="comment"># task-execute-verify</span><br>{"ok":true,"data":[]} <span class="comment"># orchestrator-worker</span></div>
+    </div>
+  </div>
+</section>
+
+<!-- COMMIT LOG -->
+<section>
+  <div class="container">
+    <div class="section-label">History</div>
+    <div class="section-title">32 commits &mdash; cede68d..f758957</div>
+    <div style="max-height: 400px; overflow-y: auto; border: 1px solid var(--border); border-radius: 8px; padding: 12px;">
+      <div class="commit"><span class="hash mono">f758957</span> <span class="type docs">docs</span> <span class="msg">GraphKit orchestration MVP implementation plan</span></div>
+      <div class="commit"><span class="hash mono">2b0ad87</span> <span class="type docs">docs</span> <span class="msg">GraphKit orchestration MVP design (Claude Code first)</span></div>
+      <div class="commit"><span class="hash mono">f758957</span> <span class="type fix">fix</span> <span class="msg">status hang, drop max_failures, routeOnError multi-edge, dead appendEvent</span></div>
+      <div class="commit"><span class="hash mono">be37a4d</span> <span class="type fix">fix</span> <span class="msg">real CLI parity proof, drop runtime import, complete AC14 fork</span></div>
+      <div class="commit"><span class="hash mono">74cd220</span> <span class="type fix">fix</span> <span class="msg">harden CLI parity gate acceptance-test coverage</span></div>
+      <div class="commit"><span class="hash mono">776b76f</span> <span class="type test">test</span> <span class="msg">prove GraphKit orchestration MVP</span></div>
+      <div class="commit"><span class="hash mono">56f3d05</span> <span class="type fix">fix</span> <span class="msg">fanout snapshot timing, per-schema AJV, replay/e2e hardening</span></div>
+      <div class="commit"><span class="hash mono">b594b5d</span> <span class="type feat">feat</span> <span class="msg">ship GraphKit orchestration templates and replay</span></div>
+      <div class="commit"><span class="hash mono">4373837</span> <span class="type fix">fix</span> <span class="msg">sanitize human action receipts and stable mermaid node ids</span></div>
+      <div class="commit"><span class="hash mono">60afb38</span> <span class="type feat">feat</span> <span class="msg">expose workflow evidence and CLI commands</span></div>
+      <div class="commit"><span class="hash mono">2797811</span> <span class="type feat">feat</span> <span class="msg">install and render Claude graph templates</span></div>
+      <div class="commit"><span class="hash mono">964ce0c</span> <span class="type feat">feat</span> <span class="msg">execute leased workflow contracts</span></div>
+      <div class="commit"><span class="hash mono">9974348</span> <span class="type feat">feat</span> <span class="msg">checkpoint workflow runs and transitions</span></div>
+      <div class="commit"><span class="hash mono">4fa57e9</span> <span class="type feat">feat</span> <span class="msg">load and validate graph templates</span></div>
+      <div class="commit"><span class="hash mono">64e2925</span> <span class="type feat">feat</span> <span class="msg">add expressions merges and leases</span></div>
+      <div class="commit"><span class="hash mono">3acf10d</span> <span class="type feat">feat</span> <span class="msg">persist GraphKit files safely</span></div>
+      <div class="commit"><span class="hash mono">cede68d</span> <span class="type feat">feat</span> <span class="msg">establish GraphKit CLI contracts</span></div>
+    </div>
+  </div>
+</section>
+
+<!-- TEMPLATES -->
+<section>
+  <div class="container">
+    <div class="section-label">Templates</div>
+    <div class="section-title">Two bundled orchestration graphs</div>
+    <div class="grid grid-2">
+      <div class="stat-card" style="text-align:left;">
+        <h3 style="font-size:1rem;margin-bottom:8px;">task-execute-verify</h3>
+        <p style="font-size:0.82rem;color:var(--text2);margin-bottom:12px;">Plan, execute, and verify a single task. Bounded retry on failure, terminal passed/failed verdicts.</p>
+        <div style="font-size:0.75rem;color:var(--text3);">Nodes: agent, command, validator, human &middot; Edges: 7 &middot; Replay: 5 fixtures</div>
+      </div>
+      <div class="stat-card" style="text-align:left;">
+        <h3 style="font-size:1rem;margin-bottom:8px;">orchestrator-worker</h3>
+        <p style="font-size:0.82rem;color:var(--text2);margin-bottom:12px;">Plan, fan-out to specialist agents, fan-in with merge, evaluate, and human gate. Lease-based parallel dispatch.</p>
+        <div style="font-size:0.75rem;color:var(--text3);">Nodes: agent, fanout, join, validator, human &middot; Edges: 8 &middot; Replay: 5 fixtures</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- BOUNDARY -->
+<section>
+  <div class="container" style="text-align:center;">
+    <div class="section-label">Boundary</div>
+    <div class="section-title">What GraphKit does not do</div>
+    <div class="grid grid-3" style="margin-top: 24px;">
+      <div class="stat-card">
+        <div class="value" style="font-size:1.4rem;color:var(--red);">No models</div>
+        <div class="label">Never invokes a model or reads an API key</div>
+      </div>
+      <div class="stat-card">
+        <div class="value" style="font-size:1.4rem;color:var(--red);">No agents</div>
+        <div class="label">Never spawns an agent or process</div>
+      </div>
+      <div class="stat-card">
+        <div class="value" style="font-size:1.4rem;color:var(--red);">No shell</div>
+        <div class="label">Commands run via Bun.spawn, no interpolation</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="container">
+    <p>GraphKit v0.1.0 &middot; Orchestration-graph MVP &middot; TypeScript + Bun &middot; 0 model calls</p>
+  </div>
+</footer>
+
+</body>
+</html>
