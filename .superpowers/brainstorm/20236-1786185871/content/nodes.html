@@ -1,0 +1,164 @@
+<h2>Enhanced Node Binding</h2>
+<p class="subtitle">Model tiering, dependencies, tools/skills, constraints, and internal loops per node</p>
+
+<div class="mockup">
+<div class="mockup-header">graph.yaml — Enhanced nodes section</div>
+<div class="mockup-body" style="font-size:0.75rem;padding:1rem">
+<pre style="margin:0;color:#c9d1d9;line-height:1.65">
+<span style="color:#e3b341">apiVersion:</span> graphkit.dev/v2
+<span style="color:#e3b341">kind:</span> Graph
+<span style="color:#e3b341">metadata:</span>
+  <span style="color:#58a6ff">name:</span> security-audit-with-research
+
+<span style="color:#e3b341">topology:</span> diamond
+
+<span style="color:#e3b341">inputs:</span>
+  <span style="color:#58a6ff">repo_path:</span> { type: string, required: true }
+  <span style="color:#58a6ff">scope:</span> { type: array, default: ["src"] }
+
+<span style="color:#e3b341">nodes:</span>                          <span style="color:#484f58"># rich per-node config</span>
+  <span style="color:#58a6ff">scouter:</span>
+    <span style="color:#58a6ff">agent:</span> Software Architect
+    <span style="color:#58a6ff">model:</span> opus                   <span style="color:#484f58"># opus | sonnet | haiku | fable</span>
+    <span style="color:#58a6ff">objective:</span> |
+      Analyze the codebase architecture.
+      Map attack surfaces, entry points, data flows.
+      Produce a prioritized list of files to audit.
+    <span style="color:#58a6ff">tools:</span> [Read, Glob, Grep, Bash]  <span style="color:#484f58"># available tools</span>
+    <span style="color:#58a6ff">skills:</span> [sequential-thinking]  <span style="color:#484f58"># loaded from .claude/skills/</span>
+    <span style="color:#58a6ff">refs:</span>                          <span style="color:#484f58"># reference docs loaded into context</span>
+      - <span style="color:#58a6ff">path:</span> docs/security-standards.md
+        <span style="color:#58a6ff">purpose:</span> "OWASP top 10 checklist"
+      - <span style="color:#58a6ff">path:</span> docs/architecture.md
+        <span style="color:#58a6ff">purpose:</span> "system architecture context"
+    <span style="color:#58a6ff">depend_on:</span> []                  <span style="color:#484f58"># no deps = starts immediately</span>
+    <span style="color:#58a6ff">loop:</span>                           <span style="color:#484f58"># internal loop until done</span>
+      <span style="color:#58a6ff">enabled:</span> true
+      <span style="color:#58a6ff">stop_when:</span> valid_evidence_found
+      <span style="color:#58a6ff">max_rounds:</span> 3
+      <span style="color:#58a6ff">exit_condition:</span> |
+        Stop when attack surface map has ≥ 3 concrete
+        code examples with file:line references.
+    <span style="color:#58a6ff">constraints:</span>                    <span style="color:#484f58"># optional per-node guardrails</span>
+      - <span style="color:#58a6ff">max_files:</span> 50
+      - <span style="color:#58a6ff">no_write:</span> true              <span style="color:#484f58"># read-only node</span>
+    <span style="color:#58a6ff">evidence:</span> [attack_surface, file_priorities]
+
+  <span style="color:#58a6ff">worker:</span>
+    <span style="color:#58a6ff">agent:</span> Code Reviewer
+    <span style="color:#58a6ff">model:</span> sonnet
+    <span style="color:#58a6ff">objective:</span> |
+      Audit assigned files for security vulnerabilities.
+      Check OWASP patterns, injection points, auth bypass.
+    <span style="color:#58a6ff">tools:</span> [Read, Grep]
+    <span style="color:#58a6ff">skills:</span> []
+    <span style="color:#58a6ff">refs:</span>
+      - <span style="color:#58a6ff">path:</span> docs/security-standards.md
+        <span style="color:#58a6ff">purpose:</span> "OWASP checklist"
+    <span style="color:#58a6ff">depend_on:</span> [scouter]         <span style="color:#484f58"># waits for scouter output</span>
+    <span style="color:#58a6ff">loop:</span> { enabled: false }
+    <span style="color:#58a6ff">constraints:</span>
+      - <span style="color:#58a6ff">assigned_only:</span> true         <span style="color:#484f58"># only touch assigned files</span>
+      - <span style="color:#58a6ff">max_findings_per_file:</span> 10
+    <span style="color:#58a6ff">evidence:</span> [findings, severity, remediation]
+
+  <span style="color:#58a6ff">verifier:</span>
+    <span style="color:#58a6ff">agent:</span> QA Engineer
+    <span style="color:#58a6ff">model:</span> haiku                 <span style="color:#484f58"># cheap model for verification</span>
+    <span style="color:#58a6ff">objective:</span> |
+      Verify each finding has valid file:line evidence.
+      Reject findings without concrete code references.
+    <span style="color:#58a6ff">tools:</span> [Read, Grep]
+    <span style="color:#58a6ff">depend_on:</span> [worker]
+
+  <span style="color:#58a6ff">synthesizer:</span>
+    <span style="color:#58a6ff">agent:</span> Security Engineer
+    <span style="color:#58a6ff">model:</span> opus                   <span style="color:#484f58"># top tier for final judgment</span>
+    <span style="color:#58a6ff">objective:</span> |
+      Merge verified findings into prioritized report.
+      Assess exploitability, propose fixes.
+    <span style="color:#58a6ff">tools:</span> [Read, Write, Bash]
+    <span style="color:#58a6ff">refs:</span>
+      - <span style="color:#58a6ff">path:</span> docs/security-standards.md
+      - <span style="color:#58a6ff">path:</span> .graphkit/evidence/
+        <span style="color:#58a6ff">purpose:</span> "all upstream evidence"
+    <span style="color:#58a6ff">depend_on:</span> [verifier]          <span style="color:#484f58"># sequential: verify before synthesize</span>
+    <span style="color:#58a6ff">evidence:</span> [report, verdict, executive_summary]
+
+<span style="color:#e3b341">limits:</span>
+  <span style="color:#58a6ff">max_workers:</span> 5
+  <span style="color:#58a6ff">budget_tokens:</span> 500000
+
+<span style="color:#e3b341">evidence:</span>
+  <span style="color:#58a6ff">required_keys:</span> [report, verdict]
+  <span style="color:#58a6ff">format:</span> markdown
+</pre>
+</div>
+</div>
+
+<div class="section" style="margin-top:1.5rem">
+<h3>Node Binding Fields</h3>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;font-size:0.8rem">
+
+<div style="background:#0d1117;border:1px solid #333;border-radius:8px;padding:0.8rem">
+<strong style="color:#58a6ff">Identity</strong>
+<ul style="margin:0;padding-left:1.2rem;color:#888">
+<li><code>agent</code> — kit agent name</li>
+<li><code>model</code> — opus/sonnet/haiku/fable</li>
+<li><code>objective</code> — what this node does</li>
+</ul>
+</div>
+
+<div style="background:#0d1117;border:1px solid #333;border-radius:8px;padding:0.8rem">
+<strong style="color:#58a6ff">Context</strong>
+<ul style="margin:0;padding-left:1.2rem;color:#888">
+<li><code>tools</code> — allowed tools</li>
+<li><code>skills</code> — loaded kit skills</li>
+<li><code>refs</code> — reference docs + purpose</li>
+</ul>
+</div>
+
+<div style="background:#0d1117;border:1px solid #333;border-radius:8px;padding:0.8rem">
+<strong style="color:#58a6ff">Flow Control</strong>
+<ul style="margin:0;padding-left:1.2rem;color:#888">
+<li><code>depend_on</code> — wait for these nodes</li>
+<li><code>loop</code> — internal loop-until-done</li>
+<li><code>evidence</code> — what this node produces</li>
+</ul>
+</div>
+
+<div style="background:#0d1117;border:1px solid #333;border-radius:8rem;padding:0.8rem">
+<strong style="color:#58a6ff">Guardrails</strong>
+<ul style="margin:0;padding-left:1.2rem;color:#888">
+<li><code>constraints</code> — per-node rules</li>
+<li>no_write, max_files, assigned_only...</li>
+</ul>
+</div>
+
+</div>
+</div>
+
+<div class="section" style="margin-top:1.5rem">
+<h3>depend_on Controls Parallelism</h3>
+<div style="font-size:0.82rem;background:#0d1117;border-radius:8px;padding:1rem;color:#c9d1d9">
+
+<strong>Example — fanout with mixed deps:</strong>
+<pre style="margin:0.5rem 0 0;color:#888;line-height:1.6">
+nodes:
+  researcher:
+    depend_on: []            ← starts immediately (parallel with planner)
+  planner:
+    depend_on: []            ← starts immediately (parallel with researcher)
+  worker-a:
+    depend_on: [planner]     ← waits for planner, runs parallel with worker-b
+  worker-b:
+    depend_on: [planner, researcher]  ← waits for BOTH
+  reviewer:
+    depend_on: [worker-a, worker-b]   ← barrier: all workers done
+</pre>
+
+<strong>Topology template resolves depend_on into parallel() vs sequential calls.</strong><br>
+Nodes with empty deps start together. Nodes sharing the same dep run in parallel.
+Nodes depending on multiple sources wait at a barrier.
+</div>
+</div>

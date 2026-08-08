@@ -12,19 +12,18 @@ export function createDiamondWorkflow(config) {
 
     // parallel() takes thunks: () => Promise — a thrown agent resolves to null, not a batch failure
     const workerResults = await context.parallel(
-      items.map(item => () =>
-        context.agent(nodes.worker.objective + `\n\nAssigned item: ${item}`, {
-          model: nodes.worker.model,
-          tools: nodes.worker.tools,
-          skills: nodes.worker.skills,
-        })
-      )
+      items.map(
+        (item) => () =>
+          context.agent(nodes.worker.objective + `\n\nAssigned item: ${item}`, {
+            model: nodes.worker.model,
+            tools: nodes.worker.tools,
+            skills: nodes.worker.skills,
+          }),
+      ),
     );
 
     // Reduce: deterministic code (dedup, rank) — NOT an agent call
-    const reduced = workerResults
-      .filter(Boolean)
-      .flat();
+    const reduced = workerResults.filter(Boolean).flat();
 
     const synthesized = await context.agent(nodes.synthesizer.objective, {
       model: nodes.synthesizer.model,

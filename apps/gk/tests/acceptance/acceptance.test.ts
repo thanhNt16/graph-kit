@@ -1,11 +1,11 @@
-import { describe, test, expect, beforeAll, afterAll } from "bun:test";
-import { existsSync, readdirSync, mkdirSync, rmSync, readFileSync, symlinkSync } from "node:fs";
+import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, symlinkSync } from "node:fs";
 import { join } from "node:path";
 import YAML from "yaml";
 import { installKit, templatesDir } from "../../src/cli/commands/kit.js";
-import { GraphSchema } from "../../src/schemas/graph.schema.js";
-import { validateGraph } from "../../src/compiler/validate.js";
 import { compileGraph } from "../../src/compiler/emitter.js";
+import { validateGraph } from "../../src/compiler/validate.js";
+import { GraphSchema } from "../../src/schemas/graph.schema.js";
 
 const TMP = join(import.meta.dir, ".tmp-acceptance");
 const FIXTURES = join(import.meta.dir, "..", "fixtures");
@@ -64,9 +64,7 @@ describe("AC03: gk compile produces valid .workflow.js for all 6 topologies", ()
 
 describe("AC04: gk compile resolves subgraph references", () => {
   test("diamond + adversarial-verification inlines both templates", () => {
-    const g = GraphSchema.parse(
-      YAML.parse(readFileSync(join(FIXTURES, "diamond-with-verification.yaml"), "utf-8")),
-    );
+    const g = GraphSchema.parse(YAML.parse(readFileSync(join(FIXTURES, "diamond-with-verification.yaml"), "utf-8")));
     const script = compileGraph(g, templatesDir());
     expect(script).toContain("createAdversarialWorkflow");
   });
@@ -105,9 +103,7 @@ describe("AC07: gk validate detects missing refs", () => {
 
 describe("AC08: init-graph diamond template produces valid graph.yaml", () => {
   test("fixture parses against schema", () => {
-    const g = GraphSchema.parse(
-      YAML.parse(readFileSync(join(FIXTURES, "minimal-diamond.yaml"), "utf-8")),
-    );
+    const g = GraphSchema.parse(YAML.parse(readFileSync(join(FIXTURES, "minimal-diamond.yaml"), "utf-8")));
     expect(g.topology).toBe("diamond");
     expect(g.nodes.scouter).toBeDefined();
   });
@@ -124,9 +120,7 @@ describe("AC09: brainstorm updates graph.yaml", () => {
 
 describe("AC10: model tiering propagates to compiled .workflow.js", () => {
   test("opus and sonnet tiers present in emitted config", () => {
-    const g = GraphSchema.parse(
-      YAML.parse(readFileSync(join(FIXTURES, "minimal-diamond.yaml"), "utf-8")),
-    );
+    const g = GraphSchema.parse(YAML.parse(readFileSync(join(FIXTURES, "minimal-diamond.yaml"), "utf-8")));
     const script = compileGraph(g, templatesDir());
     expect(script).toContain('"model": "opus"');
     expect(script).toContain('"model": "sonnet"');

@@ -5,7 +5,11 @@ const path = require("node:path");
 
 function main() {
   let input = "";
-  try { input = fs.readFileSync(0, "utf-8"); } catch { process.exit(0); }
+  try {
+    input = fs.readFileSync(0, "utf-8");
+  } catch {
+    process.exit(0);
+  }
   try {
     const event = JSON.parse(input);
     if (event.tool_name !== "Write") process.exit(0);
@@ -14,7 +18,9 @@ function main() {
     const indexFile = ".graphkit/evidence/.index";
     fs.mkdirSync(path.dirname(indexFile), { recursive: true });
     fs.appendFileSync(indexFile, JSON.stringify({ file, at: new Date().toISOString() }) + "\n");
-  } catch { /* fail-open */ }
+  } catch {
+    /* fail-open */
+  }
   process.exit(0);
 }
 main();

@@ -1,0 +1,114 @@
+<h2>ClaudeKit Engineer — Reuse Map</h2>
+<p class="subtitle">What to adopt directly, adapt, or skip from claudekit-engineer</p>
+
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-top:1rem">
+
+<div style="background:#0d1117;border:2px solid #3fb950;border-radius:8px;padding:1rem">
+<h4 style="color:#3fb950;margin:0 0 0.8rem">✅ Adopt Directly</h4>
+<div style="font-size:0.78rem;line-height:1.8">
+
+<div style="border-bottom:1px solid #21262d;padding-bottom:0.4rem;margin-bottom:0.6rem">
+<strong style="color:#58a6ff">Kit install mechanism</strong><br>
+<span style="color:#888">claude/ → .claude/ copy pattern, metadata.json deletions tracker, .ck.json user config, settings.json hook wiring</span>
+</div>
+
+<div style="border-bottom:1px solid #21262d;padding-bottom:0.4rem;margin-bottom:0.6rem">
+<strong style="color:#58a6ff">Hook architecture</strong><br>
+<span style="color:#888">Fail-open (.cjs), PreToolUse/PostToolUse/SubagentStart/Stop events, hook naming conventions, per-event scope</span>
+</div>
+
+<div style="border-bottom:1px solid #21262d;padding-bottom:0.4rem;margin-bottom:0.6rem">
+<strong style="color:#58a6ff">Agent definition format</strong><br>
+<span style="color:#888">Markdown + YAML frontmatter in claude/agents/, model/temperature/mode fields, Claude Code auto-discovers them</span>
+</div>
+
+<div style="border-bottom:1px solid #21262d;padding-bottom:0.4rem;margin-bottom:0.6rem">
+<strong style="color:#58a6ff">Skill SKILL.md contract</strong><br>
+<span style="color:#888">Frontmatter (name, description, when_to_use, user-invocable, disable-model-invocation), references/ directory pattern</span>
+</div>
+
+<div style="border-bottom:1px solid #21262d;padding-bottom:0.4rem;margin-bottom:0.6rem">
+<strong style="color:#58a6ff">Validation CI scripts pattern</strong><br>
+<span style="color:#888">check-skill-descriptions, check-skill-cross-refs, check-skill-routing — same architecture, adapted to graph-specific lint rules</span>
+</div>
+
+<div style="border-bottom:1px solid #21262d;padding-bottom:0.4rem;margin-bottom:0.6rem">
+<strong style="color:#58a6ff">Skill routing rules</strong><br>
+<span style="color:#888">domain routing + workflow routing decision trees in claude/rules/ — adapted to graph topology selection</span>
+</div>
+
+<div style="border-bottom:1px solid #21262d;padding-bottom:0.4rem;margin-bottom:0.6rem">
+<strong style="color:#58a6ff">portable-manifest.json</strong><br>
+<span style="color:#888">Provider path migration tracking for multi-harness support (Claude, Codex, Gemini, Cursor)</span>
+</div>
+
+<div>
+<strong style="color:#58a6ff">Release pipeline</strong><br>
+<span style="color:#888">commitlint + husky + semantic-release pattern, release-manifest checksums, Discord webhook</span>
+</div>
+
+</div>
+</div>
+
+<div style="background:#0d1117;border:2px solid #e3b341;border-radius:8px;padding:1rem">
+<h4 style="color:#e3b341;margin:0 0 0.8rem">🔧 Adapt for GraphKit</h4>
+<div style="font-size:0.78rem;line-height:1.8">
+
+<div style="border-bottom:1px solid #21262d;padding-bottom:0.4rem;margin-bottom:0.6rem">
+<strong style="color:#58a6ff">settings.json hooks</strong><br>
+<span style="color:#888">Replace scout-block/privacy-block/simplify-gate with graph-state-guard/evidence-persist/lease-enforce. Same event slots, different hook logic.</span>
+</div>
+
+<div style="border-bottom:1px solid #21262d;padding-bottom:0.4rem;margin-bottom:0.6rem">
+<strong style="color:#58a6ff">Rules content</strong><br>
+<span style="color:#888">Replace development-rules, primary-workflow with graph-authority, agent-binding, topology-routing. Same claude/rules/ mechanism.</span>
+</div>
+
+<div style="border-bottom:1px solid #21262d;padding-bottom:0.4rem;margin-bottom:0.6rem">
+<strong style="color:#58a6ff">Domain routing</strong><br>
+<span style="color:#888">ClaudeKit routes to ck:cook/ck:test. GraphKit routes to gk:validate/gk:compile based on graph state (has graph.yaml? validated? compiled?)</span>
+</div>
+
+<div style="border-bottom:1px solid #21262d;padding-bottom:0.4rem;margin-bottom:0.6rem">
+<strong style="color:#58a6ff">.ckignore → .gkignore</strong><br>
+<span style="color:#888">Same SIZE-based blocking concept, scoped to graph artifacts (.graphkit/runs/, .graphkit/diagrams/)</span>
+</div>
+
+<div style="border-bottom:1px solid #21262d;padding-bottom:0.4rem;margin-bottom:0.6rem">
+<strong style="color:#58a6ff">Environment resolver</strong><br>
+<span style="color:#888">7-tier env var hierarchy is directly reusable. GraphKit skills that call APIs (excalidraw render) benefit from this.</span>
+</div>
+
+<div>
+<strong style="color:#58a6ff">Skill-native task management</strong><br>
+<span style="color:#888">Hydration/sync-back pattern for graph runs — track which nodes completed in plan files, survive compaction</span>
+</div>
+
+</div>
+</div>
+
+</div>
+
+<div style="background:#0d1117;border:2px solid #484f58;border-radius:8px;padding:1rem;margin-top:1rem">
+<h4 style="color:#6e7681;margin:0 0 0.8rem">⏭️ Skip — Not Relevant</h4>
+<div style="font-size:0.78rem;line-height:1.8;color:#888">
+
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:0.5rem">
+
+<div>
+<strong>90+ domain skills</strong> — GraphKit has 8 graph-engineering skills, not a general-purpose dev kit<br><br>
+<strong>Agent Teams (experimental)</strong> — Claude Code workflows handle parallelism natively, no need for multi-session teams<br><br>
+<strong>commands_data.yaml</strong> — Deprecated in claudekit, we never need it<br><br>
+<strong>GEMINI.md / multi-provider prompts</strong> — Not in v1 scope, add via portable-manifest later
+</div>
+
+<div>
+<strong>Subagent init hook</strong> — Workflow tool handles subagent context, not hooks<br><br>
+<strong>Dev rules reminder hook</strong> — Graph-specific rules replace generic dev rules<br><br>
+<strong>Plan format kanban hook</strong> — Graph uses evidence files, not kanban plans<br><br>
+<strong>Cook/orchestration skills</strong> — GraphKit has its own graph-driven orchestration, not cook-based
+</div>
+
+</div>
+</div>
+</div>

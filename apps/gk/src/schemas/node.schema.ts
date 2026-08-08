@@ -1,1 +1,1 @@
-export { NodeDefSchema, LoopConfig, RefSchema, ConstraintValue } from "./graph.schema";
+export { ConstraintValue, LoopConfig, NodeDefSchema, RefSchema } from "./graph.schema";

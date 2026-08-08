@@ -1,0 +1,630 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GraphKit v2 — Design Spec</title>
+<style>
+  :root {
+    --bg: #0d1117;
+    --surface: #161b22;
+    --border: #21262d;
+    --text: #c9d1d9;
+    --muted: #8b949e;
+    --accent: #58a6ff;
+    --green: #3fb950;
+    --yellow: #e3b341;
+    --orange: #f78166;
+    --purple: #bc8cff;
+    --red: #f78166;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: 'IBM Plex Mono', 'SF Mono', 'Cascadia Code', monospace;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.7;
+    font-size: 14px;
+  }
+  .container {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 3rem 2rem;
+  }
+  h1 {
+    font-size: 2rem;
+    color: #fff;
+    margin-bottom: 0.3rem;
+    font-weight: 700;
+  }
+  .subtitle {
+    color: var(--muted);
+    font-size: 0.9rem;
+    margin-bottom: 2.5rem;
+    line-height: 1.6;
+  }
+  h2 {
+    font-size: 1.3rem;
+    color: var(--accent);
+    margin: 2.5rem 0 1rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid var(--border);
+  }
+  h3 {
+    font-size: 1.05rem;
+    color: var(--green);
+    margin: 1.8rem 0 0.8rem;
+  }
+  h4 {
+    font-size: 0.95rem;
+    color: var(--yellow);
+    margin: 1.2rem 0 0.5rem;
+  }
+  p { margin-bottom: 1rem; }
+  strong { color: #fff; }
+  code {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 0.15em 0.4em;
+    font-size: 0.9em;
+    color: var(--orange);
+  }
+  pre {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1rem 1.2rem;
+    overflow-x: auto;
+    margin: 1rem 0;
+    line-height: 1.6;
+    font-size: 0.85rem;
+  }
+  pre code {
+    background: none;
+    border: none;
+    padding: 0;
+    color: var(--text);
+  }
+  .yaml { color: var(--text); }
+  .yaml .comment { color: var(--muted); }
+  .yaml .key { color: var(--purple); }
+  .yaml .string { color: var(--green); }
+  .yaml .number { color: var(--orange); }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 1rem 0;
+    font-size: 0.85rem;
+  }
+  th {
+    text-align: left;
+    background: var(--surface);
+    color: var(--accent);
+    padding: 0.6rem 0.8rem;
+    border-bottom: 2px solid var(--border);
+    font-weight: 600;
+  }
+  td {
+    padding: 0.5rem 0.8rem;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+  }
+  tr:hover { background: rgba(88,166,255,0.03); }
+
+  ul, ol {
+    margin: 0.5rem 0 1rem 1.5rem;
+  }
+  li { margin-bottom: 0.3rem; }
+
+  .badge {
+    display: inline-block;
+    padding: 0.15em 0.5em;
+    border-radius: 12px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    vertical-align: middle;
+  }
+  .badge-green { background: rgba(63,185,80,0.15); color: var(--green); }
+  .badge-blue { background: rgba(88,166,255,0.15); color: var(--accent); }
+  .badge-yellow { background: rgba(227,179,65,0.15); color: var(--yellow); }
+  .badge-purple { background: rgba(188,140,255,0.15); color: var(--purple); }
+
+  .flow {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    margin: 1rem 0;
+    padding: 1rem;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    font-size: 0.85rem;
+  }
+  .flow-step {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 0.4rem 0.8rem;
+    white-space: nowrap;
+  }
+  .flow-arrow { color: var(--muted); }
+
+  .grid-2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+    margin: 1rem 0;
+  }
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1rem;
+  }
+  .card h4 { margin-top: 0; }
+
+  .topo-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.8rem;
+    margin: 1rem 0;
+  }
+  .topo-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 0.8rem 1rem;
+  }
+  .topo-card h4 {
+    margin: 0 0 0.5rem;
+    font-size: 0.9rem;
+  }
+  .topo-card pre {
+    margin: 0.5rem 0;
+    font-size: 0.75rem;
+    padding: 0.6rem;
+  }
+  .topo-card p { font-size: 0.8rem; margin: 0.3rem 0; }
+
+  .section-label {
+    display: inline-block;
+    padding: 0.1em 0.6em;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    font-size: 0.8rem;
+    color: var(--muted);
+    margin-bottom: 1rem;
+  }
+
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+
+  .toc {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1.2rem 1.5rem;
+    margin: 1.5rem 0 2.5rem;
+  }
+  .toc h3 { margin: 0 0 0.8rem; color: var(--yellow); }
+  .toc ol {
+    list-style: none;
+    counter-reset: toc;
+    padding-left: 0;
+  }
+  .toc li {
+    counter-increment: toc;
+    margin-bottom: 0.3rem;
+    font-size: 0.85rem;
+  }
+  .toc li::before {
+    content: counter(toc) ". ";
+    color: var(--muted);
+    font-weight: 600;
+  }
+  .toc a { color: var(--text); }
+  .toc a:hover { color: var(--accent); }
+</style>
+</head>
+<body>
+<div class="container">
+
+<h1>GraphKit v2 — Graph Engineering Kit for Claude Code</h1>
+<p class="subtitle">Transform GraphKit from a standalone CLI workflow engine into a ClaudeKit-style kit template — a <code>claude/</code> scaffold of agents, skills, hooks, and rules that lets users define, validate, compile, and execute graph engineering workflows through Claude Code's native dynamic workflows.</p>
+
+<nav class="toc">
+<h3>Contents</h3>
+<ol>
+  <li><a href="#architecture">Architecture</a></li>
+  <li><a href="#topologies">Graph Topologies</a></li>
+  <li><a href="#schema">Graph YAML Schema</a></li>
+  <li><a href="#agents">Kit Agents</a></li>
+  <li><a href="#skills">Session Skills</a></li>
+  <li><a href="#hooks">Hooks</a></li>
+  <li><a href="#rules">Rules</a></li>
+  <li><a href="#kit-structure">Kit Template Structure</a></li>
+  <li><a href="#reuse">ClaudeKit Reuse</a></li>
+  <li><a href="#cli">gk CLI v2 Commands</a></li>
+  <li><a href="#testing">Testing Strategy</a></li>
+  <li><a href="#future">Multi-Provider (Future)</a></li>
+</ol>
+</nav>
+
+<!-- SECTION 1 -->
+<h2 id="architecture">1. Architecture</h2>
+
+<span class="section-label">Three-Layer Model</span>
+
+<div class="grid-2">
+<div class="card">
+<h4>Layer 1 — Kit Template</h4>
+<p>Installed by <code>gk init</code> into <code>.claude/</code>. Contains 7 agents, 8 skills (+ vendored excalidraw-diagram), 3 hooks, 3 rules, JSON schemas, and 6 topology workflow templates.</p>
+</div>
+<div class="card">
+<h4>Layer 2 — gk CLI v2</h4>
+<p>A compiler and installer. Commands: <code>gk init</code>, <code>gk new</code>, <code>gk validate</code>, <code>gk compile</code>, <code>gk graph list/inspect</code>. No runtime — no state machine, no leases, no checkpoints.</p>
+</div>
+<div class="card">
+<h4>Layer 3 — Claude Code Runtime</h4>
+<p>Compiled <code>.workflow.js</code> executes via the Workflow tool. Uses <code>agent()</code> for single workers, <code>parallel()</code> for fan-out, <code>pipeline()</code> for streaming stages.</p>
+</div>
+<div class="card">
+<h4>User Session Flow</h4>
+<div class="flow">
+  <span class="flow-step" style="color:var(--green)">/gk:init-graph</span>
+  <span class="flow-arrow">→</span>
+  <span class="flow-step">edit</span>
+  <span class="flow-arrow">→</span>
+  <span class="flow-step" style="color:var(--accent)">/gk:brainstorm</span>
+  <span class="flow-arrow">→</span>
+  <span class="flow-step" style="color:var(--yellow)">/gk:validate</span>
+  <span class="flow-arrow">→</span>
+  <span class="flow-step" style="color:var(--orange)">/gk:compile</span>
+  <span class="flow-arrow">→</span>
+  <span class="flow-step" style="color:var(--purple)">/gk:run</span>
+  <span class="flow-arrow">→</span>
+  <span class="flow-step">/gk:evidence</span>
+</div>
+</div>
+</div>
+
+<!-- SECTION 2 -->
+<h2 id="topologies">2. Graph Topologies</h2>
+
+<p>Six canonical topologies, each a parameterized <code>.workflow.js</code> template. Templates compose via subgraph references.</p>
+
+<div class="topo-grid">
+<div class="topo-card" style="border-color:#3fb950">
+<h4>1. Diamond <span class="badge badge-green">fan-out → reduce → synthesize</span></h4>
+<pre><code>pipeline(items, fanout, reduce, synthesize)</code></pre>
+<p>Fan-out work to N parallel workers, reduce with code (dedup, rank), synthesize with one high-tier agent.</p>
+<p><strong>Config:</strong> fanout.strategy, fanout.isolation, reduce, verify (subgraph), synthesizer</p>
+</div>
+
+<div class="topo-card" style="border-color:#58a6ff">
+<h4>2. Classify-and-Act</h4>
+<pre><code>agent(classify) → route → agent(handler)</code></pre>
+<p>Classifier inspects input and routes to exactly one handler. Includes fallback.</p>
+<p><strong>Config:</strong> classifier, routes[].handler, routes[].condition, fallback</p>
+</div>
+
+<div class="topo-card" style="border-color:#f78166">
+<h4>3. Adversarial Verification</h4>
+<pre><code>agent(produce) → parallel(refuters) → adjudicate</code></pre>
+<p>Producer generates items. Independent refuters with fresh context. Survive threshold filter.</p>
+<p><strong>Config:</strong> producer, refuters[], survive_threshold (default 2), adjudicator</p>
+</div>
+
+<div class="topo-card" style="border-color:#e3b341">
+<h4>4. Loop Until Done</h4>
+<pre><code>while (!dry) { agent(scout) → parallel(work) → dedup }</code></pre>
+<p>Unknown-size tasks. Scout discovers, workers process, dedup. Stop when K rounds return nothing new.</p>
+<p><strong>Config:</strong> scouter, worker_batch, stop_rule, dedup, dry_threshold</p>
+</div>
+
+<div class="topo-card" style="border-color:#79c0ff">
+<h4>5. Generate-and-Filter</h4>
+<pre><code>parallel(generators) → score(dedup) → keep(K)</code></pre>
+<p>Multiple generators propose candidates. Rubric scores in one deterministic pass. Keep top-K.</p>
+<p><strong>Config:</strong> generators[], rubric, keep_top, dedup_keys</p>
+</div>
+
+<div class="topo-card" style="border-color:#bc8cff">
+<h4>6. Tournament</h4>
+<pre><code>round(candidates) → while(n>1) { pair(judge) }</code></pre>
+<p>N candidates compete in pairwise judged rounds until one champion remains.</p>
+<p><strong>Config:</strong> candidates[], judge, rounds (optional)</p>
+</div>
+</div>
+
+<h3>2.7 Subgraph Composition</h3>
+<p>Templates reference other templates as subgraphs. The compiler resolves and expands inline.</p>
+<pre class="yaml"><span class="key">topology:</span> <span class="string">diamond</span>
+<span class="key">topology_config:</span>
+  <span class="key">fanout:</span>
+    <span class="key">template:</span> <span class="string">adversarial-verification</span>
+    <span class="key">refuters:</span> [<span class="string">QA Engineer</span>, <span class="string">Security Engineer</span>]
+    <span class="key">survive_threshold:</span> <span class="number">2</span>
+  <span class="key">synthesizer:</span> <span class="string">Software Architect</span></pre>
+
+<!-- SECTION 3 -->
+<h2 id="schema">3. Graph YAML Schema</h2>
+
+<h3>3.1 Root Schema</h3>
+<pre class="yaml"><span class="key">apiVersion:</span> <span class="string">graphkit.dev/v2</span>
+<span class="key">kind:</span> <span class="string">Graph</span>
+<span class="key">metadata:</span>
+  <span class="key">name:</span> <span class="string">my-security-audit</span>
+  <span class="key">description:</span> <span class="string">Full security audit with adversarial verification</span>
+
+<span class="key">topology:</span> <span class="string">diamond</span>              <span class="comment"># one of 6 canonical names</span>
+
+<span class="key">inputs:</span>                        <span class="comment"># what the user provides</span>
+  <span class="key">repo_path:</span> { <span class="key">type:</span> <span class="string">string</span>, <span class="key">required:</span> <span class="number">true</span> }
+  <span class="key">scope:</span> { <span class="key">type:</span> <span class="string">array</span>, <span class="key">default:</span> [<span class="string">"src"</span>] }
+
+<span class="key">nodes:</span>                        <span class="comment"># rich per-node config</span>
+  <span class="key">scouter:</span>
+    <span class="key">agent:</span> <span class="string">Software Architect</span>
+    <span class="key">model:</span> <span class="string">opus</span>                   <span class="comment"># opus | sonnet | haiku | fable</span>
+    <span class="key">objective:</span> |
+      Analyze the codebase architecture.
+      Map attack surfaces, entry points, data flows.
+    <span class="key">tools:</span> [<span class="string">Read</span>, <span class="string">Glob</span>, <span class="string">Grep</span>, <span class="string">Bash</span>]
+    <span class="key">skills:</span> [<span class="string">sequential-thinking</span>]
+    <span class="key">refs:</span>                          <span class="comment"># reference docs</span>
+      - <span class="key">path:</span> <span class="string">docs/security-standards.md</span>
+        <span class="key">purpose:</span> <span class="string">"OWASP top 10 checklist"</span>
+    <span class="key">depend_on:</span> []                  <span class="comment"># no deps = starts immediately</span>
+    <span class="key">loop:</span>                           <span class="comment"># internal loop-until-done</span>
+      <span class="key">enabled:</span> <span class="number">true</span>
+      <span class="key">stop_when:</span> <span class="string">valid_evidence_found</span>
+      <span class="key">max_rounds:</span> <span class="number">3</span>
+      <span class="key">exit_condition:</span> |
+        Stop when attack surface map has ≥ 3 concrete
+        code examples with file:line references.
+    <span class="key">constraints:</span>
+      - <span class="key">max_files:</span> <span class="number">50</span>
+      - <span class="key">no_write:</span> <span class="number">true</span>
+    <span class="key">evidence:</span> [<span class="string">attack_surface</span>, <span class="string">file_priorities</span>]
+
+  <span class="key">worker:</span>
+    <span class="key">agent:</span> <span class="string">Code Reviewer</span>
+    <span class="key">model:</span> <span class="string">sonnet</span>
+    <span class="key">depend_on:</span> [<span class="string">scouter</span>]         <span class="comment"># waits for scouter</span>
+    <span class="key">loop:</span> { <span class="key">enabled:</span> <span class="number">false</span> }
+
+  <span class="key">verifier:</span>
+    <span class="key">agent:</span> <span class="string">QA Engineer</span>
+    <span class="key">model:</span> <span class="string">haiku</span>                 <span class="comment"># cheap model for verification</span>
+    <span class="key">depend_on:</span> [<span class="string">worker</span>]
+
+  <span class="key">synthesizer:</span>
+    <span class="key">agent:</span> <span class="string">Security Engineer</span>
+    <span class="key">model:</span> <span class="string">opus</span>                   <span class="comment"># top tier for final judgment</span>
+    <span class="key">depend_on:</span> [<span class="string">verifier</span>]          <span class="comment"># sequential barrier</span>
+
+<span class="key">limits:</span>
+  <span class="key">max_workers:</span> <span class="number">5</span>
+  <span class="key">budget_tokens:</span> <span class="number">500000</span>
+
+<span class="key">evidence:</span>
+  <span class="key">required_keys:</span> [<span class="string">report</span>, <span class="string">verdict</span>]
+  <span class="key">format:</span> <span class="string">markdown</span></pre>
+
+<h3>3.2 Node Binding Fields</h3>
+<table>
+<tr><th>Field</th><th>Required</th><th>Description</th></tr>
+<tr><td><code>agent</code></td><td>yes</td><td>Kit agent name from <code>claude/agents/</code></td></tr>
+<tr><td><code>model</code></td><td>no</td><td>Override agent's default tier</td></tr>
+<tr><td><code>objective</code></td><td>yes</td><td>Prompt injected at node start</td></tr>
+<tr><td><code>tools</code></td><td>no</td><td>Available tools: Read, Write, Edit, Bash, Glob, Grep</td></tr>
+<tr><td><code>skills</code></td><td>no</td><td>Kit skills loaded into subagent context</td></tr>
+<tr><td><code>refs</code></td><td>no</td><td>Reference docs with purpose labels</td></tr>
+<tr><td><code>depend_on</code></td><td>no</td><td>Node roles to wait for (empty = immediate)</td></tr>
+<tr><td><code>loop</code></td><td>no</td><td>Internal loop-until-done config</td></tr>
+<tr><td><code>constraints</code></td><td>no</td><td>Per-node guardrails</td></tr>
+<tr><td><code>evidence</code></td><td>no</td><td>Output keys for downstream nodes</td></tr>
+</table>
+
+<h3>3.3 depend_on Controls Parallelism</h3>
+<ul>
+<li><strong>Empty</strong> <code>depend_on</code>: starts immediately with other zero-dependency nodes</li>
+<li><strong>Single</strong> <code>depend_on</code>: waits for that specific node</li>
+<li><strong>Multiple</strong> <code>depend_on</code>: barrier — waits for all listed nodes</li>
+<li><strong>Shared dependencies</strong>: nodes depending on the same source run in parallel</li>
+</ul>
+<p>The compiler resolves <code>depend_on</code> into <code>parallel()</code> vs sequential calls.</p>
+
+<h3>3.4 v1 → v2 Shift</h3>
+<div class="grid-2">
+<div class="card" style="border-color:var(--red)">
+<h4>v1 workflow.yaml</h4>
+<ul>
+<li>Full node/edge graph definition (~60 lines min)</li>
+<li>gk CLI owns runtime</li>
+<li>Expression engine for routing</li>
+</ul>
+</div>
+<div class="card" style="border-color:var(--green)">
+<h4>v2 graph.yaml</h4>
+<ul>
+<li>Topology name + config (~20 lines)</li>
+<li>Claude Code Workflows own runtime</li>
+<li>Template handles routing logic</li>
+</ul>
+</div>
+</div>
+
+<!-- SECTION 4 -->
+<h2 id="agents">4. Kit Agents — Engineering Team</h2>
+
+<p>Seven agents inherited from agency-agents, adapted for graph node binding. ClaudeKit-style markdown with YAML frontmatter.</p>
+
+<table>
+<tr><th>Agent</th><th>Source</th><th>Graph Roles</th><th>Model</th></tr>
+<tr><td>🏛️ Software Architect</td><td>engineering-software-architect</td><td>scouter, planner, synthesizer</td><td><span class="badge badge-purple">opus</span></td></tr>
+<tr><td>👁️ Code Reviewer</td><td>engineering-code-reviewer</td><td>worker, verifier</td><td><span class="badge badge-blue">sonnet</span></td></tr>
+<tr><td>🧪 QA Engineer</td><td>testing-evidence-collector + model-qa</td><td>verifier, worker</td><td><span class="badge badge-green">haiku</span></td></tr>
+<tr><td>📊 Data Engineer</td><td>engineering-data-engineer</td><td>worker, scouter</td><td><span class="badge badge-blue">sonnet</span></td></tr>
+<tr><td>🎨 UI/UX Researcher</td><td>design-ux-researcher + ui-designer</td><td>worker, synthesizer</td><td><span class="badge badge-blue">sonnet</span></td></tr>
+<tr><td>🔧 Agents Orchestrator</td><td>specialized-agents-orchestrator</td><td>scouter, synthesizer</td><td><span class="badge badge-purple">opus</span></td></tr>
+<tr><td>📝 Document Generator</td><td>specialized-document-generator</td><td>synthesizer, worker</td><td><span class="badge badge-blue">sonnet</span></td></tr>
+</table>
+
+<p>Users can add custom agents to <code>claude/agents/</code> following the same format.</p>
+
+<!-- SECTION 5 -->
+<h2 id="skills">5. Session Skills — 8 Total</h2>
+
+<table>
+<tr><th>Skill</th><th>Model</th><th>Purpose</th></tr>
+<tr><td><code>gk:init-graph</code></td><td>sonnet</td><td>Generate graph.yaml from a template</td></tr>
+<tr><td><code>gk:brainstorm</code></td><td>sonnet</td><td>Refine graph.yaml via dialogue</td></tr>
+<tr><td><code>gk:visualize</code></td><td>sonnet</td><td>Render graph as Excalidraw diagram</td></tr>
+<tr><td><code>gk:validate</code></td><td>haiku</td><td>Gate check before compile</td></tr>
+<tr><td><code>gk:compile</code></td><td>sonnet</td><td>YAML → .workflow.js</td></tr>
+<tr><td><code>gk:run</code></td><td>varies</td><td>Execute compiled workflow</td></tr>
+<tr><td><code>gk:evidence</code></td><td>haiku</td><td>Report graph results</td></tr>
+<tr><td><code>gk:status</code></td><td>none</td><td>Show current run state</td></tr>
+</table>
+
+<p>Plus vendored <code>excalidraw-diagram</code> skill from coleam00/excalidraw-diagram-skill.</p>
+
+<!-- SECTION 6 -->
+<h2 id="hooks">6. Hooks</h2>
+
+<table>
+<tr><th>Hook</th><th>Event</th><th>Purpose</th></tr>
+<tr><td><code>graph-state-guard.cjs</code></td><td>PreToolUse</td><td>Validate graph state before writes during active runs</td></tr>
+<tr><td><code>evidence-persist.cjs</code></td><td>PostToolUse</td><td>Auto-persist evidence on node completion</td></tr>
+<tr><td><code>lease-enforce.cjs</code></td><td>SubagentStart</td><td>Inject lease context, enforce assigned-only constraint</td></tr>
+</table>
+
+<!-- SECTION 7 -->
+<h2 id="rules">7. Rules</h2>
+
+<table>
+<tr><th>Rule</th><th>Purpose</th></tr>
+<tr><td><code>graph-authority.md</code></td><td>gk owns graph state. Never improvise edges or skip nodes at runtime.</td></tr>
+<tr><td><code>agent-binding.md</code></td><td>Agent names in graph.yaml must match files in <code>claude/agents/</code>.</td></tr>
+<tr><td><code>topology-routing.md</code></td><td>Decision tree for suggesting topology based on user's description.</td></tr>
+</table>
+
+<!-- SECTION 8 -->
+<h2 id="kit-structure">8. Kit Template Structure</h2>
+
+<pre class="yaml"><span style="color:var(--accent)">claude/</span>
+├── <span class="key">settings.json</span>              <span class="comment"># hooks, statusline, skill budget</span>
+├── <span class="key">metadata.json</span>              <span class="comment"># kit version, deletions tracker</span>
+├── <span class="key">.gk.json</span>                   <span class="comment"># user config</span>
+├── <span class="key">agents/</span>                      <span class="comment"># 7 kit agents</span>
+├── <span class="key">skills/</span>                      <span class="comment"># 8 graph skills + vendored excalidraw</span>
+├── <span class="key">hooks/</span>                       <span class="comment"># 3 graph hooks</span>
+├── <span class="key">rules/</span>                       <span class="comment"># 3 graph rules</span>
+├── <span class="key">schemas/</span>                     <span class="comment"># validation JSON schemas</span>
+│   ├── <span class="key">graph.schema.json</span>
+│   ├── <span class="key">node.schema.json</span>
+│   └── <span class="key">topology/</span>              <span class="comment"># per-topology contract schemas</span>
+└── <span class="key">templates/</span>                   <span class="comment"># 6 .workflow.js topology templates</span></pre>
+
+<!-- SECTION 9 -->
+<h2 id="reuse">9. ClaudeKit Reuse</h2>
+
+<div class="grid-2">
+<div class="card" style="border-color:var(--green)">
+<h4>✅ Adopt Directly</h4>
+<ul>
+<li>Kit install mechanism (claude/ → .claude/)</li>
+<li>Hook architecture (fail-open .cjs)</li>
+<li>Agent definition format (markdown + frontmatter)</li>
+<li>SKILL.md contract</li>
+<li>Validation CI scripts pattern</li>
+<li>Skill routing rules</li>
+<li>portable-manifest.json</li>
+<li>Release pipeline (commitlint + semantic-release)</li>
+</ul>
+</div>
+<div class="card" style="border-color:var(--yellow)">
+<h4>🔧 Adapt for GraphKit</h4>
+<ul>
+<li>settings.json hooks (same events, graph logic)</li>
+<li>Rules content (graph-authority vs dev-rules)</li>
+<li>Domain routing (graph state-based)</li>
+<li>.gkignore (graph artifacts)</li>
+<li>Environment resolver (7-tier hierarchy)</li>
+<li>Skill-native task management</li>
+</ul>
+</div>
+</div>
+
+<!-- SECTION 10 -->
+<h2 id="cli">10. gk CLI v2 Commands</h2>
+
+<div class="grid-2">
+<div class="card">
+<h4>Kit Installation</h4>
+<ul>
+<li><code>gk init</code> — install kit template</li>
+<li><code>gk new --dir &lt;path&gt;</code> — scaffold + install</li>
+</ul>
+</div>
+<div class="card">
+<h4>Graph Lifecycle</h4>
+<ul>
+<li><code>gk validate [graph.yaml]</code> — check graph</li>
+<li><code>gk compile [graph.yaml]</code> — YAML → .workflow.js</li>
+<li><code>gk graph list</code> — show topologies</li>
+<li><code>gk graph inspect &lt;topology&gt;</code> — show contract</li>
+</ul>
+</div>
+</div>
+
+<div class="card" style="border-color:var(--red); margin-top:1rem">
+<h4>NOT in gk CLI v2</h4>
+<p style="color:var(--muted);">All v1 runtime commands removed: workflow start/next/submit/execute, leases, checkpoints, events, state machine, expression engine, merges. Runtime is Claude Code Workflows only.</p>
+</div>
+
+<!-- SECTION 11 -->
+<h2 id="testing">11. Testing Strategy</h2>
+
+<h3>Unit Tests</h3>
+<ul>
+<li>Graph YAML parser and validator (schema, topology, node binding, acyclic deps)</li>
+<li>Compiler (YAML → .workflow.js for all 6 topologies)</li>
+<li>Hook logic (graph-state-guard, evidence-persist, lease-enforce)</li>
+</ul>
+
+<h3>Integration Tests</h3>
+<ul>
+<li>Full flow: init-graph → brainstorm → validate → compile → verify .workflow.js</li>
+<li>Subgraph composition (diamond + adversarial-verification)</li>
+<li>Agent binding validation</li>
+</ul>
+
+<h3>Acceptance Criteria</h3>
+<table>
+<tr><th>ID</th><th>Criteria</th></tr>
+<tr><td>AC01</td><td><code>gk init</code> installs claude/ with all 7 agents, 8 skills, 3 hooks, 3 rules</td></tr>
+<tr><td>AC02</td><td><code>gk validate</code> rejects invalid graph.yaml with specific errors</td></tr>
+<tr><td>AC03</td><td><code>gk compile</code> produces valid .workflow.js for all 6 topologies</td></tr>
+<tr><td>AC04</td><td><code>gk compile</code> resolves subgraph references correctly</td></tr>
+<tr><td>AC05</td><td><code>/gk:visualize</code> produces .excalidraw with correct rendering</td></tr>
+<tr><td>AC06</td><td><code>gk validate</code> detects acyclic dependency violations</td></tr>
+<tr><td>AC07</td><td><code>gk validate</code> detects missing refs</td></tr>
+<tr><td>AC08</td><td><code>/gk:init-graph --template diamond</code> produces valid graph.yaml</td></tr>
+<tr><td>AC09</td><td><code>/gk:brainstorm</code> updates graph.yaml with user answers</td></tr>
+<tr><td>AC10</td><td>Model tiering propagates to compiled .workflow.js</td></tr>
+</table>
+
+<!-- SECTION 12 -->
+<h2 id="future">12. Multi-Provider (Future)</h2>
+<p>v1 scope is Claude Code only. The portable-manifest.json mechanism is adopted for future provider support (Codex, Gemini CLI, Cursor, Windsurf). Agent definitions are markdown — portable across any LLM platform.</p>
+
+</div>
+</body>
+</html>

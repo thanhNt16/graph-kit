@@ -1,15 +1,18 @@
-import { describe, test, expect } from "bun:test";
-import { readFileSync, writeFileSync, mkdirSync, rmSync } from "node:fs";
+import { describe, expect, test } from "bun:test";
+import { mkdirSync, rmSync } from "node:fs";
 import { join } from "node:path";
-import { GraphSchema } from "../../src/schemas/graph.schema.js";
 import { compileGraph } from "../../src/compiler/emitter.js";
 import type { Graph } from "../../src/compiler/validate.js";
+import { GraphSchema } from "../../src/schemas/graph.schema.js";
 
 const FIXTURES = join(import.meta.dir, "..", "..", "claude", "templates");
 const TMP = join(import.meta.dir, ".tmp-compiler");
 
-function tmpDir() {
-  if (typeof rmSync !== "undefined") try { rmSync(TMP, { recursive: true }); } catch {}
+function _tmpDir() {
+  if (typeof rmSync !== "undefined")
+    try {
+      rmSync(TMP, { recursive: true });
+    } catch {}
   mkdirSync(TMP, { recursive: true });
   return TMP;
 }
@@ -22,7 +25,15 @@ function makeGraph(topology: string, overrides?: Partial<Graph>): Graph {
     topology,
     inputs: {},
     nodes: {
-      scouter: { agent: "Software Architect", model: "opus", objective: "analyze", tools: ["Read"], skills: [], refs: [], depend_on: [] },
+      scouter: {
+        agent: "Software Architect",
+        model: "opus",
+        objective: "analyze",
+        tools: ["Read"],
+        skills: [],
+        refs: [],
+        depend_on: [],
+      },
       worker: { agent: "Code Reviewer", model: "sonnet", objective: "review", tools: ["Read"], depend_on: ["scouter"] },
       synthesizer: { agent: "Software Architect", model: "opus", objective: "synthesize", depend_on: ["worker"] },
     },
@@ -39,14 +50,18 @@ describe("compileGraph", () => {
     expect(output).toContain("export const meta");
     expect(output).toContain("graphConfig");
     // No imports from kit
-    expect(output).not.toContain("from \"");
+    expect(output).not.toContain('from "');
     expect(output).not.toContain("require(");
   });
 
   test("all 6 topologies compile", () => {
     const topologies = [
-      "diamond", "classify-and-act", "adversarial-verification",
-      "loop-until-done", "generate-and-filter", "tournament",
+      "diamond",
+      "classify-and-act",
+      "adversarial-verification",
+      "loop-until-done",
+      "generate-and-filter",
+      "tournament",
     ] as const;
     for (const topo of topologies) {
       const graph = makeGraph(topo);

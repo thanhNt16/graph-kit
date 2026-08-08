@@ -6,7 +6,7 @@ import { TOPOLOGY_NAMES } from "../schemas/topology/index.js";
 const MAX_DEPTH = 3;
 
 export function resolveTopologyConfig(
-  topology: string,
+  _topology: string,
   topologyConfig: Record<string, unknown>,
   templatesDir: string,
   depth = 0,
@@ -22,12 +22,15 @@ export function resolveTopologyConfig(
         throw new GraphKitError("UNKNOWN_SUBGRAPH", `Subgraph template "${sub.template}" is not a canonical topology`);
       }
       if (!existsSync(join(templatesDir, `${sub.template}.workflow.js`))) {
-        throw new GraphKitError("SUBGRAPH_TEMPLATE_MISSING", `Template file for "${sub.template}" not found in ${templatesDir}`);
+        throw new GraphKitError(
+          "SUBGRAPH_TEMPLATE_MISSING",
+          `Template file for "${sub.template}" not found in ${templatesDir}`,
+        );
       }
       // Recurse: subgraphs may themselves contain subgraph refs
       resolved[key] = {
         ...resolveTopologyConfig(sub.template, sub, templatesDir, depth + 1),
-        __subgraph: sub.template,   // marker the emitter uses to inline the sub-template
+        __subgraph: sub.template, // marker the emitter uses to inline the sub-template
       };
     } else {
       resolved[key] = value;

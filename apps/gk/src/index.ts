@@ -1,8 +1,9 @@
 import { cac } from "cac";
-import { registerKitCommands } from "./cli/commands/kit.js";
 import { registerGraphCommands } from "./cli/commands/graph.js";
+import { registerKitCommands } from "./cli/commands/kit.js";
 
 const cli = cac("gk");
 registerKitCommands(cli);
 registerGraphCommands(cli);
+cli.help();
 cli.parse();

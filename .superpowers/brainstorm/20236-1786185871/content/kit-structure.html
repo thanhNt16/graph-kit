@@ -1,0 +1,119 @@
+<h2>Kit Template Structure</h2>
+<p class="subtitle">The complete <code>claude/</code> directory that <code>gk init</code> installs</p>
+
+<div class="mockup">
+<div class="mockup-header">claude/ — Full Directory Tree</div>
+<div class="mockup-body" style="font-size:0.75rem;padding:1rem">
+<pre style="margin:0;color:#c9d1d9;line-height:1.7">
+claude/
+├── settings.json                    <span style="color:#484f58"># hooks, statusline, skill budget</span>
+├── metadata.json                    <span style="color:#484f58"># kit version, deletions tracker</span>
+├── .gk.json                         <span style="color:#484f58"># user config (model prefs, locale)</span>
+│
+├── agents/                          <span style="color:#58a6ff">## 7 kit agents</span>
+│   ├── software-architect.md
+│   ├── code-reviewer.md
+│   ├── qa-engineer.md
+│   ├── data-engineer.md
+│   ├── ui-ux-researcher.md
+│   ├── agents-orchestrator.md
+│   └── document-generator.md
+│
+├── skills/                          <span style="color:#58a6ff">## 8 graph engineering skills</span>
+│   ├── gk-init-graph/
+│   │   └── SKILL.md
+│   ├── gk-brainstorm/
+│   │   └── SKILL.md
+│   ├── gk-validate/
+│   │   └── SKILL.md
+│   ├── gk-compile/
+│   │   └── SKILL.md
+│   ├── gk-run/
+│   │   └── SKILL.md
+│   ├── gk-evidence/
+│   │   └── SKILL.md
+│   ├── gk-status/
+│   │   └── SKILL.md
+│   ├── gk-visualize/
+│   │   ├── SKILL.md
+│   │   └── references/
+│   │       └── graph-palette.md     <span style="color:#484f58"># colors for diagrams</span>
+│   └── excalidraw-diagram/          <span style="color:#484f58"># vendored from coleam00</span>
+│       ├── SKILL.md
+│       └── references/
+│           ├── color-palette.md
+│           ├── element-templates.md
+│           ├── json-schema.md
+│           └── render_excalidraw.py
+│
+├── hooks/                           <span style="color:#58a6ff">## 3 graph-specific hooks</span>
+│   ├── graph-state-guard.cjs        <span style="color:#484f58"># PreToolUse: validate graph state before writes</span>
+│   ├── evidence-persist.cjs          <span style="color:#484f58"># PostToolUse: auto-save evidence on node complete</span>
+│   └── lease-enforce.cjs            <span style="color:#484f58"># SubagentStart: inject lease context into workers</span>
+│
+├── rules/                           <span style="color:#58a6ff">## 3 graph authority rules</span>
+│   ├── graph-authority.md            <span style="color:#484f58"># gk owns graph state, never improvise edges</span>
+│   ├── agent-binding.md              <span style="color:#484f58"># agent names must match claude/agents/</span>
+│   └── topology-routing.md          <span style="color:#484f58"># when to use which topology</span>
+│
+├── schemas/                         <span style="color:#58a6ff">## validation schemas</span>
+│   ├── graph.schema.json            <span style="color:#484f58"># graph.yaml validation</span>
+│   ├── node.schema.json             <span style="color:#484f58"># node binding validation</span>
+│   └── topology/                    <span style="color:#484f58"># per-topology contract schemas</span>
+│       ├── diamond.schema.json
+│       ├── classify-and-act.schema.json
+│       ├── adversarial-verification.schema.json
+│       ├── loop-until-done.schema.json
+│       ├── generate-and-filter.schema.json
+│       └── tournament.schema.json
+│
+└── templates/                       <span style="color:#58a6ff">## 6 workflow.js templates</span>
+    ├── diamond.workflow.js
+    ├── classify-and-act.workflow.js
+    ├── adversarial-verification.workflow.js
+    ├── loop-until-done.workflow.js
+    ├── generate-and-filter.workflow.js
+    └── tournament.workflow.js
+</pre>
+</div>
+</div>
+
+<div class="section" style="margin-top:1.5rem">
+<h3>What gk CLI v2 Does</h3>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;font-size:0.82rem">
+
+<div style="background:#0d1117;border:1px solid #3fb950;border-radius:8px;padding:1rem">
+<h4 style="color:#3fb950;margin:0 0 0.5rem">Kit Installation</h4>
+<ul style="margin:0;padding-left:1.2rem;color:#888">
+<li><code>gk init</code> — copy claude/ to .claude/</li>
+<li><code>gk new --dir X</code> — scaffold new project + init</li>
+<li>metadata.json tracks version for upgrades</li>
+</ul>
+</div>
+
+<div style="background:#0d1117;border:1px solid #e3b341;border-radius:8px;padding:1rem">
+<h4 style="color:#e3b341;margin:0 0 0.5rem">Graph Lifecycle</h4>
+<ul style="margin:0;padding-left:1.2rem;color:#888">
+<li><code>gk validate</code> — check graph.yaml</li>
+<li><code>gk compile</code> — YAML → .workflow.js</li>
+<li><code>gk graph list</code> — show topologies</li>
+<li><code>gk graph inspect</code> — topology contract</li>
+</ul>
+</div>
+
+<div style="background:#0d1117;border:1px solid #58a6ff;border-radius:8px;padding:1rem">
+<h4 style="color:#58a6ff;margin:0 0 0.5rem">NOT in gk CLI v2</h4>
+<ul style="margin:0;padding-left:1.2rem;color:#f78166">
+<li><s>workflow start/next/submit/execute</s></li>
+<li><s>leases, checkpoints, events</s></li>
+<li><s>state machine, expression engine</s></li>
+<li><s>merges, run persistence</s></li>
+</ul>
+<p style="font-size:0.75rem;color:#888;margin:0.5rem 0 0">
+All runtime concerns moved to Claude Code Workflows.
+gk is a compiler + installer only.
+</p>
+</div>
+
+</div>
+</div>

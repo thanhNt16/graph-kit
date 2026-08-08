@@ -1,5 +1,5 @@
-import { describe, test, expect } from "bun:test";
-import { readFileSync, readdirSync } from "node:fs";
+import { describe, expect, test } from "bun:test";
+import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
 const AGENTS_DIR = join(import.meta.dir, "..", "..", "claude", "agents");
@@ -22,7 +22,7 @@ function parseFrontmatter(content: string): Record<string, unknown> {
     const m = line.match(/^(\w[\w-]*):\s*(.+)$/);
     if (m) {
       const key = m[1]!;
-      let value: unknown = m[2]!.trim();
+      let value: unknown = m[2]?.trim();
       if (value.startsWith("[") && value.endsWith("]")) {
         value = value
           .slice(1, -1)

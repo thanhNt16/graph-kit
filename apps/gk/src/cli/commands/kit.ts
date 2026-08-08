@@ -1,9 +1,9 @@
-import { existsSync, mkdirSync, cpSync, writeFileSync, readdirSync } from "node:fs";
-import { join, dirname } from "node:path";
+import { cpSync, existsSync, mkdirSync, readdirSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { CAC } from "cac";
-import { ok, fail } from "../output.js";
 import { GraphKitError } from "../../errors.js";
+import { fail, ok } from "../output.js";
 
 // The kit source ships inside the npm package: <package-root>/claude/
 // Resolve relative to this module, not process.cwd().

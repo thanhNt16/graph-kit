@@ -1,7 +1,7 @@
-import { z } from "zod";
 import { existsSync, readdirSync } from "node:fs";
-import { join, basename } from "node:path";
-import { GraphSchema } from "../schemas/graph.schema.js";
+import { basename, join } from "node:path";
+import type { z } from "zod";
+import type { GraphSchema } from "../schemas/graph.schema.js";
 
 export interface Finding {
   check: string;
@@ -13,7 +13,7 @@ export type Graph = z.infer<typeof GraphSchema>;
 
 // Agent names resolve to kebab-case filenames: "Software Architect" → software-architect.md
 export function agentFileName(agent: string): string {
-  return agent.toLowerCase().replace(/[^a-z0-9]+/g, "-") + ".md";
+  return `${agent.toLowerCase().replace(/[^a-z0-9]+/g, "-")}.md`;
 }
 
 export function validateGraph(graph: Graph, projectRoot: string): Finding[] {

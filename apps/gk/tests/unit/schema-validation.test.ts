@@ -1,4 +1,4 @@
-import { describe, test, expect } from "bun:test";
+import { describe, expect, test } from "bun:test";
 import { GraphSchema } from "../../src/schemas/graph.schema";
 
 describe("Graph YAML Schema", () => {
@@ -47,8 +47,12 @@ describe("Graph YAML Schema", () => {
 
   test("accepts all 6 topology names", () => {
     for (const topo of [
-      "diamond", "classify-and-act", "adversarial-verification",
-      "loop-until-done", "generate-and-filter", "tournament",
+      "diamond",
+      "classify-and-act",
+      "adversarial-verification",
+      "loop-until-done",
+      "generate-and-filter",
+      "tournament",
     ]) {
       const result = GraphSchema.safeParse({
         metadata: { name: "test" },

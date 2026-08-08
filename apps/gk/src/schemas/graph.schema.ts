@@ -1,8 +1,6 @@
 import { z } from "zod";
 
-const NodeRef = z.enum([
-  "opus", "sonnet", "haiku", "fable"
-]);
+const NodeRef = z.enum(["opus", "sonnet", "haiku", "fable"]);
 
 // Constraints are written in YAML as a list of single-key maps:
 //   constraints:
@@ -69,61 +67,71 @@ const TopologyName = z.enum([
 
 type NodeDef = z.infer<typeof NodeDefSchema>;
 
-const GraphSchema = z.object({
-  apiVersion: z.string().default("graphkit.dev/v2"),
-  kind: z.literal("Graph").default("Graph"),
-  metadata: z.object({
-    name: z.string(),
-    description: z.string().optional(),
-  }),
-  topology: TopologyName,
-  inputs: z.record(z.string(), z.object({
-    type: z.enum(["string", "array"]),
-    required: z.boolean().default(false),
-    default: z.any().optional(),
-  })).default({}),
-  nodes: z.record(z.string(), NodeDefSchema).default({}),
-  limits: LimitsSchema.optional().default(() => ({})),
-  evidence: EvidenceSchema.optional().default(() => ({ required_keys: [], format: "markdown" as const })),
-  topology_config: z.record(z.string(), z.any()).default({}),
-  hooks: HookRef.optional().default(() => ({ on_node_complete: [], on_fanout_dispatch: [], on_graph_complete: [] })),
-  outputs: OutputSchema.optional().default(() => ({ evidence_dir: ".graphkit/evidence/", report: ".graphkit/reports/{name}.md" })),
-}).superRefine((graph, ctx) => {
-  const nodes = graph.nodes as Record<string, NodeDef>;
-  const names = new Set(Object.keys(nodes));
-  for (const [id, node] of Object.entries(nodes)) {
-    for (const dep of node.depend_on) {
-      if (!names.has(dep)) {
+const GraphSchema = z
+  .object({
+    apiVersion: z.string().default("graphkit.dev/v2"),
+    kind: z.literal("Graph").default("Graph"),
+    metadata: z.object({
+      name: z.string(),
+      description: z.string().optional(),
+    }),
+    topology: TopologyName,
+    inputs: z
+      .record(
+        z.string(),
+        z.object({
+          type: z.enum(["string", "array"]),
+          required: z.boolean().default(false),
+          default: z.any().optional(),
+        }),
+      )
+      .default({}),
+    nodes: z.record(z.string(), NodeDefSchema).default({}),
+    limits: LimitsSchema.optional().default(() => ({})),
+    evidence: EvidenceSchema.optional().default(() => ({ required_keys: [], format: "markdown" as const })),
+    topology_config: z.record(z.string(), z.any()).default({}),
+    hooks: HookRef.optional().default(() => ({ on_node_complete: [], on_fanout_dispatch: [], on_graph_complete: [] })),
+    outputs: OutputSchema.optional().default(() => ({
+      evidence_dir: ".graphkit/evidence/",
+      report: ".graphkit/reports/{name}.md",
+    })),
+  })
+  .superRefine((graph, ctx) => {
+    const nodes = graph.nodes as Record<string, NodeDef>;
+    const names = new Set(Object.keys(nodes));
+    for (const [id, node] of Object.entries(nodes)) {
+      for (const dep of node.depend_on) {
+        if (!names.has(dep)) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ["nodes", id, "depend_on"],
+            message: `depend_on references unknown node "${dep}"`,
+          });
+        }
+      }
+    }
+    // Cycle detection: DFS with colors (0=white, 1=gray, 2=black)
+    const color = new Map<string, number>();
+    const visit = (id: string): boolean => {
+      if (color.get(id) === 1) return true;
+      if (color.get(id) === 2) return false;
+      color.set(id, 1);
+      for (const dep of nodes[id]?.depend_on ?? []) {
+        if (names.has(dep) && visit(dep)) return true;
+      }
+      color.set(id, 2);
+      return false;
+    };
+    for (const id of names) {
+      if (visit(id)) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
           path: ["nodes", id, "depend_on"],
-          message: `depend_on references unknown node "${dep}"`,
+          message: "depend_on forms a cycle",
         });
+        break;
       }
     }
-  }
-  // Cycle detection: DFS with colors (0=white, 1=gray, 2=black)
-  const color = new Map<string, number>();
-  const visit = (id: string): boolean => {
-    if (color.get(id) === 1) return true;
-    if (color.get(id) === 2) return false;
-    color.set(id, 1);
-    for (const dep of nodes[id]?.depend_on ?? []) {
-      if (names.has(dep) && visit(dep)) return true;
-    }
-    color.set(id, 2);
-    return false;
-  };
-  for (const id of names) {
-    if (visit(id)) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ["nodes", id, "depend_on"],
-        message: "depend_on forms a cycle",
-      });
-      break;
-    }
-  }
-});
+  });
 
-export { GraphSchema, NodeDefSchema, TopologyName, LoopConfig, RefSchema, ConstraintValue };
+export { ConstraintValue, GraphSchema, LoopConfig, NodeDefSchema, RefSchema, TopologyName };

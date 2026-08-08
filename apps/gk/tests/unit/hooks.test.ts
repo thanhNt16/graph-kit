@@ -1,7 +1,7 @@
-import { describe, test, expect, beforeEach, afterEach } from "bun:test";
-import { mkdtempSync, rmSync, mkdirSync, writeFileSync, existsSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 const hooksDir = join(import.meta.dir, "..", "..", "claude", "hooks");
 
@@ -151,7 +151,9 @@ describe("evidence-persist", () => {
       JSON.stringify({ tool_name: "Write", tool_input: { file_path: ".graphkit/evidence/b.md" } }),
       tmp,
     );
-    const lines = readFileSync(join(tmp, ".graphkit", "evidence", ".index"), "utf-8").trim().split("\n");
+    const lines = readFileSync(join(tmp, ".graphkit", "evidence", ".index"), "utf-8")
+      .trim()
+      .split("\n");
     expect(lines.length).toBe(2);
   });
 });

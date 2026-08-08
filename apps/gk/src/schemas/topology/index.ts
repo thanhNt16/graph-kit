@@ -10,12 +10,12 @@ export const TOPOLOGY_NAMES = [
 export type TopologyName = (typeof TOPOLOGY_NAMES)[number];
 
 const TOPOLOGY_CONFIG_KEYS: Record<TopologyName, string[]> = {
-  "diamond": ["fanout.strategy", "fanout.isolation", "reduce", "verify", "synthesizer"],
+  diamond: ["fanout.strategy", "fanout.isolation", "reduce", "verify", "synthesizer"],
   "classify-and-act": ["classifier", "routes[].handler", "routes[].condition", "fallback"],
   "adversarial-verification": ["producer", "refuters[]", "survive_threshold", "adjudicator"],
   "loop-until-done": ["scouter", "worker_batch", "stop_rule", "dedup", "dry_threshold"],
   "generate-and-filter": ["generators[]", "rubric", "keep_top", "dedup_keys", "scorer"],
-  "tournament": ["candidates[]", "judge", "rounds"],
+  tournament: ["candidates[]", "judge", "rounds"],
 };
 
 export function getTopologyConfigKeys(topology: TopologyName): string[] {

@@ -1,13 +1,14 @@
-import { describe, test, expect } from "bun:test";
-import { writeFileSync, mkdirSync, rmSync } from "node:fs";
+import { describe, expect, test } from "bun:test";
+import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { resolveTopologyConfig } from "../../src/compiler/resolver.js";
-import { GraphKitError } from "../../src/errors.js";
 
 const TMP = join(import.meta.dir, ".tmp-resolver");
 
 function tmpTemplates() {
-  try { rmSync(TMP, { recursive: true }); } catch {}
+  try {
+    rmSync(TMP, { recursive: true });
+  } catch {}
   mkdirSync(TMP, { recursive: true });
   // Stub template files so existsSync passes
   for (const name of ["diamond", "adversarial-verification", "classify-and-act"]) {

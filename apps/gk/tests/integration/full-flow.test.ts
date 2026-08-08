@@ -1,11 +1,11 @@
-import { describe, test, expect, beforeAll, afterAll } from "bun:test";
-import { existsSync, mkdirSync, rmSync, readdirSync, symlinkSync, writeFileSync, readFileSync } from "node:fs";
+import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import YAML from "yaml";
 import { installKit, templatesDir } from "../../src/cli/commands/kit.js";
-import { GraphSchema } from "../../src/schemas/graph.schema.js";
-import { validateGraph } from "../../src/compiler/validate.js";
 import { compileGraph } from "../../src/compiler/emitter.js";
+import { validateGraph } from "../../src/compiler/validate.js";
+import { GraphSchema } from "../../src/schemas/graph.schema.js";
 
 const TMP = join(import.meta.dir, ".tmp-full-flow");
 const FIXTURES = join(import.meta.dir, "..", "fixtures");
@@ -18,7 +18,9 @@ describe("Full flow: init -> validate -> compile", () => {
     // validateGraph looks at projectRoot/claude/agents — installKit puts .claude/agents
     symlinkSync(join(TMP, ".claude"), join(TMP, "claude"), "junction");
   });
-  afterAll(() => { if (existsSync(TMP)) rmSync(TMP, { recursive: true }); });
+  afterAll(() => {
+    if (existsSync(TMP)) rmSync(TMP, { recursive: true });
+  });
 
   test("init installs agents, skills, hooks, rules", () => {
     const installed = readdirSync(join(TMP, ".claude"));
@@ -27,16 +29,16 @@ describe("Full flow: init -> validate -> compile", () => {
     expect(installed).toContain("hooks");
     expect(installed).toContain("rules");
     // 7 agents
-    const agents = readdirSync(join(TMP, ".claude", "agents")).filter(f => f.endsWith(".md"));
+    const agents = readdirSync(join(TMP, ".claude", "agents")).filter((f) => f.endsWith(".md"));
     expect(agents.length).toBe(7);
     // 8 gk-* skills
-    const skills = readdirSync(join(TMP, ".claude", "skills")).filter(f => f.startsWith("gk-"));
+    const skills = readdirSync(join(TMP, ".claude", "skills")).filter((f) => f.startsWith("gk-"));
     expect(skills.length).toBe(8);
     // 3 hooks
-    const hooks = readdirSync(join(TMP, ".claude", "hooks")).filter(f => f.endsWith(".cjs"));
+    const hooks = readdirSync(join(TMP, ".claude", "hooks")).filter((f) => f.endsWith(".cjs"));
     expect(hooks.length).toBe(3);
     // 3 rules
-    const rules = readdirSync(join(TMP, ".claude", "rules")).filter(f => f.endsWith(".md"));
+    const rules = readdirSync(join(TMP, ".claude", "rules")).filter((f) => f.endsWith(".md"));
     expect(rules.length).toBe(3);
   });
 
@@ -66,7 +68,9 @@ describe("Subgraph composition: diamond + adversarial-verification", () => {
     installKit(TMP);
     symlinkSync(join(TMP, ".claude"), join(TMP, "claude"), "junction");
   });
-  afterAll(() => { if (existsSync(TMP)) rmSync(TMP, { recursive: true }); });
+  afterAll(() => {
+    if (existsSync(TMP)) rmSync(TMP, { recursive: true });
+  });
 
   test("compiles with inlined subgraph template", () => {
     const raw = readFileSync(join(FIXTURES, "diamond-with-verification.yaml"), "utf-8");

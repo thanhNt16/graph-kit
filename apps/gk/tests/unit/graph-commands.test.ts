@@ -1,9 +1,9 @@
-import { describe, test, expect, beforeEach, afterEach } from "bun:test";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { cac } from "cac";
 import { registerGraphCommands } from "../../src/cli/commands/graph.js";
-import { rmSync, mkdirSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
 
 const FIXTURES = join(import.meta.dir, "..", "fixtures");
 const graphFile = join(FIXTURES, "minimal-diamond.yaml");
@@ -14,7 +14,7 @@ function scaffoldProject(dir: string) {
   writeFileSync(join(dir, "claude", "agents", "code-reviewer.md"), "# CR\n");
 }
 
-function runCli(args: string[], cwd?: string) {
+function runCli(args: string[], _cwd?: string) {
   const cli = cac("gk");
   registerGraphCommands(cli);
 
@@ -26,7 +26,9 @@ function runCli(args: string[], cwd?: string) {
 
   let exitCode = 0;
   const origExit = process.exit;
-  process.exit = (c?: number) => { exitCode = c ?? 1; };
+  process.exit = (c?: number) => {
+    exitCode = c ?? 1;
+  };
 
   // Suppress cac's default error handler which calls process.exit
   let error: Error | undefined;

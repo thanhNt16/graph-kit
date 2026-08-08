@@ -1,0 +1,135 @@
+<h2>GraphKit v2 — Architecture</h2>
+<p class="subtitle">Template graphs + ClaudeKit-style kit + Claude Code workflows runtime</p>
+
+<div class="split">
+
+<div class="mockup">
+<div class="mockup-header">Layer 1: Kit Template (<code>claude/</code>)</div>
+<div class="mockup-body" style="font-size:0.85rem;padding:1rem">
+
+<p style="margin:0 0 0.5rem"><strong>What gets installed by <code>gk init</code></strong></p>
+
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:0.5rem;font-size:0.8rem">
+
+<div style="background:#1a1a2e;border:1px solid #333;border-radius:6px;padding:0.6rem">
+<strong style="color:#58a6ff">agents/</strong><br>
+<span style="color:#888">Software Architect</span><br>
+<span style="color:#888">Code Reviewer</span><br>
+<span style="color:#888">QA Engineer</span><br>
+<span style="color:#888">Data Engineer</span><br>
+<span style="color:#888">UI/UX Researcher</span><br>
+<span style="color:#888">Document Generator</span><br>
+<span style="color:#888">Agents Orchestrator</span>
+</div>
+
+<div style="background:#1a1a2e;border:1px solid #333;border-radius:6px;padding:0.6rem">
+<strong style="color:#58a6ff">skills/</strong><br>
+<span style="color:#888">gk-init-graph</span><br>
+<span style="color:#888">gk-brainstorm</span><br>
+<span style="color:#888">gk-validate</span><br>
+<span style="color:#888">gk-compile</span><br>
+<span style="color:#888">gk-run</span><br>
+<span style="color:#888">gk-evidence</span><br>
+<span style="color:#888">gk-status</span>
+</div>
+
+<div style="background:#1a1a2e;border:1px solid #333;border-radius:6px;padding:0.6rem">
+<strong style="color:#58a6ff">hooks/</strong><br>
+<span style="color:#888">graph-state-guard</span><br>
+<span style="color:#888">evidence-persist</span><br>
+<span style="color:#888">lease-enforce</span>
+</div>
+
+<div style="background:#1a1a2e;border:1px solid #333;border-radius:6px;padding:0.6rem">
+<strong style="color:#58a6ff">rules/</strong><br>
+<span style="color:#888">graph-authority</span><br>
+<span style="color:#888">agent-binding</span><br>
+<span style="color:#888">topology-routing</span>
+</div>
+
+</div>
+</div>
+</div>
+
+<div class="mockup">
+<div class="mockup-header">Layer 2: gk CLI v2</div>
+<div class="mockup-body" style="font-size:0.85rem;padding:1rem">
+
+<div style="display:flex;flex-direction:column;gap:0.5rem;font-size:0.8rem">
+
+<div style="background:#1a1a2e;border:1px solid #e3b341;border-radius:6px;padding:0.6rem">
+<strong style="color:#e3b341">gk init</strong> — install kit template<br>
+<strong style="color:#e3b341">gk new</strong> — scaffold new project
+</div>
+
+<div style="background:#1a1a2e;border:1px solid #e3b341;border-radius:6px;padding:0.6rem">
+<strong style="color:#e3b341">gk validate</strong> — check graph YAML<br>
+<span style="color:#888">syntax + schema + topology + agent binding + evidence keys</span>
+</div>
+
+<div style="background:#1a1a2e;border:1px solid #e3b341;border-radius:6px;padding:0.6rem">
+<strong style="color:#e3b341">gk compile</strong> — graph YAML → .workflow.js<br>
+<span style="color:#888">resolves template refs, injects agent prompts, emits workflow script</span>
+</div>
+
+<div style="background:#1a1a2e;border:1px solid #e3b341;border-radius:6px;padding:0.6rem">
+<strong style="color:#e3b341">gk graph list</strong> — show 6 canonical topologies<br>
+<strong style="color:#e3b341">gk graph inspect</strong> — show one topology's contract
+</div>
+
+</div>
+</div>
+</div>
+
+</div>
+
+<div class="mockup">
+<div class="mockup-header">Layer 3: Claude Code Runtime</div>
+<div class="mockup-body" style="font-size:0.85rem;padding:1rem">
+
+<div style="display:flex;align-items:center;gap:1rem;flex-wrap:wrap;font-size:0.8rem">
+
+<div style="background:#0d1117;border:2px solid #58a6ff;border-radius:8px;padding:0.8rem;flex:1;min-width:200px">
+<strong style="color:#58a6ff;font-size:0.9rem">graph.yaml</strong><br>
+<span style="color:#888">User defines topology + agents + inputs</span>
+</div>
+
+<div style="font-size:1.5rem;color:#e3b341">→</div>
+
+<div style="background:#0d1117;border:2px solid #e3b341;border-radius:8px;padding:0.8rem;flex:1;min-width:200px">
+<strong style="color:#e3b341;font-size:0.9rem">gk compile</strong><br>
+<span style="color:#888">Resolves templates + agents</span>
+</div>
+
+<div style="font-size:1.5rem;color:#e3b341">→</div>
+
+<div style="background:#0d1117;border:2px solid #3fb950;border-radius:8px;padding:0.8rem;flex:1;min-width:200px">
+<strong style="color:#3fb950;font-size:0.9rem">.workflow.js</strong><br>
+<span style="color:#888">agent() + parallel() + pipeline()</span>
+</div>
+
+<div style="font-size:1.5rem;color:#e3b341">→</div>
+
+<div style="background:#0d1117;border:2px solid #f78166;border-radius:8px;padding:0.8rem;flex:1;min-width:200px">
+<strong style="color:#f78166;font-size:0.9rem">Workflow tool</strong><br>
+<span style="color:#888">Claude Code executes graph</span>
+</div>
+
+</div>
+</div>
+</div>
+
+<div class="section" style="margin-top:1.5rem">
+<h3>Data Flow: User Session</h3>
+<div style="font-family:monospace;font-size:0.78rem;background:#0d1117;border-radius:8px;padding:1rem;line-height:1.8;color:#c9d1d9">
+<span style="color:#58a6ff">1.</span> <span style="color:#3fb950">/gk:init-graph</span> --template diamond<br>
+&nbsp;&nbsp;&nbsp;→ generates <span style="color:#e3b341">graph.yaml</span> in project root<br>
+<span style="color:#58a6ff">2.</span> User edits graph.yaml (assign agents, define inputs)<br>
+<span style="color:#58a6ff">3.</span> <span style="color:#3fb950">/gk:brainstorm</span> — agent asks clarifying questions, updates graph.yaml<br>
+<span style="color:#58a6ff">4.</span> <span style="color:#3fb950">/gk:validate</span> — syntax + topology + agent binding + evidence check<br>
+<span style="color:#58a6ff">5.</span> <span style="color:#3fb950">/gk:compile</span> → <span style="color:#e3b341">.claude/workflows/graph.workflow.js</span><br>
+<span style="color:#58a6ff">6.</span> <span style="color:#3fb950">/gk:run</span> → invokes Claude Code Workflow tool<br>
+&nbsp;&nbsp;&nbsp;→ agents execute nodes, evidence collected, status tracked<br>
+<span style="color:#58a6ff">7.</span> <span style="color:#3fb950">/gk:evidence</span> → report of what the graph produced
+</div>
+</div>

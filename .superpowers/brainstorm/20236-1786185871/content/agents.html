@@ -1,0 +1,137 @@
+<h2>Kit Agents — Engineering Team</h2>
+<p class="subtitle">Inherited from agency-agents, adapted for graph node binding with claudekit-style definitions</p>
+
+<div class="section">
+<h3>Agent Definition Format</h3>
+<p style="font-size:0.82rem;color:#888">ClaudeKit-style markdown agent with YAML frontmatter. Placed in <code>claude/agents/</code>. Each file is one agent.</p>
+</div>
+
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:0.8rem;margin-top:1rem">
+
+<div class="mockup">
+<div class="mockup-header" style="background:#6e40c9">🏛️ Software Architect</div>
+<div class="mockup-body" style="font-size:0.78rem;padding:0.8rem">
+<strong>Source:</strong> agency-agents engineering-software-architect<br>
+<strong>Graph roles:</strong> scouter, planner, synthesizer<br>
+<strong>Default model:</strong> opus<br>
+<strong>Core:</strong> System design, DDD, trade-off analysis, ADRs<br>
+<strong>Key deliverables:</strong> Architecture decision records, bounded context maps, system evolution strategy<br>
+<strong>Evidence:</strong> [architecture_decisions, trade_offs, context_map]
+</div>
+</div>
+
+<div class="mockup">
+<div class="mockup-header" style="background:#1f6feb">👁️ Code Reviewer</div>
+<div class="mockup-body" style="font-size:0.78rem;padding:0.8rem">
+<strong>Source:</strong> agency-agents engineering-code-reviewer<br>
+<strong>Graph roles:</strong> worker, verifier<br>
+<strong>Default model:</strong> sonnet<br>
+<strong>Core:</strong> Security, maintainability, performance review<br>
+<strong>Key deliverables:</strong> Findings list with severity, remediation steps<br>
+<strong>Evidence:</strong> [findings, severity, remediation, lines_affected]
+</div>
+</div>
+
+<div class="mockup">
+<div class="mockup-header" style="background:#238636">🧪 QA Engineer</div>
+<div class="mockup-body" style="font-size:0.78rem;padding:0.8rem">
+<strong>Source:</strong> agency-agents testing-evidence-collector + model-qa<br>
+<strong>Graph roles:</strong> verifier, worker<br>
+<strong>Default model:</strong> haiku (verification is cheap)<br>
+<strong>Core:</strong> Test case design, test execution, bug finding<br>
+<strong>Key deliverables:</strong> Test plan, pass/fail results, bug reports<br>
+<strong>Evidence:</strong> [test_results, bug_reports, coverage_gaps]
+</div>
+</div>
+
+<div class="mockup">
+<div class="mockup-header" style="background:#8957e5">📊 Data Engineer</div>
+<div class="mockup-body" style="font-size:0.78rem;padding:0.8rem">
+<strong>Source:</strong> agency-agents engineering-data-engineer<br>
+<strong>Graph roles:</strong> worker, scouter<br>
+<strong>Default model:</strong> sonnet<br>
+<strong>Core:</strong> Data pipelines, schema design, ETL, quality<br>
+<strong>Key deliverables:</strong> Schema changes, migration plans, data quality reports<br>
+<strong>Evidence:</strong> [schema_changes, data_quality, migration_plan]
+</div>
+</div>
+
+<div class="mockup">
+<div class="mockup-header" style="background:#bf8700">🎨 UI Designer / UX Researcher</div>
+<div class="mockup-body" style="font-size:0.78rem;padding:0.8rem">
+<strong>Source:</strong> agency-agents design-ux-researcher + design-ui-designer<br>
+<strong>Graph roles:</strong> worker, synthesizer<br>
+<strong>Default model:</strong> sonnet<br>
+<strong>Core:</strong> User research, wireframes, design systems, accessibility<br>
+<strong>Key deliverables:</strong> Personas, journey maps, component specs<br>
+<strong>Evidence:</strong> [design_specs, accessibility_audit, user_flows]
+</div>
+</div>
+
+<div class="mockup">
+<div class="mockup-header" style="background:#da3633">🔧 Agents Orchestrator</div>
+<div class="mockup-body" style="font-size:0.78rem;padding:0.8rem">
+<strong>Source:</strong> agency-agents specialized-agents-orchestrator<br>
+<strong>Graph roles:</strong> scouter, synthesizer<br>
+<strong>Default model:</strong> opus<br>
+<strong>Core:</strong> Multi-agent coordination, task decomposition, quality gates<br>
+<strong>Key deliverables:</strong> Task breakdown, agent assignments, orchestration plan<br>
+<strong>Evidence:</strong> [task_breakdown, agent_assignments, orchestration_log]
+</div>
+</div>
+
+<div class="mockup">
+<div class="mockup-header" style="background:#316dca">📝 Document Generator</div>
+<div class="mockup-body" style="font-size:0.78rem;padding:0.8rem">
+<strong>Source:</strong> agency-agents specialized-document-generator<br>
+<strong>Graph roles:</strong> synthesizer, worker<br>
+<strong>Default model:</strong> sonnet<br>
+<strong>Core:</strong> Technical docs, reports, runbooks, API references<br>
+<strong>Key deliverables:</strong> Markdown reports, structured documentation<br>
+<strong>Evidence:</strong> [report, executive_summary, recommendations]
+</div>
+</div>
+
+<div class="mockup">
+<div class="mockup-header" style="background:#6e7681;border:1px dashed #484f58">➕ Custom Agents</div>
+<div class="mockup-body" style="font-size:0.78rem;padding:0.8rem">
+<strong>Users can add agents to <code>claude/agents/</code></strong><br>
+<strong>Follow same format:</strong> YAML frontmatter + markdown body<br>
+<strong>Available in graph.yaml:</strong> immediately after adding<br>
+<strong>Override default model:</strong> per-node in graph.yaml<br>
+<strong>Community agents:</strong> install from agency-agents repo
+</div>
+</div>
+
+</div>
+
+<div class="section" style="margin-top:1.5rem">
+<h3>Agent File Structure</h3>
+<div style="font-family:monospace;font-size:0.75rem;background:#0d1117;border-radius:8px;padding:1rem;color:#c9d1d9;line-height:1.6">
+claude/agents/software-architect.md
+</div>
+<div style="font-size:0.78rem;background:#0d1117;border-radius:0 0 8px 8px;padding:0.8rem;margin-top:-6px;color:#c9d1d9">
+<pre style="margin:0;line-height:1.6">
+<span style="color:#e3b341">---</span>
+<span style="color:#58a6ff">name:</span> Software Architect
+<span style="color:#58a6ff">description:</span> System design, DDD, trade-off analysis
+<span style="color:#58a6ff">model:</span> opus                    <span style="color:#484f58"># default tier</span>
+<span style="color:#58a6ff">graph_roles:</span> [scouter, planner, synthesizer]
+<span style="color:#58a6ff">evidence_keys:</span> [architecture_decisions, trade_offs]
+<span style="color:#58a6ff">source:</span> agency-agents/engineering-software-architect
+<span style="color:#e3b341">---</span>
+
+# Software Architect
+
+## Identity & Memory
+[adapted from agency-agents — core mission, critical rules,
+ technical deliverables, workflow process, success metrics]
+
+## Graph Node Behavior
+[auto-generated section: how this agent behaves when bound
+ to a graph node — reads objective, refs, constraints from
+ the node config, respects depend_on ordering, produces
+ declared evidence keys]
+</pre>
+</div>
+</div>

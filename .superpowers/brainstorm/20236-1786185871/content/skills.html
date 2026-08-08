@@ -1,0 +1,141 @@
+<h2>Session Skills — 8 Total</h2>
+<p class="subtitle">Skills installed into <code>.claude/skills/</code> by <code>gk init</code>, invoked via <code>/gk:*</code></p>
+
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:0.8rem;margin-top:1rem">
+
+<div class="mockup">
+<div class="mockup-header" style="background:#3fb950"><code>gk:init-graph</code></div>
+<div class="mockup-body" style="font-size:0.78rem;padding:0.8rem">
+<strong>Purpose:</strong> Generate a graph.yaml from a template<br>
+<strong>Input:</strong> <code>--template diamond</code> (optional, agent suggests if omitted)<br>
+<strong>Output:</strong> <code>graph.yaml</code> in project root<br>
+<strong>Flow:</strong> Pick topology → ask inputs → bind default agents → write YAML<br>
+<strong>Model:</strong> sonnet (interactive, needs judgment)
+</div>
+</div>
+
+<div class="mockup">
+<div class="mockup-header" style="background:#58a6ff"><code>gk:brainstorm</code></div>
+<div class="mockup-body" style="font-size:0.78rem;padding:0.8rem">
+<strong>Purpose:</strong> Refine graph.yaml via dialogue<br>
+<strong>Input:</strong> Existing <code>graph.yaml</code><br>
+<strong>Output:</strong> Updated <code>graph.yaml</code><br>
+<strong>Flow:</strong> Ask clarifying Qs → suggest agent/model choices → update node config → add constraints/loops<br>
+<strong>Model:</strong> sonnet (conversation)
+</div>
+</div>
+
+<div class="mockup">
+<div class="mockup-header" style="background:#e3b341"><code>gk:validate</code></div>
+<div class="mockup-body" style="font-size:0.78rem;padding:0.8rem">
+<strong>Purpose:</strong> Gate check before compile<br>
+<strong>Checks:</strong> Syntax · Schema · Topology contract · Agent binding · Refs exist · depend_on acyclic · Evidence keys · Loop exit conditions · Constraint types<br>
+<strong>Output:</strong> PASS/FAIL with findings list<br>
+<strong>Model:</strong> haiku (mechanical, cheap)
+</div>
+</div>
+
+<div class="mockup">
+<div class="mockup-header" style="background:#f78166"><code>gk:compile</code></div>
+<div class="mockup-body" style="font-size:0.78rem;padding:0.8rem">
+<strong>Purpose:</strong> graph.yaml → .workflow.js<br>
+<strong>Flow:</strong> Parse YAML → resolve topology template → inject agent prompts → expand subgraph refs → generate workflow script<br>
+<strong>Output:</strong> <code>.claude/workflows/{name}.workflow.js</code><br>
+<strong>Model:</strong> sonnet (code generation)
+</div>
+</div>
+
+<div class="mockup">
+<div class="mockup-header" style="background:#bc8cff"><code>gk:run</code></div>
+<div class="mockup-body" style="font-size:0.78rem;padding:0.8rem">
+<strong>Purpose:</strong> Execute compiled workflow<br>
+<strong>Flow:</strong> Invoke Claude Code Workflow tool with compiled script<br>
+<strong>Output:</strong> Workflow execution (agents run, evidence collected)<br>
+<strong>Model:</strong> varies per node (set in graph.yaml)
+</div>
+</div>
+
+<div class="mockup">
+<div class="mockup-header" style="background:#79c0ff"><code>gk:evidence</code></div>
+<div class="mockup-body" style="font-size:0.78rem;padding:0.8rem">
+<strong>Purpose:</strong> Report what the graph produced<br>
+<strong>Input:</strong> Run name<br>
+<strong>Output:</strong> Markdown evidence report<br>
+<strong>Content:</strong> Node results, evidence keys, verdict, timing, token usage<br>
+<strong>Model:</strong> haiku (formatting)
+</div>
+</div>
+
+<div class="mockup">
+<div class="mockup-header" style="background:#7ee787"><code>gk:status</code></div>
+<div class="mockup-body" style="font-size:0.78rem;padding:0.8rem">
+<strong>Purpose:</strong> Show current graph run state<br>
+<strong>Output:</strong> Terminal-friendly status (running/complete), node states, pending nodes<br>
+<strong>Model:</strong> none (reads state files)
+</div>
+</div>
+
+<div class="mockup">
+<div class="mockup-header" style="color:#fff;background:linear-gradient(135deg,#6965db,#d4426a)"><code>gk:visualize</code> <span style="font-size:0.7rem;opacity:0.7">NEW</span></div>
+<div class="mockup-body" style="font-size:0.78rem;padding:0.8rem">
+<strong>Purpose:</strong> Render graph.yaml as a visual diagram<br>
+<strong>Input:</strong> <code>graph.yaml</code> (auto-detected)<br>
+<strong>Output:</strong> <code>.graphkit/diagrams/{name}.excalidraw</code><br>
+<strong>Also:</strong> Opens in browser (rendered via excalidraw skill pipeline)<br>
+<strong>Shows:</strong> Nodes (color by model tier), edges (depend_on), loops, evidence flow, subgraph boundaries<br>
+<strong>Model:</strong> sonnet (visual reasoning)
+</div>
+</div>
+
+</div>
+
+<div class="section" style="margin-top:1.5rem">
+<h3>gk:visualize — Diagram Details</h3>
+
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;font-size:0.82rem">
+
+<div style="background:#0d1117;border:1px solid #333;border-radius:8px;padding:1rem">
+<h4 style="color:#bc8cff;margin:0 0 0.5rem">What Gets Rendered</h4>
+<ul style="margin:0;padding-left:1.2rem;color:#888">
+<li><strong>Nodes</strong> — boxes labeled with agent name + role</li>
+<li><strong>Node color</strong> — coded by model tier (opus=purple, sonnet=blue, haiku=green, fable=orange)</li>
+<li><strong>Edges</strong> — arrows from depend_on relationships</li>
+<li><strong>Loop indicators</strong> — circular arrow on nodes with internal loops, with stop condition label</li>
+<li><strong>Subgraph boundaries</strong> — dashed rectangle around composed templates</li>
+<li><strong>Evidence flow</strong> — dotted arrows showing which keys flow between nodes</li>
+<li><strong>Topology badge</strong> — label showing the canonical shape name</li>
+</ul>
+</div>
+
+<div style="background:#0d1117;border:1px solid #d4426a;border-radius:8px;padding:1rem">
+<h4 style="color:#d4426a;margin:0 0 0.5rem">Excalidraw Integration</h4>
+<ul style="margin:0;padding-left:1.2rem;color:#888">
+<li>Uses <code>excalidraw-diagram</code> skill as dependency</li>
+<li>Output: <code>.graphkit/diagrams/{name}.excalidraw</code></li>
+<li>Editable in Excalidraw app (excalidraw.com or local)</li>
+<li>Re-render to PNG on demand</li>
+<li>Auto-opens in browser after generation</li>
+<li>Color palette matches GraphKit brand (not default excalidraw colors)</li>
+<li>Persists alongside graph.yaml — diagram is a project artifact</li>
+</ul>
+</div>
+
+</div>
+</div>
+
+<div class="section" style="margin-top:1.5rem">
+<h3>Typical Session Flow</h3>
+<div style="font-family:monospace;font-size:0.78rem;background:#0d1117;border-radius:8px;padding:1rem;line-height:1.9;color:#c9d1d9">
+<span style="color:#3fb950">/gk:init-graph --template diamond</span>      → graph.yaml created<br>
+<span style="color:#3fb950">/gk:visualize</span>                          → see the graph structure<br>
+<span style="color:#3fb950">/gk:brainstorm</span>                          → refine nodes, add loops<br>
+<span style="color:#3fb950">/gk:visualize</span>                          → see updated structure<br>
+<span style="color:#e3b341">/gk:validate</span>                           → gate check<br>
+<span style="color:#f78166">/gk:compile</span>                            → .workflow.js generated<br>
+<span style="color:#bc8cff">/gk:run</span>                                → execute graph<br>
+<span style="color:#79c0ff">/gk:evidence</span>                           → view results
+</div>
+<p style="font-size:0.8rem;color:#888;margin-top:0.5rem">
+Visualize is called multiple times — after init, after brainstorm changes — so the user can see the graph evolve before committing to a run.
+</p>
+</div>

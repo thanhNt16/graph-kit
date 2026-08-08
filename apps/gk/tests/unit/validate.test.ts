@@ -1,9 +1,9 @@
-import { describe, test, expect } from "bun:test";
+import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import YAML from "yaml";
+import { agentFileName, validateGraph } from "../../src/compiler/validate.js";
 import { GraphSchema } from "../../src/schemas/graph.schema.js";
-import { validateGraph, agentFileName } from "../../src/compiler/validate.js";
 
 const FIXTURES = join(import.meta.dir, "..", "fixtures");
 const PROJECT_ROOT = join(import.meta.dir, "..", "..");
@@ -36,9 +36,7 @@ describe("validateGraph structural checks", () => {
   test("missing-ref: finds refs-exist finding", () => {
     const parsed = GraphSchema.parse(loadYaml("invalid-graph-missing-ref.yaml"));
     const findings = validateGraph(parsed, PROJECT_ROOT);
-    expect(findings).toContainEqual(
-      expect.objectContaining({ check: "refs-exist", path: "nodes.scouter.refs" })
-    );
+    expect(findings).toContainEqual(expect.objectContaining({ check: "refs-exist", path: "nodes.scouter.refs" }));
   });
 
   test("evidence-keys: finds missing required key", () => {
@@ -49,7 +47,7 @@ describe("validateGraph structural checks", () => {
         check: "evidence-keys",
         path: "evidence.required_keys",
         message: expect.stringContaining("report"),
-      })
+      }),
     );
   });
 
@@ -69,9 +67,7 @@ describe("validateGraph structural checks", () => {
       },
     });
     const findings = validateGraph(parsed, PROJECT_ROOT);
-    expect(findings).toContainEqual(
-      expect.objectContaining({ check: "loop-exit", path: "nodes.looper.loop" })
-    );
+    expect(findings).toContainEqual(expect.objectContaining({ check: "loop-exit", path: "nodes.looper.loop" }));
   });
 
   test("agent-binding: finds unknown agent", () => {
@@ -90,7 +86,7 @@ describe("validateGraph structural checks", () => {
         check: "agent-binding",
         path: "nodes.worker.agent",
         message: expect.stringContaining("Nonexistent Agent"),
-      })
+      }),
     );
   });
 
