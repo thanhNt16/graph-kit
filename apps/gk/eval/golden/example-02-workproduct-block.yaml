@@ -1,0 +1,9 @@
+id: example-02-workproduct-block
+category: work_product
+mode: work_product
+rubric: strict
+input:
+  required_keys: [findings, test_results]
+evidence:
+  findings: "minor style nits"
+expected_verdict: BLOCK

@@ -10,6 +10,7 @@
     "typecheck": "tsc --noEmit",
     "lint": "biome check .",
     "test": "bun test",
+    "eval": "bun run src/eval/replay-cli.ts",
     "ci:local": "bun run typecheck && bun run lint && bun run build && bun test"
   },
   "files": [

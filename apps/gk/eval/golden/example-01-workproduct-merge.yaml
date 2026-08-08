@@ -1,0 +1,9 @@
+id: example-01-workproduct-merge
+category: work_product
+mode: work_product
+input:
+  required_keys: [findings, test_results]
+evidence:
+  findings: "SQL injection on line 42"
+  test_results: "12 passing, 0 failing"
+expected_verdict: MERGE
