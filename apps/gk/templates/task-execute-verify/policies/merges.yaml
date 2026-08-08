@@ -1,2 +1,0 @@
-name: task-execute-verify
-merge: result=replace, evidence=append_unique(key)

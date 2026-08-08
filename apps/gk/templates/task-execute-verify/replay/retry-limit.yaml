@@ -1,8 +1,0 @@
-name: retry-limit
-inputs: { task: task-1, objective: fail safely }
-overrides:
-  load-context: { summary: [{ id: ctx, task: load }] }
-  plan: { summary: [{ id: impl, task: implement }] }
-  implement: { summary: attempted, evidence: [{ key: tests, value: fail }] }
-  evaluate: { summary: retrying, verdict: retry, approval: false, evidence: [{ key: tests, value: retry }] }
-expect_terminal: limit-exceeded

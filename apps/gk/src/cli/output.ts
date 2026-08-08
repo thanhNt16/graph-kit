@@ -1,17 +1,7 @@
-import type { ErrorCode } from "../errors.js";
+export function ok<T>(data: T) {
+  return { status: "ok", data };
+}
 
-export type ResultEnvelope<T> =
-  | { ok: true; data: T }
-  | { ok: false; error: { code: ErrorCode; message: string; recoverable: boolean; details?: unknown } };
-
-export const ok = <T>(data: T): ResultEnvelope<T> => ({ ok: true, data });
-
-export const fail = (
-  code: ErrorCode,
-  message: string,
-  recoverable = false,
-  details?: unknown,
-): ResultEnvelope<never> => ({
-  ok: false,
-  error: { code, message, recoverable, ...(details === undefined ? {} : { details }) },
-});
+export function fail(code: string, message: string, details?: Record<string, unknown>) {
+  return { status: "fail", error: { code, message, details } };
+}

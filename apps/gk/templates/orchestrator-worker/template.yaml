@@ -1,4 +1,0 @@
-name: orchestrator-worker
-version: 1.0.0
-apiVersion: graphkit.dev/v1alpha1
-harness: claude

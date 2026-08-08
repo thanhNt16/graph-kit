@@ -1,0 +1,11 @@
+{
+  "hooks": {
+    "PreToolUse": [],
+    "PostToolUse": [],
+    "SubagentStart": ["hooks/lease-enforce.cjs"],
+    "SubagentStop": [],
+    "Stop": []
+  },
+  "skillListingBudgetFraction": 0.04,
+  "skillListingMaxDescChars": 512
+}

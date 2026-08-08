@@ -1,8 +1,0 @@
-name: valid
-inputs: { objective: complete safely, tasks: [a, b] }
-overrides:
-  load-context: [{ name: a, task: ta }, { name: b, task: tb }]
-  plan: { summary: [{ name: a, task: ta }, { name: b, task: tb }] }
-  __default__: { summary: done, evidence: [{ key: tests, value: pass }] }
-  evaluate: { summary: ok, verdict: passed, approval: false, evidence: [{ key: tests, value: pass }] }
-expect_terminal: passed
