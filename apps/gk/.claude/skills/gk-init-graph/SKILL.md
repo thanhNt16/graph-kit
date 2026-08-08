@@ -1,5 +1,5 @@
 ---
-name: gk:init-graph
+name: gk init-graph
 description: Generate a graph.yaml file from a graph topology template. Use when the user wants to create a new graph engineering workflow, start a graph-based task, or initialize graph-kit for a project.
 when_to_use: User wants to create a graph, set up a graph workflow, initialize graphkit, or start a new graph engineering task. Trigger: "create a graph", "new graph", "init graph", "set up workflow".
 user-invocable: true

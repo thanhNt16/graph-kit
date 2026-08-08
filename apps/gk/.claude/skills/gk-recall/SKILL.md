@@ -1,5 +1,5 @@
 ---
-name: gk:recall
+name: gk recall
 description: Query the run's memory graph for context relevant to the current node's objective. Fused semantic + temporal + entity retrieval. Trigger: "recall", "what do we know about", "memory", "prior context", "past decisions".
 when_to_use: A graph node needs prior-run or intra-run memory — constraints, past decisions, diagnosed errors, distilled experience — that it would not otherwise know to ask for.
 user-invocable: true

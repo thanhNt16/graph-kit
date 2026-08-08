@@ -1,5 +1,5 @@
 ---
-name: gk:visualize
+name: gk-visualize
 description: Render graph.yaml as an Excalidraw diagram with node colors by model tier and dependency arrows.
 when_to_use: Use when the user asks to visualize a graph, render a diagram from graph.yaml, or see the graph topology visually.
 user-invocable: true

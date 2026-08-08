@@ -1,5 +1,5 @@
 ---
-name: gk:run
+name: gk run
 description: Execute a compiled graph workflow using Claude Code's Workflow tool. Use after gk:compile has produced a .workflow.js. Trigger: "run the graph", "execute workflow", "start the graph run".
 when_to_use: A compiled .workflow.js exists and the user wants to execute the graph.
 user-invocable: true

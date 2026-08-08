@@ -1,5 +1,5 @@
 ---
-name: gk:validate
+name: gk validate
 description: Gate-check a graph.yaml before compilation. Runs 9 validation checks: syntax, schema, topology, agent binding, refs, acyclic deps, evidence keys, loop exits, constraints. Trigger: "validate graph", "check graph", "gk validate".
 when_to_use: User wants to validate a graph.yaml file before compiling or running it.
 user-invocable: true

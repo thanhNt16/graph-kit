@@ -1,5 +1,5 @@
 ---
-name: gk:eval
+name: gk eval
 description: Score a completed graph run's evidence and emit a MERGE/BLOCK gate verdict. Work-product mode (completeness/correctness of evidence keys) and memory mode (Letta 2x2 — adherence/retrieval/generalization/hygiene, abstention-weighted). Trigger: "eval", "score this run", "should this merge", "gate", "quality".
 when_to_use: A graph run (with an eval-gate terminal node, or standalone) has completed and needs an evidence-based merge decision — not trust-based.
 user-invocable: true

@@ -1,5 +1,5 @@
 ---
-name: gk:status
+name: gk status
 description: Show the current state of a graph run. Use when the user wants a quick check on what's running or completed. Trigger: "graph status", "what's running", "graph state".
 when_to_use: User wants to know the state of the current or most recent graph run.
 user-invocable: true

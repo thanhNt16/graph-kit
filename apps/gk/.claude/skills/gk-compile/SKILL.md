@@ -1,5 +1,5 @@
 ---
-name: gk:compile
+name: gk compile
 description: Parse graph.yaml, resolve topology config, and emit a self-contained .workflow.js file. Use after gk:validate passes. Trigger: "compile graph", "build workflow", "gk compile".
 when_to_use: A validated graph.yaml exists and the user wants to compile it into a .workflow.js for Claude Code Workflows execution.
 user-invocable: true

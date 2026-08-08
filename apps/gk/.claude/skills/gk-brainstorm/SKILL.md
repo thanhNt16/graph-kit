@@ -1,5 +1,5 @@
 ---
-name: gk:brainstorm
+name: gk brainstorm
 description: Refine an existing graph.yaml through interactive dialogue. Use when the user wants to improve their graph definition, adjust agent bindings, add loops or constraints, or explore what topology to use.
 when_to_use: User has an existing graph.yaml and wants to refine it, improve it, or adjust configuration. Trigger: "refine graph", "improve workflow", "brainstorm graph", "adjust graph".
 user-invocable: true
