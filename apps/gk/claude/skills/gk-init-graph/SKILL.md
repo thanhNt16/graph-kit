@@ -9,31 +9,43 @@ disable-model-invocation: false
 # gk init-graph
 
 ## Purpose
-Generate a graph.yaml file in the project root from one of the 6 canonical topology templates.
+Generate a valid `graph.yaml` in the project root from one of the 7 canonical topology templates.
 
 ## Process
 
-1. If `--template` argument provided, use that topology.
-2. If no template, read the user's description and suggest a topology using the rules in `claude/rules/topology-routing.md`.
-3. Ask for **inputs** — what data does the graph operate on? (repo path, code scope, documents, etc.)
-4. Generate `graph.yaml` with:
-   - Selected topology
-   - Declared inputs with types and defaults
-   - Default node bindings (based on topology: scouter → Software Architect, worker → Code Reviewer, etc.)
-   - Reasonable defaults for limits and evidence
-   - Empty `topology_config` with comments showing available keys
-5. Tell the user the file was created and suggest `/gk:visualize` to see it.
+1. **Pick a topology.** If the user specified one (e.g. `--template diamond`), use it. Otherwise, pick based on the task description:
+   - "audit", "review", "research", "migrate" → **diamond**
+   - "triage", "route", "categorize" → **classify-and-act**
+   - "verify", "fact-check", "security" → **adversarial-verification**
+   - "discover", "sweep", "find all" → **loop-until-done**
+   - "brainstorm", "ideas", "naming" → **generate-and-filter**
+   - "rank", "compare", "best of" → **tournament**
+   - "long-running", "remember", "cross-run" → **memory-augmented**
 
-## Template Defaults
+2. **Scaffold a valid graph.yaml** by running the CLI — it emits a schema-correct template:
 
-| Topology | Default Nodes |
-|----------|-------------|
-| diamond | scouter, worker, verifier, synthesizer |
-| classify-and-act | classifier, handler-1, handler-2, handler-3, fallback |
-| adversarial-verification | producer, refuter-1, refuter-2, adjudicator |
-| loop-until-done | scouter, worker-batch |
-| generate-and-filter | generator-1, generator-2, generator-3 |
-| tournament | candidate-1, candidate-2, candidate-3, judge |
+   ```bash
+   gk graph new diamond > graph.yaml
+   ```
+
+   Replace `diamond` with the chosen topology. The CLI guarantees the YAML is valid against the schema — do NOT hand-write graph.yaml, always start from the CLI scaffold.
+
+3. **Customize the scaffold.** Edit graph.yaml to fit the task:
+   - Change `metadata.name` and `description`
+   - Replace each node's `objective` with the task-specific prompt
+   - Change `agent` values to match files in `.claude/agents/` (use kebab-case: `software-architect`, `code-reviewer`, `qa-engineer`, `data-engineer`, `ui-ux-researcher`, `agents-orchestrator`, `document-generator`, `memory-curator`)
+   - Add `refs`, `loop`, `constraints`, or more nodes as needed
+
+4. **Validate** to confirm the customization is correct:
+
+   ```bash
+   gk validate graph.yaml --json
+   ```
+
+   Fix any findings, then suggest `/gk:visualize` to see it.
 
 ## Output
-Writes `graph.yaml` to project root. Does not overwrite existing files — fail if graph.yaml already exists with content.
+Writes `graph.yaml` to project root. Does not overwrite existing files — if graph.yaml already exists, read it first and ask the user if they want to regenerate.
+
+## Available topologies
+Run `gk graph list` to see all 7. Run `gk graph inspect <topology>` to see its config keys.
