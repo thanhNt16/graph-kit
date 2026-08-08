@@ -79,7 +79,7 @@ describe("gk graph commands", () => {
   });
 
   test("graph inspect nonexistent fails with UNKNOWN_TOPOLOGY", () => {
-    const { stdout, code } = runCli(["graph", "inspect", "nonexistent"]);
+    const { stdout } = runCli(["graph", "inspect", "nonexistent"]);
     // process.exit is overridden to not actually exit, but code is captured
     const parsed = JSON.parse(stdout);
     expect(parsed.status).toBe("fail");
