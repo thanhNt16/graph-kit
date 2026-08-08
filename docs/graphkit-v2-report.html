@@ -1,0 +1,837 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GraphKit v2 — Graph Engineering Kit</title>
+<style>
+  :root {
+    --bg: #0a0e14;
+    --bg-elev: #0d1117;
+    --surface: #131822;
+    --border: #1c2333;
+    --border-bright: #2a3447;
+    --text: #e6edf3;
+    --text-dim: #8b949e;
+    --text-muted: #6e7681;
+    --opus: #a371f7;
+    --sonnet: #58a6ff;
+    --haiku: #3fb950;
+    --fable: #f0883e;
+    --diamond: #2ea043;
+    --classify: #58a6ff;
+    --adversarial: #f85149;
+    --loop: #d29922;
+    --generate: #79c0ff;
+    --tournament: #bc8cff;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: 'IBM Plex Sans', -apple-system, system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.65;
+    -webkit-font-smoothing: antialiased;
+  }
+  .mono { font-family: 'IBM Plex Mono', 'SF Mono', 'Cascadia Code', monospace; }
+
+  /* HERO */
+  .hero {
+    padding: 6rem 2rem 4rem;
+    text-align: center;
+    background: radial-gradient(ellipse 80% 60% at 50% 0%, rgba(163,113,247,0.08), transparent),
+                radial-gradient(ellipse 60% 40% at 30% 20%, rgba(88,166,255,0.06), transparent);
+    border-bottom: 1px solid var(--border);
+  }
+  .hero-badge {
+    display: inline-block;
+    padding: 0.3rem 0.9rem;
+    border: 1px solid var(--border-bright);
+    border-radius: 20px;
+    font-size: 0.78rem;
+    color: var(--sonnet);
+    font-family: 'IBM Plex Mono', monospace;
+    margin-bottom: 1.5rem;
+    background: var(--surface);
+  }
+  .hero h1 {
+    font-size: clamp(2.2rem, 5vw, 3.6rem);
+    font-weight: 700;
+    letter-spacing: -0.03em;
+    background: linear-gradient(135deg, #fff 30%, var(--sonnet) 60%, var(--opus) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    margin-bottom: 0.5rem;
+  }
+  .hero-tag {
+    font-size: 1.15rem;
+    color: var(--text-dim);
+    max-width: 620px;
+    margin: 0 auto 2rem;
+  }
+  .hero-stats {
+    display: flex;
+    justify-content: center;
+    gap: 2.5rem;
+    flex-wrap: wrap;
+    margin-top: 2rem;
+  }
+  .stat { text-align: center; }
+  .stat-num {
+    font-size: 1.8rem;
+    font-weight: 700;
+    font-family: 'IBM Plex Mono', monospace;
+    color: var(--text);
+  }
+  .stat-label {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+
+  /* SECTIONS */
+  .section {
+    max-width: 1000px;
+    margin: 0 auto;
+    padding: 4rem 2rem;
+  }
+  .section-label {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.78rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    margin-bottom: 0.6rem;
+  }
+  .section h2 {
+    font-size: 1.75rem;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    margin-bottom: 1.2rem;
+  }
+  .section p { color: var(--text-dim); margin-bottom: 1rem; max-width: 720px; }
+
+  /* ARCHITECTURE DIAGRAM */
+  .arch {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    margin: 2rem 0;
+  }
+  .arch-layer {
+    background: var(--bg-elev);
+    border: 1px solid var(--border-bright);
+    border-radius: 12px;
+    padding: 1.5rem;
+    position: relative;
+    transition: border-color 0.2s;
+  }
+  .arch-layer:hover { border-color: var(--sonnet); }
+  .arch-layer-tag {
+    position: absolute;
+    top: -10px;
+    left: 1.5rem;
+    background: var(--bg);
+    padding: 0 0.6rem;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.72rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+  }
+  .arch-layer-title {
+    font-size: 1.05rem;
+    font-weight: 600;
+    margin-bottom: 0.3rem;
+  }
+  .arch-layer-desc {
+    font-size: 0.88rem;
+    color: var(--text-dim);
+    margin-bottom: 0.8rem;
+  }
+  .arch-flow {
+    display: flex;
+    align-items: center;
+    gap: 0.8rem;
+    flex-wrap: wrap;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.82rem;
+  }
+  .arch-pill {
+    padding: 0.3rem 0.7rem;
+    border: 1px solid var(--border-bright);
+    border-radius: 6px;
+    background: var(--surface);
+    white-space: nowrap;
+  }
+  .arch-arrow { color: var(--text-muted); font-size: 1.1rem; }
+  .arch-arrow-down {
+    text-align: center;
+    color: var(--text-muted);
+    font-size: 1.3rem;
+    line-height: 1;
+  }
+
+  /* TOPOLOGY GALLERY */
+  .topo-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(290px, 1fr));
+    gap: 1.2rem;
+    margin: 2rem 0;
+  }
+  .topo-card {
+    background: var(--bg-elev);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 1.4rem;
+    transition: transform 0.15s, border-color 0.2s;
+    overflow: hidden;
+  }
+  .topo-card:hover { transform: translateY(-3px); border-color: var(--border-bright); }
+  .topo-card-header {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    margin-bottom: 0.8rem;
+  }
+  .topo-dot {
+    width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0;
+  }
+  .topo-name {
+    font-size: 0.98rem;
+    font-weight: 600;
+  }
+  .topo-shape {
+    font-size: 0.72rem;
+    color: var(--text-muted);
+    font-family: 'IBM Plex Mono', monospace;
+    margin-left: auto;
+  }
+  .topo-diagram {
+    height: 110px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0.5rem 0 0.8rem;
+    position: relative;
+  }
+  .topo-desc {
+    font-size: 0.82rem;
+    color: var(--text-dim);
+    line-height: 1.5;
+  }
+  .topo-use {
+    font-size: 0.74rem;
+    color: var(--text-muted);
+    margin-top: 0.5rem;
+    font-family: 'IBM Plex Mono', monospace;
+  }
+
+  /* Mini diagram nodes */
+  .dn {
+    width: 28px; height: 22px;
+    border-radius: 5px;
+    border: 1.5px solid;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.6rem;
+    font-family: 'IBM Plex Mono', monospace;
+    font-weight: 600;
+  }
+  .svg-line { stroke: var(--border-bright); stroke-width: 1.5; fill: none; }
+
+  /* NODE BINDING */
+  .binding-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.5rem;
+    margin: 2rem 0;
+  }
+  @media (max-width: 768px) { .binding-grid { grid-template-columns: 1fr; } }
+  .code-block {
+    background: var(--bg-elev);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+  }
+  .code-header {
+    padding: 0.6rem 1rem;
+    border-bottom: 1px solid var(--border);
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.78rem;
+    color: var(--text-muted);
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+  .code-dots { display: flex; gap: 5px; }
+  .code-dot { width: 10px; height: 10px; border-radius: 50%; }
+  .code-body {
+    padding: 1rem 1.2rem;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.78rem;
+    line-height: 1.7;
+    overflow-x: auto;
+    white-space: pre;
+    color: var(--text);
+  }
+  .kw { color: var(--opus); }
+  .str { color: var(--haiku); }
+  .cmt { color: var(--text-muted); }
+  .num { color: var(--fable); }
+  .field { color: var(--sonnet); }
+
+  /* MODEL TIERS */
+  .tier-bar {
+    display: flex;
+    gap: 0.6rem;
+    margin: 1rem 0;
+    flex-wrap: wrap;
+  }
+  .tier {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.4rem 0.8rem;
+    border: 1px solid var(--border-bright);
+    border-radius: 8px;
+    background: var(--surface);
+    font-size: 0.8rem;
+  }
+  .tier-dot { width: 10px; height: 10px; border-radius: 50%; }
+  .tier-name { font-weight: 600; font-family: 'IBM Plex Mono', monospace; }
+  .tier-desc { color: var(--text-dim); font-size: 0.75rem; }
+
+  /* SKILLS + AGENTS */
+  .cards-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 0.8rem;
+    margin: 1.5rem 0;
+  }
+  .skill-card {
+    background: var(--bg-elev);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 0.9rem 1rem;
+    transition: border-color 0.2s;
+  }
+  .skill-card:hover { border-color: var(--sonnet); }
+  .skill-name {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.85rem;
+    color: var(--sonnet);
+    margin-bottom: 0.2rem;
+  }
+  .skill-desc { font-size: 0.78rem; color: var(--text-dim); }
+
+  .agent-row {
+    display: flex;
+    align-items: center;
+    gap: 0.8rem;
+    padding: 0.7rem 1rem;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--bg-elev);
+    margin-bottom: 0.5rem;
+  }
+  .agent-emoji { font-size: 1.3rem; }
+  .agent-info { flex: 1; }
+  .agent-name { font-weight: 600; font-size: 0.9rem; }
+  .agent-roles { font-size: 0.75rem; color: var(--text-muted); font-family: 'IBM Plex Mono', monospace; }
+  .agent-tier {
+    padding: 0.15rem 0.5rem;
+    border-radius: 5px;
+    font-size: 0.72rem;
+    font-family: 'IBM Plex Mono', monospace;
+    font-weight: 600;
+  }
+
+  /* CLI FLOW */
+  .cli-flow {
+    display: flex;
+    gap: 0.6rem;
+    flex-wrap: wrap;
+    margin: 1.5rem 0;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.82rem;
+  }
+  .cli-step {
+    padding: 0.5rem 0.9rem;
+    border: 1px solid var(--border-bright);
+    border-radius: 8px;
+    background: var(--surface);
+    white-space: nowrap;
+  }
+  .cli-step.active { border-color: var(--haiku); color: var(--haiku); }
+
+  /* STATS BANNER */
+  .stats-banner {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 1px;
+    background: var(--border);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    overflow: hidden;
+    margin: 2rem 0;
+  }
+  .stat-cell {
+    background: var(--bg-elev);
+    padding: 1.5rem 1rem;
+    text-align: center;
+  }
+  .stat-cell-num {
+    font-size: 1.6rem;
+    font-weight: 700;
+    font-family: 'IBM Plex Mono', monospace;
+    color: var(--sonnet);
+  }
+  .stat-cell-label {
+    font-size: 0.72rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin-top: 0.3rem;
+  }
+
+  /* FOOTER */
+  .footer {
+    text-align: center;
+    padding: 3rem 2rem;
+    border-top: 1px solid var(--border);
+    color: var(--text-muted);
+    font-size: 0.82rem;
+  }
+  .footer a { color: var(--sonnet); text-decoration: none; }
+</style>
+</head>
+<body>
+
+<!-- HERO -->
+<div class="hero">
+  <div class="hero-badge">graphkit.dev/v2 · graph engineering kit</div>
+  <h1>GraphKit v2</h1>
+  <p class="hero-tag">Define graph-structured agent workflows as YAML. Compile to Claude Code dynamic workflows. Six canonical topologies. Per-node model tiering. Zero custom runtime.</p>
+  <div class="hero-stats">
+    <div class="stat"><div class="stat-num">6</div><div class="stat-label">Topologies</div></div>
+    <div class="stat"><div class="stat-num">7</div><div class="stat-label">Agents</div></div>
+    <div class="stat"><div class="stat-num">8</div><div class="stat-label">Skills</div></div>
+    <div class="stat"><div class="stat-num">67</div><div class="stat-label">Tests</div></div>
+  </div>
+</div>
+
+<!-- ARCHITECTURE -->
+<div class="section">
+  <div class="section-label">Architecture</div>
+  <h2>Three Layers, Clean Boundary</h2>
+  <p>gk CLI validates and compiles. Claude Code executes. The kit template connects them. No custom state machine — Claude Code's native Workflow tool owns the runtime.</p>
+
+  <div class="arch">
+    <div class="arch-layer">
+      <div class="arch-layer-tag">Layer 1 — Kit Template</div>
+      <div class="arch-layer-title">📦 claude/ directory</div>
+      <div class="arch-layer-desc">Installed by <code class="mono">gk init</code> into <code class="mono">.claude/</code>. Agents, skills, hooks, rules, schemas, topology templates.</div>
+      <div class="arch-flow">
+        <span class="arch-pill">7 agents</span>
+        <span class="arch-arrow">·</span>
+        <span class="arch-pill">8 skills</span>
+        <span class="arch-arrow">·</span>
+        <span class="arch-pill">3 hooks</span>
+        <span class="arch-arrow">·</span>
+        <span class="arch-pill">3 rules</span>
+        <span class="arch-arrow">·</span>
+        <span class="arch-pill">6 templates</span>
+      </div>
+    </div>
+
+    <div class="arch-arrow-down">↓</div>
+
+    <div class="arch-layer">
+      <div class="arch-layer-tag">Layer 2 — gk CLI v2</div>
+      <div class="arch-layer-title">⚙️ Compiler + Installer</div>
+      <div class="arch-layer-desc">Validates graph YAML against schemas + topology contracts. Compiles to self-contained <code class="mono">.workflow.js</code>. Never invokes a model.</div>
+      <div class="arch-flow">
+        <span class="arch-pill">gk init</span>
+        <span class="arch-arrow">→</span>
+        <span class="arch-pill">gk validate</span>
+        <span class="arch-arrow">→</span>
+        <span class="arch-pill">gk compile</span>
+      </div>
+    </div>
+
+    <div class="arch-arrow-down">↓</div>
+
+    <div class="arch-layer">
+      <div class="arch-layer-tag">Layer 3 — Claude Code Runtime</div>
+      <div class="arch-layer-title">▶️ Workflow Tool</div>
+      <div class="arch-layer-desc">Executes the compiled <code class="mono">.workflow.js</code> using <code class="mono">agent()</code>, <code class="mono">parallel()</code>, <code class="mono">pipeline()</code>. Agents run at their declared model tier.</div>
+    </div>
+  </div>
+</div>
+
+<!-- TOPOLOGIES -->
+<div class="section">
+  <div class="section-label">Graph Topologies</div>
+  <h2>Six Canonical Shapes</h2>
+  <p>Each topology is a parameterized <code class="mono">.workflow.js</code> template. They compose — a diamond's fan-out can embed an adversarial-verification subgraph.</p>
+
+  <div class="topo-grid">
+
+    <div class="topo-card" style="border-left: 3px solid var(--diamond)">
+      <div class="topo-card-header">
+        <div class="topo-dot" style="background:var(--diamond)"></div>
+        <div class="topo-name">Diamond</div>
+        <div class="topo-shape">fan-out → reduce → synthesize</div>
+      </div>
+      <div class="topo-diagram">
+        <svg width="160" height="100" viewBox="0 0 160 100">
+          <line class="svg-line" x1="80" y1="15" x2="30" y2="50"/>
+          <line class="svg-line" x1="80" y1="15" x2="80" y2="50"/>
+          <line class="svg-line" x1="80" y1="15" x2="130" y2="50"/>
+          <line class="svg-line" x1="30" y1="50" x2="80" y2="88"/>
+          <line class="svg-line" x1="80" y1="50" x2="80" y2="88"/>
+          <line class="svg-line" x1="130" y1="50" x2="80" y2="88"/>
+          <rect x="65" y="5" width="30" height="20" rx="4" fill="none" stroke="var(--diamond)"/>
+          <rect x="15" y="40" width="30" height="20" rx="4" fill="none" stroke="var(--sonnet)"/>
+          <rect x="65" y="40" width="30" height="20" rx="4" fill="none" stroke="var(--sonnet)"/>
+          <rect x="115" y="40" width="30" height="20" rx="4" fill="none" stroke="var(--sonnet)"/>
+          <rect x="65" y="78" width="30" height="20" rx="4" fill="none" stroke="var(--opus)"/>
+        </svg>
+      </div>
+      <div class="topo-desc">Split work to N parallel workers, reduce with deterministic code, synthesize with one high-tier agent.</div>
+      <div class="topo-use">→ code review · research · migration</div>
+    </div>
+
+    <div class="topo-card" style="border-left: 3px solid var(--classify)">
+      <div class="topo-card-header">
+        <div class="topo-dot" style="background:var(--classify)"></div>
+        <div class="topo-name">Classify-and-Act</div>
+        <div class="topo-shape">route 1 → 1 handler</div>
+      </div>
+      <div class="topo-diagram">
+        <svg width="160" height="100" viewBox="0 0 160 100">
+          <line class="svg-line" x1="80" y1="20" x2="25" y2="75"/>
+          <line class="svg-line" x1="80" y1="20" x2="65" y2="75"/>
+          <line class="svg-line" x1="80" y1="20" x2="105" y2="75"/>
+          <line class="svg-line" x1="80" y1="20" x2="145" y2="75"/>
+          <rect x="62" y="8" width="36" height="22" rx="4" fill="none" stroke="var(--opus)"/>
+          <rect x="8" y="72" width="34" height="20" rx="4" fill="none" stroke="var(--sonnet)"/>
+          <rect x="48" y="72" width="34" height="20" rx="4" fill="none" stroke="var(--sonnet)"/>
+          <rect x="88" y="72" width="34" height="20" rx="4" fill="none" stroke="var(--sonnet)"/>
+          <rect x="128" y="72" width="26" height="20" rx="4" fill="none" stroke="var(--haiku)"/>
+        </svg>
+      </div>
+      <div class="topo-desc">Classifier inspects input, routes to exactly one handler. Fallback for unmatched inputs.</div>
+      <div class="topo-use">→ triage · routing · escalation</div>
+    </div>
+
+    <div class="topo-card" style="border-left: 3px solid var(--adversarial)">
+      <div class="topo-card-header">
+        <div class="topo-dot" style="background:var(--adversarial)"></div>
+        <div class="topo-name">Adversarial Verification</div>
+        <div class="topo-shape">produce → refute → adjudicate</div>
+      </div>
+      <div class="topo-diagram">
+        <svg width="160" height="100" viewBox="0 0 160 100">
+          <line class="svg-line" x1="80" y1="15" x2="30" y2="50"/>
+          <line class="svg-line" x1="80" y1="15" x2="80" y2="50"/>
+          <line class="svg-line" x1="80" y1="15" x2="130" y2="50"/>
+          <line class="svg-line" x1="30" y1="50" x2="80" y2="85"/>
+          <line class="svg-line" x1="80" y1="50" x2="80" y2="85"/>
+          <line class="svg-line" x1="130" y1="50" x2="80" y2="85"/>
+          <rect x="62" y="5" width="36" height="20" rx="4" fill="none" stroke="var(--adversarial)"/>
+          <text x="80" y="19" text-anchor="middle" fill="var(--text-muted)" font-size="8" font-family="monospace">P</text>
+          <rect x="12" y="40" width="28" height="20" rx="4" fill="none" stroke="var(--sonnet)" stroke-dasharray="3,2"/>
+          <text x="26" y="54" text-anchor="middle" fill="var(--text-muted)" font-size="8" font-family="monospace">R</text>
+          <rect x="66" y="40" width="28" height="20" rx="4" fill="none" stroke="var(--sonnet)" stroke-dasharray="3,2"/>
+          <text x="80" y="54" text-anchor="middle" fill="var(--text-muted)" font-size="8" font-family="monospace">R</text>
+          <rect x="120" y="40" width="28" height="20" rx="4" fill="none" stroke="var(--sonnet)" stroke-dasharray="3,2"/>
+          <text x="134" y="54" text-anchor="middle" fill="var(--text-muted)" font-size="8" font-family="monospace">R</text>
+          <rect x="62" y="78" width="36" height="20" rx="4" fill="none" stroke="var(--opus)"/>
+          <text x="80" y="92" text-anchor="middle" fill="var(--text-muted)" font-size="8" font-family="monospace">A</text>
+        </svg>
+      </div>
+      <div class="topo-desc">Producer emits items. Independent refuters with fresh context challenge each. Survivors pass threshold.</div>
+      <div class="topo-use">→ security audit · fact-check · code review</div>
+    </div>
+
+    <div class="topo-card" style="border-left: 3px solid var(--loop)">
+      <div class="topo-card-header">
+        <div class="topo-dot" style="background:var(--loop)"></div>
+        <div class="topo-name">Loop Until Done</div>
+        <div class="topo-shape">scout → work → dedup → repeat</div>
+      </div>
+      <div class="topo-diagram">
+        <svg width="160" height="100" viewBox="0 0 160 100">
+          <path class="svg-line" d="M 80 20 Q 140 20 140 50 Q 140 80 80 80" stroke-dasharray="4,3"/>
+          <polygon points="85,78 75,75 80,85" fill="var(--border-bright)"/>
+          <rect x="55" y="10" width="50" height="20" rx="4" fill="none" stroke="var(--opus)"/>
+          <text x="80" y="24" text-anchor="middle" fill="var(--text-muted)" font-size="8" font-family="monospace">scout</text>
+          <rect x="20" y="42" width="35" height="16" rx="4" fill="none" stroke="var(--sonnet)"/>
+          <rect x="62" y="42" width="35" height="16" rx="4" fill="none" stroke="var(--sonnet)"/>
+          <rect x="105" y="42" width="35" height="16" rx="4" fill="none" stroke="var(--sonnet)"/>
+          <text x="80" y="76" text-anchor="middle" fill="var(--loop)" font-size="7" font-family="monospace">stop when dry</text>
+        </svg>
+      </div>
+      <div class="topo-desc">Scout discovers work, workers process, dedup against seen. Loop until K consecutive empty rounds.</div>
+      <div class="topo-use">→ discovery · bug sweep · exhaustive search</div>
+    </div>
+
+    <div class="topo-card" style="border-left: 3px solid var(--generate)">
+      <div class="topo-card-header">
+        <div class="topo-dot" style="background:var(--generate)"></div>
+        <div class="topo-name">Generate-and-Filter</div>
+        <div class="topo-shape">generate N → keep best K</div>
+      </div>
+      <div class="topo-diagram">
+        <svg width="160" height="100" viewBox="0 0 160 100">
+          <line class="svg-line" x1="80" y1="20" x2="80" y2="48"/>
+          <line class="svg-line" x1="80" y1="55" x2="80" y2="80"/>
+          <rect x="55" y="10" width="50" height="20" rx="4" fill="none" stroke="var(--sonnet)"/>
+          <text x="80" y="24" text-anchor="middle" fill="var(--text-muted)" font-size="7" font-family="monospace">N generators</text>
+          <rect x="60" y="46" width="40" height="16" rx="8" fill="none" stroke="var(--haiku)"/>
+          <text x="80" y="57" text-anchor="middle" fill="var(--text-muted)" font-size="7" font-family="monospace">rubric</text>
+          <rect x="50" y="78" width="30" height="18" rx="4" fill="none" stroke="var(--opus)"/>
+          <rect x="82" y="78" width="30" height="18" rx="4" fill="none" stroke="var(--opus)"/>
+          <text x="80" y="90" text-anchor="middle" fill="var(--text-muted)" font-size="7" font-family="monospace">top-K</text>
+        </svg>
+      </div>
+      <div class="topo-desc">Multiple generators propose candidates. Rubric scores in one deterministic pass. Keep top-K.</div>
+      <div class="topo-use">→ naming · design variants · ideation</div>
+    </div>
+
+    <div class="topo-card" style="border-left: 3px solid var(--tournament)">
+      <div class="topo-card-header">
+        <div class="topo-dot" style="background:var(--tournament)"></div>
+        <div class="topo-name">Tournament</div>
+        <div class="topo-shape">pairwise elimination</div>
+      </div>
+      <div class="topo-diagram">
+        <svg width="160" height="100" viewBox="0 0 160 100">
+          <line class="svg-line" x1="25" y1="20" x2="60" y2="50"/>
+          <line class="svg-line" x1="60" y1="20" x2="60" y2="50"/>
+          <line class="svg-line" x1="100" y1="20" x2="100" y2="50"/>
+          <line class="svg-line" x1="140" y1="20" x2="100" y2="50"/>
+          <line class="svg-line" x1="60" y1="60" x2="80" y2="85"/>
+          <line class="svg-line" x1="100" y1="60" x2="80" y2="85"/>
+          <rect x="10" y="10" width="30" height="16" rx="3" fill="none" stroke="var(--sonnet)"/>
+          <rect x="45" y="10" width="30" height="16" rx="3" fill="none" stroke="var(--sonnet)"/>
+          <rect x="85" y="10" width="30" height="16" rx="3" fill="none" stroke="var(--sonnet)"/>
+          <rect x="120" y="10" width="30" height="16" rx="3" fill="none" stroke="var(--sonnet)"/>
+          <rect x="45" y="50" width="30" height="16" rx="3" fill="none" stroke="var(--sonnet)"/>
+          <rect x="85" y="50" width="30" height="16" rx="3" fill="none" stroke="var(--sonnet)"/>
+          <rect x="62" y="82" width="36" height="16" rx="3" fill="none" stroke="var(--opus)"/>
+        </svg>
+      </div>
+      <div class="topo-desc">Candidates compete in pairwise judged rounds. One champion emerges.</div>
+      <div class="topo-use">→ ranking · eval scoring · taste calls</div>
+    </div>
+
+  </div>
+</div>
+
+<!-- NODE BINDING -->
+<div class="section">
+  <div class="section-label">Per-Node Binding</div>
+  <h2>Model Tiering, Tools, Loops, Constraints</h2>
+  <p>Every node carries its own configuration. The scouter runs at opus for deep analysis. The verifier runs at haiku for cheap checks. Workers get their own tools, refs, and internal loops.</p>
+
+  <div class="tier-bar">
+    <div class="tier"><div class="tier-dot" style="background:var(--opus)"></div><span class="tier-name">opus</span><span class="tier-desc">judgment · synthesis</span></div>
+    <div class="tier"><div class="tier-dot" style="background:var(--sonnet)"></div><span class="tier-name">sonnet</span><span class="tier-desc">implementation · review</span></div>
+    <div class="tier"><div class="tier-dot" style="background:var(--haiku)"></div><span class="tier-name">haiku</span><span class="tier-desc">verification · routing</span></div>
+    <div class="tier"><div class="tier-dot" style="background:var(--fable)"></div><span class="tier-name">fable</span><span class="tier-desc">specialized tasks</span></div>
+  </div>
+
+  <div class="binding-grid">
+    <div class="code-block">
+      <div class="code-header"><div class="code-dots"><div class="code-dot" style="background:#f85149"></div><div class="code-dot" style="background:#d29922"></div><div class="code-dot" style="background:#3fb950"></div></div> graph.yaml</div>
+      <div class="code-body"><span class="kw">nodes:</span>
+  <span class="field">scouter:</span>
+    <span class="field">agent:</span> <span class="str">Software Architect</span>
+    <span class="field">model:</span> <span class="str">opus</span>
+    <span class="field">objective:</span> <span class="str">Map attack surfaces</span>
+    <span class="field">tools:</span> [<span class="str">Read</span>, <span class="str">Glob</span>, <span class="str">Grep</span>]
+    <span class="field">refs:</span>
+      - <span class="field">path:</span> <span class="str">docs/owasp.md</span>
+        <span class="field">purpose:</span> <span class="str">checklist</span>
+    <span class="field">depend_on:</span> []
+    <span class="field">loop:</span>
+      <span class="field">enabled:</span> <span class="num">true</span>
+      <span class="field">stop_when:</span> <span class="str">evidence found</span>
+      <span class="field">max_rounds:</span> <span class="num">3</span>
+    <span class="field">constraints:</span>
+      - <span class="field">no_write:</span> <span class="num">true</span>
+    <span class="field">evidence:</span> [<span class="str">attack_surface</span>]
+
+  <span class="field">worker:</span>
+    <span class="field">agent:</span> <span class="str">Code Reviewer</span>
+    <span class="field">model:</span> <span class="str">sonnet</span>
+    <span class="field">depend_on:</span> [<span class="str">scouter</span>] <span class="cmt"># waits</span>
+
+  <span class="field">verifier:</span>
+    <span class="field">agent:</span> <span class="str">QA Engineer</span>
+    <span class="field">model:</span> <span class="str">haiku</span>          <span class="cmt"># cheap</span>
+    <span class="field">depend_on:</span> [<span class="str">worker</span>]</div>
+    </div>
+
+    <div class="code-block">
+      <div class="code-header"><div class="code-dots"><div class="code-dot" style="background:#f85149"></div><div class="code-dot" style="background:#d29922"></div><div class="code-dot" style="background:#3fb950"></div></div> compiled .workflow.js</div>
+      <div class="code-body"><span class="cmt">// Generated by gk compile</span>
+<span class="cmt">// Self-contained: zero kit imports</span>
+
+<span class="kw">export const</span> meta = {
+  <span class="field">name</span>: <span class="str">"security-audit"</span>,
+};
+
+<span class="kw">export function</span> createDiamondWorkflow(config) {
+  <span class="kw">const</span> { nodes } = config;
+  <span class="kw">return async</span> (context) => {
+    <span class="kw">const</span> scout = <span class="kw">await</span> context.agent(
+      nodes.scouter.objective, {
+        <span class="field">model</span>: nodes.scouter.model,
+        <span class="field">tools</span>: nodes.scouter.tools,
+      });
+
+    <span class="kw">const</span> results = <span class="kw">await</span> context.parallel(
+      items.map(item => () =>
+        context.agent(
+          nodes.worker.objective, {
+            <span class="field">model</span>: <span class="str">"sonnet"</span>,
+          })));
+
+    <span class="kw">return</span> synthesize(results);
+  };
+}</div>
+    </div>
+  </div>
+</div>
+
+<!-- CLI FLOW -->
+<div class="section">
+  <div class="section-label">Session Flow</div>
+  <h2>From Idea to Running Graph</h2>
+  <p>Inside a Claude Code session, the eight skills walk the user through the full lifecycle.</p>
+
+  <div class="cli-flow">
+    <span class="cli-step">/gk-init-graph</span>
+    <span style="color:var(--text-muted)">→</span>
+    <span class="cli-step">/gk-visualize</span>
+    <span style="color:var(--text-muted)">→</span>
+    <span class="cli-step">/gk-brainstorm</span>
+    <span style="color:var(--text-muted)">→</span>
+    <span class="cli-step active">/gk-validate</span>
+    <span style="color:var(--text-muted)">→</span>
+    <span class="cli-step">/gk-compile</span>
+    <span style="color:var(--text-muted)">→</span>
+    <span class="cli-step">/gk-run</span>
+    <span style="color:var(--text-muted)">→</span>
+    <span class="cli-step">/gk-evidence</span>
+  </div>
+
+  <div class="binding-grid" style="margin-top:1.5rem">
+    <div class="code-block">
+      <div class="code-header"><div class="code-dots"><div class="code-dot" style="background:#f85149"></div><div class="code-dot" style="background:#d29922"></div><div class="code-dot" style="background:#3fb950"></div></div> terminal</div>
+      <div class="code-body"><span class="cmt"># Install the kit</span>
+$ gk init
+
+<span class="cmt"># Validate + compile</span>
+$ gk validate --json
+{<span class="str">"status"</span>:<span class="str">"ok"</span>,<span class="str">"topology"</span>:<span class="str">"diamond"</span>}
+
+$ gk compile --json
+{<span class="str">"status"</span>:<span class="str">"ok"</span>,
+ <span class="str">"compiled"</span>:<span class="str">".workflow.js"</span>}
+
+<span class="cmt"># List topologies</span>
+$ gk graph list
+[<span class="str">"diamond"</span>, <span class="str">"classify-and-act"</span>,
+ <span class="str">"adversarial-verification"</span>, ...]</div>
+    </div>
+
+    <div>
+      <div class="cards-row" style="grid-template-columns:1fr">
+        <div class="skill-card"><div class="skill-name">/gk-init-graph</div><div class="skill-desc">Generate graph.yaml from a topology template</div></div>
+        <div class="skill-card"><div class="skill-name">/gk-brainstorm</div><div class="skill-desc">Refine nodes, model tiers, loops, constraints</div></div>
+        <div class="skill-card"><div class="skill-name">/gk-visualize</div><div class="skill-desc">Render graph as Excalidraw diagram</div></div>
+        <div class="skill-card"><div class="skill-name">/gk-validate</div><div class="skill-desc">9-check gate: schema, agents, refs, cycles, evidence</div></div>
+        <div class="skill-card"><div class="skill-name">/gk-compile</div><div class="skill-desc">YAML → self-contained .workflow.js</div></div>
+        <div class="skill-card"><div class="skill-name">/gk-run</div><div class="skill-desc">Execute via Claude Code Workflow tool</div></div>
+        <div class="skill-card"><div class="skill-name">/gk-evidence</div><div class="skill-desc">Markdown report from graph results</div></div>
+        <div class="skill-card"><div class="skill-name">/gk-status</div><div class="skill-desc">Current run state — manual invoke only</div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- AGENTS -->
+<div class="section">
+  <div class="section-label">Kit Agents</div>
+  <h2>Engineering Team — Inherited from agency-agents</h2>
+  <p>Seven agents with markdown definitions + YAML frontmatter. Each declares default model, graph roles, and evidence keys. Users can add custom agents.</p>
+
+  <div style="margin-top:1.5rem">
+    <div class="agent-row">
+      <div class="agent-emoji">🏛️</div>
+      <div class="agent-info"><div class="agent-name">Software Architect</div><div class="agent-roles">scouter · planner · synthesizer</div></div>
+      <div class="agent-tier" style="background:rgba(163,113,247,0.15);color:var(--opus)">opus</div>
+    </div>
+    <div class="agent-row">
+      <div class="agent-emoji">👁️</div>
+      <div class="agent-info"><div class="agent-name">Code Reviewer</div><div class="agent-roles">worker · verifier</div></div>
+      <div class="agent-tier" style="background:rgba(88,166,255,0.15);color:var(--sonnet)">sonnet</div>
+    </div>
+    <div class="agent-row">
+      <div class="agent-emoji">🧪</div>
+      <div class="agent-info"><div class="agent-name">QA Engineer</div><div class="agent-roles">verifier · worker</div></div>
+      <div class="agent-tier" style="background:rgba(63,185,80,0.15);color:var(--haiku)">haiku</div>
+    </div>
+    <div class="agent-row">
+      <div class="agent-emoji">📊</div>
+      <div class="agent-info"><div class="agent-name">Data Engineer</div><div class="agent-roles">worker · scouter</div></div>
+      <div class="agent-tier" style="background:rgba(88,166,255,0.15);color:var(--sonnet)">sonnet</div>
+    </div>
+    <div class="agent-row">
+      <div class="agent-emoji">🎨</div>
+      <div class="agent-info"><div class="agent-name">UI/UX Researcher</div><div class="agent-roles">worker · synthesizer</div></div>
+      <div class="agent-tier" style="background:rgba(88,166,255,0.15);color:var(--sonnet)">sonnet</div>
+    </div>
+    <div class="agent-row">
+      <div class="agent-emoji">🔧</div>
+      <div class="agent-info"><div class="agent-name">Agents Orchestrator</div><div class="agent-roles">scouter · synthesizer</div></div>
+      <div class="agent-tier" style="background:rgba(163,113,247,0.15);color:var(--opus)">opus</div>
+    </div>
+    <div class="agent-row">
+      <div class="agent-emoji">📝</div>
+      <div class="agent-info"><div class="agent-name">Document Generator</div><div class="agent-roles">synthesizer · worker</div></div>
+      <div class="agent-tier" style="background:rgba(88,166,255,0.15);color:var(--sonnet)">sonnet</div>
+    </div>
+  </div>
+</div>
+
+<!-- STATS -->
+<div class="section">
+  <div class="section-label">Verified</div>
+  <h2>Tested End-to-End</h2>
+  <p>67 tests across unit, integration, and acceptance suites. Skills tested in live Claude Code sessions. CLI tested from init through compile.</p>
+
+  <div class="stats-banner">
+    <div class="stat-cell"><div class="stat-cell-num">67</div><div class="stat-cell-label">Tests Pass</div></div>
+    <div class="stat-cell"><div class="stat-cell-num">0</div><div class="stat-cell-label">Failures</div></div>
+    <div class="stat-cell"><div class="stat-cell-num">10</div><div class="stat-cell-label">AC Proven</div></div>
+    <div class="stat-cell"><div class="stat-cell-num">92</div><div class="stat-cell-label">Files</div></div>
+    <div class="stat-cell"><div class="stat-cell-num">8.7K</div><div class="stat-cell-label">Lines Added</div></div>
+    <div class="stat-cell"><div class="stat-cell-num">0</div><div class="stat-cell-label">Lint Errors</div></div>
+  </div>
+</div>
+
+<!-- FOOTER -->
+<div class="footer">
+  GraphKit v2 · <a href="#">graphkit.dev</a> · graph engineering kit for Claude Code<br>
+  gk never invokes a model · Claude Code Workflows own the runtime
+</div>
+
+</body>
+</html>
