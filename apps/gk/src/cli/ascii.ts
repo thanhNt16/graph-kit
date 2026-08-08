@@ -1,5 +1,4 @@
 import { readFileSync } from "node:fs";
-import { join } from "node:path";
 import YAML from "yaml";
 
 interface GraphNode {
@@ -66,14 +65,73 @@ function nodeBox(id: string, node: GraphNode): string[] {
 }
 
 /**
- * Center-connect a parent box to N child boxes using pure ASCII.
+ * Compute column centers (0-based, relative to content after "  " prefix)
+ * for side-by-side boxes of given widths separated by 3-space gaps.
  */
-function fanOutConnector(childCount: number): string[] {
-  if (childCount <= 1) return ["    |", "    v"];
-  const width = childCount * 4;
-  let line = "    +";
-  for (let i = 1; i < childCount; i++) line += "---+";
-  return ["    |", line, `    fan-out (${childCount} parallel)`];
+function columnCenters(widths: number[]): number[] {
+  const gap = 3;
+  const centers: number[] = [];
+  let x = 0;
+  for (const w of widths) {
+    centers.push(x + Math.floor(w / 2));
+    x += w + gap;
+  }
+  return centers;
+}
+
+/** Place a char at `pos` in a line, padding as needed. */
+function placeChar(line: string, pos: number, ch: string): string {
+  if (line.length <= pos) line = line.padEnd(pos + 1);
+  return line.substring(0, pos) + ch + line.substring(pos + 1);
+}
+
+/** Build horizontal bar connecting column centers with `+` and `-`. */
+function horizontalBar(centers: number[]): string {
+  if (centers.length === 0) return "";
+  const sorted = [...centers].sort((a, b) => a - b);
+  const first = sorted[0];
+  let bar = placeChar("", first, "+");
+  for (let i = 1; i < sorted.length; i++) {
+    bar = bar.padEnd(sorted[i]);
+    for (let j = sorted[i - 1] + 1; j < sorted[i]; j++) bar = placeChar(bar, j, "-");
+    bar = placeChar(bar, sorted[i], "+");
+  }
+  return bar;
+}
+
+/**
+ * Fan-out: 1 parent → N children.
+ * centers: column center positions of each child box (0-based after "  " prefix).
+ */
+function fanOutConnector(centers: number[]): string[] {
+  if (centers.length <= 1) return ["    |", "    v"];
+  const stemPos = centers[0] + Math.floor((centers[centers.length - 1] - centers[0]) / 2);
+  const bar = horizontalBar(centers);
+  const drops = centers.reduce((acc, c) => [placeChar(acc[0], c, "|"), placeChar(acc[1], c, "v")], ["", ""]);
+  return [
+    " ".repeat(stemPos + 2) + "|",
+    bar,
+    drops[0],
+    drops[1],
+  ];
+}
+
+/**
+ * Fan-in: N parents → 1 child.
+ * centers: column center positions of each parent box (0-based after "  " prefix).
+ */
+function fanInConnector(centers: number[]): string[] {
+  if (centers.length <= 1) return ["    |", "    v"];
+  const stemPos = centers[0] + Math.floor((centers[centers.length - 1] - centers[0]) / 2);
+  const bar = horizontalBar(centers);
+  const rises = centers.reduce((acc, c) => [placeChar(acc[0], c, "|"), placeChar(acc[1], c, "^")], ["", ""]);
+  return [
+    rises[0],
+    rises[1],
+    bar,
+    " ".repeat(stemPos + 2) + "|",
+    " ".repeat(stemPos) + "    v",
+  ];
 }
 
 /**
@@ -141,8 +199,18 @@ export function renderAscii(graphFile: string): string {
     // Connector to next level
     if (lvl < maxLevel) {
       const nextIds = byLevel[lvl + 1];
+      // Compute actual box widths for the side-by-side level to get column centers
+      const nextBoxes = nextIds.map((id) => nodeBox(id, nodes[id]));
+      const nextWidths = nextBoxes.map((b) => b[0].length);
+      const curBoxes = ids.map((id) => nodeBox(id, nodes[id]));
+      const curWidths = curBoxes.map((b) => b[0].length);
+
       if (ids.length === 1 && nextIds.length > 1) {
-        for (const c of fanOutConnector(nextIds.length)) out.push(`  ${c}`);
+        const centers = columnCenters(nextWidths);
+        for (const c of fanOutConnector(centers)) out.push(`  ${c}`);
+      } else if (ids.length > 1 && nextIds.length <= 1) {
+        const centers = columnCenters(curWidths);
+        for (const c of fanInConnector(centers)) out.push(`  ${c}`);
       } else {
         out.push("    |");
         out.push("    v");
