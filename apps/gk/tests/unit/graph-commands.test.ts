@@ -58,12 +58,12 @@ describe("gk graph commands", () => {
     rmSync(tmp, { recursive: true, force: true });
   });
 
-  test("graph list outputs all 8 topologies", () => {
+  test("graph list outputs all 11 topologies", () => {
     const { stdout, code } = runCli(["graph", "list"]);
     expect(code).toBe(0);
     const parsed = JSON.parse(stdout);
     expect(parsed.status).toBe("ok");
-    expect(parsed.data.topologies).toHaveLength(8);
+    expect(parsed.data.topologies).toHaveLength(11);
     expect(parsed.data.topologies).toContain("diamond");
     expect(parsed.data.topologies).toContain("tournament");
   });
@@ -84,7 +84,7 @@ describe("gk graph commands", () => {
     const parsed = JSON.parse(stdout);
     expect(parsed.status).toBe("fail");
     expect(parsed.error.code).toBe("UNKNOWN_TOPOLOGY");
-    expect(parsed.error.details.available).toHaveLength(8);
+    expect(parsed.error.details.available).toHaveLength(11);
   });
 
   test("validate on minimal-diamond.yaml — schema parse succeeds", () => {

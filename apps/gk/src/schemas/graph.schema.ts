@@ -68,6 +68,9 @@ const TopologyName = z.enum([
   "tournament",
   "memory-augmented",
   "custom",
+  "sdd",
+  "superpowers",
+  "research-and-build",
 ]);
 
 type NodeDef = z.infer<typeof NodeDefSchema>;

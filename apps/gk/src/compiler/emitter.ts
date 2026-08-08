@@ -3,6 +3,13 @@ import { join } from "node:path";
 import { resolveTopologyConfig } from "./resolver.js";
 import type { Graph } from "./validate.js";
 
+// Presets that delegate to the custom executor must also resolve to custom.workflow.js
+const EFFECTIVE_TOPOLOGY: Record<string, string> = {
+  sdd: "custom",
+  superpowers: "custom",
+  "research-and-build": "custom",
+};
+
 const TEMPLATE_FN: Record<string, string> = {
   diamond: "createDiamondWorkflow",
   "classify-and-act": "createClassifyWorkflow",
@@ -12,13 +19,24 @@ const TEMPLATE_FN: Record<string, string> = {
   tournament: "createTournamentWorkflow",
   "memory-augmented": "createMemoryAugmentedWorkflow",
   custom: "createCustomWorkflow",
+  sdd: "createCustomWorkflow",
+  superpowers: "createCustomWorkflow",
+  "research-and-build": "createCustomWorkflow",
+};
+
+// Flow presets alias to the custom template file
+const TEMPLATE_ALIAS: Record<string, string> = {
+  sdd: "custom",
+  superpowers: "custom",
+  "research-and-build": "custom",
 };
 
 export function compileGraph(graph: Graph, templatesDir: string): string {
   const resolved = resolveTopologyConfig(graph.topology, graph.topology_config, templatesDir);
 
   // Collect the root template + every referenced subgraph template (deduped)
-  const templateFiles = new Set<string>([`${graph.topology}.workflow.js`]);
+  const effectiveTopology = EFFECTIVE_TOPOLOGY[graph.topology] ?? graph.topology;
+  const templateFiles = new Set<string>([`${effectiveTopology}.workflow.js`]);
   const collectSubgraphs = (obj: unknown) => {
     if (obj && typeof obj === "object") {
       for (const v of Object.values(obj as Record<string, unknown>)) {

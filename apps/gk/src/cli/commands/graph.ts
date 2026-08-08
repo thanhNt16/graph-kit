@@ -356,6 +356,192 @@ nodes:
     objective: "Second step — depends on step-1"
     depend_on: [step-1]
 `,
+    sdd: `apiVersion: graphkit.dev/v2
+kind: Graph
+metadata:
+  name: sdd
+  description: Subagent-driven development — brainstorm, plan, parallel workers, review, test loop
+topology: custom
+inputs:
+  task: { type: string, required: true }
+nodes:
+  brainstormer:
+    agent: software-architect
+    model: opus
+    objective: |
+      Brainstorm the approach. Ask clarifying questions.
+      Identify key decisions and constraints.
+    depend_on: []
+    evidence: [approach, decisions]
+  planner:
+    agent: software-architect
+    model: opus
+    objective: |
+      Write a detailed implementation plan with tasks.
+      Each task should be independently assignable.
+    depend_on: [brainstormer]
+    evidence: [plan, task_list]
+  worker-1:
+    agent: code-reviewer
+    model: sonnet
+    objective: Execute plan task 1. Write tests. Record evidence.
+    depend_on: [planner]
+    evidence: [implementation, tests]
+  worker-2:
+    agent: code-reviewer
+    model: sonnet
+    objective: Execute plan task 2. Write tests. Record evidence.
+    depend_on: [planner]
+    evidence: [implementation, tests]
+  worker-3:
+    agent: data-engineer
+    model: sonnet
+    objective: Execute plan task 3. Write tests. Record evidence.
+    depend_on: [planner]
+    evidence: [implementation, tests]
+  reviewer:
+    agent: agents-orchestrator
+    model: sonnet
+    objective: |
+      Review all worker implementations against the plan.
+      Check for integration issues, missing tests, code quality.
+    depend_on: [worker-1, worker-2, worker-3]
+    evidence: [review_findings]
+  tester:
+    agent: qa-engineer
+    model: haiku
+    objective: |
+      Run all tests. Report failures with details.
+      Return {passed: bool, failures: [...]}.
+    depend_on: [reviewer]
+    loop:
+      enabled: true
+      stop_when: all tests pass
+      max_rounds: 5
+    evidence: [test_results, coverage]
+evidence:
+  required_keys: [test_results]
+`,
+    superpowers: `apiVersion: graphkit.dev/v2
+kind: Graph
+metadata:
+  name: superpowers
+  description: Superpowers flow — brainstorm, plan, parallel execution, test until done
+topology: custom
+inputs:
+  task: { type: string, required: true }
+nodes:
+  brainstormer:
+    agent: software-architect
+    model: opus
+    objective: Brainstorm and clarify the task. Explore approaches.
+    depend_on: []
+    evidence: [approach]
+  planner:
+    agent: software-architect
+    model: opus
+    objective: |
+      Write a bite-sized implementation plan.
+      Split into independent, testable tasks.
+    depend_on: [brainstormer]
+    evidence: [plan]
+  executor-1:
+    agent: code-reviewer
+    model: sonnet
+    objective: Implement task 1 from the plan. TDD — write test first.
+    depend_on: [planner]
+    evidence: [code, tests]
+  executor-2:
+    agent: code-reviewer
+    model: sonnet
+    objective: Implement task 2 from the plan. TDD — write test first.
+    depend_on: [planner]
+    evidence: [code, tests]
+  executor-3:
+    agent: ui-ux-researcher
+    model: sonnet
+    objective: Implement task 3 from the plan. TDD — write test first.
+    depend_on: [planner]
+    evidence: [code, tests]
+  tester:
+    agent: qa-engineer
+    model: haiku
+    objective: |
+      Run all tests. If any fail, report which and why.
+      Return {passed, failures} so the loop can decide.
+    depend_on: [executor-1, executor-2, executor-3]
+    loop:
+      enabled: true
+      stop_when: all tests pass
+      max_rounds: 5
+    evidence: [test_results]
+evidence:
+  required_keys: [test_results]
+`,
+    "research-and-build": `apiVersion: graphkit.dev/v2
+kind: Graph
+metadata:
+  name: research-and-build
+  description: Research tools/approaches, then plan and build based on findings
+topology: custom
+inputs:
+  task: { type: string, required: true }
+nodes:
+  scouter:
+    agent: software-architect
+    model: opus
+    objective: |
+      Identify what needs researching.
+      Break the research into independent areas.
+    depend_on: []
+    evidence: [research_areas]
+  researcher-1:
+    agent: data-engineer
+    model: sonnet
+    objective: Deep-dive research area 1. Report findings, pros/cons, evidence.
+    depend_on: [scouter]
+    evidence: [findings]
+  researcher-2:
+    agent: code-reviewer
+    model: sonnet
+    objective: Deep-dive research area 2. Report findings, pros/cons, evidence.
+    depend_on: [scouter]
+    evidence: [findings]
+  researcher-3:
+    agent: ui-ux-researcher
+    model: sonnet
+    objective: Deep-dive research area 3. Report findings, pros/cons, evidence.
+    depend_on: [scouter]
+    evidence: [findings]
+  planner:
+    agent: software-architect
+    model: opus
+    objective: |
+      Synthesize research into a build plan.
+      Decide what to build vs leverage.
+    depend_on: [researcher-1, researcher-2, researcher-3]
+    evidence: [decision, plan]
+  builder-1:
+    agent: code-reviewer
+    model: sonnet
+    objective: Build plan task 1. Write code and tests.
+    depend_on: [planner]
+    evidence: [implementation]
+  builder-2:
+    agent: data-engineer
+    model: sonnet
+    objective: Build plan task 2. Write code and tests.
+    depend_on: [planner]
+    evidence: [implementation]
+  reviewer:
+    agent: agents-orchestrator
+    model: opus
+    objective: Review the full build against the plan. Verify integration.
+    depend_on: [builder-1, builder-2]
+    evidence: [review, verdict]
+evidence:
+  required_keys: [verdict]
+`,
   };
   return templates[topology];
 }
