@@ -1,4 +1,4 @@
-import { cpSync, existsSync, mkdirSync, readdirSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { CAC } from "cac";
@@ -45,12 +45,18 @@ export function templatesDir(): string {
   return join(kitSourceDir(), "templates");
 }
 
-export function installKit(targetDir: string): { installed: string[] } {
+export function installKit(targetDir: string, fresh = false): { installed: string[] } {
   const source = kitSourceDir();
   const claudeDir = join(targetDir, ".claude");
+
+  // --force / fresh: wipe old .claude/ and reinstall clean
+  if (fresh && existsSync(claudeDir)) {
+    rmSync(claudeDir, { recursive: true, force: true });
+  }
+
   mkdirSync(claudeDir, { recursive: true });
-  // cpSync with recursive handles the whole tree; force: false → never clobber user edits
-  cpSync(source, claudeDir, { recursive: true, force: false });
+  // fresh → force:true (overwrite everything); else force:false (preserve user edits)
+  cpSync(source, claudeDir, { recursive: true, force: fresh });
 
   // settings.json is kit-owned infrastructure (hook config), always overwrite
   const settingsSrc = join(source, "settings.json");
@@ -69,9 +75,10 @@ export function registerKitCommands(cli: CAC) {
   cli
     .command("init", "Install the GraphKit kit into the current project")
     .option("--json", "JSON output")
-    .action(() => {
+    .option("--force", "Remove previous .claude/ and install fresh")
+    .action((opts) => {
       try {
-        const result = installKit(process.cwd());
+        const result = installKit(process.cwd(), opts.force);
         console.log(JSON.stringify(ok(result)));
       } catch (e) {
         console.log(JSON.stringify(fail("INIT_FAILED", String(e))));
