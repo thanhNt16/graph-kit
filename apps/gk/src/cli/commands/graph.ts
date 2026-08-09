@@ -656,6 +656,61 @@ export function registerGraphCommands(cli: CAC) {
           console.log(JSON.stringify(fail("SVG_ERROR", String(e))));
           process.exit(1);
         }
+      } else if (subcommand === "waves") {
+        // Output topological wave structure for direct execution
+        // Each wave = nodes that can run in parallel (all deps satisfied)
+        const file = Array.isArray(args) ? args[0] : args;
+        try {
+          const resolved = file ?? join(process.cwd(), "graph.yaml");
+          const raw = readFileSync(resolved, "utf-8");
+          const graph = YAML.parse(raw);
+          const nodes = graph.nodes || {};
+          const ids = Object.keys(nodes);
+
+          // Kahn's algorithm → waves
+          const completed = new Set<string>();
+          const waves: string[][] = [];
+          while (completed.size < ids.length) {
+            const ready = ids.filter(id => {
+              if (completed.has(id)) return false;
+              const deps = nodes[id]?.depend_on || [];
+              return deps.every((d: string) => completed.has(d));
+            });
+            if (ready.length === 0) break;
+            waves.push(ready);
+            ready.forEach(id => completed.add(id));
+          }
+
+          // Output wave structure with node details
+          const waveData = waves.map((wave, i) => ({
+            wave: i,
+            parallel: wave.length > 1,
+            nodes: wave.map(id => ({
+              id,
+              agent: nodes[id]?.agent,
+              model: nodes[id]?.model || "sonnet",
+              objective: nodes[id]?.objective?.trim() || "",
+              tools: nodes[id]?.tools || [],
+              skills: nodes[id]?.skills || [],
+              refs: nodes[id]?.refs || [],
+              depend_on: nodes[id]?.depend_on || [],
+              loop: nodes[id]?.loop || null,
+              evidence: nodes[id]?.evidence || [],
+            })),
+          }));
+
+          console.log(JSON.stringify(ok({
+            graph: graph.metadata?.name,
+            topology: graph.topology,
+            total_waves: waves.length,
+            total_nodes: ids.length,
+            waves: waveData,
+            evidence_required: graph.evidence?.required_keys || [],
+          })));
+        } catch (e) {
+          console.log(JSON.stringify(fail("WAVES_ERROR", String(e))));
+          process.exit(1);
+        }
       } else {
         console.log(
           JSON.stringify(
