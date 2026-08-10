@@ -1,0 +1,15 @@
+apiVersion: graphkit.dev/v2
+kind: Graph
+metadata:
+  name: invalid-cyclic
+topology: diamond
+inputs: {}
+nodes:
+  a:
+    agent: Code Reviewer
+    objective: "step a"
+    depend_on: [b]
+  b:
+    agent: Code Reviewer
+    objective: "step b"
+    depend_on: [a]

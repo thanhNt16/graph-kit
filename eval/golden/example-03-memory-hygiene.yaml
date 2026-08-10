@@ -1,0 +1,13 @@
+id: example-03-memory-hygiene
+category: memory
+mode: memory
+memory_state:
+  adherence: 0.8
+  retrieval: 0.7
+  generalization: 0.6
+  hygiene: 0.9
+  staleAnsweredFrom: 0
+  admittedIgnorance: 1
+opts:
+  abstention_weighted: true
+expected_min_overall: 0.6

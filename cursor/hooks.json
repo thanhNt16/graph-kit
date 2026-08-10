@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "hooks": {
+    "preToolUse": [
+      { "command": "node hooks/graph-state-guard.cjs", "matcher": "Write" }
+    ],
+    "postToolUse": [
+      { "command": "node hooks/evidence-persist.cjs", "matcher": "Write" },
+      { "command": "node hooks/memory-persist.cjs", "matcher": "Write" }
+    ],
+    "subagentStart": [
+      { "command": "node hooks/lease-enforce.cjs" }
+    ]
+  }
+}
