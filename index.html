@@ -1,0 +1,456 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GraphKit — Graph Engineering Kit for Claude Code</title>
+<style>
+  :root {
+    --bg: #0a0e14; --bg-elev: #0d1117; --surface: #131822;
+    --border: #1c2333; --border-bright: #2a3447;
+    --text: #e6edf3; --text-dim: #8b949e; --text-muted: #6e7681;
+    --opus: #a371f7; --sonnet: #58a6ff; --haiku: #3fb950; --fable: #f0883e;
+    --diamond: #2ea043; --classify: #58a6ff; --adversarial: #f85149;
+    --loop: #d29922; --generate: #79c0ff; --tournament: #bc8cff;
+    --memory: #2ea043; --eval: #f85149; --gold: #d29922;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family:'IBM Plex Sans',-apple-system,system-ui,sans-serif; background:var(--bg); color:var(--text); line-height:1.65; -webkit-font-smoothing:antialiased; }
+  .mono { font-family:'IBM Plex Mono','SF Mono',monospace; }
+  code { font-family:'IBM Plex Mono',monospace; font-size:0.88em; background:var(--surface); border:1px solid var(--border); border-radius:4px; padding:0.1em 0.35em; color:var(--fable); }
+
+  .hero { padding:5.5rem 2rem 4rem; text-align:center;
+    background: radial-gradient(ellipse 80% 60% at 50% 0%, rgba(163,113,247,0.08), transparent),
+                radial-gradient(ellipse 50% 40% at 75% 15%, rgba(46,160,67,0.06), transparent),
+                radial-gradient(ellipse 40% 30% at 25% 20%, rgba(248,81,73,0.04), transparent);
+    border-bottom:1px solid var(--border); }
+  .hero-badge { display:inline-block; padding:0.3rem 0.9rem; border:1px solid var(--border-bright); border-radius:20px; font-size:0.78rem; color:var(--sonnet); font-family:'IBM Plex Mono',monospace; margin-bottom:1.3rem; background:var(--surface); }
+  .hero h1 { font-size:clamp(2.3rem,5.5vw,3.8rem); font-weight:700; letter-spacing:-0.03em;
+    background:linear-gradient(135deg,#fff 25%,var(--sonnet) 50%,var(--memory) 75%,var(--eval) 100%);
+    -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text; margin-bottom:0.5rem; }
+  .hero-tag { font-size:1.15rem; color:var(--text-dim); max-width:680px; margin:0 auto 2rem; }
+  .hero-stats { display:flex; justify-content:center; gap:2.2rem; flex-wrap:wrap; }
+  .stat-num { font-size:1.8rem; font-weight:700; font-family:'IBM Plex Mono',monospace; }
+  .stat-label { font-size:0.72rem; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.08em; }
+
+  .section { max-width:1000px; margin:0 auto; padding:4rem 2rem; }
+  .section-label { font-family:'IBM Plex Mono',monospace; font-size:0.76rem; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.12em; margin-bottom:0.5rem; }
+  .section h2 { font-size:1.75rem; font-weight:700; letter-spacing:-0.02em; margin-bottom:1rem; }
+  .section > p { color:var(--text-dim); margin-bottom:1rem; max-width:740px; }
+  .badge-new { display:inline-block; padding:0.1rem 0.5rem; border-radius:4px; font-size:0.68rem; font-family:'IBM Plex Mono',monospace; font-weight:600; background:rgba(46,160,67,0.15); color:var(--memory); vertical-align:middle; margin-left:0.4rem; }
+
+  .install-grid { display:grid; grid-template-columns:1fr 1fr; gap:1.2rem; margin:1.5rem 0; }
+  @media(max-width:768px){ .install-grid{ grid-template-columns:1fr; } }
+  .code-block { background:var(--bg-elev); border:1px solid var(--border); border-radius:12px; overflow:hidden; }
+  .code-header { padding:0.6rem 1rem; border-bottom:1px solid var(--border); font-family:'IBM Plex Mono',monospace; font-size:0.76rem; color:var(--text-muted); display:flex; align-items:center; gap:0.5rem; }
+  .code-dot { width:10px; height:10px; border-radius:50%; }
+  .code-body { padding:1rem 1.2rem; font-family:'IBM Plex Mono',monospace; font-size:0.8rem; line-height:1.8; overflow-x:auto; white-space:pre; color:var(--text); }
+  .kw{color:var(--opus);} .str{color:var(--haiku);} .cmt{color:var(--text-muted);} .num{color:var(--fable);} .field{color:var(--sonnet);}
+
+  .arch { display:flex; flex-direction:column; gap:1rem; margin:2rem 0; }
+  .arch-layer { background:var(--bg-elev); border:1px solid var(--border-bright); border-radius:12px; padding:1.4rem; position:relative; }
+  .arch-layer-tag { position:absolute; top:-10px; left:1.5rem; background:var(--bg); padding:0 0.6rem; font-family:'IBM Plex Mono',monospace; font-size:0.72rem; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.1em; }
+  .arch-layer-title { font-size:1.05rem; font-weight:600; margin-bottom:0.3rem; }
+  .arch-layer-desc { font-size:0.88rem; color:var(--text-dim); margin-bottom:0.7rem; }
+  .arch-flow { display:flex; align-items:center; gap:0.7rem; flex-wrap:wrap; font-family:'IBM Plex Mono',monospace; font-size:0.8rem; }
+  .arch-pill { padding:0.3rem 0.7rem; border:1px solid var(--border-bright); border-radius:6px; background:var(--surface); white-space:nowrap; }
+  .arch-arrow { color:var(--text-muted); }
+  .arch-arrow-down { text-align:center; color:var(--text-muted); font-size:1.3rem; line-height:1; }
+
+  .topo-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(290px,1fr)); gap:1.1rem; margin:2rem 0; }
+  .topo-card { background:var(--bg-elev); border:1px solid var(--border); border-radius:14px; padding:1.3rem; transition:transform 0.15s,border-color 0.2s; overflow:hidden; }
+  .topo-card:hover { transform:translateY(-3px); border-color:var(--border-bright); }
+  .topo-card-header { display:flex; align-items:center; gap:0.6rem; margin-bottom:0.7rem; }
+  .topo-dot { width:10px; height:10px; border-radius:50%; flex-shrink:0; }
+  .topo-name { font-size:0.98rem; font-weight:600; }
+  .topo-shape { font-size:0.7rem; color:var(--text-muted); font-family:'IBM Plex Mono',monospace; margin-left:auto; }
+  .topo-diagram { height:100px; display:flex; align-items:center; justify-content:center; margin:0.4rem 0 0.7rem; }
+  .topo-desc { font-size:0.82rem; color:var(--text-dim); line-height:1.5; }
+  .topo-use { font-size:0.72rem; color:var(--text-muted); margin-top:0.4rem; font-family:'IBM Plex Mono',monospace; }
+  .svg-line { stroke:var(--border-bright); stroke-width:1.5; fill:none; }
+
+  .binding-grid { display:grid; grid-template-columns:1fr 1fr; gap:1.5rem; margin:2rem 0; }
+  @media(max-width:768px){ .binding-grid{ grid-template-columns:1fr; } }
+
+  .tier-bar { display:flex; gap:0.6rem; margin:1rem 0; flex-wrap:wrap; }
+  .tier { display:flex; align-items:center; gap:0.5rem; padding:0.4rem 0.8rem; border:1px solid var(--border-bright); border-radius:8px; background:var(--surface); font-size:0.8rem; }
+  .tier-dot { width:10px; height:10px; border-radius:50%; }
+  .tier-name { font-weight:600; font-family:'IBM Plex Mono',monospace; }
+  .tier-desc { color:var(--text-dim); font-size:0.75rem; }
+
+  .subsys-grid { display:grid; grid-template-columns:1fr 1fr; gap:1.5rem; margin:2rem 0; }
+  @media(max-width:768px){ .subsys-grid{ grid-template-columns:1fr; } }
+  .subsys { background:var(--bg-elev); border:1px solid var(--border-bright); border-radius:14px; padding:1.5rem; }
+  .subsys-tag { display:inline-block; padding:0.2rem 0.6rem; border-radius:5px; font-size:0.72rem; font-family:'IBM Plex Mono',monospace; font-weight:600; margin-bottom:0.6rem; }
+  .subsys h3 { font-size:1.1rem; margin-bottom:0.4rem; }
+  .subsys p { font-size:0.85rem; color:var(--text-dim); margin-bottom:0.7rem; }
+
+  .flow-diagram { display:flex; align-items:center; justify-content:center; gap:0.5rem; flex-wrap:wrap; margin:1.5rem 0; padding:1.4rem; background:var(--bg-elev); border:1px solid var(--border); border-radius:12px; font-family:'IBM Plex Mono',monospace; font-size:0.8rem; }
+  .flow-node { padding:0.45rem 0.8rem; border:1px solid var(--border-bright); border-radius:8px; background:var(--surface); white-space:nowrap; }
+  .flow-arrow { color:var(--text-muted); }
+
+  .lifecycle { display:grid; grid-template-columns:repeat(auto-fill,minmax(195px,1fr)); gap:0.7rem; margin:1.5rem 0; }
+  .lc-step { background:var(--bg-elev); border:1px solid var(--border); border-radius:10px; padding:0.75rem 1rem; }
+  .lc-step .name { font-family:'IBM Plex Mono',monospace; font-size:0.8rem; color:var(--sonnet); margin-bottom:0.15rem; }
+  .lc-step .desc { font-size:0.73rem; color:var(--text-dim); }
+  .lc-step.new { border-color:var(--memory); }
+  .lc-step.new .name { color:var(--memory); }
+
+  .agent-row { display:flex; align-items:center; gap:0.8rem; padding:0.6rem 1rem; border:1px solid var(--border); border-radius:10px; background:var(--bg-elev); margin-bottom:0.45rem; }
+  .agent-emoji { font-size:1.25rem; }
+  .agent-info { flex:1; }
+  .agent-name { font-weight:600; font-size:0.88rem; }
+  .agent-roles { font-size:0.72rem; color:var(--text-muted); font-family:'IBM Plex Mono',monospace; }
+  .agent-tier { padding:0.12rem 0.45rem; border-radius:5px; font-size:0.7rem; font-family:'IBM Plex Mono',monospace; font-weight:600; }
+
+  .stats-banner { display:grid; grid-template-columns:repeat(auto-fit,minmax(135px,1fr)); gap:1px; background:var(--border); border:1px solid var(--border); border-radius:14px; overflow:hidden; margin:2rem 0; }
+  .stat-cell { background:var(--bg-elev); padding:1.3rem 1rem; text-align:center; }
+  .stat-cell-num { font-size:1.5rem; font-weight:700; font-family:'IBM Plex Mono',monospace; color:var(--sonnet); }
+  .stat-cell-label { font-size:0.68rem; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.08em; margin-top:0.3rem; }
+
+  .ac-table { width:100%; border-collapse:collapse; margin:1.5rem 0; font-size:0.8rem; }
+  .ac-table th { text-align:left; background:var(--surface); color:var(--sonnet); padding:0.5rem 0.8rem; border-bottom:2px solid var(--border); font-size:0.78rem; }
+  .ac-table td { padding:0.4rem 0.8rem; border-bottom:1px solid var(--border); }
+  .ac-table .pass { color:var(--haiku); font-family:'IBM Plex Mono',monospace; font-weight:600; white-space:nowrap; }
+
+  .footer { text-align:center; padding:3rem 2rem; border-top:1px solid var(--border); color:var(--text-muted); font-size:0.8rem; }
+</style>
+</head>
+<body>
+
+<div class="hero">
+  <div class="hero-badge">graphkit.dev/v2.1 · graph engineering kit</div>
+  <h1>GraphKit</h1>
+  <p class="hero-tag">Define graph-structured agent workflows as YAML. Compile to Claude Code dynamic workflows. Seven topologies. Per-node model tiering. Graph-backed memory with ACT-R forgetting. Evidence-based merge gates. Zero custom runtime.</p>
+  <div class="hero-stats">
+    <div class="stat"><div class="stat-num">7</div><div class="stat-label">Topologies</div></div>
+    <div class="stat"><div class="stat-num">8</div><div class="stat-label">Agents</div></div>
+    <div class="stat"><div class="stat-num">10</div><div class="stat-label">Skills</div></div>
+    <div class="stat"><div class="stat-num">105</div><div class="stat-label">Tests</div></div>
+  </div>
+</div>
+
+<div class="section">
+  <div class="section-label">Quick Start</div>
+  <h2>Install from Source</h2>
+  <p>GraphKit isn't on npm yet. Clone, build, and install as a global <code>gk</code> command. Requires <a href="https://bun.sh" style="color:var(--sonnet)">Bun</a> and <a href="https://docs.claude.com/en/docs/claude-code" style="color:var(--sonnet)">Claude Code</a>.</p>
+
+  <div class="code-block">
+    <div class="code-header"><div class="code-dot" style="background:#f85149"></div><div class="code-dot" style="background:#d29922"></div><div class="code-dot" style="background:#3fb950"></div> 1. Clone &amp; build</div>
+    <div class="code-body"><span class="cmt"># Clone the repo</span>
+git clone https://github.com/user/graph-kit.git
+cd graph-kit/apps/gk
+
+<span class="cmt"># Install deps + build</span>
+bun install
+bun run build                <span class="cmt"># → dist/index.js (executable, with shebang)</span>
+
+<span class="cmt"># Run the full gate to verify</span>
+bun run ci:local             <span class="cmt"># → typecheck + lint + build + 105 tests</span></div>
+  </div>
+
+  <div class="install-grid">
+    <div class="code-block">
+      <div class="code-header"><div class="code-dot" style="background:#f85149"></div><div class="code-dot" style="background:#d29922"></div><div class="code-dot" style="background:#3fb950"></div> 2a. Install globally (npm link)</div>
+      <div class="code-body"><span class="cmt"># From the apps/gk directory:</span>
+npm link
+
+<span class="cmt"># If you have a conflicting 'gk' alias</span>
+<span class="cmt"># (e.g. gk → gitk), remove it from ~/.zshrc:</span>
+<span class="kw">unalias</span> gk 2&gt;/dev/null
+
+<span class="cmt"># Verify — should show GraphKit help:</span>
+gk --help
+gk graph list --json</div>
+    </div>
+    <div class="code-block">
+      <div class="code-header"><div class="code-dot" style="background:#f85149"></div><div class="code-dot" style="background:#d29922"></div><div class="code-dot" style="background:#3fb950"></div> 2b. Or: standalone binary</div>
+      <div class="code-body"><span class="cmt"># Build a standalone binary (no runtime needed):</span>
+bun run build:bin            <span class="cmt"># → dist/gk (58MB, self-contained)</span>
+
+<span class="cmt"># Install to your PATH:</span>
+cp dist/gk /usr/local/bin/gk
+chmod +x /usr/local/bin/gk
+
+<span class="cmt"># Verify:</span>
+gk --help
+gk graph list --json</div>
+    </div>
+  </div>
+
+  <div class="code-block" style="margin-top:1rem">
+    <div class="code-header"><div class="code-dot" style="background:#f85149"></div><div class="code-dot" style="background:#d29922"></div><div class="code-dot" style="background:#3fb950"></div> 3. Install the kit + use it</div>
+    <div class="code-body"><span class="cmt"># Install the kit into your project (agents, skills, hooks, rules):</span>
+cd /path/to/your-project
+gk init
+
+<span class="cmt"># Or scaffold a new project from scratch:</span>
+gk new --dir my-project
+cd my-project
+
+<span class="cmt"># Define, validate, compile a graph:</span>
+gk validate graph.yaml --json
+gk compile graph.yaml --json    <span class="cmt"># → .claude/workflows/{name}.workflow.js</span>
+gk graph inspect diamond        <span class="cmt"># → see topology config keys</span>
+
+<span class="cmt"># Inside Claude Code, skills auto-discover from .claude/skills/:</span>
+<span class="cmt"># /gk-init-graph  /gk-validate  /gk-compile  /gk-eval  /gk-recall</span></div>
+  </div>
+</div>
+
+<div class="section">
+  <div class="section-label">Architecture</div>
+  <h2>Three Layers, Clean Boundary</h2>
+  <p>gk CLI validates and compiles. Claude Code executes. The kit template connects them. No custom state machine — Claude Code's native Workflow tool owns the runtime.</p>
+  <div class="arch">
+    <div class="arch-layer">
+      <div class="arch-layer-tag">Layer 1 — Kit Template</div>
+      <div class="arch-layer-title">📦 claude/ directory</div>
+      <div class="arch-layer-desc">Installed by <code>gk init</code> into <code>.claude/</code>. Agents, skills, hooks, rules, schemas, topology templates.</div>
+      <div class="arch-flow"><span class="arch-pill">8 agents</span><span class="arch-arrow">·</span><span class="arch-pill">10 skills</span><span class="arch-arrow">·</span><span class="arch-pill">4 hooks</span><span class="arch-arrow">·</span><span class="arch-pill">3 rules</span><span class="arch-arrow">·</span><span class="arch-pill">7 templates</span></div>
+    </div>
+    <div class="arch-arrow-down">↓</div>
+    <div class="arch-layer">
+      <div class="arch-layer-tag">Layer 2 — gk CLI</div>
+      <div class="arch-layer-title">⚙️ Compiler + Installer</div>
+      <div class="arch-layer-desc">Validates graph YAML against schemas + topology contracts. Compiles to self-contained <code>.workflow.js</code>. Never invokes a model.</div>
+      <div class="arch-flow"><span class="arch-pill">gk init</span><span class="arch-arrow">→</span><span class="arch-pill">gk validate</span><span class="arch-arrow">→</span><span class="arch-pill">gk compile</span></div>
+    </div>
+    <div class="arch-arrow-down">↓</div>
+    <div class="arch-layer">
+      <div class="arch-layer-tag">Layer 3 — Claude Code Runtime</div>
+      <div class="arch-layer-title">▶️ Workflow Tool</div>
+      <div class="arch-layer-desc">Executes the compiled <code>.workflow.js</code> using <code>agent()</code>, <code>parallel()</code>, <code>pipeline()</code>. Agents run at their declared model tier.</div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <div class="section-label">Graph Topologies</div>
+  <h2>Seven Canonical Shapes</h2>
+  <p>Each topology is a parameterized <code>.workflow.js</code> template. They compose — a diamond's fan-out can embed an adversarial-verification subgraph, or wrap the whole thing in a memory-augmented layer.</p>
+  <div class="topo-grid">
+    <div class="topo-card" style="border-left:3px solid var(--diamond)"><div class="topo-card-header"><div class="topo-dot" style="background:var(--diamond)"></div><div class="topo-name">Diamond</div><div class="topo-shape">fan-out → reduce → synthesize</div></div><div class="topo-diagram"><svg width="150" height="90" viewBox="0 0 150 90"><line class="svg-line" x1="75" y1="12" x2="28" y2="45"/><line class="svg-line" x1="75" y1="12" x2="75" y2="45"/><line class="svg-line" x1="75" y1="12" x2="122" y2="45"/><line class="svg-line" x1="28" y1="45" x2="75" y2="80"/><line class="svg-line" x1="75" y1="45" x2="75" y2="80"/><line class="svg-line" x1="122" y1="45" x2="75" y2="80"/><rect x="62" y="4" width="26" height="16" rx="3" fill="none" stroke="var(--diamond)"/><rect x="15" y="37" width="26" height="16" rx="3" fill="none" stroke="var(--sonnet)"/><rect x="62" y="37" width="26" height="16" rx="3" fill="none" stroke="var(--sonnet)"/><rect x="109" y="37" width="26" height="16" rx="3" fill="none" stroke="var(--sonnet)"/><rect x="62" y="72" width="26" height="16" rx="3" fill="none" stroke="var(--opus)"/></svg></div><div class="topo-desc">Split work to N parallel workers, reduce with deterministic code, synthesize with one high-tier agent.</div><div class="topo-use">→ code review · research · migration</div></div>
+    <div class="topo-card" style="border-left:3px solid var(--classify)"><div class="topo-card-header"><div class="topo-dot" style="background:var(--classify)"></div><div class="topo-name">Classify-and-Act</div><div class="topo-shape">route 1 → 1 handler</div></div><div class="topo-diagram"><svg width="150" height="90" viewBox="0 0 150 90"><line class="svg-line" x1="75" y1="18" x2="22" y2="68"/><line class="svg-line" x1="75" y1="18" x2="60" y2="68"/><line class="svg-line" x1="75" y1="18" x2="98" y2="68"/><line class="svg-line" x1="75" y1="18" x2="135" y2="68"/><rect x="58" y="6" width="34" height="20" rx="3" fill="none" stroke="var(--opus)"/><rect x="6" y="65" width="32" height="18" rx="3" fill="none" stroke="var(--sonnet)"/><rect x="44" y="65" width="32" height="18" rx="3" fill="none" stroke="var(--sonnet)"/><rect x="82" y="65" width="32" height="18" rx="3" fill="none" stroke="var(--sonnet)"/><rect x="120" y="65" width="24" height="18" rx="3" fill="none" stroke="var(--haiku)"/></svg></div><div class="topo-desc">Classifier inspects input, routes to exactly one handler. Fallback for unmatched inputs.</div><div class="topo-use">→ triage · routing · escalation</div></div>
+    <div class="topo-card" style="border-left:3px solid var(--adversarial)"><div class="topo-card-header"><div class="topo-dot" style="background:var(--adversarial)"></div><div class="topo-name">Adversarial Verification</div><div class="topo-shape">produce → refute → adjudicate</div></div><div class="topo-diagram"><svg width="150" height="90" viewBox="0 0 150 90"><line class="svg-line" x1="75" y1="12" x2="28" y2="45"/><line class="svg-line" x1="75" y1="12" x2="75" y2="45"/><line class="svg-line" x1="75" y1="12" x2="122" y2="45"/><line class="svg-line" x1="28" y1="45" x2="75" y2="80"/><line class="svg-line" x1="75" y1="45" x2="75" y2="80"/><line class="svg-line" x1="122" y1="45" x2="75" y2="80"/><rect x="58" y="4" width="34" height="16" rx="3" fill="none" stroke="var(--adversarial)"/><rect x="12" y="37" width="26" height="16" rx="3" fill="none" stroke="var(--sonnet)" stroke-dasharray="3,2"/><rect x="62" y="37" width="26" height="16" rx="3" fill="none" stroke="var(--sonnet)" stroke-dasharray="3,2"/><rect x="112" y="37" width="26" height="16" rx="3" fill="none" stroke="var(--sonnet)" stroke-dasharray="3,2"/><rect x="58" y="72" width="34" height="16" rx="3" fill="none" stroke="var(--opus)"/></svg></div><div class="topo-desc">Producer emits items. Independent refuters with fresh context challenge each. Survivors pass threshold.</div><div class="topo-use">→ security audit · fact-check</div></div>
+    <div class="topo-card" style="border-left:3px solid var(--loop)"><div class="topo-card-header"><div class="topo-dot" style="background:var(--loop)"></div><div class="topo-name">Loop Until Done</div><div class="topo-shape">scout → work → dedup → repeat</div></div><div class="topo-diagram"><svg width="150" height="90" viewBox="0 0 150 90"><path class="svg-line" d="M 75 18 Q 130 18 130 45 Q 130 72 75 72" stroke-dasharray="4,3"/><rect x="52" y="8" width="46" height="18" rx="3" fill="none" stroke="var(--opus)"/><rect x="18" y="38" width="32" height="14" rx="3" fill="none" stroke="var(--sonnet)"/><rect x="58" y="38" width="32" height="14" rx="3" fill="none" stroke="var(--sonnet)"/><rect x="98" y="38" width="32" height="14" rx="3" fill="none" stroke="var(--sonnet)"/><text x="75" y="68" text-anchor="middle" fill="var(--loop)" font-size="7" font-family="monospace">stop when dry</text></svg></div><div class="topo-desc">Scout discovers work, workers process, dedup against seen. Loop until K consecutive empty rounds.</div><div class="topo-use">→ discovery · bug sweep</div></div>
+    <div class="topo-card" style="border-left:3px solid var(--generate)"><div class="topo-card-header"><div class="topo-dot" style="background:var(--generate)"></div><div class="topo-name">Generate-and-Filter</div><div class="topo-shape">generate N → keep best K</div></div><div class="topo-diagram"><svg width="150" height="90" viewBox="0 0 150 90"><line class="svg-line" x1="75" y1="18" x2="75" y2="42"/><line class="svg-line" x1="75" y1="50" x2="75" y2="72"/><rect x="52" y="8" width="46" height="18" rx="3" fill="none" stroke="var(--sonnet)"/><rect x="56" y="40" width="38" height="14" rx="7" fill="none" stroke="var(--haiku)"/><rect x="46" y="70" width="28" height="16" rx="3" fill="none" stroke="var(--opus)"/><rect x="78" y="70" width="28" height="16" rx="3" fill="none" stroke="var(--opus)"/></svg></div><div class="topo-desc">Multiple generators propose candidates. Rubric scores in one deterministic pass. Keep top-K.</div><div class="topo-use">→ naming · ideation · design</div></div>
+    <div class="topo-card" style="border-left:3px solid var(--tournament)"><div class="topo-card-header"><div class="topo-dot" style="background:var(--tournament)"></div><div class="topo-name">Tournament</div><div class="topo-shape">pairwise elimination</div></div><div class="topo-diagram"><svg width="150" height="90" viewBox="0 0 150 90"><line class="svg-line" x1="22" y1="18" x2="55" y2="45"/><line class="svg-line" x1="55" y1="18" x2="55" y2="45"/><line class="svg-line" x1="95" y1="18" x2="95" y2="45"/><line class="svg-line" x1="132" y1="18" x2="95" y2="45"/><line class="svg-line" x1="55" y1="55" x2="75" y2="78"/><line class="svg-line" x1="95" y1="55" x2="75" y2="78"/><rect x="8" y="8" width="28" height="14" rx="3" fill="none" stroke="var(--sonnet)"/><rect x="41" y="8" width="28" height="14" rx="3" fill="none" stroke="var(--sonnet)"/><rect x="81" y="8" width="28" height="14" rx="3" fill="none" stroke="var(--sonnet)"/><rect x="114" y="8" width="28" height="14" rx="3" fill="none" stroke="var(--sonnet)"/><rect x="41" y="45" width="28" height="14" rx="3" fill="none" stroke="var(--sonnet)"/><rect x="81" y="45" width="28" height="14" rx="3" fill="none" stroke="var(--sonnet)"/><rect x="58" y="74" width="34" height="14" rx="3" fill="none" stroke="var(--opus)"/></svg></div><div class="topo-desc">Candidates compete in pairwise judged rounds. One champion emerges.</div><div class="topo-use">→ ranking · eval scoring</div></div>
+    <div class="topo-card" style="border-left:3px solid var(--memory)"><div class="topo-card-header"><div class="topo-dot" style="background:var(--memory)"></div><div class="topo-name">Memory-Augmented <span class="badge-new">v2.1</span></div><div class="topo-shape">wrapper: any topology + curator</div></div><div class="topo-diagram"><svg width="150" height="90" viewBox="0 0 150 90"><rect x="10" y="6" width="130" height="78" rx="6" fill="none" stroke="var(--memory)" stroke-dasharray="5,3" opacity="0.5"/><rect x="30" y="20" width="40" height="14" rx="3" fill="none" stroke="var(--sonnet)"/><rect x="80" y="20" width="40" height="14" rx="3" fill="none" stroke="var(--sonnet)"/><line class="svg-line" x1="50" y1="34" x2="50" y2="52"/><line class="svg-line" x1="100" y1="34" x2="100" y2="52"/><rect x="28" y="52" width="44" height="14" rx="3" fill="none" stroke="var(--opus)"/><rect x="80" y="52" width="44" height="14" rx="3" fill="none" stroke="var(--memory)"/><text x="102" y="63" text-anchor="middle" fill="var(--memory)" font-size="7" font-family="monospace">curator</text><text x="75" y="82" text-anchor="middle" fill="var(--text-muted)" font-size="6" font-family="monospace">wraps diamond inside</text></svg></div><div class="topo-desc">Wraps any of the 6 base topologies. A Memory Curator agent interleaves at cadence — extract, consolidate, expire, inject-or-null.</div><div class="topo-use">→ long-running graphs · cross-run memory</div></div>
+  </div>
+</div>
+
+<div class="section">
+  <div class="section-label">Per-Node Binding</div>
+  <h2>Model Tiering, Tools, Loops, Constraints</h2>
+  <p>Every node carries its own configuration. The scouter runs at opus for deep analysis. The verifier runs at haiku for cheap checks. Workers get their own tools, refs, and internal loops.</p>
+  <div class="tier-bar">
+    <div class="tier"><div class="tier-dot" style="background:var(--opus)"></div><span class="tier-name">opus</span><span class="tier-desc">judgment · synthesis</span></div>
+    <div class="tier"><div class="tier-dot" style="background:var(--sonnet)"></div><span class="tier-name">sonnet</span><span class="tier-desc">implementation · review</span></div>
+    <div class="tier"><div class="tier-dot" style="background:var(--haiku)"></div><span class="tier-name">haiku</span><span class="tier-desc">verification · routing</span></div>
+    <div class="tier"><div class="tier-dot" style="background:var(--fable)"></div><span class="tier-name">fable</span><span class="tier-desc">specialized tasks</span></div>
+  </div>
+  <div class="binding-grid">
+    <div class="code-block">
+      <div class="code-header"><div class="code-dot" style="background:#f85149"></div><div class="code-dot" style="background:#d29922"></div><div class="code-dot" style="background:#3fb950"></div> graph.yaml</div>
+      <div class="code-body"><span class="kw">nodes:</span>
+  <span class="field">scouter:</span>
+    <span class="field">agent:</span> <span class="str">Software Architect</span>
+    <span class="field">model:</span> <span class="str">opus</span>
+    <span class="field">objective:</span> <span class="str">Map attack surfaces</span>
+    <span class="field">tools:</span> [<span class="str">Read</span>, <span class="str">Glob</span>, <span class="str">Grep</span>]
+    <span class="field">refs:</span>
+      - <span class="field">path:</span> <span class="str">docs/owasp.md</span>
+        <span class="field">purpose:</span> <span class="str">checklist</span>
+    <span class="field">depend_on:</span> []
+    <span class="field">loop:</span>
+      <span class="field">enabled:</span> <span class="num">true</span>
+      <span class="field">stop_when:</span> <span class="str">evidence found</span>
+      <span class="field">max_rounds:</span> <span class="num">3</span>
+    <span class="field">constraints:</span>
+      - <span class="field">no_write:</span> <span class="num">true</span>
+    <span class="field">evidence:</span> [<span class="str">attack_surface</span>]
+
+  <span class="field">eval-gate:</span> <span class="cmt"># ← v2.1</span>
+    <span class="field">agent:</span> <span class="str">QA Engineer</span>
+    <span class="field">model:</span> <span class="str">haiku</span>
+    <span class="field">role:</span> <span class="str">eval-gate</span>
+    <span class="field">depend_on:</span> [<span class="str">worker</span>]
+    <span class="field">eval:</span>
+      <span class="field">mode:</span> <span class="str">both</span>
+      <span class="field">abstention_weighted:</span> <span class="num">true</span></div>
+    </div>
+    <div class="code-block">
+      <div class="code-header"><div class="code-dot" style="background:#f85149"></div><div class="code-dot" style="background:#d29922"></div><div class="code-dot" style="background:#3fb950"></div> compiled .workflow.js</div>
+      <div class="code-body"><span class="cmt">// Generated by gk compile</span>
+<span class="cmt">// Self-contained: zero kit imports</span>
+
+<span class="kw">export const</span> meta = {
+  <span class="field">name</span>: <span class="str">"security-audit"</span>,
+};
+
+<span class="kw">export function</span> createDiamondWorkflow(config) {
+  <span class="kw">const</span> { nodes } = config;
+  <span class="kw">return async</span> (context) => {
+    <span class="kw">const</span> scout = <span class="kw">await</span> context.agent(
+      nodes.scouter.objective, {
+        <span class="field">model</span>: <span class="str">"opus"</span>,
+        <span class="field">tools</span>: nodes.scouter.tools,
+      });
+
+    <span class="kw">const</span> results = <span class="kw">await</span> context.parallel(
+      items.map(item => () =>
+        context.agent(..., {
+          <span class="field">model</span>: <span class="str">"sonnet"</span>,
+        })));
+
+    <span class="kw">return</span> synthesize(results);
+  };
+}</div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <div class="section-label">Memory Subsystem <span class="badge-new">v2.1</span></div>
+  <h2>Graph-Backed Memory with ACT-R Forgetting</h2>
+  <p>Evidence flows through the memory-persist hook into OKF markdown files. A Memory Curator agent curates at cadence — extract, consolidate, resolve, expire. Recall fetches ranked memories for the next node. Silence is first-class.</p>
+  <div class="flow-diagram">
+    <span class="flow-node" style="border-color:var(--sonnet)">evidence write</span><span class="flow-arrow">→</span>
+    <span class="flow-node" style="border-color:var(--memory)">memory-persist.cjs</span><span class="flow-arrow">→</span>
+    <span class="flow-node" style="border-color:var(--memory)">.graphkit/memory/*.md</span><span class="flow-arrow">→</span>
+    <span class="flow-node" style="border-color:var(--opus)">Curator (cadence)</span><span class="flow-arrow">→</span>
+    <span class="flow-node" style="border-color:var(--haiku)">gk:recall</span><span class="flow-arrow">→</span>
+    <span class="flow-node">next node</span>
+  </div>
+  <div class="binding-grid">
+    <div class="subsys" style="margin:0">
+      <div class="subsys-tag" style="background:rgba(46,160,67,0.15);color:var(--memory)">ACT-R FORGETTING</div>
+      <p style="font-size:0.82rem;color:var(--text-dim)">Memories decay by salience = relevance × connectivity × reactivation (14-day half-life). Below threshold → expired (retained for audit, never deleted).</p>
+      <div class="code-block" style="margin:0.5rem 0"><div class="code-body">recent + relevant + connected → <span class="num">0.72</span>  <span class="str">keep</span>
+stale + unused + isolated    → <span class="num">0.08</span>  <span class="str">expire</span></div></div>
+    </div>
+    <div class="subsys" style="margin:0">
+      <div class="subsys-tag" style="background:rgba(46,160,67,0.15);color:var(--memory)">NULL INTERVENTION</div>
+      <p style="font-size:0.82rem;color:var(--text-dim)">The Curator's default is silence. It only injects a reminder when it will change the next decision. Selective injection beats always-on.</p>
+      <div class="code-block" style="margin:0.5rem 0"><div class="code-body"><span class="field">injection_decision</span>: <span class="str">null</span>
+<span class="cmt">// rationale: "no constraint violation</span>
+<span class="cmt">// detected, staying silent"</span></div></div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <div class="section-label">Eval-Gate Subsystem <span class="badge-new">v2.1</span></div>
+  <h2>Evidence-Based Merge Gate</h2>
+  <p>Any topology can bind an eval-gate terminal node. The gate reads evidence and decides MERGE or BLOCK — the rubric is code, not a model opinion.</p>
+  <div class="subsys-grid">
+    <div class="subsys">
+      <div class="subsys-tag" style="background:rgba(248,81,73,0.15);color:var(--eval)">WORK_PRODUCT MODE</div>
+      <h3 style="color:var(--sonnet);font-size:1rem">Completeness Check</h3>
+      <p style="font-size:0.82rem;color:var(--text-dim)">Checks every <code>required_keys</code> value exists and is non-empty (strict) or present (lenient). Pure code — no model call.</p>
+      <div class="code-block" style="margin:0.5rem 0"><div class="code-body">findings: <span class="str">"ok"</span>, test_results: <span class="str">"ok"</span>  → <span class="str">MERGE</span>
+findings: <span class="str">"ok"</span>, test_results: <span class="str">"missing"</span>  → <span class="str">BLOCK</span></div></div>
+    </div>
+    <div class="subsys">
+      <div class="subsys-tag" style="background:rgba(248,81,73,0.15);color:var(--eval)">MEMORY MODE (LETTA 2×2)</div>
+      <h3 style="color:var(--memory);font-size:1rem">Abstention-Weighted</h3>
+      <p style="font-size:0.82rem;color:var(--text-dim)">Four axes: adherence, retrieval, generalization, hygiene. Confidently answering from stale memory is penalized more than admitting ignorance.</p>
+      <div class="code-block" style="margin:0.5rem 0"><div class="code-body">staleAnsweredFrom: <span class="num">3</span> → penalty <span class="num">-0.3</span>
+admittedIgnorance: <span class="num">3</span> → bonus <span class="num">+0.15</span></div></div>
+    </div>
+  </div>
+  <div class="flow-diagram">
+    <span class="flow-node">evidence files</span><span class="flow-arrow">→</span>
+    <span class="flow-node" style="border-color:var(--eval)">scoreWorkProduct</span><span class="flow-arrow">+</span>
+    <span class="flow-node" style="border-color:var(--eval)">scoreMemory (2×2)</span><span class="flow-arrow">→</span>
+    <span class="flow-node" style="border-color:var(--haiku)">MERGE</span><span class="flow-arrow">/</span>
+    <span class="flow-node" style="border-color:var(--eval)">BLOCK</span>
+  </div>
+  <div class="code-block" style="margin-top:1rem">
+    <div class="code-header"><div class="code-dot" style="background:#f85149"></div><div class="code-dot" style="background:#d29922"></div><div class="code-dot" style="background:#3fb950"></div> Golden harness — $ bun run eval</div>
+    <div class="code-body">{
+  <span class="field">"total"</span>: <span class="num">3</span>, <span class="field">"perCategory"</span>: {
+    <span class="str">"work_product"</span>: { <span class="field">"pass"</span>: <span class="num">2</span>, <span class="field">"total"</span>: <span class="num">2</span> },
+    <span class="str">"memory"</span>: { <span class="field">"pass"</span>: <span class="num">1</span>, <span class="field">"total"</span>: <span class="num">1</span> }
+  },
+  <span class="field">"results"</span>: [
+    { <span class="field">"id"</span>: <span class="str">"workproduct-merge"</span>, <span class="field">"actual"</span>: <span class="str">"MERGE"</span>, <span class="field">"pass"</span>: <span class="num">true</span> },
+    { <span class="field">"id"</span>: <span class="str">"workproduct-block"</span>, <span class="field">"actual"</span>: <span class="str">"BLOCK"</span>, <span class="field">"pass"</span>: <span class="num">true</span> },
+    { <span class="field">"id"</span>: <span class="str">"memory-hygiene"</span>, <span class="field">"actual"</span>: <span class="str">"PASS"</span>, <span class="field">"pass"</span>: <span class="num">true</span> }
+  ]
+}</div>
+  </div>
+</div>
+
+<div class="section">
+  <div class="section-label">Session Skills — 10 Total</div>
+  <h2>The Full Lifecycle</h2>
+  <p>Inside a Claude Code session, ten skills walk the user through the full lifecycle. Two new in v2.1 (green border).</p>
+  <div class="lifecycle">
+    <div class="lc-step"><div class="name">/gk-init-graph</div><div class="desc">Generate graph.yaml</div></div>
+    <div class="lc-step"><div class="name">/gk-brainstorm</div><div class="desc">Refine nodes + tiers</div></div>
+    <div class="lc-step"><div class="name">/gk-visualize</div><div class="desc">Excalidraw render</div></div>
+    <div class="lc-step"><div class="name">/gk-validate</div><div class="desc">9-check gate</div></div>
+    <div class="lc-step"><div class="name">/gk-compile</div><div class="desc">YAML → .workflow.js</div></div>
+    <div class="lc-step"><div class="name">/gk-run</div><div class="desc">Execute workflow</div></div>
+    <div class="lc-step new"><div class="name">/gk-recall</div><div class="desc">Query memory graph</div></div>
+    <div class="lc-step new"><div class="name">/gk-eval</div><div class="desc">MERGE/BLOCK gate</div></div>
+    <div class="lc-step"><div class="name">/gk-evidence</div><div class="desc">Results report</div></div>
+    <div class="lc-step"><div class="name">/gk-status</div><div class="desc">Run state</div></div>
+  </div>
+</div>
+
+<div class="section">
+  <div class="section-label">Kit Agents — 8 Total</div>
+  <h2>Engineering Team</h2>
+  <p>Seven agents from agency-agents, plus the Memory Curator (v2.1). Each declares model tier, graph roles, and evidence keys.</p>
+  <div style="margin-top:1.2rem">
+    <div class="agent-row"><div class="agent-emoji">🏛️</div><div class="agent-info"><div class="agent-name">Software Architect</div><div class="agent-roles">scouter · planner · synthesizer</div></div><div class="agent-tier" style="background:rgba(163,113,247,0.15);color:var(--opus)">opus</div></div>
+    <div class="agent-row"><div class="agent-emoji">👁️</div><div class="agent-info"><div class="agent-name">Code Reviewer</div><div class="agent-roles">worker · verifier</div></div><div class="agent-tier" style="background:rgba(88,166,255,0.15);color:var(--sonnet)">sonnet</div></div>
+    <div class="agent-row"><div class="agent-emoji">🧪</div><div class="agent-info"><div class="agent-name">QA Engineer</div><div class="agent-roles">verifier · worker</div></div><div class="agent-tier" style="background:rgba(63,185,80,0.15);color:var(--haiku)">haiku</div></div>
+    <div class="agent-row"><div class="agent-emoji">📊</div><div class="agent-info"><div class="agent-name">Data Engineer</div><div class="agent-roles">worker · scouter</div></div><div class="agent-tier" style="background:rgba(88,166,255,0.15);color:var(--sonnet)">sonnet</div></div>
+    <div class="agent-row"><div class="agent-emoji">🎨</div><div class="agent-info"><div class="agent-name">UI/UX Researcher</div><div class="agent-roles">worker · synthesizer</div></div><div class="agent-tier" style="background:rgba(88,166,255,0.15);color:var(--sonnet)">sonnet</div></div>
+    <div class="agent-row"><div class="agent-emoji">🔧</div><div class="agent-info"><div class="agent-name">Agents Orchestrator</div><div class="agent-roles">scouter · synthesizer</div></div><div class="agent-tier" style="background:rgba(163,113,247,0.15);color:var(--opus)">opus</div></div>
+    <div class="agent-row"><div class="agent-emoji">📝</div><div class="agent-info"><div class="agent-name">Document Generator</div><div class="agent-roles">synthesizer · worker</div></div><div class="agent-tier" style="background:rgba(88,166,255,0.15);color:var(--sonnet)">sonnet</div></div>
+    <div class="agent-row" style="border-color:var(--memory)"><div class="agent-emoji">🧠</div><div class="agent-info"><div class="agent-name">Memory Curator <span class="badge-new">v2.1</span></div><div class="agent-roles">curator · injector</div></div><div class="agent-tier" style="background:rgba(163,113,247,0.15);color:var(--opus)">opus</div></div>
+  </div>
+</div>
+
+<div class="section">
+  <div class="section-label">Verified</div>
+  <h2>Acceptance Criteria — 22 Proven</h2>
+  <table class="ac-table">
+    <tr><th>AC</th><th>Description</th><th></th></tr>
+    <tr><td>AC01</td><td>gk init installs claude/ with all agents, skills, hooks, rules</td><td class="pass">✓</td></tr>
+    <tr><td>AC02</td><td>gk validate rejects invalid graph.yaml</td><td class="pass">✓</td></tr>
+    <tr><td>AC03</td><td>gk compile produces valid .workflow.js for all topologies</td><td class="pass">✓</td></tr>
+    <tr><td>AC04</td><td>gk compile resolves subgraph references</td><td class="pass">✓</td></tr>
+    <tr><td>AC06</td><td>gk validate detects acyclic dependency violations</td><td class="pass">✓</td></tr>
+    <tr><td>AC07</td><td>gk validate detects missing refs</td><td class="pass">✓</td></tr>
+    <tr><td>AC10</td><td>Model tiering propagates to compiled .workflow.js</td><td class="pass">✓</td></tr>
+    <tr><td>AC11</td><td>memory-augmented compiles + wraps inner topology</td><td class="pass">✓</td></tr>
+    <tr><td>AC12</td><td>Curator fires at cadence, inject-or-null</td><td class="pass">✓</td></tr>
+    <tr><td>AC14</td><td>memory-persist fail-open + writes OKF</td><td class="pass">✓</td></tr>
+    <tr><td>AC15</td><td>active forgetting expires below threshold</td><td class="pass">✓</td></tr>
+    <tr><td>AC16</td><td>eval-gate binds terminal, MERGE/BLOCK</td><td class="pass">✓</td></tr>
+    <tr><td>AC17</td><td>work_product + memory modes, abstention</td><td class="pass">✓</td></tr>
+    <tr><td>AC19</td><td>golden harness, per-category pass rates</td><td class="pass">✓</td></tr>
+  </table>
+  <div class="stats-banner">
+    <div class="stat-cell"><div class="stat-cell-num">105</div><div class="stat-cell-label">Tests Pass</div></div>
+    <div class="stat-cell"><div class="stat-cell-num">0</div><div class="stat-cell-label">Failures</div></div>
+    <div class="stat-cell"><div class="stat-cell-num">22</div><div class="stat-cell-label">AC Proven</div></div>
+    <div class="stat-cell"><div class="stat-cell-num">3/3</div><div class="stat-cell-label">Golden Cases</div></div>
+    <div class="stat-cell"><div class="stat-cell-num">0</div><div class="stat-cell-label">Lint Errors</div></div>
+  </div>
+</div>
+
+<div class="footer">
+  GraphKit · graph engineering kit for Claude Code<br>
+  <span style="color:var(--memory)">8 agents</span> · <span style="color:var(--sonnet)">10 skills</span> · <span style="color:var(--eval)">7 topologies</span> · <span style="color:var(--haiku)">105 tests</span><br>
+  gk never invokes a model · evidence-based gates · silence is first-class
+</div>
+
+</body>
+</html>
