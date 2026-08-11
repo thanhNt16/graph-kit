@@ -1,0 +1,80 @@
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { cac } from "cac";
+import { registerModelsCommands } from "../../src/cli/commands/models.js";
+import { CURSOR_MODEL_DEFAULTS } from "../../src/models/cursor-map.js";
+
+function fullCli() {
+  const cli = cac("gk");
+  registerModelsCommands(cli);
+  return cli;
+}
+
+function runCli(args: string[], cwd: string) {
+  const cli = fullCli();
+  const logs: string[] = [];
+  const origLog = console.log;
+  console.log = (...a: unknown[]) => logs.push(a.map(String).join(" "));
+  let exit = 0;
+  const origExit = process.exit;
+  process.exit = (c?: number) => { exit = c ?? 1; };
+  const origCwd = process.cwd;
+  process.cwd = () => cwd;
+  try {
+    cli.parse(["node", "gk", ...args], { run: true });
+  } finally {
+    console.log = origLog;
+    process.exit = origExit;
+    process.cwd = origCwd;
+  }
+  return { stdout: logs.join("\n"), code: exit };
+}
+
+describe("gk models", () => {
+  let cwd: string;
+  beforeEach(() => {
+    cwd = mkdtempSync(join(tmpdir(), "gk-models-"));
+    mkdirSync(join(cwd, ".graphkit"), { recursive: true });
+  });
+  afterEach(() => rmSync(cwd, { recursive: true, force: true }));
+
+  test("models cursor prints defaults when no override", () => {
+    const { stdout, code } = runCli(["models", "cursor"], cwd);
+    expect(code).toBe(0);
+    const parsed = JSON.parse(stdout);
+    expect(parsed.status).toBe("ok");
+    expect(parsed.data.opus).toBe(CURSOR_MODEL_DEFAULTS.opus);
+    expect(parsed.data.sonnet).toBe(CURSOR_MODEL_DEFAULTS.sonnet);
+  });
+
+  test("models cursor set writes an override file", () => {
+    const { stdout, code } = runCli(["models", "cursor", "set", "--map", "sonnet=Claude Sonnet 4.5"], cwd);
+    expect(code).toBe(0);
+    const parsed = JSON.parse(stdout);
+    expect(parsed.status).toBe("ok");
+    const file = join(cwd, ".graphkit", "models.cursor.json");
+    expect(existsSync(file)).toBe(true);
+    const saved = JSON.parse(readFileSync(file, "utf8"));
+    expect(saved.sonnet).toBe("Claude Sonnet 4.5");
+    expect(parsed.data.sonnet).toBe("Claude Sonnet 4.5");
+  });
+
+  test("models cursor reflects an override", () => {
+    writeFileSync(join(cwd, ".graphkit", "models.cursor.json"), JSON.stringify({ sonnet: "Claude Sonnet 4.5" }));
+    const { stdout, code } = runCli(["models", "cursor"], cwd);
+    expect(code).toBe(0);
+    const parsed = JSON.parse(stdout);
+    expect(parsed.data.sonnet).toBe("Claude Sonnet 4.5");
+    expect(parsed.data.opus).toBe(CURSOR_MODEL_DEFAULTS.opus);
+  });
+
+  test("models cursor reset clears overrides", () => {
+    writeFileSync(join(cwd, ".graphkit", "models.cursor.json"), JSON.stringify({ sonnet: "Claude Sonnet 4.5" }));
+    const res = runCli(["models", "cursor", "reset"], cwd);
+    expect(res.code).toBe(0);
+    const file = join(cwd, ".graphkit", "models.cursor.json");
+    expect(existsSync(file)).toBe(false);
+  });
+});

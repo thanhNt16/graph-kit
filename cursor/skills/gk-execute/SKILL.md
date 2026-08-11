@@ -92,6 +92,22 @@ Return your output with these evidence keys: {node.evidence}
 
 Dispatch via the Task tool with the node's model tier and the matching `.cursor/agents/<agent>.md` definition.
 
+## Model resolution (Cursor)
+
+The node's `model` tier is a GraphKit tier, not a Cursor model. Resolve it
+before setting the Task tool's model:
+
+| GraphKit tier | Cursor model |
+|---|---|
+| `opus` | `Grok 4.5` |
+| `sonnet` | `Composer 2.5` |
+| `haiku` | `Auto` |
+| `fable` | `Auto` |
+
+Custom overrides live in `.graphkit/models.cursor.json` and win over the table
+above. Query the effective mapping with `gk models cursor`. If a tier is
+missing from the map, fall back to `Auto`.
+
 ## Why this is effective
 
 - **Transparent**: every task dispatch is visible in the conversation

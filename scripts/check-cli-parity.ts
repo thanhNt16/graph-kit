@@ -20,7 +20,7 @@ function fail(message: string): never {
 function outputOf(result: { stdout: string; stderr: string }): string {
   return result.stdout + result.stderr;
 }
-const UNKNOWN_CODES = ["UNKNOWN_GRAPH_SUBCOMMAND", "UNKNOWN_TEMPLATE_SUBCOMMAND", "UNKNOWN_MEMORY_SUBCOMMAND"];
+const UNKNOWN_CODES = ["UNKNOWN_GRAPH_SUBCOMMAND", "UNKNOWN_TEMPLATE_SUBCOMMAND", "UNKNOWN_MEMORY_SUBCOMMAND", "UNKNOWN_MODELS_SUBCOMMAND"];
 function isUnknownCommand(result: { stdout: string; stderr: string }, _parent: string): boolean {
   try {
     const envelope = JSON.parse(result.stdout) as { status?: string; error?: { code?: string; message?: string } };

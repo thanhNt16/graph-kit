@@ -96,6 +96,21 @@
       "name": "inventory",
       "description": "Inventory installed agents, skills, tools, and MCP servers",
       "options": ["--target <target>", "--json"]
+    },
+    {
+      "name": "models cursor",
+      "description": "Show the Cursor model mapping",
+      "options": ["--json"]
+    },
+    {
+      "name": "models cursor set",
+      "description": "Set a Cursor model override",
+      "options": ["--map <k=v,...>", "--json"]
+    },
+    {
+      "name": "models cursor reset",
+      "description": "Remove Cursor model overrides",
+      "options": ["--json"]
     }
   ]
 }

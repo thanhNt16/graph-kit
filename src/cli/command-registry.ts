@@ -59,6 +59,9 @@ export const CLI_COMMANDS: { path: string; description: string; options: string[
     description: "Inventory installed agents, skills, tools, and MCP servers",
     options: ["--target <target>", "--json"],
   },
+  { path: "models cursor", description: "Show the Cursor model mapping", options: ["--json"] },
+  { path: "models cursor set", description: "Set a Cursor model override", options: ["--map <k=v,...>", "--json"] },
+  { path: "models cursor reset", description: "Remove Cursor model overrides", options: ["--json"] },
 ];
 
 /** Return the manifest object (mirrors cli-manifest.json). */
