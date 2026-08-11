@@ -339,7 +339,9 @@ import { emphasisIds, type Filters, matchesSearch, passesFilters, retainedSelect
       class: "edge",
       "data-from": edge.v,
       "data-to": edge.w,
+      "data-dash": "flow",
       "marker-end": "url(#arrow)",
+      "stroke-dasharray": "6 6",
     }) as SVGPathElement;
     path.appendChild(textNode(""));
     layers.edges.appendChild(path);
