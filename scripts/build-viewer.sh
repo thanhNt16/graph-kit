@@ -15,4 +15,8 @@ cp claude/viewer/app.js cursor/viewer/app.js
 bun build scripts/dagre-entry.ts --target=browser --format=iife --global-name=dagre --outfile=claude/viewer/dagre.js
 cp claude/viewer/dagre.js cursor/viewer/dagre.js
 
+# styles.css is shared source, not bundled — mirror it so claude/cursor stay
+# byte-identical (viewer-parity.test.ts enforces this).
+cp claude/viewer/styles.css cursor/viewer/styles.css
+
 echo "[viewer] done"
