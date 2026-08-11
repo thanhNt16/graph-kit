@@ -188,6 +188,14 @@ input[type="checkbox"]:focus-visible {
 }
 
 /* nodes + edges */
+/* Hidden auto-fit measurement probe. visibility:hidden (not display:none) so
+   getBBox() still reports text extents; it never animates, so no reduced-motion
+   guard is needed — the class carries no transition or animation. */
+.node-probe {
+  visibility: hidden;
+  position: absolute;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
 .node-group {
   cursor: pointer;
   transform-box: fill-box;

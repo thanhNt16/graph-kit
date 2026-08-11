@@ -192,6 +192,19 @@ export class FakeEl {
     };
   }
 
+  /** Deterministic fake text measurement: 1em = 6px monospace, char-per-line
+      floor of 2px. Width grows linearly with the longest line so a long node ID
+      measures strictly wider than a short one. Only the probe uses this — the
+      fake DOM has no real layout. */
+  getBBox(): { x: number; y: number; width: number; height: number } {
+    const lines = textOf(this).split("\n");
+    let width = 0;
+    for (const line of lines) {
+      width = Math.max(width, line.length * 6 + 2);
+    }
+    return { x: 0, y: 0, width, height: lines.length * 12 };
+  }
+
   focus() {
     if (this.ownerDocument) this.ownerDocument.activeElement = this;
   }
@@ -253,6 +266,9 @@ export interface ViewerHarness {
   es: FakeEventSource[];
   getEl(id: string): FakeEl;
   nodeGroup(id: string): FakeEl | null;
+  /** Card rect width for `id`: the node-rect `width` attribute, falling back to
+      getBoundingClientRect().width when no explicit width is set. */
+  nodeRectWidth(id: string): number;
   viewport(): FakeEl | null;
   edge(from: string, to: string): FakeEl | null;
   lane(level: number): FakeEl | null;
@@ -376,6 +392,12 @@ export function createViewerHarness(
     nodeGroup: (id) => {
       const vps = doc.ids.canvas.querySelectorAll("g.viewport");
       return (vps[vps.length - 1] || doc.ids.canvas).querySelector(`[data-id="${id}"]`) ?? null;
+    },
+    nodeRectWidth: (id) => {
+      const rect = harness.nodeGroup(id)?.querySelector("rect.node-rect");
+      if (!rect) return NaN;
+      const w = rect.getAttribute("width");
+      return w != null ? Number(w) : rect.getBoundingClientRect().width;
     },
     viewport: () => doc.ids.canvas.querySelector("g.viewport"),
     edge: (from, to) =>

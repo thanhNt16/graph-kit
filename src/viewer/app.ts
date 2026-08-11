@@ -10,6 +10,10 @@ import { emphasisIds, type Filters, matchesSearch, passesFilters, retainedSelect
   var KEY = new URLSearchParams(location.search).get("key") || "";
   var NODE_W = 208;
   var NODE_H = 64;
+  var MIN_NODE_W = 120;
+  var MIN_NODE_H = 48;
+  var nodeSizes = new Map<string, { width: number; height: number; key: string }>();
+  var probeEl: SVGGElement | null = null;
   var TIERS = ["opus", "sonnet", "haiku", "fable"];
   var COLOR = {
     opus: "var(--tier-opus)",
@@ -74,12 +78,36 @@ import { emphasisIds, type Filters, matchesSearch, passesFilters, retainedSelect
     return node.id + "\n" + node.agent + " · " + node.model;
   }
 
+  function nodeContentKey(node: any): string {
+    return [node.id, node.agent, node.model, node.loop?.enabled ? "loop" : "", node.eval ? "eval" : ""].join("~");
+  }
+
+  function nodeSizeFor(node: any): { width: number; height: number } {
+    var key = nodeContentKey(node);
+    var cached = nodeSizes.get(node.id);
+    if (cached && cached.key === key) {
+      return { width: cached.width, height: cached.height };
+    }
+    var probe = probeEl;
+    if (!probe) {
+      return { width: NODE_W, height: NODE_H };
+    }
+    // reset probe text to the node's card content
+    probe.textContent = "";
+    probe.appendChild(textNode(node.id + "\n" + node.agent + " · " + node.model));
+    var w = Math.max(MIN_NODE_W, probe.getBBox().width + 24);
+    var h = Math.max(MIN_NODE_H, probe.getBBox().height + 16);
+    nodeSizes.set(node.id, { width: w, height: h, key });
+    return { width: w, height: h };
+  }
+
   function layout() {
     var g = new (dagre as any).graphlib.Graph();
     g.setGraph({ rankdir: "TB", nodesep: 60, ranksep: 70, marginx: 40, marginy: 40 });
     g.setDefaultEdgeLabel(() => ({}));
     Object.keys(state.graph!.nodes).forEach((id) => {
-      g.setNode(id, { width: NODE_W, height: NODE_H, label: nodeTitle(state.graph!.nodes[id]) });
+      var size = nodeSizeFor(state.graph!.nodes[id]);
+      g.setNode(id, { width: size.width, height: size.height, label: nodeTitle(state.graph!.nodes[id]) });
     });
     Object.keys(state.graph!.nodes).forEach((id) => {
       state.graph!.nodes[id].depend_on.forEach((dep: string) => {
@@ -667,6 +695,10 @@ import { emphasisIds, type Filters, matchesSearch, passesFilters, retainedSelect
     viewport.appendChild(layers.edges);
     viewport.appendChild(layers.nodes);
     svg.appendChild(viewport);
+    // hidden measurement probe for auto-fitted node sizes — a sibling of the
+    // node layer (never a child), so it stays out of node ordering/focus
+    probeEl = el("g", { class: "node-probe" });
+    viewport.appendChild(probeEl);
   }
 
   function init() {
