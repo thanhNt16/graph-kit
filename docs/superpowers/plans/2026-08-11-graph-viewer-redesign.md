@@ -12,7 +12,7 @@
 
 - Before Task 1, invoke the `frontend-design` skill and use the approved spec plus Image #3 as the visual direction.
 - Apply `cathrynlavery/diagram-design` principles: density 4/10, one focal accent, semantic tokens, restrained decoration, strong hierarchy.
-- Target the current branch layout under `apps/gk/`; run commands from `apps/gk/` unless noted.
+- Target the repo-root layout (source under `src/`, not `apps/gk/`); run commands from the worktree root unless noted.
 - Preserve CSP `script-src 'self'`; no inline scripts, remote assets, or data interpolation through `innerHTML`.
 - Keep `claude/viewer` and `cursor/viewer` assets byte-identical.
 - Keep dagre as the bundled IIFE layout engine; add no runtime or development dependencies.
@@ -23,26 +23,26 @@
 
 ## File Structure
 
-- `apps/gk/src/viewer/app.ts` — browser orchestration, dagre layout, keyed SVG reconciliation, canvas interaction.
-- `apps/gk/src/viewer/view.ts` — existing pure search/filter/emphasis policies; change only if a new DOM-free policy is necessary.
-- `apps/gk/claude/viewer/index.html` — accessible toolbar shell and empty SVG host.
-- `apps/gk/claude/viewer/styles.css` — semantic theme tokens, lanes, node cards, edges, drawer, motion.
-- `apps/gk/cursor/viewer/index.html` — byte-identical copy of Claude asset.
-- `apps/gk/cursor/viewer/styles.css` — byte-identical copy of Claude asset.
-- `apps/gk/tests/helpers/fake-dom.ts` — test-only APIs and viewer inspection helpers.
-- `apps/gk/tests/unit/viewer-dom.test.ts` — executed renderer behavior and element-identity tests.
-- `apps/gk/tests/unit/viewer-parity.test.ts` — static security, parity, visual-contract, and bundle checks.
+- `src/viewer/app.ts` — browser orchestration, dagre layout, keyed SVG reconciliation, canvas interaction.
+- `src/viewer/view.ts` — existing pure search/filter/emphasis policies; change only if a new DOM-free policy is necessary.
+- `claude/viewer/index.html` — accessible toolbar shell and empty SVG host.
+- `claude/viewer/styles.css` — semantic theme tokens, lanes, node cards, edges, drawer, motion.
+- `cursor/viewer/index.html` — byte-identical copy of Claude asset.
+- `cursor/viewer/styles.css` — byte-identical copy of Claude asset.
+- `tests/helpers/fake-dom.ts` — test-only APIs and viewer inspection helpers.
+- `tests/unit/viewer-dom.test.ts` — executed renderer behavior and element-identity tests.
+- `tests/unit/viewer-parity.test.ts` — static security, parity, visual-contract, and bundle checks.
 
 ---
 
 ### Task 1: Dark-first editorial shell
 
 **Files:**
-- Modify: `apps/gk/claude/viewer/index.html:2-43`
-- Modify: `apps/gk/claude/viewer/styles.css:1-355`
-- Modify: `apps/gk/cursor/viewer/index.html:2-43`
-- Modify: `apps/gk/cursor/viewer/styles.css:1-355`
-- Test: `apps/gk/tests/unit/viewer-parity.test.ts:96-113`
+- Modify: `claude/viewer/index.html:2-43`
+- Modify: `claude/viewer/styles.css:1-355`
+- Modify: `cursor/viewer/index.html:2-43`
+- Modify: `cursor/viewer/styles.css:1-355`
+- Test: `tests/unit/viewer-parity.test.ts:96-113`
 
 **Interfaces:**
 - Consumes: existing toolbar element IDs used by `app.ts`.
@@ -79,7 +79,7 @@ test("editorial shell exposes phase-lane and card styling hooks", () => {
 Run:
 
 ```bash
-cd apps/gk && bun test tests/unit/viewer-parity.test.ts
+bun test tests/unit/viewer-parity.test.ts
 ```
 
 Expected: FAIL because `--ink`, `--muted`, `--hairline`, `#toggle-lanes`, and new visual hooks do not exist.
@@ -188,7 +188,7 @@ Keep controls and body painted explicitly. Remove the default-system media token
 Run:
 
 ```bash
-cd apps/gk && cp claude/viewer/index.html cursor/viewer/index.html && cp claude/viewer/styles.css cursor/viewer/styles.css
+cp claude/viewer/index.html cursor/viewer/index.html && cp claude/viewer/styles.css cursor/viewer/styles.css
 ```
 
 - [ ] **Step 6: Run focused tests**
@@ -196,7 +196,7 @@ cd apps/gk && cp claude/viewer/index.html cursor/viewer/index.html && cp claude/
 Run:
 
 ```bash
-cd apps/gk && bun test tests/unit/viewer-parity.test.ts
+bun test tests/unit/viewer-parity.test.ts
 ```
 
 Expected: PASS.
@@ -204,9 +204,9 @@ Expected: PASS.
 - [ ] **Step 7: Commit**
 
 ```bash
-git add apps/gk/claude/viewer/index.html apps/gk/claude/viewer/styles.css \
-  apps/gk/cursor/viewer/index.html apps/gk/cursor/viewer/styles.css \
-  apps/gk/tests/unit/viewer-parity.test.ts
+git add claude/viewer/index.html claude/viewer/styles.css \
+  cursor/viewer/index.html cursor/viewer/styles.css \
+  tests/unit/viewer-parity.test.ts
 git commit -m "style: add editorial viewer shell
 
 Co-Authored-By: Claude <noreply@anthropic.com>"
@@ -217,9 +217,9 @@ Co-Authored-By: Claude <noreply@anthropic.com>"
 ### Task 2: Stable keyed SVG renderer
 
 **Files:**
-- Modify: `apps/gk/src/viewer/app.ts:22-290,504-527,549-584`
-- Modify: `apps/gk/tests/helpers/fake-dom.ts:199-266,355-406`
-- Test: `apps/gk/tests/unit/viewer-dom.test.ts:137-168`
+- Modify: `src/viewer/app.ts:22-290,504-527,549-584`
+- Modify: `tests/helpers/fake-dom.ts:199-266,355-406`
+- Test: `tests/unit/viewer-dom.test.ts:137-168`
 
 **Interfaces:**
 - Consumes: `ViewerGraph`, existing dagre layout output, existing `isVisible`, `emphasisIds`, and viewport state.
@@ -275,7 +275,7 @@ test("graph updates reconcile keyed nodes instead of replacing retained nodes", 
 Run:
 
 ```bash
-cd apps/gk && bun run build:viewer && bun test tests/unit/viewer-dom.test.ts
+bun run build:viewer && bun test tests/unit/viewer-dom.test.ts
 ```
 
 Expected: FAIL because `draw()` replaces the viewport and all nodes.
@@ -412,7 +412,7 @@ Replace search/filter/reset calls to `draw()` with `updateViewState()`. Replace 
 Run:
 
 ```bash
-cd apps/gk && bun run build:viewer && bun test tests/unit/viewer-dom.test.ts tests/unit/viewer-parity.test.ts
+bun run build:viewer && bun test tests/unit/viewer-dom.test.ts tests/unit/viewer-parity.test.ts
 ```
 
 Expected: PASS, including stable object identity across search and graph updates.
@@ -420,7 +420,7 @@ Expected: PASS, including stable object identity across search and graph updates
 - [ ] **Step 8: Commit source and tests only**
 
 ```bash
-git add apps/gk/src/viewer/app.ts apps/gk/tests/helpers/fake-dom.ts apps/gk/tests/unit/viewer-dom.test.ts
+git add src/viewer/app.ts tests/helpers/fake-dom.ts tests/unit/viewer-dom.test.ts
 git commit -m "refactor: reconcile viewer SVG incrementally
 
 Co-Authored-By: Claude <noreply@anthropic.com>"
@@ -431,10 +431,10 @@ Co-Authored-By: Claude <noreply@anthropic.com>"
 ### Task 3: Phase lanes, editorial cards, and calm edges
 
 **Files:**
-- Modify: `apps/gk/src/viewer/app.ts` (layout constants, `reconcileLanes`, node/edge element helpers)
-- Modify: `apps/gk/tests/helpers/fake-dom.ts:308-327`
-- Test: `apps/gk/tests/unit/viewer-dom.test.ts`
-- Test: `apps/gk/tests/unit/viewer-parity.test.ts`
+- Modify: `src/viewer/app.ts` (layout constants, `reconcileLanes`, node/edge element helpers)
+- Modify: `tests/helpers/fake-dom.ts:308-327`
+- Test: `tests/unit/viewer-dom.test.ts`
+- Test: `tests/unit/viewer-parity.test.ts`
 
 **Interfaces:**
 - Consumes: keyed layer/maps from Task 2 and normalized `ViewerNode.level`/`order`.
@@ -484,7 +484,7 @@ test("node cards include a model rail, model text, and loop badge", async () => 
 Run:
 
 ```bash
-cd apps/gk && bun run build:viewer && bun test tests/unit/viewer-dom.test.ts
+bun run build:viewer && bun test tests/unit/viewer-dom.test.ts
 ```
 
 Expected: FAIL because lanes, markers, cubic paths, tier rails, and badges are absent.
@@ -622,7 +622,7 @@ Remove `.is-new` on `animationend`; retained nodes must not receive it again.
 Run:
 
 ```bash
-cd apps/gk && cp claude/viewer/styles.css cursor/viewer/styles.css && bun run build:viewer && bun test tests/unit/viewer-dom.test.ts tests/unit/viewer-parity.test.ts
+cp claude/viewer/styles.css cursor/viewer/styles.css && bun run build:viewer && bun test tests/unit/viewer-dom.test.ts tests/unit/viewer-parity.test.ts
 ```
 
 Expected: PASS.
@@ -630,8 +630,8 @@ Expected: PASS.
 - [ ] **Step 9: Commit**
 
 ```bash
-git add apps/gk/src/viewer/app.ts apps/gk/claude/viewer/styles.css apps/gk/cursor/viewer/styles.css \
-  apps/gk/tests/helpers/fake-dom.ts apps/gk/tests/unit/viewer-dom.test.ts apps/gk/tests/unit/viewer-parity.test.ts
+git add src/viewer/app.ts claude/viewer/styles.css cursor/viewer/styles.css \
+  tests/helpers/fake-dom.ts tests/unit/viewer-dom.test.ts tests/unit/viewer-parity.test.ts
 git commit -m "feat: reveal workflow phases in viewer
 
 Co-Authored-By: Claude <noreply@anthropic.com>"
@@ -642,11 +642,11 @@ Co-Authored-By: Claude <noreply@anthropic.com>"
 ### Task 4: Interaction polish, accessibility, and final verification
 
 **Files:**
-- Modify: `apps/gk/src/viewer/app.ts` (selection, lane toggle, ARIA, animation cleanup)
-- Modify: `apps/gk/claude/viewer/styles.css` (focus, selected, dimmed, reduced motion)
-- Modify: `apps/gk/cursor/viewer/styles.css`
-- Test: `apps/gk/tests/unit/viewer-dom.test.ts`
-- Test: `apps/gk/tests/unit/viewer-parity.test.ts`
+- Modify: `src/viewer/app.ts` (selection, lane toggle, ARIA, animation cleanup)
+- Modify: `claude/viewer/styles.css` (focus, selected, dimmed, reduced motion)
+- Modify: `cursor/viewer/styles.css`
+- Test: `tests/unit/viewer-dom.test.ts`
+- Test: `tests/unit/viewer-parity.test.ts`
 
 **Interfaces:**
 - Consumes: stable maps and visual structures from Tasks 2–3.
@@ -705,7 +705,7 @@ expect(css).toMatch(/prefers-reduced-motion:\s*reduce[\s\S]*animation:\s*none/);
 Run:
 
 ```bash
-cd apps/gk && bun run build:viewer && bun test tests/unit/viewer-dom.test.ts tests/unit/viewer-parity.test.ts
+bun run build:viewer && bun test tests/unit/viewer-dom.test.ts tests/unit/viewer-parity.test.ts
 ```
 
 Expected: FAIL until lane toggling, durable selected styling, and reduced-motion animation suppression are complete.
@@ -773,7 +773,7 @@ Mirror CSS afterward.
 Run:
 
 ```bash
-cd apps/gk && cp claude/viewer/styles.css cursor/viewer/styles.css && bun run build:viewer && \
+cp claude/viewer/styles.css cursor/viewer/styles.css && bun run build:viewer && \
   bun test tests/unit/viewer-behavior.test.ts \
     tests/unit/viewer-dom.test.ts \
     tests/unit/viewer-normalize.test.ts \
@@ -788,7 +788,7 @@ Expected: all PASS.
 Run:
 
 ```bash
-cd apps/gk && bun run ci:local
+bun run ci:local
 ```
 
 Expected: typecheck, lint, builds, viewer build, tests, and CBM parity all PASS. If unrelated pre-existing failures occur, record the exact command and failure; do not weaken tests.
@@ -798,7 +798,7 @@ Expected: typecheck, lint, builds, viewer build, tests, and CBM parity all PASS.
 Run:
 
 ```bash
-cd apps/gk && bun src/cli/index.ts graph viewer graph.yaml
+bun src/cli/index.ts graph viewer graph.yaml
 ```
 
 Open the printed authenticated URL. Verify:
@@ -818,8 +818,8 @@ Stop the viewer process after inspection.
 - [ ] **Step 9: Commit final source and tests**
 
 ```bash
-git add apps/gk/src/viewer/app.ts apps/gk/claude/viewer/styles.css apps/gk/cursor/viewer/styles.css \
-  apps/gk/tests/helpers/fake-dom.ts apps/gk/tests/unit/viewer-dom.test.ts apps/gk/tests/unit/viewer-parity.test.ts
+git add src/viewer/app.ts claude/viewer/styles.css cursor/viewer/styles.css \
+  tests/helpers/fake-dom.ts tests/unit/viewer-dom.test.ts tests/unit/viewer-parity.test.ts
 git commit -m "feat: polish interactive graph emphasis
 
 Co-Authored-By: Claude <noreply@anthropic.com>"
@@ -830,7 +830,7 @@ Co-Authored-By: Claude <noreply@anthropic.com>"
 Run:
 
 ```bash
-git status --short -- apps/gk/claude/viewer apps/gk/cursor/viewer
+git status --short -- claude/viewer cursor/viewer
 ```
 
 Expected: no `app.js`, `server.mjs`, or `dagre.js` staged or newly tracked; only source changes already committed.
