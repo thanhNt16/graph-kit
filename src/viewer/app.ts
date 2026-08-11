@@ -56,6 +56,9 @@ import { emphasisIds, type Filters, matchesSearch, passesFilters, retainedSelect
   var drawerTitle: HTMLElement;
   var searchEl: HTMLInputElement;
   var mouseAnchor: { x: number; y: number; view: { x: number; y: number; k: number } } | null = null;
+  // Manual-nudge drag state — ephemeral, cleared on mouseup and any graph apply.
+  var dragNodeId: string | null = null;
+  var dragAnchor: { x: number; y: number; tx: number; ty: number } | null = null;
 
   function el(tag: string, props?: Record<string, string>, children?: Node[]) {
     var n = document.createElementNS("http://www.w3.org/2000/svg", tag);
@@ -197,6 +200,13 @@ import { emphasisIds, type Filters, matchesSearch, passesFilters, retainedSelect
       label2.setAttribute("y", String(b.y + 18));
       label2.textContent = "Phase " + level;
     });
+  }
+
+  function parseTransform(g: SVGGElement | undefined): { tx: number; ty: number } {
+    if (!g) return { tx: 0, ty: 0 };
+    var t = g.getAttribute("transform") || "";
+    var m = t.match(/translate\(\s*([-\d.]+)[,\s]+([-\d.]+)/);
+    return m ? { tx: parseFloat(m[1]), ty: parseFloat(m[2]) } : { tx: 0, ty: 0 };
   }
 
   function setView(v: { x: number; y: number; k: number }) {
@@ -628,6 +638,11 @@ import { emphasisIds, type Filters, matchesSearch, passesFilters, retainedSelect
 
   function applyGraph(graph: ViewerGraph) {
     var prevGraph = state.graph;
+    // A node mid-drag snaps to its new layout position: drop drag state and any
+    // residual translate before reconcileTopology. Manual nudge never persists.
+    dragNodeId = null;
+    dragAnchor = null;
+    nodeEls.forEach((g) => g.removeAttribute("transform"));
     // Preserve viewport + selection across valid updates; fit only initial load.
     // The retained selection may have been dropped if the node no longer exists.
     var prevSelected = state.selected;
@@ -780,7 +795,24 @@ import { emphasisIds, type Filters, matchesSearch, passesFilters, retainedSelect
       if ((e.target as Element).closest("g.node-group")) return;
       mouseAnchor = { x: e.clientX, y: e.clientY, view: state.view || { x: 0, y: 0, k: 1 } };
     });
+    // manual nudge: mousedown on a node starts a drag instead of a pan
+    svg.addEventListener("mousedown", (e) => {
+      var g = (e.target as Element).closest("g.node-group") as HTMLElement | null;
+      if (!g) return; // pan handles background
+      dragNodeId = g.dataset.id as string;
+      var cur = parseTransform(nodeEls.get(dragNodeId));
+      dragAnchor = { x: e.clientX, y: e.clientY, tx: cur.tx, ty: cur.ty };
+    });
     window.addEventListener("mousemove", (e) => {
+      if (dragNodeId && dragAnchor) {
+        var g = nodeEls.get(dragNodeId);
+        if (g) {
+          var nx = dragAnchor.tx + (e.clientX - dragAnchor.x);
+          var ny = dragAnchor.ty + (e.clientY - dragAnchor.y);
+          g.setAttribute("transform", `translate(${nx} ${ny})`);
+        }
+        return;
+      }
       if (!mouseAnchor) return;
       var dx = e.clientX - mouseAnchor.x;
       var dy = e.clientY - mouseAnchor.y;
@@ -788,6 +820,8 @@ import { emphasisIds, type Filters, matchesSearch, passesFilters, retainedSelect
     });
     window.addEventListener("mouseup", () => {
       mouseAnchor = null;
+      dragNodeId = null;
+      dragAnchor = null;
     });
     svg.addEventListener("wheel", (e) => {
       e.preventDefault();

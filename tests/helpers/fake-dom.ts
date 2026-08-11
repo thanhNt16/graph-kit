@@ -90,6 +90,12 @@ export class FakeEl {
     return this.attrs[k];
   }
 
+  removeAttribute(k: string) {
+    delete this.attrs[k];
+    if (k === "class") this.classList.remove(...this.classList.values());
+    if (k.startsWith("data-")) delete this.dataset[k.slice(5)];
+  }
+
   appendChild(c: FakeEl | FakeText) {
     if (c.parentNode) c.parentNode.removeChild(c);
     c.parentNode = this;
@@ -279,6 +285,11 @@ export interface ViewerHarness {
   nodeOrder(): string[];
   setLanes(checked: boolean): void;
   clickNode(id: string): void;
+  /** Simulate a pointer drag on node `id` by dx/dy: mousedown on the node
+      group (canvas listener, target = group), mousemove + mouseup on window. */
+  dragNode(id: string, dx: number, dy: number): void;
+  /** The node group's current `transform` attribute (null when never set). */
+  nodeTransform(id: string): string | null;
   focusNode(id: string): void;
   blurNode(): void;
   hoverNode(id: string): void;
@@ -365,7 +376,23 @@ export function createViewerHarness(
 ): ViewerHarness {
   const doc = makeDocument();
   const esInstances: FakeEventSource[] = [];
-  const win = { innerWidth: 1200, innerHeight: 800, addEventListener: () => {} };
+  const win = {
+    innerWidth: 1200,
+    innerHeight: 800,
+    addEventListener: (t: string, fn: (ev: any) => void) => {
+      const list = (win.listeners[t] ||= []);
+      list.push(fn);
+    },
+    dispatch: (t: string, init?: Record<string, unknown>) => {
+      const ev = Object.assign(
+        { type: t, target: win, currentTarget: win, preventDefault() {}, stopPropagation() {} },
+        init ?? {},
+      );
+      for (const fn of win.listeners[t] || []) fn(ev);
+      return ev;
+    },
+    listeners: {} as Record<string, Array<(ev: any) => void>>,
+  };
   const sandbox: Record<string, unknown> = {
     document: doc,
     window: win,
@@ -440,6 +467,15 @@ export function createViewerHarness(
       const g = harness.nodeGroup(id);
       if (g) g.dispatch("click");
     },
+    dragNode: (id, dx, dy) => {
+      const g = harness.nodeGroup(id);
+      if (!g) return;
+      const canvas = doc.ids.canvas;
+      canvas.dispatch("mousedown", { target: g, clientX: 500, clientY: 400 });
+      win.dispatch("mousemove", { target: g, clientX: 500 + dx, clientY: 400 + dy });
+      win.dispatch("mouseup", { target: g, clientX: 500 + dx, clientY: 400 + dy });
+    },
+    nodeTransform: (id) => harness.nodeGroup(id)?.getAttribute("transform") ?? null,
     focusNode: (id) => {
       const g = harness.nodeGroup(id);
       if (g) doc.ids.canvas.dispatch("focusin", { target: g });
