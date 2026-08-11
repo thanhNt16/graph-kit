@@ -183,17 +183,18 @@ test("graph updates reconcile keyed nodes instead of replacing retained nodes", 
   expect(harness.nodeGroup("c")).not.toBeNull();
 });
 
-test("keyed edge owns its arrow: rendered and removed with the edge", async () => {
+test("keyed edge owns its render: removed with the edge", async () => {
   const harness = createViewerHarness(APP_BUNDLE, graph("g", { a: node("a"), b: node("b", { depend_on: ["a"] }) }));
   await flush();
   expect(harness.doc.ids.canvas.querySelector('path.edge[data-from="a"][data-to="b"]')).not.toBeNull();
-  expect(harness.doc.ids.canvas.querySelector('path.edge-arrow[data-from="a"][data-to="b"]')).not.toBeNull();
 
-  // dropping the dependency removes the edge AND its arrow
+  // dropping the dependency removes the edge
+  const before = harness.edge("a", "b");
+  expect(before).not.toBeNull();
   harness.emitUpdate({ type: "graph", graph: graph("g", { a: node("a"), b: node("b") }) });
   await flush();
-  expect(harness.doc.ids.canvas.querySelector('path.edge[data-from="a"][data-to="b"]')).toBeNull();
-  expect(harness.doc.ids.canvas.querySelector('path.edge-arrow[data-from="a"][data-to="b"]')).toBeNull();
+  expect(harness.edge("a", "b")).toBeNull();
+  expect(harness.doc.ids.canvas.querySelectorAll("path.edge-arrow")).toHaveLength(0);
 });
 
 test("edgeKey is collision-free: newline-containing IDs keep distinct edges", async () => {
@@ -248,4 +249,46 @@ test("stale banner appears on error update and clears on the next valid graph", 
   harness.emitUpdate({ type: "graph", graph: graph("g", { a: node("a", { objective: "ok" }) }) });
   await flush();
   expect(harness.staleVisible()).toBe(false);
+});
+
+test("normalized levels render as stable phase lanes", async () => {
+  const harness = createViewerHarness(
+    APP_BUNDLE,
+    graph("g", {
+      root: node("root", { level: 0, order: 0 }),
+      worker: node("worker", { level: 1, order: 0, depend_on: ["root"] }),
+    }),
+  );
+  await flush();
+  expect(harness.lane(0)?.classList.contains("lane-group")).toBe(true);
+  expect(harness.lane(1)?.textContent).toContain("Phase 1");
+});
+
+test("edges share an SVG marker and use curved path geometry", async () => {
+  const harness = createViewerHarness(
+    APP_BUNDLE,
+    graph("g", {
+      a: node("a"),
+      b: node("b", { level: 1, depend_on: ["a"] }),
+    }),
+  );
+  await flush();
+  const edge = harness.edge("a", "b");
+  expect(edge?.getAttribute("marker-end")).toBe("url(#arrow)");
+  expect(edge?.getAttribute("d")).toContain(" C ");
+  expect(harness.doc.ids.canvas.querySelectorAll("path.edge-arrow")).toHaveLength(0);
+});
+
+test("node cards include a model rail, model text, and loop badge", async () => {
+  const harness = createViewerHarness(
+    APP_BUNDLE,
+    graph("g", {
+      a: node("a", { model: "opus", loop: { enabled: true, max_rounds: 3 } }),
+    }),
+  );
+  await flush();
+  const group = harness.nodeGroup("a")!;
+  expect(group.querySelector("rect.node-tier-rail")).not.toBeNull();
+  expect(group.querySelector("text.node-badge")?.textContent).toContain("↻");
+  expect(group.textContent).toContain("opus");
 });

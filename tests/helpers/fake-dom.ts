@@ -64,6 +64,7 @@ export class FakeEl {
   value = "";
   checked = false;
   id = "";
+  style: Record<string, string> = {};
 
   constructor(
     public tagName: string,
@@ -74,6 +75,16 @@ export class FakeEl {
 
   setAttribute(k: string, v: string) {
     this.attrs[k] = String(v);
+    if (k === "style") {
+      this.style = {};
+      String(v)
+        .split(";")
+        .filter(Boolean)
+        .forEach((decl) => {
+          const idx = decl.indexOf(":");
+          if (idx > 0) this.style[decl.slice(0, idx).trim()] = decl.slice(idx + 1).trim();
+        });
+    }
     if (k === "class") {
       this.classList.remove(...this.classList.values());
       String(v)
@@ -216,6 +227,8 @@ function makeDocument() {
   reg("filter-model", "select");
   reg("filter-agent", "select");
   reg("filter-loop", "input");
+  reg("toggle-lanes", "input");
+  ids["toggle-lanes"].checked = true;
   reg("search", "input");
   reg("stale-banner", "div", "banner hidden");
   reg("stale-message", "span");
@@ -311,12 +324,15 @@ class FakeGraph {
 const fakeDagre = {
   graphlib: { Graph: FakeGraph },
   layout(g: FakeGraph) {
+    // Fake layout for deterministic test geometry only — production dagre
+    // already ranks nodes by dependency level (TB, ranksep 70). Nodes are
+    // placed monotonically so each lane's bounds come out of its own level's
+    // nodes in tests. Lane geometry itself derives from ViewerNode.level, not
+    // from this y-inference.
     Object.keys(g.nodes).forEach((id, i) => {
-      g.nodes[id].x = 100 + i * 120;
-      g.nodes[id].y = 100 + (i % 2) * 80;
+      g.nodes[id].x = 160 + i * 220;
+      g.nodes[id].y = 120 + i * 150;
     });
-    // Straight vertical edge from source bottom to target top so app.js draws
-    // path.edge + path.edge-arrow elements (exercises edge emphasis classes).
     g.edgesArr.forEach((e) => {
       const a = g.node(e.v);
       const b = g.node(e.w);

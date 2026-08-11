@@ -8,8 +8,8 @@ import { emphasisIds, type Filters, matchesSearch, passesFilters, retainedSelect
 
 (() => {
   var KEY = new URLSearchParams(location.search).get("key") || "";
-  var NODE_W = 180;
-  var NODE_H = 54;
+  var NODE_W = 208;
+  var NODE_H = 64;
   var TIERS = ["opus", "sonnet", "haiku", "fable"];
   var COLOR = {
     opus: "var(--tier-opus)",
@@ -30,6 +30,7 @@ import { emphasisIds, type Filters, matchesSearch, passesFilters, retainedSelect
     filterModel: "",
     filterAgent: "",
     filterLoop: false,
+    showLanes: true,
     view: null as { x: number; y: number; k: number } | null,
     minK: 0.05,
     maxK: 4,
@@ -45,8 +46,7 @@ import { emphasisIds, type Filters, matchesSearch, passesFilters, retainedSelect
   var nodeEls = new Map<string, SVGGElement>();
   var edgeEls = new Map<string, SVGPathElement>();
   var laneEls = new Map<number, SVGGElement>();
-  var nodeParts = new WeakMap<SVGGElement, { rect: any; idText: any; subText: any }>();
-  var edgeArrows = new WeakMap<SVGPathElement, SVGPathElement>();
+  var nodeParts = new WeakMap<SVGGElement, { rect: any; rail: any; idText: any; subText: any; badgeText: any }>();
   var drawer: HTMLElement;
   var drawerBody: HTMLElement;
   var drawerTitle: HTMLElement;
@@ -130,6 +130,52 @@ import { emphasisIds, type Filters, matchesSearch, passesFilters, retainedSelect
     return from.length + ":" + from + to.length + ":" + to;
   }
 
+  /**
+   * Cubic Bezier between dagre's first and last edge points, bowed toward the
+   * vertical midpoint so multi-hop runs read as gentle curves instead of
+   * sharp corners. Minimal added control — one focal accent discipline.
+   */
+  function curvedPath(points: Array<{ x: number; y: number }>): string {
+    var first = points[0];
+    var last = points[points.length - 1];
+    var midY = (first.y + last.y) / 2;
+    return "M " + first.x + "," + first.y + " C " + first.x + "," + midY + " " + last.x + "," + midY + " " + last.x + "," + last.y;
+  }
+
+  function laneBounds(level: number) {
+    var nodes = Object.values(state.nodes).filter((entry) => entry.node.level === level);
+    var bounds = graphBounds();
+    var minY = Math.min(...nodes.map((entry) => entry.y - entry.height / 2)) - 34;
+    var maxY = Math.max(...nodes.map((entry) => entry.y + entry.height / 2)) + 34;
+    return { x: bounds.x - 28, y: minY, width: bounds.w + 56, height: maxY - minY };
+  }
+
+  function reconcileLanes(): void {
+    var levels = new Set(Object.values(state.nodes).map((entry) => entry.node.level));
+    removeMissing<number, Element>(laneEls, levels);
+    [...levels].sort((a, b) => a - b).forEach((level) => {
+      var group = laneEls.get(level);
+      if (!group) {
+        group = el("g", { class: "lane-group", "data-level": String(level) }) as SVGGElement;
+        group.appendChild(el("rect", { class: level % 2 ? "lane alt" : "lane" }));
+        var label = el("text", { class: "lane-label" });
+        group.appendChild(label);
+        laneEls.set(level, group);
+        layers.lanes.appendChild(group);
+      }
+      var b = laneBounds(level);
+      var rect = group.querySelector("rect.lane")!;
+      rect.setAttribute("x", String(b.x));
+      rect.setAttribute("y", String(b.y));
+      rect.setAttribute("width", String(b.width));
+      rect.setAttribute("height", String(b.height));
+      var label2 = group.querySelector("text.lane-label")!;
+      label2.setAttribute("x", String(b.x + 12));
+      label2.setAttribute("y", String(b.y + 18));
+      label2.textContent = "Phase " + level;
+    });
+  }
+
   function setView(v: { x: number; y: number; k: number }) {
     state.view = v;
     if (viewport) viewport.setAttribute("transform", "translate(" + v.x + "," + v.y + ") scale(" + v.k + ")");
@@ -173,30 +219,11 @@ import { emphasisIds, type Filters, matchesSearch, passesFilters, retainedSelect
     });
   }
 
-  function edgeArrowD(pts: Array<{ x: number; y: number }>): string | null {
-    var last = pts[pts.length - 1];
-    var prev = pts[pts.length - 2];
-    if (!last || !prev) return null;
-    var ang = Math.atan2(last.y - prev.y, last.x - prev.x);
-    var ax = last.x - 6 * Math.cos(ang),
-      ay = last.y - 6 * Math.sin(ang);
-    return (
-      "M " +
-      last.x +
-      "," +
-      last.y +
-      " L " +
-      (ax + 3 * Math.cos(ang + 2.4)) +
-      "," +
-      (ay + 3 * Math.sin(ang + 2.4)) +
-      " L " +
-      (ax + 3 * Math.cos(ang - 2.4)) +
-      "," +
-      (ay + 3 * Math.sin(ang - 2.4)) +
-      " Z"
-    );
-  }
-
+  /**
+   * Editorial node card: rounded rect + tier rail (model color as a rail only —
+   * never as the sole model indicator), monospace id/sub, and a right-aligned
+   * badge for loop/eval markers. Text is left-aligned inside the card.
+   */
   function createNodeElement(id: string): SVGGElement {
     var nx = state.nodes[id];
     var node = nx.node;
@@ -207,6 +234,12 @@ import { emphasisIds, type Filters, matchesSearch, passesFilters, retainedSelect
       role: "button",
       "aria-label": "Node " + node.id + ", " + node.agent + ", " + node.model,
     }) as SVGGElement;
+    // entrance animation-delay keyed by normalized level via a style custom
+    // property — a numeric value only, never inline JS
+    g.setAttribute("style", "--level:" + String(node.level));
+    g.addEventListener("animationend", () => {
+      g.classList.remove("is-new");
+    });
     // handlers read group.dataset.id at event time so retained elements keep
     // working after graph updates (id never changes for a retained element)
     g.addEventListener("click", () => {
@@ -218,13 +251,17 @@ import { emphasisIds, type Filters, matchesSearch, passesFilters, retainedSelect
         select(g.dataset.id as string);
       }
     });
-    var rect = el("rect", { class: "node-rect", rx: "8" });
-    var idText = el("text", { class: "node-text-id", "text-anchor": "middle" });
-    var subText = el("text", { class: "node-text-sub", "text-anchor": "middle" });
-    g.appendChild(rect);
+    var card = el("rect", { class: "node-rect", rx: "10" });
+    var rail = el("rect", { class: "node-tier-rail", width: "3", rx: "1.5" });
+    var idText = el("text", { class: "node-text-id" });
+    var subText = el("text", { class: "node-text-sub" });
+    var badgeText = el("text", { class: "node-badge", "text-anchor": "end" });
+    g.appendChild(card);
+    g.appendChild(rail);
     g.appendChild(idText);
     g.appendChild(subText);
-    nodeParts.set(g, { rect, idText, subText });
+    g.appendChild(badgeText);
+    nodeParts.set(g, { rect: card, rail, idText, subText, badgeText });
     return g;
   }
 
@@ -233,57 +270,58 @@ import { emphasisIds, type Filters, matchesSearch, passesFilters, retainedSelect
     var node = nx.node;
     var parts = nodeParts.get(group);
     if (!parts) return;
-    parts.rect.setAttribute("x", String(nx.x - nx.width / 2));
+    var left = nx.x - nx.width / 2;
+    parts.rect.setAttribute("x", String(left));
     parts.rect.setAttribute("y", String(nx.y - nx.height / 2));
     parts.rect.setAttribute("width", String(nx.width));
     parts.rect.setAttribute("height", String(nx.height));
-    parts.rect.setAttribute("stroke", tierColor(node.model));
-    parts.idText.setAttribute("x", String(nx.x));
-    parts.idText.setAttribute("y", String(nx.y - 4));
+    parts.rail.setAttribute("x", String(left + 2));
+    parts.rail.setAttribute("y", String(nx.y - nx.height / 2 + 6));
+    parts.rail.setAttribute("height", String(nx.height - 12));
+    parts.rail.setAttribute("fill", tierColor(node.model));
+    parts.idText.setAttribute("x", String(left + 12));
+    parts.idText.setAttribute("y", String(nx.y - 8));
     parts.idText.textContent = "";
-    parts.idText.appendChild(textNode(node.id + (node.loop && node.loop.enabled ? " ↻" : "")));
-    parts.subText.setAttribute("x", String(nx.x));
-    parts.subText.setAttribute("y", String(nx.y + 14));
+    parts.idText.appendChild(textNode(node.id));
+    parts.subText.setAttribute("x", String(left + 12));
+    parts.subText.setAttribute("y", String(nx.y + 12));
     parts.subText.textContent = "";
     parts.subText.appendChild(textNode(node.agent + " · " + node.model));
+    parts.badgeText.setAttribute("x", String(left + nx.width - 10));
+    parts.badgeText.setAttribute("y", String(nx.y + 12));
+    parts.badgeText.textContent = "";
+    parts.badgeText.appendChild(
+      textNode([node.loop?.enabled ? "↻" : "", node.eval ? "◆" : ""].filter(Boolean).join(" ")),
+    );
   }
 
   function createEdgeElement(edge: PositionedEdge): SVGPathElement {
+    // Single shared marker handles the arrowhead; edge elements carry only
+    // stable identifying attributes. Geometry updates in updateEdgeElement.
     var path = el("path", {
       class: "edge",
       "data-from": esc(edge.v),
       "data-to": esc(edge.w),
+      "marker-end": "url(#arrow)",
     }) as SVGPathElement;
     path.appendChild(textNode(""));
-    var arr = el("path", {
-      class: "edge-arrow",
-      "data-from": esc(edge.v),
-      "data-to": esc(edge.w),
-    }) as SVGPathElement;
-    arr.appendChild(textNode(""));
-    edgeArrows.set(path, arr);
-    // each keyed edge owns both its path and its arrow
     layers.edges.appendChild(path);
-    layers.edges.appendChild(arr);
     return path;
   }
 
   function updateEdgeElement(path: SVGPathElement, edge: PositionedEdge): void {
     var pts = edge.points || [];
-    var d = "";
-    if (pts.length >= 2) {
-      d = "M " + pts[0].x + "," + pts[0].y;
-      for (var i = 1; i < pts.length; i++) d += " L " + pts[i].x + "," + pts[i].y;
+    if (pts.length < 2) {
+      path.setAttribute("d", "");
+      return;
     }
-    path.setAttribute("d", d);
-    var arr = edgeArrows.get(path);
-    if (arr) {
-      var ad = edgeArrowD(pts);
-      arr.setAttribute("d", ad || "");
-    }
+    path.setAttribute("d", curvedPath(pts));
   }
 
   function reconcileTopology(): void {
+    reconcileLanes();
+    layers.lanes.setAttribute("style", "opacity:" + (state.showLanes ? "1" : "0"));
+
     var wantedNodes = new Set(Object.keys(state.nodes));
     removeMissing(nodeEls, wantedNodes);
     for (const id of wantedNodes) {
@@ -292,6 +330,7 @@ import { emphasisIds, type Filters, matchesSearch, passesFilters, retainedSelect
         group = createNodeElement(id);
         nodeEls.set(id, group);
         layers.nodes.appendChild(group);
+        group.classList.add("is-new");
       }
       updateNodeElement(group, id);
     }
@@ -300,9 +339,6 @@ import { emphasisIds, type Filters, matchesSearch, passesFilters, retainedSelect
     edgeEls.forEach((path, key) => {
       if (wantedEdges.has(key)) return;
       path.parentNode?.removeChild(path);
-      var arr = edgeArrows.get(path);
-      if (arr) arr.parentNode?.removeChild(arr);
-      edgeArrows.delete(path);
       edgeEls.delete(key);
     });
     state.edges.forEach((edge) => {
@@ -334,9 +370,6 @@ import { emphasisIds, type Filters, matchesSearch, passesFilters, retainedSelect
       path.classList.remove("dim", "emph-conn");
       var adjacent = path.dataset.from === focusId || path.dataset.to === focusId;
       if (connected) path.classList.add(adjacent ? "emph-conn" : "dim");
-      var arr = edgeArrows.get(path);
-      if (arr) arr.classList.remove("dim", "emph-conn");
-      if (connected && arr) arr.classList.add(adjacent ? "emph-conn" : "dim");
     });
   }
 
@@ -659,6 +692,15 @@ import { emphasisIds, type Filters, matchesSearch, passesFilters, retainedSelect
       state.filterLoop = (e.target as HTMLInputElement).checked;
       updateViewState();
     });
+    var lanesToggle = document.getElementById("toggle-lanes") as HTMLInputElement | null;
+    if (lanesToggle) {
+      state.showLanes = lanesToggle.checked;
+      lanesToggle.addEventListener("change", (e) => {
+        state.showLanes = (e.target as HTMLInputElement).checked;
+        // toggle lane visibility without relayout — pure opacity flip
+        layers.lanes.setAttribute("style", "opacity:" + (state.showLanes ? "1" : "0"));
+      });
+    }
     searchEl.addEventListener("input", (e) => {
       state.search = (e.target as HTMLInputElement).value;
       updateViewState();
