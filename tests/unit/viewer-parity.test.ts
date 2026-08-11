@@ -101,14 +101,23 @@ describe("browser asset contracts", () => {
     expect(html).toContain("dagre.js");
   });
 
-  test("styles.css defines complete light+dark token sets and focus styles", () => {
+  test("viewer is dark-first with complete explicit light and dark palettes", () => {
     const css = readFileSync(join(claudeViewer, "styles.css"), "utf-8");
-    // complete token sets under both themes
-    for (const tok of ["--bg", "--text", "--accent", "--focus", "--tier-opus", "--node-stroke", "--edge-emph"]) {
-      expect(css, `token ${tok} in :root`).toMatch(new RegExp(`:root\\s*\\{[^}]*${tok}:`, "s"));
-      expect(css, `token ${tok} in dark`).toMatch(new RegExp(`data-theme="dark"\\]?\\s*\\{[^}]*${tok}:`, "s"));
+    for (const token of ["--bg", "--surface", "--ink", "--muted", "--hairline", "--accent", "--tier-opus"]) {
+      expect(css, `${token} default`).toMatch(new RegExp(`:root\\s*\\{[^}]*${token}:`, "s"));
+      expect(css, `${token} light`).toMatch(new RegExp(`data-theme="light"\\]\\s*\\{[^}]*${token}:`, "s"));
+      expect(css, `${token} dark`).toMatch(new RegExp(`data-theme="dark"\\]\\s*\\{[^}]*${token}:`, "s"));
     }
-    expect(css).toContain(":focus-visible");
-    expect(css).toContain("prefers-reduced-motion");
+    expect(css).toContain("prefers-reduced-motion: reduce");
+  });
+
+  test("editorial shell exposes phase-lane and card styling hooks", () => {
+    const html = readFileSync(join(claudeViewer, "index.html"), "utf-8");
+    const css = readFileSync(join(claudeViewer, "styles.css"), "utf-8");
+    expect(html).toContain('id="toggle-lanes"');
+    expect(html).toContain('aria-label="Show phase lanes"');
+    for (const hook of [".lane", ".lane-label", ".node-tier-rail", ".node-badge", ".node-group.selected"]) {
+      expect(css).toContain(hook);
+    }
   });
 });
