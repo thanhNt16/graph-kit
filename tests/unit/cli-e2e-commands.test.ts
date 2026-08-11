@@ -8,6 +8,7 @@ import { registerInventoryCommands } from "../../src/cli/commands/inventory.js";
 import { registerKitCommands } from "../../src/cli/commands/kit.js";
 import { registerMemoryCommands } from "../../src/cli/commands/memory.js";
 import { registerTemplateCommands } from "../../src/cli/commands/template.js";
+import { APP_VERSION } from "../../src/version.js";
 
 const DIAMOND = `apiVersion: graphkit.dev/v2
 kind: Graph
@@ -36,7 +37,7 @@ evidence:
 
 /** Build the real CLI with every command family registered (mirrors src/index.ts). */
 function fullCli() {
-  const cli = cac("gk");
+  const cli = cac("gk").version(APP_VERSION);
   registerKitCommands(cli);
   registerGraphCommands(cli);
   registerMemoryCommands(cli);
@@ -180,6 +181,14 @@ describe("CLI end-to-end: inventory registration", () => {
 
   afterEach(() => {
     rmSync(root, { recursive: true, force: true });
+  });
+
+  test("gk --version prints the APP_VERSION constant", () => {
+    const { stdout, code } = runCli(["--version"], cwd);
+    expect(code).toBe(0);
+    // cac formats as "gk/<version> <platform>-<arch> node-<runtime>"
+    expect(stdout.trim()).toContain(APP_VERSION);
+    expect(stdout).toMatch(/^gk\//);
   });
 
   test("inventory --target claude --json returns the output contract", () => {

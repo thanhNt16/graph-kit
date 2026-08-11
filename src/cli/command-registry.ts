@@ -6,6 +6,8 @@
  * `dist/index.js` exposes exactly these commands. Keep this list in sync with
  * the register*() calls in src/index.ts.
  */
+import { APP_VERSION } from "../version.js";
+
 export interface CliManifestCommand {
   name: string;
   description: string;
@@ -63,7 +65,7 @@ export const CLI_COMMANDS: { path: string; description: string; options: string[
 export function cliManifest(): { cli: string; version: string; commands: CliManifestCommand[] } {
   return {
     cli: "gk",
-    version: "0.2.0",
+    version: APP_VERSION,
     commands: CLI_COMMANDS.map((c) => ({ name: c.path, description: c.description, options: c.options })),
   };
 }
