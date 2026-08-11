@@ -7,3 +7,5 @@ claude/viewer/*.js
 claude/viewer/*.mjs
 cursor/viewer/*.js
 cursor/viewer/*.mjs
+
+.superpowers/
