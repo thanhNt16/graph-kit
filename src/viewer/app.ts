@@ -8,8 +8,8 @@ import { emphasisIds, type Filters, matchesSearch, passesFilters, retainedSelect
 
 (() => {
   var KEY = new URLSearchParams(location.search).get("key") || "";
-  var NODE_W = 180;
-  var NODE_H = 54;
+  var NODE_W = 208;
+  var NODE_H = 64;
   var TIERS = ["opus", "sonnet", "haiku", "fable"];
   var COLOR = {
     opus: "var(--tier-opus)",
@@ -21,8 +21,8 @@ import { emphasisIds, type Filters, matchesSearch, passesFilters, retainedSelect
 
   var state = {
     graph: null as ViewerGraph | null,
-    nodes: {} as Record<string, { x: number; y: number; width: number; height: number; node: any }>,
-    edges: [] as Array<{ v: string; w: string; points?: Array<{ x: number; y: number }> }>,
+    nodes: {} as Record<string, PositionedNode>,
+    edges: [] as PositionedEdge[],
     selected: null as string | null,
     hover: null as string | null,
     focus: null as string | null, // path-emphasis source from keyboard focus
@@ -30,19 +30,28 @@ import { emphasisIds, type Filters, matchesSearch, passesFilters, retainedSelect
     filterModel: "",
     filterAgent: "",
     filterLoop: false,
+    showLanes: true,
     view: null as { x: number; y: number; k: number } | null,
     minK: 0.05,
     maxK: 4,
   };
 
+  type PositionedNode = { x: number; y: number; width: number; height: number; node: ViewerGraph["nodes"][string] };
+  type PositionedEdge = { v: string; w: string; points?: Array<{ x: number; y: number }> };
+  type Layers = { lanes: SVGGElement; edges: SVGGElement; nodes: SVGGElement };
+
   var svg: SVGSVGElement;
-  var root: SVGGElement;
+  var viewport: SVGGElement;
+  var layers: Layers;
+  var nodeEls = new Map<string, SVGGElement>();
+  var edgeEls = new Map<string, SVGPathElement>();
+  var laneEls = new Map<number, SVGGElement>();
+  var nodeParts = new WeakMap<SVGGElement, { rect: any; rail: any; idText: any; subText: any; badgeText: any }>();
   var drawer: HTMLElement;
   var drawerBody: HTMLElement;
   var drawerTitle: HTMLElement;
   var searchEl: HTMLInputElement;
   var mouseAnchor: { x: number; y: number; view: { x: number; y: number; k: number } } | null = null;
-  var keyboardOrder: string[] = [];
 
   function el(tag: string, props?: Record<string, string>, children?: Node[]) {
     var n = document.createElementNS("http://www.w3.org/2000/svg", tag);
@@ -55,10 +64,6 @@ import { emphasisIds, type Filters, matchesSearch, passesFilters, retainedSelect
 
   function textNode(content: unknown) {
     return document.createTextNode(content == null ? "" : String(content));
-  }
-
-  function esc(id: string) {
-    return String(id).replace(/[^a-zA-Z0-9_-]/g, () => "_");
   }
 
   function tierColor(model: string) {
@@ -116,10 +121,59 @@ import { emphasisIds, type Filters, matchesSearch, passesFilters, retainedSelect
     return { x: minX, y: minY, w: maxX - minX, h: maxY - minY };
   }
 
+  function edgeKey(from: string, to: string): string {
+    return from.length + ":" + from + to.length + ":" + to;
+  }
+
+  /**
+   * Cubic Bezier between dagre's first and last edge points, bowed toward the
+   * vertical midpoint so multi-hop runs read as gentle curves instead of
+   * sharp corners. Minimal added control — one focal accent discipline.
+   */
+  function curvedPath(points: Array<{ x: number; y: number }>): string {
+    var first = points[0];
+    var last = points[points.length - 1];
+    var midY = (first.y + last.y) / 2;
+    return "M " + first.x + "," + first.y + " C " + first.x + "," + midY + " " + last.x + "," + midY + " " + last.x + "," + last.y;
+  }
+
+  function laneBounds(level: number) {
+    var nodes = Object.values(state.nodes).filter((entry) => entry.node.level === level);
+    var bounds = graphBounds();
+    var minY = Math.min(...nodes.map((entry) => entry.y - entry.height / 2)) - 34;
+    var maxY = Math.max(...nodes.map((entry) => entry.y + entry.height / 2)) + 34;
+    return { x: bounds.x - 28, y: minY, width: bounds.w + 56, height: maxY - minY };
+  }
+
+  function reconcileLanes(): void {
+    var levels = new Set(Object.values(state.nodes).map((entry) => entry.node.level));
+    removeMissing<number, Element>(laneEls, levels);
+    [...levels].sort((a, b) => a - b).forEach((level) => {
+      var group = laneEls.get(level);
+      if (!group) {
+        group = el("g", { class: "lane-group", "data-level": String(level) }) as SVGGElement;
+        group.appendChild(el("rect", { class: level % 2 ? "lane alt" : "lane" }));
+        var label = el("text", { class: "lane-label" });
+        group.appendChild(label);
+        laneEls.set(level, group);
+        layers.lanes.appendChild(group);
+      }
+      var b = laneBounds(level);
+      var rect = group.querySelector("rect.lane")!;
+      rect.setAttribute("x", String(b.x));
+      rect.setAttribute("y", String(b.y));
+      rect.setAttribute("width", String(b.width));
+      rect.setAttribute("height", String(b.height));
+      var label2 = group.querySelector("text.lane-label")!;
+      label2.setAttribute("x", String(b.x + 12));
+      label2.setAttribute("y", String(b.y + 18));
+      label2.textContent = "Phase " + level;
+    });
+  }
+
   function setView(v: { x: number; y: number; k: number }) {
     state.view = v;
-    var g = root.querySelector("g.viewport");
-    if (g) g.setAttribute("transform", "translate(" + v.x + "," + v.y + ") scale(" + v.k + ")");
+    if (viewport) viewport.setAttribute("transform", "translate(" + v.x + "," + v.y + ") scale(" + v.k + ")");
   }
 
   function fitView() {
@@ -150,142 +204,179 @@ import { emphasisIds, type Filters, matchesSearch, passesFilters, retainedSelect
     return matchesSearch(node, state.search) && passesFilters(node, filters());
   }
 
-  function draw() {
-    var old = root.querySelector("g.viewport");
-    if (old) old.parentNode.removeChild(old);
-    var vp = el("g", { class: "viewport" });
-    root.appendChild(vp);
+  // --- stable, keyed SVG reconciliation -----------------------------------
 
-    // edges
-    state.edges.forEach((e) => {
-      var pts = e.points || [];
-      if (pts.length < 2) return;
-      var d = "M " + pts[0].x + "," + pts[0].y;
-      for (var i = 1; i < pts.length; i++) d += " L " + pts[i].x + "," + pts[i].y;
-      var path = el("path", { class: "edge", d: d, "data-from": esc(e.v), "data-to": esc(e.w) });
-      path.appendChild(textNode(""));
-      vp.appendChild(path);
-      var last = pts[pts.length - 1];
-      var prev = pts[pts.length - 2];
-      if (last && prev) {
-        var ang = Math.atan2(last.y - prev.y, last.x - prev.x);
-        var ax = last.x - 6 * Math.cos(ang),
-          ay = last.y - 6 * Math.sin(ang);
-        var arr = el("path", {
-          class: "edge-arrow",
-          "data-from": esc(e.v),
-          "data-to": esc(e.w),
-          d:
-            "M " +
-            last.x +
-            "," +
-            last.y +
-            " L " +
-            (ax + 3 * Math.cos(ang + 2.4)) +
-            "," +
-            (ay + 3 * Math.sin(ang + 2.4)) +
-            " L " +
-            (ax + 3 * Math.cos(ang - 2.4)) +
-            "," +
-            (ay + 3 * Math.sin(ang - 2.4)) +
-            " Z",
-        });
-        arr.appendChild(textNode(""));
-        vp.appendChild(arr);
-      }
+  function removeMissing<K, E extends Element>(index: Map<K, E>, wanted: Set<K>): void {
+    index.forEach((element, key) => {
+      if (wanted.has(key)) return;
+      element.parentNode?.removeChild(element);
+      index.delete(key);
     });
-
-    // nodes
-    Object.keys(state.nodes).forEach((id) => {
-      var nx = state.nodes[id];
-      var node = nx.node;
-      var vis = isVisible(node);
-      var g = el("g", {
-        class: "node-group",
-        "data-id": id,
-        tabindex: "0",
-        role: "button",
-        "aria-label": "Node " + node.id + ", " + node.agent + ", " + node.model,
-      });
-      g.addEventListener("click", () => {
-        select(id);
-      });
-      g.addEventListener("keydown", (ev) => {
-        if ((ev as KeyboardEvent).key === "Enter") {
-          ev.preventDefault();
-          select(id);
-        }
-      });
-      var rect = el("rect", {
-        class: "node-rect",
-        x: String(nx.x - nx.width / 2),
-        y: String(nx.y - nx.height / 2),
-        width: String(nx.width),
-        height: String(nx.height),
-        rx: "8",
-        stroke: tierColor(node.model),
-      });
-      var idText = el("text", {
-        class: "node-text-id",
-        x: String(nx.x),
-        y: String(nx.y - 4),
-        "text-anchor": "middle",
-      });
-      idText.appendChild(textNode(node.id + (node.loop && node.loop.enabled ? " ↻" : "")));
-      var subText = el("text", {
-        class: "node-text-sub",
-        x: String(nx.x),
-        y: String(nx.y + 14),
-        "text-anchor": "middle",
-      });
-      subText.appendChild(textNode(node.agent + " · " + node.model));
-      g.appendChild(rect);
-      g.appendChild(idText);
-      g.appendChild(subText);
-      g.dataset.visible = vis ? "1" : "0";
-      // search/filter emphasis: non-matching nodes dim (never hidden) via CSS
-      if (!vis) g.classList.add("filtered");
-      vp.appendChild(g);
-    });
-
-    applyEmphasis();
-    if (state.view) setView(state.view);
   }
 
-  function applyEmphasis() {
-    var focusId = state.selected || state.hover || state.focus;
-    var groups = root.querySelectorAll("g.node-group");
-    var edges = root.querySelectorAll("path.edge");
-    groups.forEach((grp) => {
-      grp.classList.remove("dim", "emph");
+  /**
+   * Editorial node card: rounded rect + tier rail (model color as a rail only —
+   * never as the sole model indicator), monospace id/sub, and a right-aligned
+   * badge for loop/eval markers. Text is left-aligned inside the card.
+   */
+  function createNodeElement(id: string): SVGGElement {
+    var nx = state.nodes[id];
+    var node = nx.node;
+    var g = el("g", {
+      class: "node-group",
+      "data-id": id,
+      tabindex: "0",
+      role: "button",
+      "aria-label": "Node " + node.id + ", " + node.agent + ", " + node.model,
+    }) as SVGGElement;
+    // Entrance animation is a single uniform fade+rise, applied by toggling a
+    // class (never an inline style, which `style-src 'self'` blocks). Animation
+    // runs once; the class is removed on animationend so retained nodes don't
+    // replay it on subsequent updates.
+    g.addEventListener("animationend", () => {
+      g.classList.remove("is-new");
     });
-    edges.forEach((e) => {
-      e.classList.remove("dim", "emph-conn");
+    // handlers read group.dataset.id at event time so retained elements keep
+    // working after graph updates (id never changes for a retained element)
+    g.addEventListener("click", () => {
+      select(g.dataset.id as string);
     });
-    root.querySelectorAll("path.edge-arrow").forEach((a) => {
-      a.classList.remove("dim", "emph-conn");
-    });
-    var conn = emphasisIds(state.graph!, focusId);
-    if (!conn) return;
-    // nodes along the focus path emphasize; all others dim
-    groups.forEach((grp) => {
-      if (conn.has((grp as Element).dataset.id!)) grp.classList.add("emph");
-      else grp.classList.add("dim");
-    });
-    edges.forEach((e) => {
-      if (e.dataset.from === focusId || e.dataset.to === focusId) {
-        e.classList.add("emph-conn");
-        var arr = root.querySelector(
-          'path.edge-arrow[data-from="' + esc(e.dataset.from!) + '"][data-to="' + esc(e.dataset.to!) + '"]',
-        );
-        if (arr) arr.classList.add("emph-conn");
-      } else {
-        e.classList.add("dim");
-        var arr2 = root.querySelector(
-          'path.edge-arrow[data-from="' + esc(e.dataset.from!) + '"][data-to="' + esc(e.dataset.to!) + '"]',
-        );
-        if (arr2) arr2.classList.add("dim");
+    g.addEventListener("keydown", (ev) => {
+      if ((ev as KeyboardEvent).key === "Enter") {
+        ev.preventDefault();
+        select(g.dataset.id as string);
       }
+    });
+    var card = el("rect", { class: "node-rect", rx: "10" });
+    var rail = el("rect", { class: "node-tier-rail", width: "3", rx: "1.5" });
+    var idText = el("text", { class: "node-text-id" });
+    var subText = el("text", { class: "node-text-sub" });
+    var badgeText = el("text", { class: "node-badge", "text-anchor": "end" });
+    g.appendChild(card);
+    g.appendChild(rail);
+    g.appendChild(idText);
+    g.appendChild(subText);
+    g.appendChild(badgeText);
+    nodeParts.set(g, { rect: card, rail, idText, subText, badgeText });
+    return g;
+  }
+
+  function updateNodeElement(group: SVGGElement, id: string): void {
+    var nx = state.nodes[id];
+    var node = nx.node;
+    var parts = nodeParts.get(group);
+    if (!parts) return;
+    var left = nx.x - nx.width / 2;
+    parts.rect.setAttribute("x", String(left));
+    parts.rect.setAttribute("y", String(nx.y - nx.height / 2));
+    parts.rect.setAttribute("width", String(nx.width));
+    parts.rect.setAttribute("height", String(nx.height));
+    parts.rail.setAttribute("x", String(left + 2));
+    parts.rail.setAttribute("y", String(nx.y - nx.height / 2 + 6));
+    parts.rail.setAttribute("height", String(nx.height - 12));
+    parts.rail.setAttribute("fill", tierColor(node.model));
+    parts.idText.setAttribute("x", String(left + 12));
+    parts.idText.setAttribute("y", String(nx.y - 8));
+    parts.idText.textContent = "";
+    parts.idText.appendChild(textNode(node.id));
+    parts.subText.setAttribute("x", String(left + 12));
+    parts.subText.setAttribute("y", String(nx.y + 12));
+    parts.subText.textContent = "";
+    parts.subText.appendChild(textNode(node.agent + " · " + node.model));
+    parts.badgeText.setAttribute("x", String(left + nx.width - 10));
+    parts.badgeText.setAttribute("y", String(nx.y + 12));
+    parts.badgeText.textContent = "";
+    parts.badgeText.appendChild(
+      textNode([node.loop?.enabled ? "↻" : "", node.eval ? "◆" : ""].filter(Boolean).join(" ")),
+    );
+  }
+
+  function createEdgeElement(edge: PositionedEdge): SVGPathElement {
+    // Single shared marker handles the arrowhead; edge elements carry only
+    // stable identifying attributes. Geometry updates in updateEdgeElement.
+    // Raw endpoint IDs go into data attributes verbatim — setAttribute safely
+    // serializes any string, so arbitrary punctuation/whitespace/newline IDs
+    // round-trip without escaping (schema allows any string record key).
+    var path = el("path", {
+      class: "edge",
+      "data-from": edge.v,
+      "data-to": edge.w,
+      "marker-end": "url(#arrow)",
+    }) as SVGPathElement;
+    path.appendChild(textNode(""));
+    layers.edges.appendChild(path);
+    return path;
+  }
+
+  function updateEdgeElement(path: SVGPathElement, edge: PositionedEdge): void {
+    var pts = edge.points || [];
+    if (pts.length < 2) {
+      path.setAttribute("d", "");
+      return;
+    }
+    path.setAttribute("d", curvedPath(pts));
+  }
+
+  function reconcileTopology(): void {
+    reconcileLanes();
+    // Lane show/hide via the SVG visibility attribute — never an inline style,
+    // which `style-src 'self'` blocks. No relayout: geometry stays computed.
+    layers.lanes.setAttribute("visibility", state.showLanes ? "visible" : "hidden");
+    layers.lanes.setAttribute("aria-hidden", state.showLanes ? "false" : "true");
+
+    var wantedNodes = new Set(Object.keys(state.nodes));
+    removeMissing(nodeEls, wantedNodes);
+    // Append in normalized keyboard/tab order (level, order, then id) so Tab
+    // order follows the visual hierarchy regardless of source object order.
+    keyboardOrderBy().forEach((id) => {
+      if (!wantedNodes.has(id)) return;
+      var group = nodeEls.get(id);
+      if (!group) {
+        group = createNodeElement(id);
+        nodeEls.set(id, group);
+        group.classList.add("is-new");
+      }
+      updateNodeElement(group, id);
+      // appendChild moves retained groups, preserving identity while restoring
+      // normalized keyboard/tab order after live level/order changes.
+      layers.nodes.appendChild(group);
+    });
+
+    var wantedEdges = new Set(state.edges.map((edge) => edgeKey(edge.v, edge.w)));
+    edgeEls.forEach((path, key) => {
+      if (wantedEdges.has(key)) return;
+      path.parentNode?.removeChild(path);
+      edgeEls.delete(key);
+    });
+    state.edges.forEach((edge) => {
+      var key = edgeKey(edge.v, edge.w);
+      var path = edgeEls.get(key);
+      if (!path) {
+        path = createEdgeElement(edge);
+        edgeEls.set(key, path);
+      }
+      updateEdgeElement(path, edge);
+    });
+
+    updateViewState();
+  }
+
+  function updateViewState(): void {
+    var focusId = state.selected || state.hover || state.focus;
+    var connected = state.graph ? emphasisIds(state.graph, focusId) : undefined;
+    nodeEls.forEach((group, id) => {
+      var pn = state.nodes[id];
+      group.classList.remove("dim", "emph", "filtered", "selected");
+      var vis = pn ? isVisible(pn.node) : false;
+      if (!vis) group.classList.add("filtered");
+      if (state.selected === id) group.classList.add("selected");
+      if (connected) group.classList.add(connected.has(id) ? "emph" : "dim");
+      group.dataset.visible = vis ? "1" : "0";
+    });
+    edgeEls.forEach((path) => {
+      path.classList.remove("dim", "emph-conn");
+      var adjacent = path.dataset.from === focusId || path.dataset.to === focusId;
+      if (connected) path.classList.add(adjacent ? "emph-conn" : "dim");
     });
   }
 
@@ -300,7 +391,7 @@ import { emphasisIds, type Filters, matchesSearch, passesFilters, retainedSelect
     } else {
       closeDrawer();
     }
-    applyEmphasis();
+    updateViewState();
   }
 
   function centerOn(id: string) {
@@ -308,7 +399,7 @@ import { emphasisIds, type Filters, matchesSearch, passesFilters, retainedSelect
     if (!n) return;
     var v = state.view || { x: 0, y: 0, k: 1 };
     setView({ x: svg.clientWidth / 2 - n.x * v.k, y: svg.clientHeight / 2 - n.y * v.k, k: v.k });
-    var g = root.querySelector('g.node-group[data-id="' + esc(id) + '"]');
+    var g = nodeEls.get(id);
     if (g) (g as SVGGraphicsElement).focus();
   }
 
@@ -411,7 +502,7 @@ import { emphasisIds, type Filters, matchesSearch, passesFilters, retainedSelect
     state.focus = null;
     openDrawer(id);
     centerOn(id);
-    applyEmphasis();
+    updateViewState();
   }
 
   function closeDrawer() {
@@ -470,6 +561,12 @@ import { emphasisIds, type Filters, matchesSearch, passesFilters, retainedSelect
         o.appendChild(textNode(a));
         agents.appendChild(o);
       });
+    if (!mSet[state.filterModel]) state.filterModel = "";
+    if (!aSet[state.filterAgent]) state.filterAgent = "";
+    models.value = state.filterModel;
+    agents.value = state.filterAgent;
+    // Clearing stale state changes node visibility after reconcileTopology ran.
+    updateViewState();
   }
 
   function keyboardOrderBy() {
@@ -513,10 +610,9 @@ import { emphasisIds, type Filters, matchesSearch, passesFilters, retainedSelect
     state.nodes = {};
     state.edges = [];
     layout();
-    draw();
+    reconcileTopology();
     rebuildHeader();
     buildFilters();
-    keyboardOrder = keyboardOrderBy();
     hideStale();
     document.getElementById("error-screen")!.classList.add("hidden");
     // Refresh drawer for a still-selected node (its details may have changed);
@@ -546,10 +642,36 @@ import { emphasisIds, type Filters, matchesSearch, passesFilters, retainedSelect
     };
   }
 
+  function initCanvas(): void {
+    var defs = el("defs");
+    var marker = el("marker", {
+      id: "arrow",
+      viewBox: "0 0 10 10",
+      refX: "9",
+      refY: "5",
+      markerWidth: "7",
+      markerHeight: "7",
+      orient: "auto-start-reverse",
+    });
+    marker.appendChild(el("path", { class: "arrow-marker", d: "M 0 0 L 10 5 L 0 10 z", fill: "context-stroke" }));
+    defs.appendChild(marker);
+    svg.appendChild(defs);
+
+    viewport = el("g", { class: "viewport" }) as SVGGElement;
+    layers = {
+      lanes: el("g", { class: "lane-layer" }) as SVGGElement,
+      edges: el("g", { class: "edge-layer" }) as SVGGElement,
+      nodes: el("g", { class: "node-layer" }) as SVGGElement,
+    };
+    viewport.appendChild(layers.lanes);
+    viewport.appendChild(layers.edges);
+    viewport.appendChild(layers.nodes);
+    svg.appendChild(viewport);
+  }
+
   function init() {
     svg = document.getElementById("canvas")!;
-    root = el("g", { class: "viewport" });
-    svg.appendChild(root);
+    initCanvas();
     drawer = document.getElementById("drawer")!;
     drawerBody = document.getElementById("drawer-body")!;
     drawerTitle = document.getElementById("drawer-title")!;
@@ -568,36 +690,47 @@ import { emphasisIds, type Filters, matchesSearch, passesFilters, retainedSelect
       (document.getElementById("filter-loop") as HTMLInputElement).checked = false;
       searchEl.value = "";
       state.search = "";
-      draw();
+      updateViewState();
     });
     (document.getElementById("filter-model") as HTMLSelectElement).addEventListener("change", (e) => {
       state.filterModel = (e.target as HTMLSelectElement).value;
-      draw();
+      updateViewState();
     });
     (document.getElementById("filter-agent") as HTMLSelectElement).addEventListener("change", (e) => {
       state.filterAgent = (e.target as HTMLSelectElement).value;
-      draw();
+      updateViewState();
     });
     (document.getElementById("filter-loop") as HTMLInputElement).addEventListener("change", (e) => {
       state.filterLoop = (e.target as HTMLInputElement).checked;
-      draw();
+      updateViewState();
     });
+    var lanesToggle = document.getElementById("toggle-lanes") as HTMLInputElement | null;
+    if (lanesToggle) {
+      state.showLanes = lanesToggle.checked;
+      lanesToggle.addEventListener("change", (e) => {
+        state.showLanes = (e.target as HTMLInputElement).checked;
+        // toggle lane visibility without relayout via the visibility attribute
+        layers.lanes.setAttribute("visibility", state.showLanes ? "visible" : "hidden");
+        layers.lanes.setAttribute("aria-hidden", state.showLanes ? "false" : "true");
+      });
+    }
     searchEl.addEventListener("input", (e) => {
       state.search = (e.target as HTMLInputElement).value;
-      draw();
+      updateViewState();
     });
 
-    // focus emulates hover for path emphasis (keyboard accessibility)
+    // focus emulates hover for path emphasis (keyboard accessibility); selection
+    // locks emphasis, so hover/focus updates only apply when nothing is selected
     svg.addEventListener("focusin", (e) => {
       var target = (e.target as Element).closest("g.node-group");
       if (target) {
         state.focus = (target as HTMLElement).dataset.id as string;
-        if (!state.selected) applyEmphasis();
+        if (!state.selected) updateViewState();
       }
     });
     svg.addEventListener("focusout", () => {
       state.focus = null;
-      if (!state.selected) applyEmphasis();
+      if (!state.selected) updateViewState();
     });
 
     // hover emphasis
@@ -606,7 +739,7 @@ import { emphasisIds, type Filters, matchesSearch, passesFilters, retainedSelect
       var id = target ? (target as HTMLElement).dataset.id : null;
       if (id !== state.hover) {
         state.hover = id;
-        if (!state.selected) applyEmphasis();
+        if (!state.selected) updateViewState();
       }
     });
 
@@ -638,11 +771,11 @@ import { emphasisIds, type Filters, matchesSearch, passesFilters, retainedSelect
 
     // background click clears selection
     svg.addEventListener("click", (e) => {
-      if (e.target === svg || e.target === root) {
+      if (e.target === svg || e.target === viewport) {
         if (state.selected) {
           state.selected = null;
           closeDrawer();
-          applyEmphasis();
+          updateViewState();
         }
       }
     });
@@ -653,7 +786,7 @@ import { emphasisIds, type Filters, matchesSearch, passesFilters, retainedSelect
         if (state.selected) {
           state.selected = null;
           closeDrawer();
-          applyEmphasis();
+          updateViewState();
         }
       }
     });
@@ -674,9 +807,9 @@ import { emphasisIds, type Filters, matchesSearch, passesFilters, retainedSelect
       .then((data) => {
         if (data.type === "graph") applyGraph(data.graph);
         else applyError(data);
-      });
-
-    connectSSE();
+      })
+      .catch(applyError)
+      .finally(connectSSE);
   }
 
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init);

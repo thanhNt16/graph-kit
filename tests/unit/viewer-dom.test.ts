@@ -54,6 +54,16 @@ type ViewerNodeShape = {
   order: number;
 };
 
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  return { promise, resolve, reject };
+}
+
 function graph(name: string, nodes: Record<string, unknown>): ViewerGraph {
   const raw: ViewerGraph["nodes"] = {};
   let edgeCount = 0;
@@ -76,6 +86,25 @@ function graph(name: string, nodes: Record<string, unknown>): ViewerGraph {
     nodes: raw,
   } as ViewerGraph;
 }
+
+test("SSE connects only after the initial fetch settles", async () => {
+  const pending = deferred<{ json(): Promise<unknown> }>();
+  const harness = createViewerHarness(APP_BUNDLE, null, pending.promise);
+  expect(harness.es).toHaveLength(0);
+
+  pending.resolve({ json: () => Promise.resolve({ type: "graph", graph: graph("g", { a: node("a") }) }) });
+  await flush();
+  expect(harness.es).toHaveLength(1);
+});
+
+test("SSE connects after the initial fetch rejects", async () => {
+  const pending = deferred<{ json(): Promise<unknown> }>();
+  const harness = createViewerHarness(APP_BUNDLE, null, pending.promise);
+  pending.reject(new Error("offline"));
+  await flush();
+  expect(harness.es).toHaveLength(1);
+  expect(harness.doc.ids["error-screen"].classList.contains("hidden")).toBe(false);
+});
 
 test("click opens the details drawer and shows the node's fields", async () => {
   const harness = createViewerHarness(
@@ -155,6 +184,65 @@ test("search/filter applies a visible dimming class to non-matching nodes", asyn
   expect(harness2.nodeGroup("b")?.classList.contains("filtered")).toBe(true);
 });
 
+test("search updates classes without replacing node or viewport elements", async () => {
+  const harness = createViewerHarness(
+    APP_BUNDLE,
+    graph("g", { a: node("a", { skills: ["rocket"] }), b: node("b", { skills: ["anchor"] }) }),
+  );
+  await flush();
+  const viewport = harness.viewport();
+  const a = harness.nodeGroup("a");
+  harness.setSearch("rocket");
+  expect(harness.viewport()).toBe(viewport);
+  expect(harness.nodeGroup("a")).toBe(a);
+  expect(harness.nodeGroup("b")?.classList.contains("filtered")).toBe(true);
+});
+
+test("graph updates reconcile keyed nodes instead of replacing retained nodes", async () => {
+  const harness = createViewerHarness(APP_BUNDLE, graph("g", { a: node("a"), b: node("b", { depend_on: ["a"] }) }));
+  await flush();
+  const a = harness.nodeGroup("a");
+  harness.emitUpdate({
+    type: "graph",
+    graph: graph("g", { a: node("a", { objective: "changed" }), c: node("c", { depend_on: ["a"] }) }),
+  });
+  await flush();
+  expect(harness.nodeGroup("a")).toBe(a);
+  expect(harness.nodeGroup("b")).toBeNull();
+  expect(harness.nodeGroup("c")).not.toBeNull();
+});
+
+test("keyed edge owns its render: removed with the edge", async () => {
+  const harness = createViewerHarness(APP_BUNDLE, graph("g", { a: node("a"), b: node("b", { depend_on: ["a"] }) }));
+  await flush();
+  expect(harness.doc.ids.canvas.querySelector('path.edge[data-from="a"][data-to="b"]')).not.toBeNull();
+
+  // dropping the dependency removes the edge
+  const before = harness.edge("a", "b");
+  expect(before).not.toBeNull();
+  harness.emitUpdate({ type: "graph", graph: graph("g", { a: node("a"), b: node("b") }) });
+  await flush();
+  expect(harness.edge("a", "b")).toBeNull();
+  expect(harness.doc.ids.canvas.querySelectorAll("path.edge-arrow")).toHaveLength(0);
+});
+
+test("edgeKey is collision-free: newline-containing IDs keep distinct edges", async () => {
+  const harness = createViewerHarness(
+    APP_BUNDLE,
+    graph("g", {
+      a: node("a"),
+      "a\nb": node("a\nb"),
+      "b\nc": node("b\nc", { depend_on: ["a"] }), // edge a -> b\nc
+      c: node("c", { depend_on: ["a\nb"] }), // edge a\nb -> c
+    }),
+  );
+  await flush();
+  const edges = harness.doc.ids.canvas.querySelectorAll("path.edge");
+  // under "from + sep + to" both edges key to "a\nb\nc" and would merge into one;
+  // the length-prefixed key keeps them distinct, so two path.edge elements render.
+  expect(edges.length).toBe(2);
+});
+
 test("viewport pan transform survives a graph update (no re-fit)", async () => {
   const harness = createViewerHarness(APP_BUNDLE, graph("g", { a: node("a") }));
   await flush();
@@ -190,4 +278,189 @@ test("stale banner appears on error update and clears on the next valid graph", 
   harness.emitUpdate({ type: "graph", graph: graph("g", { a: node("a", { objective: "ok" }) }) });
   await flush();
   expect(harness.staleVisible()).toBe(false);
+});
+
+test("normalized levels render as stable phase lanes", async () => {
+  const harness = createViewerHarness(
+    APP_BUNDLE,
+    graph("g", {
+      root: node("root", { level: 0, order: 0 }),
+      worker: node("worker", { level: 1, order: 0, depend_on: ["root"] }),
+    }),
+  );
+  await flush();
+  expect(harness.lane(0)?.classList.contains("lane-group")).toBe(true);
+  expect(harness.lane(1)?.textContent).toContain("Phase 1");
+});
+
+test("edges share an SVG marker and use curved path geometry", async () => {
+  const harness = createViewerHarness(
+    APP_BUNDLE,
+    graph("g", {
+      a: node("a"),
+      b: node("b", { level: 1, depend_on: ["a"] }),
+    }),
+  );
+  await flush();
+  const edge = harness.edge("a", "b");
+  expect(edge?.getAttribute("marker-end")).toBe("url(#arrow)");
+  expect(edge?.getAttribute("d")).toContain(" C ");
+  expect(harness.doc.ids.canvas.querySelectorAll("path.edge-arrow")).toHaveLength(0);
+});
+
+test("node cards include a model rail, model text, and loop badge", async () => {
+  const harness = createViewerHarness(
+    APP_BUNDLE,
+    graph("g", {
+      a: node("a", { model: "opus", loop: { enabled: true, max_rounds: 3 } }),
+    }),
+  );
+  await flush();
+  const group = harness.nodeGroup("a")!;
+  expect(group.querySelector("rect.node-tier-rail")).not.toBeNull();
+  expect(group.querySelector("text.node-badge")?.textContent).toContain("↻");
+  expect(group.textContent).toContain("opus");
+});
+
+test("hiding lanes toggles the lane-layer visibility attribute (CSP-safe, no inline style)", async () => {
+  const harness = createViewerHarness(APP_BUNDLE, graph("g", { a: node("a") }));
+  await flush();
+  const laneLayer = harness.doc.ids.canvas.querySelector("g.lane-layer");
+  expect(laneLayer).not.toBeNull();
+  expect(laneLayer?.getAttribute("visibility")).toBe("visible");
+
+  // flip the toggle-lanes checkbox off — lanes must hide via the attribute
+  const toggle = harness.doc.ids["toggle-lanes"];
+  toggle.checked = false;
+  toggle.dispatch("change", { target: toggle });
+  expect(laneLayer?.getAttribute("visibility")).toBe("hidden");
+  // style-string approach would set an inline style, which `style-src 'self'` blocks
+  expect(laneLayer?.getAttribute("style")).toBeUndefined();
+});
+
+test("new nodes get the entrance class via classList, with no inline style attribute", async () => {
+  const harness = createViewerHarness(APP_BUNDLE, graph("g", { a: node("a") }));
+  await flush();
+  const group = harness.nodeGroup("a")!;
+  expect(group.classList.contains("is-new")).toBe(true);
+  // the old approach set an inline `--level` custom property, blocked by CSP
+  expect(group.getAttribute("style")).toBeUndefined();
+});
+
+test("lane toggle hides lanes without replacing graph elements", async () => {
+  const harness = createViewerHarness(APP_BUNDLE, graph("g", { a: node("a") }));
+  await flush();
+  const a = harness.nodeGroup("a");
+  harness.setLanes(false);
+  expect(harness.viewport()?.querySelector("g.lane-layer")?.getAttribute("aria-hidden")).toBe("true");
+  expect(harness.nodeGroup("a")).toBe(a);
+});
+
+test("selection uses a durable selected class and connected edge emphasis", async () => {
+  const harness = createViewerHarness(
+    APP_BUNDLE,
+    graph("g", {
+      a: node("a"),
+      b: node("b", { depend_on: ["a"] }),
+      c: node("c"),
+    }),
+  );
+  await flush();
+  harness.clickNode("a");
+  expect(harness.nodeGroup("a")?.classList.contains("selected")).toBe(true);
+  expect(harness.edge("a", "b")?.classList.contains("emph-conn")).toBe(true);
+  expect(harness.nodeGroup("c")?.classList.contains("dim")).toBe(true);
+});
+
+test("graph update preserves active model and agent filters when values still exist", async () => {
+  const harness = createViewerHarness(
+    APP_BUNDLE,
+    graph("g", {
+      a: node("a", { model: "sonnet", agent: "Alpha" }),
+      b: node("b", { model: "haiku", agent: "Beta" }),
+    }),
+  );
+  await flush();
+  harness.setModelFilter("sonnet");
+  harness.setAgentFilter("Alpha");
+  expect(harness.getEl("filter-model").value).toBe("sonnet");
+  expect(harness.getEl("filter-agent").value).toBe("Alpha");
+
+  harness.emitUpdate({
+    type: "graph",
+    graph: graph("g", {
+      a: node("a", { model: "sonnet", agent: "Alpha" }),
+      b: node("b", { model: "haiku", agent: "Beta" }),
+    }),
+  });
+  await flush();
+  expect(harness.getEl("filter-model").value).toBe("sonnet");
+  expect(harness.getEl("filter-agent").value).toBe("Alpha");
+  // 'haiku' dims under the retained model filter
+  expect(harness.nodeGroup("b")?.classList.contains("filtered")).toBe(true);
+  expect(harness.nodeGroup("a")?.classList.contains("filtered")).toBe(false);
+});
+
+test("graph update resets stale filters to all when the value disappears", async () => {
+  const harness = createViewerHarness(APP_BUNDLE, graph("g", { a: node("a", { model: "sonnet", agent: "Alpha" }) }));
+  await flush();
+  harness.setModelFilter("sonnet");
+  harness.setAgentFilter("Alpha");
+
+  // update drops sonnet and Alpha entirely
+  harness.emitUpdate({
+    type: "graph",
+    graph: graph("g", { a: node("a", { model: "haiku", agent: "Beta" }) }),
+  });
+  await flush();
+  expect(harness.getEl("filter-model").value).toBe("");
+  expect(harness.getEl("filter-agent").value).toBe("");
+  // state-visible behavior: with no filter active nothing is filtered out
+  expect(harness.nodeGroup("a")?.classList.contains("filtered")).toBe(false);
+});
+
+test("arbitrary punctuation/whitespace node IDs emphasize their connected edges", async () => {
+  const weirdFrom = "a b\tc";
+  const weirdTo = "d\ne|f";
+  const harness = createViewerHarness(
+    APP_BUNDLE,
+    graph("g", {
+      [weirdFrom]: node(weirdFrom),
+      [weirdTo]: node(weirdTo, { depend_on: [weirdFrom] }),
+      bystander: node("bystander"),
+    }),
+  );
+  await flush();
+  harness.clickNode(weirdFrom);
+  expect(harness.nodeGroup(weirdFrom)?.classList.contains("selected")).toBe(true);
+  const edge = harness.edge(weirdFrom, weirdTo);
+  expect(edge).not.toBeNull();
+  expect(edge?.classList.contains("emph-conn")).toBe(true);
+});
+
+test("retained node DOM identity stays stable while keyboard order tracks level/order", async () => {
+  const harness = createViewerHarness(
+    APP_BUNDLE,
+    graph("g", {
+      a: node("a", { level: 0, order: 0 }),
+      b: node("b", { level: 1, order: 0, depend_on: ["a"] }),
+    }),
+  );
+  await flush();
+  expect(harness.nodeOrder()).toEqual(["a", "b"]);
+  const aBefore = harness.nodeGroup("a");
+  const bBefore = harness.nodeGroup("b");
+
+  // swap levels: b becomes phase 0, a becomes phase 1
+  harness.emitUpdate({
+    type: "graph",
+    graph: graph("g", {
+      a: node("a", { level: 1, order: 0 }),
+      b: node("b", { level: 0, order: 0, depend_on: [] }),
+    }),
+  });
+  await flush();
+  expect(harness.nodeOrder()).toEqual(["b", "a"]);
+  expect(harness.nodeGroup("a")).toBe(aBefore);
+  expect(harness.nodeGroup("b")).toBe(bBefore);
 });

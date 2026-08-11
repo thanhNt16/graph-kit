@@ -165,7 +165,8 @@ export class FakeEl {
   }
 
   set textContent(v: string) {
-    this.children = [new FakeText(String(v))];
+    this.children = String(v) ? [new FakeText(String(v))] : [];
+    if (this.tagName.toLowerCase() === "select") this.value = "";
   }
 
   get textContent(): string {
@@ -216,6 +217,8 @@ function makeDocument() {
   reg("filter-model", "select");
   reg("filter-agent", "select");
   reg("filter-loop", "input");
+  reg("toggle-lanes", "input");
+  ids["toggle-lanes"].checked = true;
   reg("search", "input");
   reg("stale-banner", "div", "banner hidden");
   reg("stale-message", "span");
@@ -250,12 +253,18 @@ export interface ViewerHarness {
   es: FakeEventSource[];
   getEl(id: string): FakeEl;
   nodeGroup(id: string): FakeEl | null;
+  viewport(): FakeEl | null;
+  edge(from: string, to: string): FakeEl | null;
+  lane(level: number): FakeEl | null;
   emitUpdate(payload: unknown): void;
   setSearch(v: string): void;
   setModelFilter(v: string): void;
+  setAgentFilter(v: string): void;
+  nodeOrder(): string[];
+  setLanes(checked: boolean): void;
   clickNode(id: string): void;
   focusNode(id: string): void;
-  blurNode(id: string): void;
+  blurNode(): void;
   hoverNode(id: string): void;
   zoomWheel(deltaY: number): void;
   viewportTransform(): string | null;
@@ -308,12 +317,15 @@ class FakeGraph {
 const fakeDagre = {
   graphlib: { Graph: FakeGraph },
   layout(g: FakeGraph) {
+    // Fake layout for deterministic test geometry only — production dagre
+    // already ranks nodes by dependency level (TB, ranksep 70). Nodes are
+    // placed monotonically so each lane's bounds come out of its own level's
+    // nodes in tests. Lane geometry itself derives from ViewerNode.level, not
+    // from this y-inference.
     Object.keys(g.nodes).forEach((id, i) => {
-      g.nodes[id].x = 100 + i * 120;
-      g.nodes[id].y = 100 + (i % 2) * 80;
+      g.nodes[id].x = 160 + i * 220;
+      g.nodes[id].y = 120 + i * 150;
     });
-    // Straight vertical edge from source bottom to target top so app.js draws
-    // path.edge + path.edge-arrow elements (exercises edge emphasis classes).
     g.edgesArr.forEach((e) => {
       const a = g.node(e.v);
       const b = g.node(e.w);
@@ -330,7 +342,11 @@ const fakeDagre = {
  * Execute the bundled viewer inside a fresh vm context and return a controller.
  * `initialGraph` is what the initial fetch resolves to.
  */
-export function createViewerHarness(appJs: string, initialGraph: unknown): ViewerHarness {
+export function createViewerHarness(
+  appJs: string,
+  initialGraph: unknown,
+  fetchResult?: Promise<{ json(): Promise<unknown> }>,
+): ViewerHarness {
   const doc = makeDocument();
   const esInstances: FakeEventSource[] = [];
   const win = { innerWidth: 1200, innerHeight: 800, addEventListener: () => {} };
@@ -338,7 +354,8 @@ export function createViewerHarness(appJs: string, initialGraph: unknown): Viewe
     document: doc,
     window: win,
     location: { search: "?key=testkey", href: "http://127.0.0.1/?key=testkey" },
-    fetch: () => Promise.resolve({ json: () => Promise.resolve({ type: "graph", graph: initialGraph }) }),
+    fetch: () =>
+      fetchResult ?? Promise.resolve({ json: () => Promise.resolve({ type: "graph", graph: initialGraph }) }),
     EventSource: class extends FakeEventSource {
       constructor(url: string) {
         super(url);
@@ -360,6 +377,12 @@ export function createViewerHarness(appJs: string, initialGraph: unknown): Viewe
       const vps = doc.ids.canvas.querySelectorAll("g.viewport");
       return (vps[vps.length - 1] || doc.ids.canvas).querySelector(`[data-id="${id}"]`) ?? null;
     },
+    viewport: () => doc.ids.canvas.querySelector("g.viewport"),
+    edge: (from, to) =>
+      doc.ids.canvas
+        .querySelectorAll("path.edge")
+        .find((edge) => edge.getAttribute("data-from") === from && edge.getAttribute("data-to") === to) ?? null,
+    lane: (level) => doc.ids.canvas.querySelector(`[data-level="${level}"]`),
     emitUpdate: (payload) => {
       for (const es of esInstances) es.emit("update", JSON.stringify(payload));
     },
@@ -368,10 +391,28 @@ export function createViewerHarness(appJs: string, initialGraph: unknown): Viewe
       s.value = v;
       s.dispatch("input", { target: s });
     },
+    setLanes: (checked) => {
+      const control = doc.ids["toggle-lanes"];
+      control.checked = checked;
+      control.dispatch("change", { target: control });
+    },
     setModelFilter: (v) => {
       const m = doc.ids["filter-model"];
       m.value = v;
       m.dispatch("change", { target: m });
+    },
+    setAgentFilter: (v) => {
+      const a = doc.ids["filter-agent"];
+      a.value = v;
+      a.dispatch("change", { target: a });
+    },
+    nodeOrder: () => {
+      const vps = doc.ids.canvas.querySelectorAll("g.viewport");
+      const vp = vps[vps.length - 1] || doc.ids.canvas;
+      const layer = vp.querySelector("g.node-layer");
+      return (layer ? layer.children : [])
+        .filter((c) => c.tagName.toLowerCase() === "g")
+        .map((c) => c.getAttribute("data-id"));
     },
     clickNode: (id) => {
       const g = harness.nodeGroup(id);
