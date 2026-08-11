@@ -54,6 +54,16 @@ type ViewerNodeShape = {
   order: number;
 };
 
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  return { promise, resolve, reject };
+}
+
 function graph(name: string, nodes: Record<string, unknown>): ViewerGraph {
   const raw: ViewerGraph["nodes"] = {};
   let edgeCount = 0;
@@ -76,6 +86,25 @@ function graph(name: string, nodes: Record<string, unknown>): ViewerGraph {
     nodes: raw,
   } as ViewerGraph;
 }
+
+test("SSE connects only after the initial fetch settles", async () => {
+  const pending = deferred<{ json(): Promise<unknown> }>();
+  const harness = createViewerHarness(APP_BUNDLE, null, pending.promise);
+  expect(harness.es).toHaveLength(0);
+
+  pending.resolve({ json: () => Promise.resolve({ type: "graph", graph: graph("g", { a: node("a") }) }) });
+  await flush();
+  expect(harness.es).toHaveLength(1);
+});
+
+test("SSE connects after the initial fetch rejects", async () => {
+  const pending = deferred<{ json(): Promise<unknown> }>();
+  const harness = createViewerHarness(APP_BUNDLE, null, pending.promise);
+  pending.reject(new Error("offline"));
+  await flush();
+  expect(harness.es).toHaveLength(1);
+  expect(harness.doc.ids["error-screen"].classList.contains("hidden")).toBe(false);
+});
 
 test("click opens the details drawer and shows the node's fields", async () => {
   const harness = createViewerHarness(
@@ -341,4 +370,97 @@ test("selection uses a durable selected class and connected edge emphasis", asyn
   expect(harness.nodeGroup("a")?.classList.contains("selected")).toBe(true);
   expect(harness.edge("a", "b")?.classList.contains("emph-conn")).toBe(true);
   expect(harness.nodeGroup("c")?.classList.contains("dim")).toBe(true);
+});
+
+test("graph update preserves active model and agent filters when values still exist", async () => {
+  const harness = createViewerHarness(
+    APP_BUNDLE,
+    graph("g", {
+      a: node("a", { model: "sonnet", agent: "Alpha" }),
+      b: node("b", { model: "haiku", agent: "Beta" }),
+    }),
+  );
+  await flush();
+  harness.setModelFilter("sonnet");
+  harness.setAgentFilter("Alpha");
+  expect(harness.getEl("filter-model").value).toBe("sonnet");
+  expect(harness.getEl("filter-agent").value).toBe("Alpha");
+
+  harness.emitUpdate({
+    type: "graph",
+    graph: graph("g", {
+      a: node("a", { model: "sonnet", agent: "Alpha" }),
+      b: node("b", { model: "haiku", agent: "Beta" }),
+    }),
+  });
+  await flush();
+  expect(harness.getEl("filter-model").value).toBe("sonnet");
+  expect(harness.getEl("filter-agent").value).toBe("Alpha");
+  // 'haiku' dims under the retained model filter
+  expect(harness.nodeGroup("b")?.classList.contains("filtered")).toBe(true);
+  expect(harness.nodeGroup("a")?.classList.contains("filtered")).toBe(false);
+});
+
+test("graph update resets stale filters to all when the value disappears", async () => {
+  const harness = createViewerHarness(APP_BUNDLE, graph("g", { a: node("a", { model: "sonnet", agent: "Alpha" }) }));
+  await flush();
+  harness.setModelFilter("sonnet");
+  harness.setAgentFilter("Alpha");
+
+  // update drops sonnet and Alpha entirely
+  harness.emitUpdate({
+    type: "graph",
+    graph: graph("g", { a: node("a", { model: "haiku", agent: "Beta" }) }),
+  });
+  await flush();
+  expect(harness.getEl("filter-model").value).toBe("");
+  expect(harness.getEl("filter-agent").value).toBe("");
+  // state-visible behavior: with no filter active nothing is filtered out
+  expect(harness.nodeGroup("a")?.classList.contains("filtered")).toBe(false);
+});
+
+test("arbitrary punctuation/whitespace node IDs emphasize their connected edges", async () => {
+  const weirdFrom = "a b\tc";
+  const weirdTo = "d\ne|f";
+  const harness = createViewerHarness(
+    APP_BUNDLE,
+    graph("g", {
+      [weirdFrom]: node(weirdFrom),
+      [weirdTo]: node(weirdTo, { depend_on: [weirdFrom] }),
+      bystander: node("bystander"),
+    }),
+  );
+  await flush();
+  harness.clickNode(weirdFrom);
+  expect(harness.nodeGroup(weirdFrom)?.classList.contains("selected")).toBe(true);
+  const edge = harness.edge(weirdFrom, weirdTo);
+  expect(edge).not.toBeNull();
+  expect(edge?.classList.contains("emph-conn")).toBe(true);
+});
+
+test("retained node DOM identity stays stable while keyboard order tracks level/order", async () => {
+  const harness = createViewerHarness(
+    APP_BUNDLE,
+    graph("g", {
+      a: node("a", { level: 0, order: 0 }),
+      b: node("b", { level: 1, order: 0, depend_on: ["a"] }),
+    }),
+  );
+  await flush();
+  expect(harness.nodeOrder()).toEqual(["a", "b"]);
+  const aBefore = harness.nodeGroup("a");
+  const bBefore = harness.nodeGroup("b");
+
+  // swap levels: b becomes phase 0, a becomes phase 1
+  harness.emitUpdate({
+    type: "graph",
+    graph: graph("g", {
+      a: node("a", { level: 1, order: 0 }),
+      b: node("b", { level: 0, order: 0, depend_on: [] }),
+    }),
+  });
+  await flush();
+  expect(harness.nodeOrder()).toEqual(["b", "a"]);
+  expect(harness.nodeGroup("a")).toBe(aBefore);
+  expect(harness.nodeGroup("b")).toBe(bBefore);
 });

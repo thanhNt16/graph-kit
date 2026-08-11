@@ -66,10 +66,6 @@ import { emphasisIds, type Filters, matchesSearch, passesFilters, retainedSelect
     return document.createTextNode(content == null ? "" : String(content));
   }
 
-  function esc(id: string) {
-    return String(id).replace(/[^a-zA-Z0-9_-]/g, () => "_");
-  }
-
   function tierColor(model: string) {
     return COLOR[model as keyof typeof COLOR] || COLOR.default;
   }
@@ -298,10 +294,13 @@ import { emphasisIds, type Filters, matchesSearch, passesFilters, retainedSelect
   function createEdgeElement(edge: PositionedEdge): SVGPathElement {
     // Single shared marker handles the arrowhead; edge elements carry only
     // stable identifying attributes. Geometry updates in updateEdgeElement.
+    // Raw endpoint IDs go into data attributes verbatim — setAttribute safely
+    // serializes any string, so arbitrary punctuation/whitespace/newline IDs
+    // round-trip without escaping (schema allows any string record key).
     var path = el("path", {
       class: "edge",
-      "data-from": esc(edge.v),
-      "data-to": esc(edge.w),
+      "data-from": edge.v,
+      "data-to": edge.w,
       "marker-end": "url(#arrow)",
     }) as SVGPathElement;
     path.appendChild(textNode(""));
@@ -335,10 +334,12 @@ import { emphasisIds, type Filters, matchesSearch, passesFilters, retainedSelect
       if (!group) {
         group = createNodeElement(id);
         nodeEls.set(id, group);
-        layers.nodes.appendChild(group);
         group.classList.add("is-new");
       }
       updateNodeElement(group, id);
+      // appendChild moves retained groups, preserving identity while restoring
+      // normalized keyboard/tab order after live level/order changes.
+      layers.nodes.appendChild(group);
     });
 
     var wantedEdges = new Set(state.edges.map((edge) => edgeKey(edge.v, edge.w)));
@@ -560,6 +561,12 @@ import { emphasisIds, type Filters, matchesSearch, passesFilters, retainedSelect
         o.appendChild(textNode(a));
         agents.appendChild(o);
       });
+    if (!mSet[state.filterModel]) state.filterModel = "";
+    if (!aSet[state.filterAgent]) state.filterAgent = "";
+    models.value = state.filterModel;
+    agents.value = state.filterAgent;
+    // Clearing stale state changes node visibility after reconcileTopology ran.
+    updateViewState();
   }
 
   function keyboardOrderBy() {
@@ -800,9 +807,9 @@ import { emphasisIds, type Filters, matchesSearch, passesFilters, retainedSelect
       .then((data) => {
         if (data.type === "graph") applyGraph(data.graph);
         else applyError(data);
-      });
-
-    connectSSE();
+      })
+      .catch(applyError)
+      .finally(connectSSE);
   }
 
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init);

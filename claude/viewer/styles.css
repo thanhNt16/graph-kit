@@ -235,7 +235,12 @@ input[type="checkbox"]:focus-visible {
   transition: stroke var(--transition), opacity var(--transition);
 }
 .arrow-marker {
-  fill: context-stroke;
+  fill: var(--hairline);
+}
+@supports (fill: context-stroke) {
+  .arrow-marker {
+    fill: context-stroke;
+  }
 }
 .edge.emph-conn {
   stroke: var(--accent);
