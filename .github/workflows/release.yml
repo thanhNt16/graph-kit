@@ -1,0 +1,63 @@
+name: Release
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  bundle:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: linux-x64
+          - os: macos-latest
+            target: darwin-arm64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.9
+      - run: bun install --frozen-lockfile
+      - run: bun run build
+      - run: bun run build:viewer
+      - run: bun run build:bin
+      - name: Build release archives
+        run: |
+          npm pack --pack-destination dist
+          tar -C dist -czf "dist/gk-${{ matrix.target }}.tar.gz" gk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: graphkit-${{ matrix.target }}
+          path: dist/gk-*.tar.gz
+
+  publish:
+    needs: bundle
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: graphkit-*
+          merge-multiple: true
+      - name: Publish rolling latest release (main)
+        if: github.ref == 'refs/heads/main'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: latest
+          name: Latest build
+          body: Auto-built from the latest main commit (${{ github.sha }}).
+          prerelease: true
+          files: gk-*.tar.gz
+      - name: Publish tagged release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: gk-*.tar.gz

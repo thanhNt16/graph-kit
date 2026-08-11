@@ -1,0 +1,32 @@
+apiVersion: graphkit.dev/v2
+kind: Graph
+metadata:
+  name: mem-diamond
+topology: memory-augmented
+topology_config:
+  inner:
+    template: diamond
+  memory:
+    project: graph-kit-memory
+    cadence: on_node_complete
+    curator_node: curator
+    recall_topk: 5
+nodes:
+  scouter:
+    agent: Software Architect
+    objective: Find items to review.
+    depend_on: []
+  worker:
+    agent: Code Reviewer
+    objective: Review the item.
+    depend_on: [scouter]
+  synthesizer:
+    agent: Software Architect
+    objective: Synthesize findings.
+    depend_on: [worker]
+  curator:
+    agent: Memory Curator
+    objective: Curate memory and decide injection.
+    depend_on: []
+evidence:
+  required_keys: []

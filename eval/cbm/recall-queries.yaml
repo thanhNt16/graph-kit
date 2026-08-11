@@ -1,0 +1,62 @@
+# expected names reference exports/symbols of graph-kit src/ and eval/cbm/code-fixtures/sample-*.ts
+# (executor-retrieval creates sample-{a,b,c}.ts; their exported symbol names are the shared contract)
+
+- id: cq-01
+  query: "graph validation"
+  expected_qualified_names: [validateGraph]
+  kind: code-search
+  note: find the main graph validation entry point
+
+- id: cq-02
+  query: "render graph as ascii art"
+  expected_qualified_names: [renderAscii]
+  kind: code-search
+  note: locate the ASCII topology renderer
+
+- id: cq-03
+  query: "agent file name from display name"
+  expected_qualified_names: [agentFileName]
+  kind: code-search
+  note: find the agent binding resolver
+
+- id: cq-04
+  query: "install kit into project directory"
+  expected_qualified_names: [installKit]
+  kind: code-search
+  note: locate kit installation function
+
+- id: cq-05
+  query: "run golden replay evaluation"
+  expected_qualified_names: [runGolden]
+  kind: code-search
+  note: find the golden test runner
+
+- id: cq-06
+  query: "who calls validateGraph"
+  expected_qualified_names: [validateGraph, registerGraphCommands]
+  kind: trace
+  note: inbound callers of the validation gate
+
+- id: cq-07
+  query: "what does loadGraph call"
+  expected_qualified_names: [loadGraph, GraphSchema]
+  kind: trace
+  note: outbound callees from graph loading (GraphSchema.safeParse, not validateGraph)
+
+- id: cq-08
+  query: "scoreWorkProduct fan-out"
+  expected_qualified_names: [scoreWorkProduct, Verdict]
+  kind: trace
+  note: trace the scoring rubric and its verdict type
+
+- id: cq-09
+  query: "all exported functions in compiler directory"
+  expected_qualified_names: [validateGraph, agentFileName]
+  kind: cypher
+  note: Cypher scan for compiler exports
+
+- id: cq-10
+  query: "topology names with config keys"
+  expected_qualified_names: [getTopologyConfigKeys, TOPOLOGY_NAMES]
+  kind: cypher
+  note: topology config resolution via Cypher

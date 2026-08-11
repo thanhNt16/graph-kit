@@ -1,0 +1,15 @@
+---
+description: GraphKit graph-state authority — gk owns graph state; never improvise edges or skip nodes; recompile to change topology
+alwaysApply: true
+---
+
+# Graph Authority
+
+gk owns graph state. The compiled workflow is the execution plan.
+
+## Inviolable Rules
+
+- Never improvise edges or skip nodes at runtime.
+- Never modify topology after compilation — recompile if needed.
+- The workflow script is deterministic: same graph.yaml → same .workflow.js.
+- If a node fails, the workflow handles it (null filter, error boundary) — do not retry outside the declared loop config.

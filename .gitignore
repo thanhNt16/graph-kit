@@ -1,6 +1,9 @@
 node_modules/
 dist/
-.superpowers/
-**/.tmp-*/
+claude/topology/
+.claude/
 .graphkit/
-.claude/worktrees/
+claude/viewer/*.js
+claude/viewer/*.mjs
+cursor/viewer/*.js
+cursor/viewer/*.mjs

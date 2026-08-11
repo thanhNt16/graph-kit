@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "codebase-memory": {
+      "command": "/usr/local/bin/codebase-memory-mcp",
+      "tools": ["search_graph", "get_code"]
+    },
+    "gated": {
+      "command": "/usr/local/bin/gated",
+      "args": ["--secret", "SECRET_TOKEN"],
+      "env": { "API_KEY": "leak-me" }
+    }
+  }
+}

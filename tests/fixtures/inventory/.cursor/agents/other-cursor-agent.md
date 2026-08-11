@@ -1,0 +1,4 @@
+---
+name: Other Cursor
+---
+body

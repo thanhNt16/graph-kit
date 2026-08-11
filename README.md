@@ -1,90 +1,167 @@
 # GraphKit
 
-GraphKit is an orchestration-graph CLI and Agent Skills system. The `gk` CLI owns workflow state, transitions, leases, checkpoints, and evidence. It does not invoke a model, spawn an agent, or read an API key.
+GraphKit is a graph engineering kit for AI coding agents (Claude Code and Cursor). It installs agents, skills, hooks, and rules that let you define, validate, compile, and execute graph-structured agent workflows.
 
-## Install and build
+## What it is
 
-```bash
-cd apps/gk
-bun install
-bun run build
-```
+- A **kit template** per target: `claude/` (Claude Code) and `cursor/` (Cursor) — each with 8 agents, skills, 4 hooks, and rules in the target's native format
+- A **compiler** (`gk`) that turns a `graph.yaml` into a runnable workflow
+- **Two runtimes**: Claude Code's Workflow tool (`/gk:run`) or direct subagent dispatch (`/gk:execute`, works in both hosts)
 
-Run the CLI from source with `bun run src/index.ts ...`, or use the built `dist/index.js`/`gk` binary.
+gk never invokes a model, spawns an agent, or reads an API key. It validates and compiles only.
 
-## Install templates
+## CBM boundary
 
-Install a bundled template into the current project:
+gk bridges to the [codebase-memory-mcp](https://github.com/) (CBM) MCP server for indexing and code-graph queries (`gk graph index|search|trace|query`). gk owns no graph database — CBM is the authority. This keeps gk a workflow compiler, not a re-implementation of CBM's LSP-backed indexer.
 
-```bash
-gk template install apps/gk/templates/task-execute-verify
-gk template install apps/gk/templates/orchestrator-worker
-```
+## Install
 
-Install globally:
+### GitHub release (macOS Apple Silicon)
 
 ```bash
-gk template install apps/gk/templates/task-execute-verify --global
+curl -fsSL https://github.com/thanhNt16/graph-kit/releases/latest/download/gk-darwin-arm64.tar.gz \
+  | tar -xz -C /usr/local/bin
 ```
 
-Validate before use:
+Verify:
 
 ```bash
-gk template validate apps/gk/templates/task-execute-verify --json
+gk --version
 ```
 
-Project installs use `.graphkit/` and `.claude/skills/` in the project. Global installs use the equivalent paths under `$HOME`.
-
-## Run a workflow
-
-Start with one JSON input object:
+Or install from npm:
 
 ```bash
-gk workflow start apps/gk/templates/task-execute-verify run-1 \
-  --inputs '{"task":"ship","objective":"verify"}' --json
+npm install -g @graphkit/gk
 ```
 
-Ask GraphKit for the next contract:
+Install the kit into a project:
 
 ```bash
-gk workflow next apps/gk/templates/task-execute-verify run-1 --json
+gk init
 ```
 
-The returned contract is harness-actionable. An agent submits structured output through the returned `submit_argv`:
+Or scaffold a new project:
 
 ```bash
-gk workflow submit apps/gk/templates/task-execute-verify run-1 \
-  '{"summary":"implemented","evidence":[{"key":"tests","value":"pass"}]}' --json
+gk new --dir my-project
 ```
 
-GraphKit-owned deterministic nodes use `execute`:
+## Cursor IDE support
+
+GraphKit also targets Cursor. Pass `--target cursor` to install the Cursor-flavored kit into `.cursor/` instead of `.claude/`:
 
 ```bash
-gk workflow execute apps/gk/templates/task-execute-verify run-1 --json
-gk workflow status run-1 --json
-gk workflow trace run-1 --json
-gk evidence report apps/gk/templates/task-execute-verify run-1 --json
-gk workflow graph apps/gk/templates/task-execute-verify run-1 --format mermaid
+gk init --target cursor      # install into an existing project
+gk new --dir my-project --target cursor   # scaffold fresh
 ```
 
-Use `next`, then submit each returned agent or human contract. A human pause resumes with a declared action such as `approve` or `reject`.
+The `gk` CLI is identical across targets — `validate`, `graph new/ascii/svg/waves` all work the same. The kit differs:
 
-## Parallel leases
+| | Claude Code (`--target claude`) | Cursor (`--target cursor`) |
+|---|---|---|
+| Rules | `.claude/rules/*.md` | `.cursor/rules/*.mdc` (Cursor frontmatter) |
+| Agents | `.claude/agents/*.md` | `.cursor/agents/*.md` (+ `readonly`, `is_background`) |
+| Skills | `.claude/skills/*/SKILL.md` | `.cursor/skills/*/SKILL.md` |
+| Hooks | `.claude/settings.json` + `hooks/*.cjs` | `.cursor/hooks.json` (lowercase events) + `hooks/*.cjs` |
+| Execution | `/gk:run` (Workflow tool) + `/gk:execute` | **`/gk:execute` only** (Cursor has no Workflow tool) |
 
-The `orchestrator-worker` template returns a dispatch contract with one distinct lease per work item and a concurrency ceiling. Submit each item with both identifiers:
+Cursor has no Workflow tool, so the compile→run path is omitted — `/gk:execute` is the sole execution path. It reads `gk graph waves --json` and dispatches Cursor subagents via the Task tool, wave by wave (parallel within a wave).
 
-```bash
-gk workflow submit apps/gk/templates/orchestrator-worker run-2 \
-  '{"summary":"done","evidence":[{"key":"tests","value":"pass"}]}' \
-  --lease LEASE_ID --work-item ITEM_ID --json
+## Define a graph
+
+Create `graph.yaml` with a topology, node bindings, and inputs:
+
+```yaml
+apiVersion: graphkit.dev/v2
+kind: Graph
+metadata:
+  name: my-review
+topology: diamond
+inputs:
+  repo_path:
+    type: string
+    required: true
+nodes:
+  scouter:
+    agent: Software Architect
+    model: opus
+    objective: Identify files to review
+    depend_on: []
+  worker:
+    agent: Code Reviewer
+    model: sonnet
+    depend_on: [scouter]
+  synthesizer:
+    agent: Software Architect
+    model: opus
+    depend_on: [worker]
+limits:
+  max_workers: 3
+evidence:
+  required_keys: [report]
 ```
 
-Leases are single-use, expiry-bound, and merged only under the template's declared state policy. Duplicate, stale, or mismatched leases fail with a structured error and leave a rejection event.
+## Session skills
 
-## Resume and evidence
+Inside a Claude Code or Cursor session (after `gk init`):
 
-Runs persist checkpoints and append-only provenance under `.graphkit/runs/<run_id>/`. `workflow status`, `workflow trace`, and `evidence report` reconstruct the run after interruption. Evidence reports retain failed branches, settled work items, deterministic command receipts, and human actions while excluding raw output payloads.
+- `/gk:init-graph --template diamond` — generate a graph.yaml (from a topology preset **or a packaged GraphTemplate**, with capability suggestions)
+- `/gk:template` — package a validated graph.yaml as a reusable `GraphTemplate v1` (`gk template pack|list|show`)
+- `/gk:brainstorm` — refine nodes, model tiers, loops, constraints
+- `/gk:visualize` — interactive viewer (default) or `--ascii` / `--svg` / `--excalidraw`
+- `/gk:validate` — gate-check before compile
+- `/gk:compile` — graph.yaml → .workflow.js (Claude Code only)
+- `/gk:run` — execute via Claude Code Workflows (Claude Code only)
+- `/gk:execute` — execute by dispatching subagents directly (both hosts; **sole path in Cursor**)
+- `/gk:eval` — score evidence / memory against rubrics
+- `/gk:recall` — query the codebase-memory graph
+- `/gk:evidence` — report what the graph produced
+- `/gk:status` — current run state
 
-## Explicit boundary
+Templates live in `<project>/.graphkit/templates/` (overrides) and `~/.graphkit/templates/`; `gk inventory` reports installed agents/skills/tools/MCP servers for the active target — names only, no credentials/tokens. See [docs/templates-and-viewer.md](docs/templates-and-viewer.md) for template storage, parameter reference, the smart `/gk:init-graph` flow, and the interactive viewer's controls and troubleshooting.
 
-GraphKit is the workflow authority, not an agent runtime or model provider. It never invokes a model, spawns an agent, or reads an API key. An external coding-agent harness performs the returned action; `gk` validates its result, applies the graph transition, and persists the evidence.
+## Eleven topologies
+
+| Topology | Shape | Use |
+|----------|-------|-----|
+| diamond | fan-out → reduce → synthesize | reviews, research, migrations |
+| classify-and-act | route one input to one handler | triage, routing |
+| adversarial-verification | produce → refute → adjudicate | security, fact-check |
+| loop-until-done | scout → work → dedup until dry | discovery, sweeps |
+| generate-and-filter | generate many → keep best K | naming, ideation |
+| tournament | pairwise elimination | ranking, evals |
+| memory-augmented | wrap any graph with recall + curator | long-context work |
+| custom | arbitrary DAG via `depend_on` | any shape you define |
+| sdd | brainstorm → plan → parallel workers → review → test | subagent-driven dev |
+| superpowers | brainstorm → plan → workers → test loop | brainstorm/plan/execute |
+| research-and-build | scout → research → plan → build → review | research-first features |
+
+Topologies compose: a diamond's fan-out can embed an adversarial-verification subgraph, or use `custom` to mix patterns (diamond + per-node loops).
+
+## Per-node binding
+
+Each node carries its own model tier, tools, skills, refs, constraints, and optional internal loop:
+
+```yaml
+nodes:
+  scouter:
+    agent: Software Architect
+    model: opus
+    tools: [Read, Glob, Grep]
+    refs:
+      - path: docs/standards.md
+        purpose: checklist
+    loop:
+      enabled: true
+      max_rounds: 3
+      stop_when: evidence found
+    constraints:
+      no_write: true
+```
+
+`depend_on` controls parallelism: empty = start immediately, shared = parallel, multiple = barrier.
+
+## Boundary
+
+gk is the compiler, not a runtime. It never invokes a model, spawns an agent, or reads an API key. Execution is delegated to the host: Claude Code's Workflow tool (`/gk:run`) or native subagent dispatch (`/gk:execute`, both hosts).

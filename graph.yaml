@@ -1,0 +1,189 @@
+apiVersion: graphkit.dev/v2
+kind: Graph
+metadata:
+  name: gk-evolve
+  description: >
+    Evolve graph-kit into a best-of-breed knowledge-graph tool. Explore CBM,
+    hash-indexing, graphify, understand-anything, and tencentdb-agent-memory in
+    parallel; consolidate into one architecture; review and propose changes;
+    superpowers-plan; execute in parallel; verify on a loop until indexing speed,
+    indexing quality, graph UI parity with CBM, retrieval/traversal speed, and
+    recall/precision all beat plain grep/glob.
+topology: custom
+inputs:
+  task:
+    type: string
+    required: true
+    description: The improvement mission — what graph-kit must become.
+  success_criteria:
+    type: array
+    required: false
+    description: >
+      Optional explicit metric strings. If omitted, the orchestrator defines them.
+      Defaults: indexing speed up, semantic+structural edges, graph UI == CBM,
+      recall/precision > grep/glob.
+nodes:
+  # ── Phase 1: frame the mission, fan out exploration ───────────────────────
+  orchestrator:
+    agent: agents-orchestrator
+    model: opus
+    objective: |
+      Frame the mission: make graph-kit the best knowledge-graph tool.
+      Define concrete, measurable success metrics across five axes:
+        1. indexing speed  2. indexing quality (semantic + structural edges)
+        3. graph UI parity with codebase-memory-mcp  4. retrieval + traversal speed
+        5. recall & precision higher than grep/glob
+      Decide the exact exploration targets for the five parallel scouts.
+      Output a mission brief + metric targets the scouts and verifier will use.
+    depend_on: []
+    evidence: [mission_brief, metric_targets]
+
+  # ── Phase 2: parallel exploration (fan-out) ───────────────────────────────
+  explore-cbm:
+    agent: software-architect
+    model: sonnet
+    objective: |
+      Study codebase-memory-mcp (CBM). Focus: graph UI and visualization layer —
+      how nodes/edges/clusters are rendered, the Leiden community detection,
+      interactive traversal, and the visual experience we must match.
+      Return the concrete UI/visualization mechanisms to adopt.
+    depend_on: [orchestrator]
+    evidence: [cbm_findings]
+  explore-hash-index:
+    agent: data-engineer
+    model: sonnet
+    objective: |
+      Research fast hash-based indexing for code knowledge graphs.
+      Cover: content-addressed symbol indexing, edge lookup by hash, incremental
+      re-indexing, and how to beat grep/glob on retrieval latency and recall.
+      Return indexing design + expected speed/quality wins.
+    depend_on: [orchestrator]
+    evidence: [hash_index_findings]
+  explore-graphify:
+    agent: software-architect
+    model: sonnet
+    objective: |
+      Study the graphify skill (~/.claude/skills/graphify/SKILL.md).
+      Extract its best ideas: any-input ingestion, entity/edge extraction,
+      query patterns. Decide which to adopt into graph-kit.
+    depend_on: [orchestrator]
+    evidence: [graphify_findings]
+  explore-understand-anything:
+    agent: software-architect
+    model: sonnet
+    objective: |
+      Study the understand-anything agent suite (file-analyzer, domain-analyzer,
+      architecture-analyzer, graph-reviewer). Extract its layer assignment,
+      domain-graph, and batch-merge approaches worth adopting.
+    depend_on: [orchestrator]
+    evidence: [understand_findings]
+  explore-tencent-memory:
+    agent: memory-curator
+    model: sonnet
+    objective: |
+      Study tencentdb-agent-memory architecture. Extract its memory model,
+      consolidation, and recall mechanisms that could improve graph-kit's
+      cross-run memory and retrieval.
+    depend_on: [orchestrator]
+    evidence: [tencent_findings]
+
+  # ── Phase 3: consolidate ───────────────────────────────────────────────────
+  consolidate:
+    agent: software-architect
+    model: opus
+    objective: |
+      Merge all five exploration findings into ONE unified architecture proposal
+      for graph-kit. Resolve conflicts, pick the best mechanism per concern
+      (indexing, UI, extraction, memory), and define the target architecture.
+    depend_on:
+      [explore-cbm, explore-hash-index, explore-graphify,
+       explore-understand-anything, explore-tencent-memory]
+    evidence: [architecture]
+
+  # ── Phase 4: review + propose changes ──────────────────────────────────────
+  reviewer:
+    agent: code-reviewer
+    model: opus
+    objective: |
+      Adversarially review the consolidated architecture against the mission
+      metrics. Identify gaps, risks, and over-engineering. Propose concrete,
+      prioritized changes to the current graph-kit project — file-level deltas,
+      not abstractions. Block anything that does not advance the five metrics.
+    depend_on: [consolidate]
+    evidence: [review, proposed_changes]
+
+  # ── Phase 5: superpowers brainstorm → plan ─────────────────────────────────
+  brainstorm:
+    agent: software-architect
+    model: opus
+    objective: |
+      Superpowers brainstorm: given the reviewed architecture and proposed
+      changes, explore implementation approaches. Pick the simplest path that
+      hits the metrics. Challenge scope per YAGNI — delete before adding.
+    depend_on: [reviewer]
+    evidence: [approach]
+  planner:
+    agent: software-architect
+    model: opus
+    objective: |
+      Write a bite-sized implementation plan. Split into independent, testable
+      tasks (one per executor). Each task must have a verification check.
+    depend_on: [brainstorm]
+    evidence: [plan]
+
+  # ── Phase 6: parallel execution (fan-out) ──────────────────────────────────
+  executor-index:
+    agent: data-engineer
+    model: sonnet
+    objective: |
+      Execute the indexing task from the plan (hash indexing, speed, quality).
+      TDD — leave a runnable check proving the speed/quality win.
+    depend_on: [planner]
+    evidence: [code, tests]
+  executor-ui:
+    agent: ui-ux-researcher
+    model: sonnet
+    objective: |
+      Execute the graph-UI task — match codebase-memory-mcp's visualization
+      (clusters, traversal, interaction). TDD with a visual/structural check.
+    depend_on: [planner]
+    evidence: [code, tests]
+  executor-extract:
+    agent: code-reviewer
+    model: sonnet
+    objective: |
+      Execute the extraction task — adopt best of graphify + understand-anything
+      entity/edge extraction. TDD with a precision/recall check vs grep/glob.
+    depend_on: [planner]
+    evidence: [code, tests]
+  executor-retrieval:
+    agent: data-engineer
+    model: sonnet
+    objective: |
+      Execute the retrieval/traversal task — fast graph traversal, recall &
+      precision higher than grep/glob. TDD with a benchmark check.
+    depend_on: [planner]
+    evidence: [code, tests]
+
+  # ── Phase 7: verify on a loop until metrics beat grep/glob ─────────────────
+  verifier:
+    agent: qa-engineer
+    model: opus
+    objective: |
+      Measure the implementation against ALL five success metrics:
+      indexing speed, indexing quality, graph UI parity with CBM, retrieval/
+      traversal speed, and recall/precision vs grep/glob.
+      Run the benchmark checks each executor left behind. If any metric fails,
+      report which, why, and the specific task that must rerun. Loop until every
+      metric passes.
+    depend_on:
+      [executor-index, executor-ui, executor-extract, executor-retrieval]
+    loop:
+      enabled: true
+      stop_when: all five success metrics pass
+      max_rounds: 5
+    evidence: [metric_report]
+
+evidence:
+  required_keys: [metric_report]
+  format: markdown

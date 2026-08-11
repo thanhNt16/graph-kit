@@ -1,0 +1,357 @@
+:root {
+  --bg: #f6f8fa;
+  --surface: #ffffff;
+  --surface-2: #eef1f4;
+  --border: #d0d7de;
+  --text: #1f2328;
+  --text-dim: #57606a;
+  --accent: #0969da;
+  --focus: #0969da;
+  --danger: #cf222e;
+  --ok: #1a7f37;
+  --node-stroke: #6e7781;
+  --edge: #afb8c1;
+  --edge-emph: #0969da;
+  --dim: 0.25;
+  /* model tiers — never the only indicator (text badge used too) */
+  --tier-opus: #a371f7;
+  --tier-sonnet: #0969da;
+  --tier-haiku: #1a7f37;
+  --tier-fable: #d62728;
+  --tier-default: #6e7781;
+  --shadow: 0 4px 16px rgba(31, 35, 40, 0.12);
+  --transition: 160ms ease;
+}
+:root[data-theme="dark"] {
+  --bg: #0d1117;
+  --surface: #161b22;
+  --surface-2: #21262d;
+  --border: #30363d;
+  --text: #e6edf3;
+  --text-dim: #9198a1;
+  --accent: #58a6ff;
+  --focus: #58a6ff;
+  --danger: #f85149;
+  --ok: #3fb950;
+  --node-stroke: #8b949e;
+  --edge: #484f58;
+  --edge-emph: #58a6ff;
+  --tier-opus: #bc8cff;
+  --tier-sonnet: #58a6ff;
+  --tier-haiku: #3fb950;
+  --tier-fable: #f0883e;
+  --tier-default: #8b949e;
+  --shadow: 0 4px 16px rgba(1, 4, 9, 0.5);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0d1117;
+    --surface: #161b22;
+    --surface-2: #21262d;
+    --border: #30363d;
+    --text: #e6edf3;
+    --text-dim: #9198a1;
+    --accent: #58a6ff;
+    --focus: #58a6ff;
+    --danger: #f85149;
+    --ok: #3fb950;
+    --node-stroke: #8b949e;
+    --edge: #484f58;
+    --edge-emph: #58a6ff;
+    --tier-opus: #bc8cff;
+    --tier-sonnet: #58a6ff;
+    --tier-haiku: #3fb950;
+    --tier-fable: #f0883e;
+    --tier-default: #8b949e;
+    --shadow: 0 4px 16px rgba(1, 4, 9, 0.5);
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+html,
+body {
+  margin: 0;
+  height: 100%;
+}
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  font-size: 14px;
+}
+#app {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+}
+
+#toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  padding: 8px 12px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+.toolbar-title {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+.brand {
+  font-weight: 700;
+  color: var(--accent);
+}
+.graph-title {
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.graph-meta {
+  color: var(--text-dim);
+  font-size: 12px;
+  white-space: nowrap;
+}
+.toolbar-controls {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.ctrl {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.ctrl-label {
+  color: var(--text-dim);
+  font-size: 12px;
+}
+.toolbar-search {
+  flex: 1 1 220px;
+  min-width: 180px;
+}
+input[type="search"],
+select {
+  width: 100%;
+  padding: 4px 8px;
+  font: inherit;
+  color: var(--text);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+.btn {
+  font: inherit;
+  padding: 4px 10px;
+  color: var(--text);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  cursor: pointer;
+}
+.btn:hover {
+  border-color: var(--accent);
+}
+.btn:focus-visible,
+input[type="search"]:focus-visible,
+select:focus-visible,
+input[type="checkbox"]:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.banner {
+  padding: 8px 12px;
+  background: var(--danger);
+  color: #fff;
+  font-weight: 600;
+}
+.hidden {
+  display: none !important;
+}
+
+#stage {
+  position: relative;
+  flex: 1 1 auto;
+  display: flex;
+  overflow: hidden;
+}
+#canvas {
+  flex: 1 1 auto;
+  width: 100%;
+  height: 100%;
+  display: block;
+  touch-action: none;
+}
+
+/* nodes + edges */
+.node-group {
+  cursor: pointer;
+}
+.node-group:focus {
+  outline: none;
+}
+.node-group:focus .node-rect {
+  stroke: var(--focus);
+  stroke-width: 3;
+}
+.node-rect {
+  fill: var(--surface);
+  stroke: var(--node-stroke);
+  stroke-width: 1.5;
+  filter: drop-shadow(var(--shadow));
+  transition: stroke var(--transition), opacity var(--transition), fill var(--transition);
+}
+.node-text-id {
+  font-weight: 600;
+  fill: var(--text);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+.node-text-sub {
+  fill: var(--text-dim);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+.edge {
+  fill: none;
+  stroke: var(--edge);
+  stroke-width: 1.5;
+  transition: stroke var(--transition), opacity var(--transition);
+}
+.edge-arrow {
+  fill: var(--edge);
+  transition: fill var(--transition), opacity var(--transition);
+}
+
+/* dim unrelated when a path is emphasized */
+.dim .node-rect,
+.dim .node-text-id,
+.dim .node-text-sub,
+.dim .edge,
+.dim .edge-arrow {
+  opacity: var(--dim);
+}
+/* search/filter emphasis policy: non-matching nodes remain visible but dim,
+   and the mode is labeled emphasis rather than filtering (the design doc: dim
+   — never hide — when hiding would make remaining edges misleading). The
+   runtime tags non-matching groups with the .filtered class + data-visible="0". */
+.node-group.filtered .node-rect,
+.node-group.filtered .node-text-id,
+.node-group.filtered .node-text-sub {
+  opacity: var(--dim);
+}
+.node-group.filtered {
+  pointer-events: none;
+}
+.emph .node-rect {
+  stroke: var(--edge-emph);
+  stroke-width: 2.5;
+}
+.emph-conn .edge,
+.emph-conn .edge-arrow {
+  stroke: var(--edge-emph);
+  fill: var(--edge-emph);
+}
+
+/* drawer */
+.drawer {
+  flex: 0 0 340px;
+  max-width: 42vw;
+  min-width: 260px;
+  background: var(--surface);
+  border-left: 1px solid var(--border);
+  overflow-y: auto;
+  padding: 14px;
+  display: block;
+}
+.drawer-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+.drawer-title {
+  font-size: 16px;
+  font-weight: 700;
+  word-break: break-word;
+}
+.drawer-body h4 {
+  margin: 14px 0 4px;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-dim);
+}
+.field {
+  margin: 2px 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.badge {
+  display: inline-block;
+  padding: 1px 8px;
+  margin: 2px;
+  border-radius: 12px;
+  font-size: 12px;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+}
+.badge.tier {
+  font-weight: 700;
+  border-width: 2px;
+}
+.link {
+  color: var(--accent);
+  cursor: pointer;
+  text-decoration: underline;
+}
+.kv {
+  margin: 2px 0;
+}
+.kv kbd {
+  font-weight: 600;
+  color: var(--text-dim);
+}
+
+/* error screen */
+.error-screen {
+  margin: 40px auto;
+  max-width: 560px;
+  padding: 24px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.error-screen h1 {
+  margin-top: 0;
+  font-size: 18px;
+}
+.error-path {
+  color: var(--text-dim);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+@media (max-width: 720px) {
+  .drawer {
+    position: absolute;
+    inset: 0 0 0 auto;
+    width: 100%;
+    max-width: 100%;
+    z-index: 10;
+    box-shadow: var(--shadow);
+  }
+}
+
+/* reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .node-rect,
+  .edge,
+  .edge-arrow {
+    transition: none;
+  }
+}
