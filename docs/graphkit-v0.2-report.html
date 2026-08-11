@@ -1,0 +1,457 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GraphKit 0.2 — Graph Engineering Kit for Claude Code & Cursor</title>
+<style>
+  :root {
+    --bg: #0a0e14; --bg-elev: #0d1117; --surface: #131822;
+    --border: #1c2333; --border-bright: #2a3447;
+    --text: #e6edf3; --text-dim: #8b949e; --text-muted: #6e7681;
+    --opus: #a371f7; --sonnet: #58a6ff; --haiku: #3fb950; --fable: #f0883e;
+    --diamond: #2ea043; --classify: #58a6ff; --adversarial: #f85149;
+    --loop: #d29922; --generate: #79c0ff; --tournament: #bc8cff;
+    --memory: #2ea043; --eval: #f85149; --gold: #d29922;
+    --bridge: #39d0d8; --custom: #d2a8ff; --flow: #f0883e; --cursor: #56d3dd;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family:'IBM Plex Sans',-apple-system,system-ui,sans-serif; background:var(--bg); color:var(--text); line-height:1.65; -webkit-font-smoothing:antialiased; }
+  .mono { font-family:'IBM Plex Mono','SF Mono',monospace; }
+  code { font-family:'IBM Plex Mono',monospace; font-size:0.88em; background:var(--surface); border:1px solid var(--border); border-radius:4px; padding:0.1em 0.35em; color:var(--fable); }
+
+  .hero { padding:5.5rem 2rem 4rem; text-align:center;
+    background: radial-gradient(ellipse 80% 60% at 50% 0%, rgba(163,113,247,0.09), transparent),
+                radial-gradient(ellipse 50% 40% at 78% 15%, rgba(57,208,216,0.07), transparent),
+                radial-gradient(ellipse 40% 30% at 22% 20%, rgba(46,160,67,0.05), transparent);
+    border-bottom:1px solid var(--border); }
+  .hero-badge { display:inline-block; padding:0.3rem 0.9rem; border:1px solid var(--border-bright); border-radius:20px; font-size:0.78rem; color:var(--sonnet); font-family:'IBM Plex Mono',monospace; margin-bottom:1.3rem; background:var(--surface); }
+  .hero h1 { font-size:clamp(2.3rem,5.5vw,3.8rem); font-weight:700; letter-spacing:-0.03em;
+    background:linear-gradient(135deg,#fff 25%,var(--sonnet) 45%,var(--bridge) 70%,var(--memory) 100%);
+    -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text; margin-bottom:0.5rem; }
+  .hero-tag { font-size:1.12rem; color:var(--text-dim); max-width:700px; margin:0 auto 2rem; }
+  .hero-stats { display:flex; justify-content:center; gap:2.4rem; flex-wrap:wrap; font-variant-numeric:tabular-nums; }
+  .stat-num { font-size:1.8rem; font-weight:700; font-family:'IBM Plex Mono',monospace; }
+  .stat-label { font-size:0.72rem; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.08em; }
+
+  .section { max-width:1000px; margin:0 auto; padding:4rem 2rem; }
+  .section-label { font-family:'IBM Plex Mono',monospace; font-size:0.76rem; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.12em; margin-bottom:0.5rem; }
+  .section h2 { font-size:1.75rem; font-weight:700; letter-spacing:-0.02em; margin-bottom:1rem; text-wrap:balance; }
+  .section > p { color:var(--text-dim); margin-bottom:1rem; max-width:740px; }
+  .badge-new { display:inline-block; padding:0.1rem 0.5rem; border-radius:4px; font-size:0.68rem; font-family:'IBM Plex Mono',monospace; font-weight:600; background:rgba(57,208,216,0.15); color:var(--bridge); vertical-align:middle; margin-left:0.4rem; }
+
+  .code-block { background:var(--bg-elev); border:1px solid var(--border); border-radius:12px; overflow:hidden; }
+  .code-header { padding:0.6rem 1rem; border-bottom:1px solid var(--border); font-family:'IBM Plex Mono',monospace; font-size:0.76rem; color:var(--text-muted); display:flex; align-items:center; gap:0.5rem; }
+  .code-dot { width:10px; height:10px; border-radius:50%; }
+  .code-body { padding:1rem 1.2rem; font-family:'IBM Plex Mono',monospace; font-size:0.8rem; line-height:1.8; overflow-x:auto; white-space:pre; color:var(--text); }
+  .kw{color:var(--opus);} .str{color:var(--haiku);} .cmt{color:var(--text-muted);} .num{color:var(--fable);} .field{color:var(--sonnet);}
+
+  .install-grid { display:grid; grid-template-columns:1fr 1fr; gap:1.2rem; margin:1.5rem 0; }
+  @media(max-width:768px){ .install-grid{ grid-template-columns:1fr; } }
+
+  .arch { display:flex; flex-direction:column; gap:1rem; margin:2rem 0; }
+  .arch-layer { background:var(--bg-elev); border:1px solid var(--border-bright); border-radius:12px; padding:1.4rem; position:relative; }
+  .arch-layer-tag { position:absolute; top:-10px; left:1.5rem; background:var(--bg); padding:0 0.6rem; font-family:'IBM Plex Mono',monospace; font-size:0.72rem; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.1em; }
+  .arch-layer-title { font-size:1.05rem; font-weight:600; margin-bottom:0.3rem; }
+  .arch-layer-desc { font-size:0.88rem; color:var(--text-dim); margin-bottom:0.7rem; }
+  .arch-flow { display:flex; align-items:center; gap:0.7rem; flex-wrap:wrap; font-family:'IBM Plex Mono',monospace; font-size:0.8rem; }
+  .arch-pill { padding:0.3rem 0.7rem; border:1px solid var(--border-bright); border-radius:6px; background:var(--surface); white-space:nowrap; }
+  .arch-arrow { color:var(--text-muted); }
+  .arch-arrow-down { text-align:center; color:var(--text-muted); font-size:1.3rem; line-height:1; }
+
+  .cmp-table { width:100%; border-collapse:collapse; margin:1.5rem 0; font-size:0.85rem; }
+  .cmp-table th { text-align:left; background:var(--surface); color:var(--sonnet); padding:0.6rem 0.9rem; border-bottom:2px solid var(--border); font-size:0.8rem; }
+  .cmp-table td { padding:0.55rem 0.9rem; border-bottom:1px solid var(--border); color:var(--text-dim); }
+  .cmp-table td:first-child { color:var(--text); font-family:'IBM Plex Mono',monospace; font-size:0.8rem; }
+  .cmp-table th:nth-child(2){ color:var(--sonnet); }
+  .cmp-table th:nth-child(3){ color:var(--haiku); }
+
+  .topo-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(290px,1fr)); gap:1.1rem; margin:2rem 0; }
+  .topo-card { background:var(--bg-elev); border:1px solid var(--border); border-radius:14px; padding:1.3rem; transition:transform 0.15s,border-color 0.2s; overflow:hidden; }
+  .topo-card:hover { transform:translateY(-3px); border-color:var(--border-bright); }
+  .topo-card-header { display:flex; align-items:center; gap:0.6rem; margin-bottom:0.7rem; }
+  .topo-dot { width:10px; height:10px; border-radius:50%; flex-shrink:0; }
+  .topo-name { font-size:0.98rem; font-weight:600; }
+  .topo-shape { font-size:0.7rem; color:var(--text-muted); font-family:'IBM Plex Mono',monospace; margin-left:auto; }
+  .topo-diagram { height:100px; display:flex; align-items:center; justify-content:center; margin:0.4rem 0 0.7rem; }
+  .topo-desc { font-size:0.82rem; color:var(--text-dim); line-height:1.5; }
+  .topo-use { font-size:0.72rem; color:var(--text-muted); margin-top:0.4rem; font-family:'IBM Plex Mono',monospace; }
+  .svg-line { stroke:var(--border-bright); stroke-width:1.5; fill:none; }
+
+  .bridge-flow { display:flex; align-items:center; justify-content:center; gap:0.5rem; flex-wrap:wrap; margin:1.5rem 0; padding:1.4rem; background:var(--bg-elev); border:1px solid var(--border); border-radius:12px; font-family:'IBM Plex Mono',monospace; font-size:0.78rem; }
+  .flow-node { padding:0.45rem 0.8rem; border:1px solid var(--border-bright); border-radius:8px; background:var(--surface); white-space:nowrap; }
+  .flow-arrow { color:var(--text-muted); }
+
+  .bridge-grid { display:grid; grid-template-columns:1.1fr 0.9fr; gap:1.5rem; margin:2rem 0; }
+  @media(max-width:768px){ .bridge-grid{ grid-template-columns:1fr; } }
+  .subsys { background:var(--bg-elev); border:1px solid var(--border-bright); border-radius:14px; padding:1.5rem; }
+  .subsys-tag { display:inline-block; padding:0.2rem 0.6rem; border-radius:5px; font-size:0.72rem; font-family:'IBM Plex Mono',monospace; font-weight:600; margin-bottom:0.6rem; }
+  .subsys h3 { font-size:1.1rem; margin-bottom:0.4rem; }
+  .subsys p { font-size:0.85rem; color:var(--text-dim); margin-bottom:0.7rem; }
+
+  .lifecycle { display:grid; grid-template-columns:repeat(auto-fill,minmax(195px,1fr)); gap:0.7rem; margin:1.5rem 0; }
+  .lc-step { background:var(--bg-elev); border:1px solid var(--border); border-radius:10px; padding:0.75rem 1rem; }
+  .lc-step .name { font-family:'IBM Plex Mono',monospace; font-size:0.8rem; color:var(--sonnet); margin-bottom:0.15rem; }
+  .lc-step .desc { font-size:0.73rem; color:var(--text-dim); }
+  .lc-step.new { border-color:var(--bridge); }
+  .lc-step.new .name { color:var(--bridge); }
+
+  .agent-row { display:flex; align-items:center; gap:0.8rem; padding:0.6rem 1rem; border:1px solid var(--border); border-radius:10px; background:var(--bg-elev); margin-bottom:0.45rem; }
+  .agent-emoji { font-size:1.25rem; }
+  .agent-info { flex:1; }
+  .agent-name { font-weight:600; font-size:0.88rem; }
+  .agent-roles { font-size:0.72rem; color:var(--text-muted); font-family:'IBM Plex Mono',monospace; }
+  .agent-tier { padding:0.12rem 0.45rem; border-radius:5px; font-size:0.7rem; font-family:'IBM Plex Mono',monospace; font-weight:600; }
+
+  .stats-banner { display:grid; grid-template-columns:repeat(auto-fit,minmax(135px,1fr)); gap:1px; background:var(--border); border:1px solid var(--border); border-radius:14px; overflow:hidden; margin:2rem 0; font-variant-numeric:tabular-nums; }
+  .stat-cell { background:var(--bg-elev); padding:1.3rem 1rem; text-align:center; }
+  .stat-cell-num { font-size:1.5rem; font-weight:700; font-family:'IBM Plex Mono',monospace; color:var(--sonnet); }
+  .stat-cell-label { font-size:0.68rem; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.08em; margin-top:0.3rem; }
+
+  .ac-table { width:100%; border-collapse:collapse; margin:1.5rem 0; font-size:0.82rem; font-variant-numeric:tabular-nums; }
+  .ac-table th { text-align:left; background:var(--surface); color:var(--sonnet); padding:0.5rem 0.8rem; border-bottom:2px solid var(--border); font-size:0.78rem; }
+  .ac-table td { padding:0.45rem 0.8rem; border-bottom:1px solid var(--border); }
+  .ac-table .pass { color:var(--haiku); font-family:'IBM Plex Mono',monospace; font-weight:600; white-space:nowrap; }
+  .ac-table .caveat { color:var(--gold); font-family:'IBM Plex Mono',monospace; font-size:0.74rem; white-space:nowrap; }
+
+  .footer { text-align:center; padding:3rem 2rem; border-top:1px solid var(--border); color:var(--text-muted); font-size:0.8rem; }
+</style>
+</head>
+<body>
+
+<div class="hero">
+  <div class="hero-badge">@graphkit/gk 0.2.0 · graph engineering kit</div>
+  <h1>GraphKit</h1>
+  <p class="hero-tag">Define graph-structured agent workflows as YAML. Compile to Claude Code dynamic workflows — or dispatch subagents directly. Eleven topologies, two runtimes, Cursor support, and a live bridge to the codebase-memory graph. Per-node model tiering. Evidence-based gates. Zero custom runtime.</p>
+  <div class="hero-stats">
+    <div class="stat"><div class="stat-num">11</div><div class="stat-label">Topologies</div></div>
+    <div class="stat"><div class="stat-num">2</div><div class="stat-label">Runtimes</div></div>
+    <div class="stat"><div class="stat-num">11</div><div class="stat-label">Skills</div></div>
+    <div class="stat"><div class="stat-num">8</div><div class="stat-label">Agents</div></div>
+    <div class="stat"><div class="stat-num">138</div><div class="stat-label">Tests</div></div>
+  </div>
+</div>
+
+<div class="section">
+  <div class="section-label">Quick Start</div>
+  <h2>Install from Source</h2>
+  <p>GraphKit isn't on npm yet. Clone, build, and install as a global <code>gk</code> command. Requires <a href="https://bun.sh" style="color:var(--sonnet)">Bun</a> and <a href="https://docs.claude.com/en/docs/claude-code" style="color:var(--sonnet)">Claude Code</a> (or Cursor).</p>
+
+  <div class="code-block">
+    <div class="code-header"><div class="code-dot" style="background:#f85149"></div><div class="code-dot" style="background:#d29922"></div><div class="code-dot" style="background:#3fb950"></div> 1. Clone &amp; build</div>
+    <div class="code-body"><span class="cmt"># Clone the repo</span>
+git clone https://github.com/user/graph-kit.git
+cd graph-kit/apps/gk
+
+<span class="cmt"># Install deps + build</span>
+bun install
+bun run build                <span class="cmt"># → dist/index.js (executable, with shebang)</span>
+
+<span class="cmt"># Run the full gate to verify</span>
+bun run ci:local             <span class="cmt"># → typecheck + lint + build + 138 tests + cbm:parity</span></div>
+  </div>
+
+  <div class="install-grid">
+    <div class="code-block">
+      <div class="code-header"><div class="code-dot" style="background:#f85149"></div><div class="code-dot" style="background:#d29922"></div><div class="code-dot" style="background:#3fb950"></div> 2a. Install globally (npm link)</div>
+      <div class="code-body"><span class="cmt"># From the apps/gk directory:</span>
+npm link
+
+<span class="cmt"># If you have a conflicting 'gk' alias</span>
+<span class="kw">unalias</span> gk 2&gt;/dev/null
+
+<span class="cmt"># Verify — should show GraphKit help:</span>
+gk --help
+gk graph list --json</div>
+    </div>
+    <div class="code-block">
+      <div class="code-header"><div class="code-dot" style="background:#f85149"></div><div class="code-dot" style="background:#d29922"></div><div class="code-dot" style="background:#3fb950"></div> 2b. Or: standalone binary</div>
+      <div class="code-body"><span class="cmt"># Build a standalone binary (no runtime needed):</span>
+bun run build:bin            <span class="cmt"># → dist/gk (self-contained)</span>
+
+<span class="cmt"># Install to your PATH:</span>
+cp dist/gk /usr/local/bin/gk
+chmod +x /usr/local/bin/gk
+
+<span class="cmt"># Verify:</span>
+gk --help
+gk graph list --json</div>
+    </div>
+  </div>
+
+  <div class="code-block" style="margin-top:1rem">
+    <div class="code-header"><div class="code-dot" style="background:#f85149"></div><div class="code-dot" style="background:#d29922"></div><div class="code-dot" style="background:#3fb950"></div> 3. Install the kit + use it</div>
+    <div class="code-body"><span class="cmt"># Install the kit into your project (agents, skills, hooks, rules):</span>
+cd /path/to/your-project
+gk init                                  <span class="cmt"># → .claude/  (default target)</span>
+gk init --target cursor                  <span class="cmt"># → .cursor/  (Cursor IDE)</span>
+
+<span class="cmt"># Or scaffold a new project from scratch:</span>
+gk new --dir my-project
+
+<span class="cmt"># Define, validate, compile a graph:</span>
+gk validate graph.yaml --json
+gk compile graph.yaml --json             <span class="cmt"># → .claude/workflows/{name}.workflow.js</span>
+gk graph inspect diamond                 <span class="cmt"># → see topology config keys</span>
+
+<span class="cmt"># Inside a session, skills auto-discover from .claude/skills/:</span>
+<span class="cmt"># /gk-init-graph  /gk-validate  /gk-compile  /gk-run  /gk-execute</span></div>
+  </div>
+</div>
+
+<div class="section">
+  <div class="section-label">Architecture</div>
+  <h2>Three Layers, Clean Boundary</h2>
+  <p>gk CLI validates, compiles, and — new in 0.2 — <em>bridges</em>. The host executes. The kit template connects them. No custom state machine: the host's native primitives own the runtime.</p>
+  <div class="arch">
+    <div class="arch-layer">
+      <div class="arch-layer-tag">Layer 1 — Kit Template</div>
+      <div class="arch-layer-title">📦 .claude/ or .cursor/ directory</div>
+      <div class="arch-layer-desc">Installed by <code>gk init</code>. Agents, skills, hooks, rules, schemas, topology templates — in the target host's native format.</div>
+      <div class="arch-flow"><span class="arch-pill">8 agents</span><span class="arch-arrow">·</span><span class="arch-pill">11 skills</span><span class="arch-arrow">·</span><span class="arch-pill">4 hooks</span><span class="arch-arrow">·</span><span class="arch-pill">3 rules</span><span class="arch-arrow">·</span><span class="arch-pill">11 templates</span></div>
+    </div>
+    <div class="arch-arrow-down">↓</div>
+    <div class="arch-layer">
+      <div class="arch-layer-tag">Layer 2 — gk CLI</div>
+      <div class="arch-layer-title">⚙️ Compiler + Installer + Bridge</div>
+      <div class="arch-layer-desc">Validates graph YAML against schemas + topology contracts. Compiles to self-contained <code>.workflow.js</code>. Bridges to CBM MCP for indexing &amp; code-graph queries. Never invokes a model.</div>
+      <div class="arch-flow"><span class="arch-pill">gk init</span><span class="arch-arrow">→</span><span class="arch-pill">gk validate</span><span class="arch-arrow">→</span><span class="arch-pill">gk compile</span><span class="arch-arrow">→</span><span class="arch-pill" style="border-color:var(--bridge);color:var(--bridge)">gk graph index|search|trace|query</span></div>
+    </div>
+    <div class="arch-arrow-down">↓</div>
+    <div class="arch-layer">
+      <div class="arch-layer-tag">Layer 3 — Host Runtime</div>
+      <div class="arch-layer-title">▶️ Workflow Tool &nbsp;/&nbsp; Native Subagents</div>
+      <div class="arch-layer-desc">Two execution paths. Claude Code's Workflow tool runs the compiled <code>.workflow.js</code> via <code>agent()</code>, <code>parallel()</code>, <code>pipeline()</code>. Or <code>/gk:execute</code> dispatches host subagents directly, wave by wave — works in both Claude Code and Cursor.</div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <div class="section-label">Two Runtimes <span class="badge-new">0.2</span></div>
+  <h2>Compile-and-Run, or Dispatch Directly</h2>
+  <p>Same graph, two execution paths. <code>/gk:run</code> is the opaque high-scale path inside Claude Code. <code>/gk:execute</code> is the transparent path — you watch each subagent spawn, debug failures interactively, and skip compilation entirely. Cursor has no Workflow tool, so <code>/gk:execute</code> is its sole path.</p>
+  <table class="cmp-table">
+    <tr><th></th><th>/gk:run</th><th>/gk:execute</th></tr>
+    <tr><td>Host</td><td>Claude Code only</td><td>Claude Code + Cursor</td></tr>
+    <tr><td>Compile step</td><td>Required (gk compile)</td><td>Not needed — reads waves</td></tr>
+    <tr><td>Visibility</td><td>Opaque background job</td><td>Full — every agent visible</td></tr>
+    <tr><td>Debugging</td><td>Hard</td><td>Interactive, adaptive</td></tr>
+    <tr><td>Best for</td><td>100+ node graphs</td><td>&lt;20 node graphs</td></tr>
+    <tr><td>Speed</td><td colspan="2" style="text-align:center;color:var(--text-muted)">Same — parallel within waves</td></tr>
+  </table>
+</div>
+
+<div class="section">
+  <div class="section-label">CBM Bridge <span class="badge-new">0.2</span></div>
+  <h2>Code-Graph Queries Without a Graph DB</h2>
+  <p>gk owns no graph database. It bridges to <a href="https://github.com/" style="color:var(--bridge)">codebase-memory-mcp</a> (CBM) — a live MCP server with an LSP-backed indexer (11 languages), SQLite + Cypher, and Leiden community detection. Four <code>gk graph</code> subcommands wrap CBM's tools so topology agents can look up code structure mid-run.</p>
+  <div class="bridge-flow">
+    <span class="flow-node">gk graph &lt;cmd&gt;</span><span class="flow-arrow">→</span>
+    <span class="flow-node" style="border-color:var(--opus);color:var(--opus)">stdio JSON-RPC</span><span class="flow-arrow">→</span>
+    <span class="flow-node" style="border-color:var(--bridge);color:var(--bridge)">CBM MCP server</span><span class="flow-arrow">→</span>
+    <span class="flow-node">SQLite + LSP + Cypher</span><span class="flow-arrow">→</span>
+    <span class="flow-node" style="border-color:var(--haiku);color:var(--haiku)">ranked hits</span>
+  </div>
+  <div class="bridge-grid">
+    <div class="code-block" style="margin:0">
+      <div class="code-header"><div class="code-dot" style="background:#f85149"></div><div class="code-dot" style="background:#d29922"></div><div class="code-dot" style="background:#3fb950"></div> Four subcommands</div>
+      <div class="code-body"><span class="cmt"># Index a repo into the CBM graph:</span>
+gk graph index /path/to/repo --mode fast
+
+<span class="cmt"># Natural-language code search (BM25 + semantic):</span>
+gk graph search <span class="str">"graph validation"</span>
+
+<span class="cmt"># Caller/callee trace, 3-hop:</span>
+gk graph trace validateGraph
+
+<span class="cmt"># Raw Cypher against the graph:</span>
+gk graph query <span class="str">"MATCH (f:Function) RETURN f.name LIMIT 5"</span>
+
+<span class="cmt"># JSON envelope on every call:</span>
+<span class="cmt"># { "status":"ok", "data":{...} }  |  { "status":"fail", "error":{...} }</span></div>
+    </div>
+    <div class="subsys" style="margin:0">
+      <div class="subsys-tag" style="background:rgba(57,208,216,0.15);color:var(--bridge)">FAITHFUL CONTRACT</div>
+      <p style="font-size:0.82rem;color:var(--text-dim)">Return shapes mirror CBM's live output exactly — captured from the running server, not invented. Versioned at <code>CBM_CONTRACT_VERSION = "2"</code>.</p>
+      <div class="code-block" style="margin:0.5rem 0"><div class="code-body">search → {total, search_mode, results:[{
+  <span class="field">name</span>, <span class="field">qualified_name</span>, <span class="field">label</span>,
+  <span class="field">file_path</span>, <span class="field">start_line</span>, <span class="field">rank</span>}], has_more}
+trace  → {function, direction, callers:[...], callees:[...]}
+query  → {columns:string[], rows:unknown[][], total}</div></div>
+    </div>
+  </div>
+  <div class="subsys" style="margin-top:1rem;border-color:var(--bridge)">
+    <div class="subsys-tag" style="background:rgba(57,208,216,0.15);color:var(--bridge)">WHY BRIDGE, NOT BUILD</div>
+    <p style="font-size:0.85rem;color:var(--text-dim)">0.2 originally aimed to ship a native TS indexer (≈4.3k LOC) to beat CBM + grep. Evidence killed it: a tree-sitter-only indexer (no cross-file LSP) produced <strong style="color:var(--text)">4,477 edges</strong> vs CBM's <strong style="color:var(--text)">43,589</strong> — a <strong style="color:var(--adversarial)">9.7×</strong> deficit. CBM was already live and hitting all five target metrics on graph-kit. So ~400 LOC of bridge replaced 4.3k LOC of re-implementation.</p>
+    <div class="code-block" style="margin-top:0.6rem"><div class="code-body"><span class="cmt"># Parity harness — gate in ci:local (bun run cbm:parity)</span>
+<span class="cmt"># decision rule: gk-CLI latency ≤ 1.5× CBM-direct</span>
+CBM direct  63.2ms   ·   CBM-via-MCP  525.6ms   ·   <span class="str">gk CLI  17.5ms</span>   →   c/a = <span class="num">0.28×</span>   <span class="str">PASS</span></div></div>
+  </div>
+</div>
+
+<div class="section">
+  <div class="section-label">Graph Topologies</div>
+  <h2>Eleven Canonical Shapes</h2>
+  <p>Seven base topologies, plus <code>custom</code> for arbitrary DAGs and three flow presets (<code>sdd</code>, <code>superpowers</code>, <code>research-and-build</code>) built on it. They compose — a diamond's fan-out can embed an adversarial-verification subgraph, or wrap the whole thing in a memory-augmented layer.</p>
+  <div class="topo-grid">
+    <div class="topo-card" style="border-left:3px solid var(--diamond)"><div class="topo-card-header"><div class="topo-dot" style="background:var(--diamond)"></div><div class="topo-name">Diamond</div><div class="topo-shape">fan-out → reduce → synthesize</div></div><div class="topo-diagram"><svg width="150" height="90" viewBox="0 0 150 90"><line class="svg-line" x1="75" y1="12" x2="28" y2="45"/><line class="svg-line" x1="75" y1="12" x2="75" y2="45"/><line class="svg-line" x1="75" y1="12" x2="122" y2="45"/><line class="svg-line" x1="28" y1="45" x2="75" y2="80"/><line class="svg-line" x1="75" y1="45" x2="75" y2="80"/><line class="svg-line" x1="122" y1="45" x2="75" y2="80"/><rect x="62" y="4" width="26" height="16" rx="3" fill="none" stroke="var(--diamond)"/><rect x="15" y="37" width="26" height="16" rx="3" fill="none" stroke="var(--sonnet)"/><rect x="62" y="37" width="26" height="16" rx="3" fill="none" stroke="var(--sonnet)"/><rect x="109" y="37" width="26" height="16" rx="3" fill="none" stroke="var(--sonnet)"/><rect x="62" y="72" width="26" height="16" rx="3" fill="none" stroke="var(--opus)"/></svg></div><div class="topo-desc">Split work to N parallel workers, reduce with deterministic code, synthesize with one high-tier agent.</div><div class="topo-use">→ code review · research · migration</div></div>
+    <div class="topo-card" style="border-left:3px solid var(--classify)"><div class="topo-card-header"><div class="topo-dot" style="background:var(--classify)"></div><div class="topo-name">Classify-and-Act</div><div class="topo-shape">route 1 → 1 handler</div></div><div class="topo-diagram"><svg width="150" height="90" viewBox="0 0 150 90"><line class="svg-line" x1="75" y1="18" x2="22" y2="68"/><line class="svg-line" x1="75" y1="18" x2="60" y2="68"/><line class="svg-line" x1="75" y1="18" x2="98" y2="68"/><line class="svg-line" x1="75" y1="18" x2="135" y2="68"/><rect x="58" y="6" width="34" height="20" rx="3" fill="none" stroke="var(--opus)"/><rect x="6" y="65" width="32" height="18" rx="3" fill="none" stroke="var(--sonnet)"/><rect x="44" y="65" width="32" height="18" rx="3" fill="none" stroke="var(--sonnet)"/><rect x="82" y="65" width="32" height="18" rx="3" fill="none" stroke="var(--sonnet)"/><rect x="120" y="65" width="24" height="18" rx="3" fill="none" stroke="var(--haiku)"/></svg></div><div class="topo-desc">Classifier inspects input, routes to exactly one handler. Fallback for unmatched inputs.</div><div class="topo-use">→ triage · routing · escalation</div></div>
+    <div class="topo-card" style="border-left:3px solid var(--adversarial)"><div class="topo-card-header"><div class="topo-dot" style="background:var(--adversarial)"></div><div class="topo-name">Adversarial Verification</div><div class="topo-shape">produce → refute → adjudicate</div></div><div class="topo-diagram"><svg width="150" height="90" viewBox="0 0 150 90"><line class="svg-line" x1="75" y1="12" x2="28" y2="45"/><line class="svg-line" x1="75" y1="12" x2="75" y2="45"/><line class="svg-line" x1="75" y1="12" x2="122" y2="45"/><line class="svg-line" x1="28" y1="45" x2="75" y2="80"/><line class="svg-line" x1="75" y1="45" x2="75" y2="80"/><line class="svg-line" x1="122" y1="45" x2="75" y2="80"/><rect x="58" y="4" width="34" height="16" rx="3" fill="none" stroke="var(--adversarial)"/><rect x="12" y="37" width="26" height="16" rx="3" fill="none" stroke="var(--sonnet)" stroke-dasharray="3,2"/><rect x="62" y="37" width="26" height="16" rx="3" fill="none" stroke="var(--sonnet)" stroke-dasharray="3,2"/><rect x="112" y="37" width="26" height="16" rx="3" fill="none" stroke="var(--sonnet)" stroke-dasharray="3,2"/><rect x="58" y="72" width="34" height="16" rx="3" fill="none" stroke="var(--opus)"/></svg></div><div class="topo-desc">Producer emits items. Independent refuters with fresh context challenge each. Survivors pass threshold.</div><div class="topo-use">→ security audit · fact-check</div></div>
+    <div class="topo-card" style="border-left:3px solid var(--loop)"><div class="topo-card-header"><div class="topo-dot" style="background:var(--loop)"></div><div class="topo-name">Loop Until Done</div><div class="topo-shape">scout → work → dedup → repeat</div></div><div class="topo-diagram"><svg width="150" height="90" viewBox="0 0 150 90"><path class="svg-line" d="M 75 18 Q 130 18 130 45 Q 130 72 75 72" stroke-dasharray="4,3"/><rect x="52" y="8" width="46" height="18" rx="3" fill="none" stroke="var(--opus)"/><rect x="18" y="38" width="32" height="14" rx="3" fill="none" stroke="var(--sonnet)"/><rect x="58" y="38" width="32" height="14" rx="3" fill="none" stroke="var(--sonnet)"/><rect x="98" y="38" width="32" height="14" rx="3" fill="none" stroke="var(--sonnet)"/><text x="75" y="68" text-anchor="middle" fill="var(--loop)" font-size="7" font-family="monospace">stop when dry</text></svg></div><div class="topo-desc">Scout discovers work, workers process, dedup against seen. Loop until K consecutive empty rounds.</div><div class="topo-use">→ discovery · bug sweep</div></div>
+    <div class="topo-card" style="border-left:3px solid var(--generate)"><div class="topo-card-header"><div class="topo-dot" style="background:var(--generate)"></div><div class="topo-name">Generate-and-Filter</div><div class="topo-shape">generate N → keep best K</div></div><div class="topo-diagram"><svg width="150" height="90" viewBox="0 0 150 90"><line class="svg-line" x1="75" y1="18" x2="75" y2="42"/><line class="svg-line" x1="75" y1="50" x2="75" y2="72"/><rect x="52" y="8" width="46" height="18" rx="3" fill="none" stroke="var(--sonnet)"/><rect x="56" y="40" width="38" height="14" rx="7" fill="none" stroke="var(--haiku)"/><rect x="46" y="70" width="28" height="16" rx="3" fill="none" stroke="var(--opus)"/><rect x="78" y="70" width="28" height="16" rx="3" fill="none" stroke="var(--opus)"/></svg></div><div class="topo-desc">Multiple generators propose candidates. Rubric scores in one deterministic pass. Keep top-K.</div><div class="topo-use">→ naming · ideation · design</div></div>
+    <div class="topo-card" style="border-left:3px solid var(--tournament)"><div class="topo-card-header"><div class="topo-dot" style="background:var(--tournament)"></div><div class="topo-name">Tournament</div><div class="topo-shape">pairwise elimination</div></div><div class="topo-diagram"><svg width="150" height="90" viewBox="0 0 150 90"><line class="svg-line" x1="22" y1="18" x2="55" y2="45"/><line class="svg-line" x1="55" y1="18" x2="55" y2="45"/><line class="svg-line" x1="95" y1="18" x2="95" y2="45"/><line class="svg-line" x1="132" y1="18" x2="95" y2="45"/><line class="svg-line" x1="55" y1="55" x2="75" y2="78"/><line class="svg-line" x1="95" y1="55" x2="75" y2="78"/><rect x="8" y="8" width="28" height="14" rx="3" fill="none" stroke="var(--sonnet)"/><rect x="41" y="8" width="28" height="14" rx="3" fill="none" stroke="var(--sonnet)"/><rect x="81" y="8" width="28" height="14" rx="3" fill="none" stroke="var(--sonnet)"/><rect x="114" y="8" width="28" height="14" rx="3" fill="none" stroke="var(--sonnet)"/><rect x="41" y="45" width="28" height="14" rx="3" fill="none" stroke="var(--sonnet)"/><rect x="81" y="45" width="28" height="14" rx="3" fill="none" stroke="var(--sonnet)"/><rect x="58" y="74" width="34" height="14" rx="3" fill="none" stroke="var(--opus)"/></svg></div><div class="topo-desc">Candidates compete in pairwise judged rounds. One champion emerges.</div><div class="topo-use">→ ranking · eval scoring</div></div>
+    <div class="topo-card" style="border-left:3px solid var(--memory)"><div class="topo-card-header"><div class="topo-dot" style="background:var(--memory)"></div><div class="topo-name">Memory-Augmented</div><div class="topo-shape">wrapper: any topology + curator</div></div><div class="topo-diagram"><svg width="150" height="90" viewBox="0 0 150 90"><rect x="10" y="6" width="130" height="78" rx="6" fill="none" stroke="var(--memory)" stroke-dasharray="5,3" opacity="0.5"/><rect x="30" y="20" width="40" height="14" rx="3" fill="none" stroke="var(--sonnet)"/><rect x="80" y="20" width="40" height="14" rx="3" fill="none" stroke="var(--sonnet)"/><line class="svg-line" x1="50" y1="34" x2="50" y2="52"/><line class="svg-line" x1="100" y1="34" x2="100" y2="52"/><rect x="28" y="52" width="44" height="14" rx="3" fill="none" stroke="var(--opus)"/><rect x="80" y="52" width="44" height="14" rx="3" fill="none" stroke="var(--memory)"/><text x="102" y="63" text-anchor="middle" fill="var(--memory)" font-size="7" font-family="monospace">curator</text><text x="75" y="82" text-anchor="middle" fill="var(--text-muted)" font-size="6" font-family="monospace">wraps diamond inside</text></svg></div><div class="topo-desc">Wraps any base topology. A Memory Curator agent interleaves at cadence — extract, consolidate, expire, inject-or-null.</div><div class="topo-use">→ long-running graphs · cross-run memory</div></div>
+    <div class="topo-card" style="border-left:3px solid var(--custom)"><div class="topo-card-header"><div class="topo-dot" style="background:var(--custom)"></div><div class="topo-name">Custom</div><div class="topo-shape">arbitrary DAG via depend_on</div></div><div class="topo-diagram"><svg width="150" height="90" viewBox="0 0 150 90"><line class="svg-line" x1="40" y1="20" x2="75" y2="45"/><line class="svg-line" x1="110" y1="20" x2="75" y2="45"/><line class="svg-line" x1="75" y1="45" x2="30" y2="75"/><line class="svg-line" x1="75" y1="45" x2="75" y2="75"/><line class="svg-line" x1="75" y1="45" x2="120" y2="75"/><line class="svg-line" x1="40" y1="20" x2="110" y2="20" stroke-dasharray="2,2"/><rect x="26" y="12" width="28" height="16" rx="3" fill="none" stroke="var(--opus)"/><rect x="96" y="12" width="28" height="16" rx="3" fill="none" stroke="var(--sonnet)"/><rect x="61" y="37" width="28" height="16" rx="3" fill="none" stroke="var(--custom)"/><rect x="16" y="67" width="28" height="16" rx="3" fill="none" stroke="var(--sonnet)"/><rect x="61" y="67" width="28" height="16" rx="3" fill="none" stroke="var(--sonnet)"/><rect x="106" y="67" width="28" height="16" rx="3" fill="none" stroke="var(--haiku)"/></svg></div><div class="topo-desc">Define any shape. <code>depend_on</code> controls order — empty deps run now, shared deps run parallel, multiple deps form a barrier.</div><div class="topo-use">→ any shape you define</div></div>
+    <div class="topo-card" style="border-left:3px solid var(--flow)"><div class="topo-card-header"><div class="topo-dot" style="background:var(--flow)"></div><div class="topo-name">SDD <span class="badge-new">flow</span></div><div class="topo-shape">spec → design → dev → review</div></div><div class="topo-diagram"><svg width="150" height="90" viewBox="0 0 150 90"><line class="svg-line" x1="75" y1="14" x2="75" y2="30"/><line class="svg-line" x1="75" y1="38" x2="30" y2="55"/><line class="svg-line" x1="75" y1="38" x2="75" y2="55"/><line class="svg-line" x1="75" y1="38" x2="120" y2="55"/><line class="svg-line" x1="30" y1="63" x2="75" y2="78"/><line class="svg-line" x1="75" y1="63" x2="75" y2="78"/><line class="svg-line" x1="120" y1="63" x2="75" y2="78"/><rect x="55" y="2" width="40" height="14" rx="3" fill="none" stroke="var(--flow)"/><rect x="55" y="24" width="40" height="14" rx="3" fill="none" stroke="var(--opus)"/><rect x="12" y="49" width="36" height="14" rx="3" fill="none" stroke="var(--sonnet)"/><rect x="57" y="49" width="36" height="14" rx="3" fill="none" stroke="var(--sonnet)"/><rect x="102" y="49" width="36" height="14" rx="3" fill="none" stroke="var(--sonnet)"/><rect x="55" y="72" width="40" height="14" rx="3" fill="none" stroke="var(--haiku)"/></svg></div><div class="topo-desc">Spec-driven development. Brainstorm → plan → parallel workers → review → test. Custom-topology preset.</div><div class="topo-use">→ subagent-driven feature dev</div></div>
+    <div class="topo-card" style="border-left:3px solid var(--flow)"><div class="topo-card-header"><div class="topo-dot" style="background:var(--flow)"></div><div class="topo-name">Superpowers <span class="badge-new">flow</span></div><div class="topo-shape">brainstorm → plan → execute loop</div></div><div class="topo-diagram"><svg width="150" height="90" viewBox="0 0 150 90"><line class="svg-line" x1="75" y1="20" x2="75" y2="36"/><line class="svg-line" x1="75" y1="44" x2="75" y2="60"/><path class="svg-line" d="M 75 60 Q 140 60 140 40 Q 140 20 90 20" stroke-dasharray="4,3"/><rect x="52" y="8" width="46" height="14" rx="3" fill="none" stroke="var(--flow)"/><rect x="52" y="30" width="46" height="14" rx="3" fill="none" stroke="var(--opus)"/><rect x="48" y="54" width="54" height="14" rx="3" fill="none" stroke="var(--sonnet)"/><text x="75" y="82" text-anchor="middle" fill="var(--flow)" font-size="7" font-family="monospace">verify · loop</text></svg></div><div class="topo-desc">Brainstorm → plan → workers → verify, looping until the goal holds. Matches the superpowers skill cycle.</div><div class="topo-use">→ brainstorm/plan/execute</div></div>
+    <div class="topo-card" style="border-left:3px solid var(--flow)"><div class="topo-card-header"><div class="topo-dot" style="background:var(--flow)"></div><div class="topo-name">Research-and-Build <span class="badge-new">flow</span></div><div class="topo-shape">scout → research → build</div></div><div class="topo-diagram"><svg width="150" height="90" viewBox="0 0 150 90"><line class="svg-line" x1="75" y1="14" x2="75" y2="30"/><line class="svg-line" x1="75" y1="38" x2="75" y2="54"/><line class="svg-line" x1="75" y1="62" x2="40" y2="78"/><line class="svg-line" x1="75" y1="62" x2="110" y2="78"/><rect x="52" y="2" width="46" height="14" rx="3" fill="none" stroke="var(--haiku)"/><rect x="52" y="24" width="46" height="14" rx="3" fill="none" stroke="var(--sonnet)"/><rect x="48" y="48" width="54" height="14" rx="3" fill="none" stroke="var(--opus)"/><rect x="18" y="72" width="44" height="14" rx="3" fill="none" stroke="var(--sonnet)"/><rect x="88" y="72" width="44" height="14" rx="3" fill="none" stroke="var(--haiku)"/><text x="40" y="82" text-anchor="middle" fill="var(--text-muted)" font-size="6" font-family="monospace">build</text><text x="110" y="82" text-anchor="middle" fill="var(--text-muted)" font-size="6" font-family="monospace">review</text></svg></div><div class="topo-desc">Research-first features. Scout → research → compare → build → review. Decisions grounded before code.</div><div class="topo-use">→ research-first features</div></div>
+  </div>
+</div>
+
+<div class="section">
+  <div class="section-label">Per-Node Binding</div>
+  <h2>Model Tiering, Tools, Loops, Constraints</h2>
+  <p>Every node carries its own configuration. The scouter runs at opus for deep analysis. The verifier runs at haiku for cheap checks. Workers get their own tools, refs, and internal loops. Agent names must resolve to a file in <code>claude/agents/</code> — validation fails otherwise.</p>
+  <div class="install-grid">
+    <div class="code-block">
+      <div class="code-header"><div class="code-dot" style="background:#f85149"></div><div class="code-dot" style="background:#d29922"></div><div class="code-dot" style="background:#3fb950"></div> graph.yaml</div>
+      <div class="code-body"><span class="kw">nodes:</span>
+  <span class="field">scouter:</span>
+    <span class="field">agent:</span> <span class="str">Software Architect</span>
+    <span class="field">model:</span> <span class="str">opus</span>
+    <span class="field">objective:</span> <span class="str">Map attack surfaces</span>
+    <span class="field">tools:</span> [<span class="str">Read</span>, <span class="str">Glob</span>, <span class="str">Grep</span>]
+    <span class="field">refs:</span>
+      - <span class="field">path:</span> <span class="str">docs/owasp.md</span>
+        <span class="field">purpose:</span> <span class="str">checklist</span>
+    <span class="field">depend_on:</span> []
+    <span class="field">loop:</span>
+      <span class="field">enabled:</span> <span class="num">true</span>
+      <span class="field">stop_when:</span> <span class="str">evidence found</span>
+      <span class="field">max_rounds:</span> <span class="num">3</span>
+    <span class="field">constraints:</span>
+      - <span class="field">no_write:</span> <span class="num">true</span>
+    <span class="field">evidence:</span> [<span class="str">attack_surface</span>]</div>
+    </div>
+    <div class="code-block">
+      <div class="code-header"><div class="code-dot" style="background:#f85149"></div><div class="code-dot" style="background:#d29922"></div><div class="code-dot" style="background:#3fb950"></div> compiled .workflow.js</div>
+      <div class="code-body"><span class="cmt">// Generated by gk compile</span>
+<span class="cmt">// Self-contained: zero kit imports</span>
+
+<span class="kw">export const</span> meta = {
+  <span class="field">name</span>: <span class="str">"security-audit"</span>,
+};
+
+<span class="kw">export function</span> createDiamondWorkflow(config) {
+  <span class="kw">const</span> { nodes } = config;
+  <span class="kw">return async</span> (context) => {
+    <span class="kw">const</span> scout = <span class="kw">await</span> context.agent(
+      nodes.scouter.objective, {
+        <span class="field">model</span>: <span class="str">"opus"</span>,
+        <span class="field">tools</span>: nodes.scouter.tools,
+      });
+
+    <span class="kw">const</span> results = <span class="kw">await</span> context.parallel(
+      items.map(item => () =>
+        context.agent(..., {
+          <span class="field">model</span>: <span class="str">"sonnet"</span>,
+        })));
+
+    <span class="kw">return</span> synthesize(results);
+  };
+}</div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <div class="section-label">Cursor IDE <span class="badge-new">0.2</span></div>
+  <h2>Same CLI, Two Hosts</h2>
+  <p>Pass <code>--target cursor</code> to install the Cursor-flavored kit into <code>.cursor/</code>. The <code>gk</code> CLI is identical across targets — <code>validate</code>, <code>graph new/ascii/svg/waves</code> all work the same. The kit differs. Cursor has no Workflow tool, so <code>/gk:execute</code> is the sole execution path there.</p>
+  <div class="install-grid" style="margin-bottom:0">
+    <div class="code-block">
+      <div class="code-header"><div class="code-dot" style="background:#f85149"></div><div class="code-dot" style="background:#d29922"></div><div class="code-dot" style="background:#3fb950"></div> install for Cursor</div>
+      <div class="code-body"><span class="cmt"># Into an existing project:</span>
+gk init --target cursor
+
+<span class="cmt"># Or scaffold fresh:</span>
+gk new --dir my-project --target cursor</div>
+    </div>
+    <div>
+      <table class="cmp-table" style="margin:0">
+        <tr><th></th><th style="color:var(--sonnet)">Claude Code</th><th style="color:var(--cursor)">Cursor</th></tr>
+        <tr><td>Rules</td><td>.claude/rules/*.md</td><td>.cursor/rules/*.mdc</td></tr>
+        <tr><td>Agents</td><td>.claude/agents/*.md</td><td>.cursor/agents/*.md</td></tr>
+        <tr><td>Skills</td><td>.claude/skills/*/SKILL.md</td><td>.cursor/skills/*/SKILL.md</td></tr>
+        <tr><td>Hooks</td><td>settings.json + *.cjs</td><td>hooks.json + *.cjs</td></tr>
+        <tr><td>Run</td><td>/gk:run + /gk:execute</td><td>/gk:execute only</td></tr>
+      </table>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <div class="section-label">Session Skills — 11 Total</div>
+  <h2>The Full Lifecycle</h2>
+  <p>Inside a session, eleven skills walk the user from blank canvas to verified run. <code>/gk:execute</code> is new in 0.2 (cyan border).</p>
+  <div class="lifecycle">
+    <div class="lc-step"><div class="name">/gk-init-graph</div><div class="desc">Generate graph.yaml</div></div>
+    <div class="lc-step"><div class="name">/gk-brainstorm</div><div class="desc">Refine nodes + tiers</div></div>
+    <div class="lc-step"><div class="name">/gk-visualize</div><div class="desc">ASCII / SVG render</div></div>
+    <div class="lc-step"><div class="name">/gk-validate</div><div class="desc">Gate-check</div></div>
+    <div class="lc-step"><div class="name">/gk-compile</div><div class="desc">YAML → .workflow.js</div></div>
+    <div class="lc-step"><div class="name">/gk-run</div><div class="desc">Workflow tool run</div></div>
+    <div class="lc-step new"><div class="name">/gk-execute</div><div class="desc">Dispatch subagents</div></div>
+    <div class="lc-step"><div class="name">/gk-eval</div><div class="desc">MERGE/BLOCK gate</div></div>
+    <div class="lc-step"><div class="name">/gk-recall</div><div class="desc">Query memory graph</div></div>
+    <div class="lc-step"><div class="name">/gk-evidence</div><div class="desc">Results report</div></div>
+    <div class="lc-step"><div class="name">/gk-status</div><div class="desc">Run state</div></div>
+  </div>
+</div>
+
+<div class="section">
+  <div class="section-label">Kit Agents — 8 Total</div>
+  <h2>Engineering Team</h2>
+  <p>Seven agents from agency-agents, plus the Memory Curator. Each declares a model tier, graph roles, and evidence keys.</p>
+  <div style="margin-top:1.2rem">
+    <div class="agent-row"><div class="agent-emoji">🏛️</div><div class="agent-info"><div class="agent-name">Software Architect</div><div class="agent-roles">scouter · planner · synthesizer</div></div><div class="agent-tier" style="background:rgba(163,113,247,0.15);color:var(--opus)">opus</div></div>
+    <div class="agent-row"><div class="agent-emoji">👁️</div><div class="agent-info"><div class="agent-name">Code Reviewer</div><div class="agent-roles">worker · verifier · <code style="font-size:0.72rem">gk graph search/trace</code></div></div><div class="agent-tier" style="background:rgba(88,166,255,0.15);color:var(--sonnet)">sonnet</div></div>
+    <div class="agent-row"><div class="agent-emoji">🧪</div><div class="agent-info"><div class="agent-name">QA Engineer</div><div class="agent-roles">verifier · worker</div></div><div class="agent-tier" style="background:rgba(63,185,80,0.15);color:var(--haiku)">haiku</div></div>
+    <div class="agent-row"><div class="agent-emoji">📊</div><div class="agent-info"><div class="agent-name">Data Engineer</div><div class="agent-roles">worker · scouter · <code style="font-size:0.72rem">gk graph query</code></div></div><div class="agent-tier" style="background:rgba(88,166,255,0.15);color:var(--sonnet)">sonnet</div></div>
+    <div class="agent-row"><div class="agent-emoji">🎨</div><div class="agent-info"><div class="agent-name">UI/UX Researcher</div><div class="agent-roles">worker · synthesizer</div></div><div class="agent-tier" style="background:rgba(88,166,255,0.15);color:var(--sonnet)">sonnet</div></div>
+    <div class="agent-row"><div class="agent-emoji">🔧</div><div class="agent-info"><div class="agent-name">Agents Orchestrator</div><div class="agent-roles">scouter · synthesizer</div></div><div class="agent-tier" style="background:rgba(163,113,247,0.15);color:var(--opus)">opus</div></div>
+    <div class="agent-row"><div class="agent-emoji">📝</div><div class="agent-info"><div class="agent-name">Document Generator</div><div class="agent-roles">synthesizer · worker</div></div><div class="agent-tier" style="background:rgba(88,166,255,0.15);color:var(--sonnet)">sonnet</div></div>
+    <div class="agent-row" style="border-color:var(--memory)"><div class="agent-emoji">🧠</div><div class="agent-info"><div class="agent-name">Memory Curator</div><div class="agent-roles">curator · injector</div></div><div class="agent-tier" style="background:rgba(163,113,247,0.15);color:var(--opus)">opus</div></div>
+  </div>
+</div>
+
+<div class="section">
+  <div class="section-label">Verified</div>
+  <h2>CBM Bridge — Five Metrics Proven</h2>
+  <p>The 0.2 bridge was exercised end-to-end by a 15-node <code>gk-evolve</code> custom-topology graph. A verifier node looped until all five success metrics held. Final: all pass, three with documented caveats.</p>
+  <table class="ac-table">
+    <tr><th>Metric</th><th>Target</th><th></th></tr>
+    <tr><td>M1 — indexing speed</td><td>≤ CBM, ≥10k nodes/sec</td><td class="caveat">PASS · delegation</td></tr>
+    <tr><td>M2 — indexing quality</td><td>node_yield ≤ 1.10, edge kinds + complexity</td><td class="pass">PASS</td></tr>
+    <tr><td>M3 — API parity</td><td>contract mirrors live CBM output</td><td class="pass">PASS</td></tr>
+    <tr><td>M4 — retrieval</td><td>gk CLI ≤ 1.5× CBM-direct</td><td class="caveat">PASS · 0.28×</td></tr>
+    <tr><td>M5 — recall &gt; grep</td><td>Recall@10 ≥ 0.95, ≥10× vs grep</td><td class="caveat">PASS · CBM 4/5 vs grep 0/5</td></tr>
+  </table>
+  <div class="stats-banner">
+    <div class="stat-cell"><div class="stat-cell-num">138</div><div class="stat-cell-label">Tests Pass</div></div>
+    <div class="stat-cell"><div class="stat-cell-num">0</div><div class="stat-cell-label">Failures</div></div>
+    <div class="stat-cell"><div class="stat-cell-num">402</div><div class="stat-cell-label">Expect Calls</div></div>
+    <div class="stat-cell"><div class="stat-cell-num">28</div><div class="stat-cell-label">Test Files</div></div>
+    <div class="stat-cell"><div class="stat-cell-num">5/5</div><div class="stat-cell-label">Metrics</div></div>
+    <div class="stat-cell"><div class="stat-cell-num">0</div><div class="stat-cell-label">Lint Errors</div></div>
+  </div>
+</div>
+
+<div class="footer">
+  GraphKit 0.2 · graph engineering kit for Claude Code &amp; Cursor<br>
+  <span style="color:var(--memory)">8 agents</span> · <span style="color:var(--sonnet)">11 skills</span> · <span style="color:var(--bridge)">11 topologies</span> · <span style="color:var(--fable)">2 runtimes</span> · <span style="color:var(--haiku)">138 tests</span><br>
+  gk never invokes a model · CBM is the graph authority · evidence-based gates
+</div>
+
+</body>
+</html>
