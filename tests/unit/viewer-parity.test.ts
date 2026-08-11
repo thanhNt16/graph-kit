@@ -65,7 +65,7 @@ describe("browser asset contracts", () => {
     expect(app).toContain('addEventListener("focusin"');
     expect(app).toContain('addEventListener("focusout"');
     expect(app).toContain("state.focus");
-    expect(app).toContain("applyEmphasis");
+    expect(app).toContain("updateViewState");
   });
 
   test("app.js dims (not hides) nodes that miss search/filters via the filtered class", () => {

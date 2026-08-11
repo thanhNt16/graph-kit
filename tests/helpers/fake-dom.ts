@@ -250,6 +250,9 @@ export interface ViewerHarness {
   es: FakeEventSource[];
   getEl(id: string): FakeEl;
   nodeGroup(id: string): FakeEl | null;
+  viewport(): FakeEl | null;
+  edge(from: string, to: string): FakeEl | null;
+  lane(level: number): FakeEl | null;
   emitUpdate(payload: unknown): void;
   setSearch(v: string): void;
   setModelFilter(v: string): void;
@@ -360,6 +363,9 @@ export function createViewerHarness(appJs: string, initialGraph: unknown): Viewe
       const vps = doc.ids.canvas.querySelectorAll("g.viewport");
       return (vps[vps.length - 1] || doc.ids.canvas).querySelector(`[data-id="${id}"]`) ?? null;
     },
+    viewport: () => doc.ids.canvas.querySelector("g.viewport"),
+    edge: (from, to) => doc.ids.canvas.querySelector(`path.edge[data-from="${from}"][data-to="${to}"]`),
+    lane: (level) => doc.ids.canvas.querySelector(`[data-level="${level}"]`),
     emitUpdate: (payload) => {
       for (const es of esInstances) es.emit("update", JSON.stringify(payload));
     },

@@ -155,6 +155,34 @@ test("search/filter applies a visible dimming class to non-matching nodes", asyn
   expect(harness2.nodeGroup("b")?.classList.contains("filtered")).toBe(true);
 });
 
+test("search updates classes without replacing node or viewport elements", async () => {
+  const harness = createViewerHarness(
+    APP_BUNDLE,
+    graph("g", { a: node("a", { skills: ["rocket"] }), b: node("b", { skills: ["anchor"] }) }),
+  );
+  await flush();
+  const viewport = harness.viewport();
+  const a = harness.nodeGroup("a");
+  harness.setSearch("rocket");
+  expect(harness.viewport()).toBe(viewport);
+  expect(harness.nodeGroup("a")).toBe(a);
+  expect(harness.nodeGroup("b")?.classList.contains("filtered")).toBe(true);
+});
+
+test("graph updates reconcile keyed nodes instead of replacing retained nodes", async () => {
+  const harness = createViewerHarness(APP_BUNDLE, graph("g", { a: node("a"), b: node("b", { depend_on: ["a"] }) }));
+  await flush();
+  const a = harness.nodeGroup("a");
+  harness.emitUpdate({
+    type: "graph",
+    graph: graph("g", { a: node("a", { objective: "changed" }), c: node("c", { depend_on: ["a"] }) }),
+  });
+  await flush();
+  expect(harness.nodeGroup("a")).toBe(a);
+  expect(harness.nodeGroup("b")).toBeNull();
+  expect(harness.nodeGroup("c")).not.toBeNull();
+});
+
 test("viewport pan transform survives a graph update (no re-fit)", async () => {
   const harness = createViewerHarness(APP_BUNDLE, graph("g", { a: node("a") }));
   await flush();

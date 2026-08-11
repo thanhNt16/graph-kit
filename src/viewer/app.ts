@@ -21,8 +21,8 @@ import { emphasisIds, type Filters, matchesSearch, passesFilters, retainedSelect
 
   var state = {
     graph: null as ViewerGraph | null,
-    nodes: {} as Record<string, { x: number; y: number; width: number; height: number; node: any }>,
-    edges: [] as Array<{ v: string; w: string; points?: Array<{ x: number; y: number }> }>,
+    nodes: {} as Record<string, PositionedNode>,
+    edges: [] as PositionedEdge[],
     selected: null as string | null,
     hover: null as string | null,
     focus: null as string | null, // path-emphasis source from keyboard focus
@@ -35,8 +35,18 @@ import { emphasisIds, type Filters, matchesSearch, passesFilters, retainedSelect
     maxK: 4,
   };
 
+  type PositionedNode = { x: number; y: number; width: number; height: number; node: ViewerGraph["nodes"][string] };
+  type PositionedEdge = { v: string; w: string; points?: Array<{ x: number; y: number }> };
+  type Layers = { lanes: SVGGElement; edges: SVGGElement; nodes: SVGGElement };
+
   var svg: SVGSVGElement;
-  var root: SVGGElement;
+  var viewport: SVGGElement;
+  var layers: Layers;
+  var nodeEls = new Map<string, SVGGElement>();
+  var edgeEls = new Map<string, SVGPathElement>();
+  var laneEls = new Map<number, SVGGElement>();
+  var nodeParts = new WeakMap<SVGGElement, { rect: any; idText: any; subText: any }>();
+  var edgeArrows = new WeakMap<SVGPathElement, SVGPathElement>();
   var drawer: HTMLElement;
   var drawerBody: HTMLElement;
   var drawerTitle: HTMLElement;
@@ -116,10 +126,13 @@ import { emphasisIds, type Filters, matchesSearch, passesFilters, retainedSelect
     return { x: minX, y: minY, w: maxX - minX, h: maxY - minY };
   }
 
+  function edgeKey(from: string, to: string): string {
+    return from + "\n" + to;
+  }
+
   function setView(v: { x: number; y: number; k: number }) {
     state.view = v;
-    var g = root.querySelector("g.viewport");
-    if (g) g.setAttribute("transform", "translate(" + v.x + "," + v.y + ") scale(" + v.k + ")");
+    if (viewport) viewport.setAttribute("transform", "translate(" + v.x + "," + v.y + ") scale(" + v.k + ")");
   }
 
   function fitView() {
@@ -150,142 +163,171 @@ import { emphasisIds, type Filters, matchesSearch, passesFilters, retainedSelect
     return matchesSearch(node, state.search) && passesFilters(node, filters());
   }
 
-  function draw() {
-    var old = root.querySelector("g.viewport");
-    if (old) old.parentNode.removeChild(old);
-    var vp = el("g", { class: "viewport" });
-    root.appendChild(vp);
+  // --- stable, keyed SVG reconciliation -----------------------------------
 
-    // edges
-    state.edges.forEach((e) => {
-      var pts = e.points || [];
-      if (pts.length < 2) return;
-      var d = "M " + pts[0].x + "," + pts[0].y;
-      for (var i = 1; i < pts.length; i++) d += " L " + pts[i].x + "," + pts[i].y;
-      var path = el("path", { class: "edge", d: d, "data-from": esc(e.v), "data-to": esc(e.w) });
-      path.appendChild(textNode(""));
-      vp.appendChild(path);
-      var last = pts[pts.length - 1];
-      var prev = pts[pts.length - 2];
-      if (last && prev) {
-        var ang = Math.atan2(last.y - prev.y, last.x - prev.x);
-        var ax = last.x - 6 * Math.cos(ang),
-          ay = last.y - 6 * Math.sin(ang);
-        var arr = el("path", {
-          class: "edge-arrow",
-          "data-from": esc(e.v),
-          "data-to": esc(e.w),
-          d:
-            "M " +
-            last.x +
-            "," +
-            last.y +
-            " L " +
-            (ax + 3 * Math.cos(ang + 2.4)) +
-            "," +
-            (ay + 3 * Math.sin(ang + 2.4)) +
-            " L " +
-            (ax + 3 * Math.cos(ang - 2.4)) +
-            "," +
-            (ay + 3 * Math.sin(ang - 2.4)) +
-            " Z",
-        });
-        arr.appendChild(textNode(""));
-        vp.appendChild(arr);
-      }
+  function removeMissing<K, E extends Element>(index: Map<K, E>, wanted: Set<K>): void {
+    index.forEach((element, key) => {
+      if (wanted.has(key)) return;
+      element.parentNode?.removeChild(element);
+      index.delete(key);
     });
-
-    // nodes
-    Object.keys(state.nodes).forEach((id) => {
-      var nx = state.nodes[id];
-      var node = nx.node;
-      var vis = isVisible(node);
-      var g = el("g", {
-        class: "node-group",
-        "data-id": id,
-        tabindex: "0",
-        role: "button",
-        "aria-label": "Node " + node.id + ", " + node.agent + ", " + node.model,
-      });
-      g.addEventListener("click", () => {
-        select(id);
-      });
-      g.addEventListener("keydown", (ev) => {
-        if ((ev as KeyboardEvent).key === "Enter") {
-          ev.preventDefault();
-          select(id);
-        }
-      });
-      var rect = el("rect", {
-        class: "node-rect",
-        x: String(nx.x - nx.width / 2),
-        y: String(nx.y - nx.height / 2),
-        width: String(nx.width),
-        height: String(nx.height),
-        rx: "8",
-        stroke: tierColor(node.model),
-      });
-      var idText = el("text", {
-        class: "node-text-id",
-        x: String(nx.x),
-        y: String(nx.y - 4),
-        "text-anchor": "middle",
-      });
-      idText.appendChild(textNode(node.id + (node.loop && node.loop.enabled ? " ↻" : "")));
-      var subText = el("text", {
-        class: "node-text-sub",
-        x: String(nx.x),
-        y: String(nx.y + 14),
-        "text-anchor": "middle",
-      });
-      subText.appendChild(textNode(node.agent + " · " + node.model));
-      g.appendChild(rect);
-      g.appendChild(idText);
-      g.appendChild(subText);
-      g.dataset.visible = vis ? "1" : "0";
-      // search/filter emphasis: non-matching nodes dim (never hidden) via CSS
-      if (!vis) g.classList.add("filtered");
-      vp.appendChild(g);
-    });
-
-    applyEmphasis();
-    if (state.view) setView(state.view);
   }
 
-  function applyEmphasis() {
-    var focusId = state.selected || state.hover || state.focus;
-    var groups = root.querySelectorAll("g.node-group");
-    var edges = root.querySelectorAll("path.edge");
-    groups.forEach((grp) => {
-      grp.classList.remove("dim", "emph");
+  function edgeArrowD(pts: Array<{ x: number; y: number }>): string | null {
+    var last = pts[pts.length - 1];
+    var prev = pts[pts.length - 2];
+    if (!last || !prev) return null;
+    var ang = Math.atan2(last.y - prev.y, last.x - prev.x);
+    var ax = last.x - 6 * Math.cos(ang),
+      ay = last.y - 6 * Math.sin(ang);
+    return (
+      "M " +
+      last.x +
+      "," +
+      last.y +
+      " L " +
+      (ax + 3 * Math.cos(ang + 2.4)) +
+      "," +
+      (ay + 3 * Math.sin(ang + 2.4)) +
+      " L " +
+      (ax + 3 * Math.cos(ang - 2.4)) +
+      "," +
+      (ay + 3 * Math.sin(ang - 2.4)) +
+      " Z"
+    );
+  }
+
+  function createNodeElement(id: string): SVGGElement {
+    var nx = state.nodes[id];
+    var node = nx.node;
+    var g = el("g", {
+      class: "node-group",
+      "data-id": id,
+      tabindex: "0",
+      role: "button",
+      "aria-label": "Node " + node.id + ", " + node.agent + ", " + node.model,
+    }) as SVGGElement;
+    // handlers read group.dataset.id at event time so retained elements keep
+    // working after graph updates (id never changes for a retained element)
+    g.addEventListener("click", () => {
+      select(g.dataset.id as string);
     });
-    edges.forEach((e) => {
-      e.classList.remove("dim", "emph-conn");
-    });
-    root.querySelectorAll("path.edge-arrow").forEach((a) => {
-      a.classList.remove("dim", "emph-conn");
-    });
-    var conn = emphasisIds(state.graph!, focusId);
-    if (!conn) return;
-    // nodes along the focus path emphasize; all others dim
-    groups.forEach((grp) => {
-      if (conn.has((grp as Element).dataset.id!)) grp.classList.add("emph");
-      else grp.classList.add("dim");
-    });
-    edges.forEach((e) => {
-      if (e.dataset.from === focusId || e.dataset.to === focusId) {
-        e.classList.add("emph-conn");
-        var arr = root.querySelector(
-          'path.edge-arrow[data-from="' + esc(e.dataset.from!) + '"][data-to="' + esc(e.dataset.to!) + '"]',
-        );
-        if (arr) arr.classList.add("emph-conn");
-      } else {
-        e.classList.add("dim");
-        var arr2 = root.querySelector(
-          'path.edge-arrow[data-from="' + esc(e.dataset.from!) + '"][data-to="' + esc(e.dataset.to!) + '"]',
-        );
-        if (arr2) arr2.classList.add("dim");
+    g.addEventListener("keydown", (ev) => {
+      if ((ev as KeyboardEvent).key === "Enter") {
+        ev.preventDefault();
+        select(g.dataset.id as string);
       }
+    });
+    var rect = el("rect", { class: "node-rect", rx: "8" });
+    var idText = el("text", { class: "node-text-id", "text-anchor": "middle" });
+    var subText = el("text", { class: "node-text-sub", "text-anchor": "middle" });
+    g.appendChild(rect);
+    g.appendChild(idText);
+    g.appendChild(subText);
+    nodeParts.set(g, { rect, idText, subText });
+    return g;
+  }
+
+  function updateNodeElement(group: SVGGElement, id: string): void {
+    var nx = state.nodes[id];
+    var node = nx.node;
+    var parts = nodeParts.get(group);
+    if (!parts) return;
+    parts.rect.setAttribute("x", String(nx.x - nx.width / 2));
+    parts.rect.setAttribute("y", String(nx.y - nx.height / 2));
+    parts.rect.setAttribute("width", String(nx.width));
+    parts.rect.setAttribute("height", String(nx.height));
+    parts.rect.setAttribute("stroke", tierColor(node.model));
+    parts.idText.setAttribute("x", String(nx.x));
+    parts.idText.setAttribute("y", String(nx.y - 4));
+    parts.idText.textContent = "";
+    parts.idText.appendChild(textNode(node.id + (node.loop && node.loop.enabled ? " ↻" : "")));
+    parts.subText.setAttribute("x", String(nx.x));
+    parts.subText.setAttribute("y", String(nx.y + 14));
+    parts.subText.textContent = "";
+    parts.subText.appendChild(textNode(node.agent + " · " + node.model));
+  }
+
+  function createEdgeElement(edge: PositionedEdge): SVGPathElement {
+    var path = el("path", {
+      class: "edge",
+      "data-from": esc(edge.v),
+      "data-to": esc(edge.w),
+    }) as SVGPathElement;
+    path.appendChild(textNode(""));
+    var arr = el("path", {
+      class: "edge-arrow",
+      "data-from": esc(edge.v),
+      "data-to": esc(edge.w),
+    }) as SVGPathElement;
+    arr.appendChild(textNode(""));
+    edgeArrows.set(path, arr);
+    return path;
+  }
+
+  function updateEdgeElement(path: SVGPathElement, edge: PositionedEdge): void {
+    var pts = edge.points || [];
+    var d = "";
+    if (pts.length >= 2) {
+      d = "M " + pts[0].x + "," + pts[0].y;
+      for (var i = 1; i < pts.length; i++) d += " L " + pts[i].x + "," + pts[i].y;
+    }
+    path.setAttribute("d", d);
+    var arr = edgeArrows.get(path);
+    if (arr) {
+      var ad = edgeArrowD(pts);
+      arr.setAttribute("d", ad || "");
+    }
+  }
+
+  function reconcileTopology(): void {
+    var wantedNodes = new Set(Object.keys(state.nodes));
+    removeMissing(nodeEls, wantedNodes);
+    for (const id of wantedNodes) {
+      var group = nodeEls.get(id);
+      if (!group) {
+        group = createNodeElement(id);
+        nodeEls.set(id, group);
+        layers.nodes.appendChild(group);
+      }
+      updateNodeElement(group, id);
+    }
+
+    var wantedEdges = new Set(state.edges.map((edge) => edgeKey(edge.v, edge.w)));
+    removeMissing(edgeEls, wantedEdges);
+    state.edges.forEach((edge) => {
+      var key = edgeKey(edge.v, edge.w);
+      var path = edgeEls.get(key);
+      if (!path) {
+        path = createEdgeElement(edge);
+        edgeEls.set(key, path);
+        layers.edges.appendChild(path);
+      }
+      updateEdgeElement(path, edge);
+    });
+
+    updateViewState();
+  }
+
+  function updateViewState(): void {
+    var focusId = state.selected || state.hover || state.focus;
+    var connected = state.graph ? emphasisIds(state.graph, focusId) : undefined;
+    nodeEls.forEach((group, id) => {
+      var pn = state.nodes[id];
+      group.classList.remove("dim", "emph", "filtered", "selected");
+      var vis = pn ? isVisible(pn.node) : false;
+      if (!vis) group.classList.add("filtered");
+      if (state.selected === id) group.classList.add("selected");
+      if (connected) group.classList.add(connected.has(id) ? "emph" : "dim");
+      group.dataset.visible = vis ? "1" : "0";
+    });
+    edgeEls.forEach((path) => {
+      path.classList.remove("dim", "emph-conn");
+      var adjacent = path.dataset.from === focusId || path.dataset.to === focusId;
+      if (connected) path.classList.add(adjacent ? "emph-conn" : "dim");
+      var arr = edgeArrows.get(path);
+      if (arr) arr.classList.remove("dim", "emph-conn");
+      if (connected && arr) arr.classList.add(adjacent ? "emph-conn" : "dim");
     });
   }
 
@@ -300,7 +342,7 @@ import { emphasisIds, type Filters, matchesSearch, passesFilters, retainedSelect
     } else {
       closeDrawer();
     }
-    applyEmphasis();
+    updateViewState();
   }
 
   function centerOn(id: string) {
@@ -308,7 +350,7 @@ import { emphasisIds, type Filters, matchesSearch, passesFilters, retainedSelect
     if (!n) return;
     var v = state.view || { x: 0, y: 0, k: 1 };
     setView({ x: svg.clientWidth / 2 - n.x * v.k, y: svg.clientHeight / 2 - n.y * v.k, k: v.k });
-    var g = root.querySelector('g.node-group[data-id="' + esc(id) + '"]');
+    var g = nodeEls.get(id);
     if (g) (g as SVGGraphicsElement).focus();
   }
 
@@ -411,7 +453,7 @@ import { emphasisIds, type Filters, matchesSearch, passesFilters, retainedSelect
     state.focus = null;
     openDrawer(id);
     centerOn(id);
-    applyEmphasis();
+    updateViewState();
   }
 
   function closeDrawer() {
@@ -513,7 +555,7 @@ import { emphasisIds, type Filters, matchesSearch, passesFilters, retainedSelect
     state.nodes = {};
     state.edges = [];
     layout();
-    draw();
+    reconcileTopology();
     rebuildHeader();
     buildFilters();
     keyboardOrder = keyboardOrderBy();
@@ -546,10 +588,36 @@ import { emphasisIds, type Filters, matchesSearch, passesFilters, retainedSelect
     };
   }
 
+  function initCanvas(): void {
+    var defs = el("defs");
+    var marker = el("marker", {
+      id: "arrow",
+      viewBox: "0 0 10 10",
+      refX: "9",
+      refY: "5",
+      markerWidth: "7",
+      markerHeight: "7",
+      orient: "auto-start-reverse",
+    });
+    marker.appendChild(el("path", { class: "arrow-marker", d: "M 0 0 L 10 5 L 0 10 z" }));
+    defs.appendChild(marker);
+    svg.appendChild(defs);
+
+    viewport = el("g", { class: "viewport" }) as SVGGElement;
+    layers = {
+      lanes: el("g", { class: "lane-layer" }) as SVGGElement,
+      edges: el("g", { class: "edge-layer" }) as SVGGElement,
+      nodes: el("g", { class: "node-layer" }) as SVGGElement,
+    };
+    viewport.appendChild(layers.lanes);
+    viewport.appendChild(layers.edges);
+    viewport.appendChild(layers.nodes);
+    svg.appendChild(viewport);
+  }
+
   function init() {
     svg = document.getElementById("canvas")!;
-    root = el("g", { class: "viewport" });
-    svg.appendChild(root);
+    initCanvas();
     drawer = document.getElementById("drawer")!;
     drawerBody = document.getElementById("drawer-body")!;
     drawerTitle = document.getElementById("drawer-title")!;
@@ -568,23 +636,23 @@ import { emphasisIds, type Filters, matchesSearch, passesFilters, retainedSelect
       (document.getElementById("filter-loop") as HTMLInputElement).checked = false;
       searchEl.value = "";
       state.search = "";
-      draw();
+      updateViewState();
     });
     (document.getElementById("filter-model") as HTMLSelectElement).addEventListener("change", (e) => {
       state.filterModel = (e.target as HTMLSelectElement).value;
-      draw();
+      updateViewState();
     });
     (document.getElementById("filter-agent") as HTMLSelectElement).addEventListener("change", (e) => {
       state.filterAgent = (e.target as HTMLSelectElement).value;
-      draw();
+      updateViewState();
     });
     (document.getElementById("filter-loop") as HTMLInputElement).addEventListener("change", (e) => {
       state.filterLoop = (e.target as HTMLInputElement).checked;
-      draw();
+      updateViewState();
     });
     searchEl.addEventListener("input", (e) => {
       state.search = (e.target as HTMLInputElement).value;
-      draw();
+      updateViewState();
     });
 
     // focus emulates hover for path emphasis (keyboard accessibility)
@@ -592,12 +660,12 @@ import { emphasisIds, type Filters, matchesSearch, passesFilters, retainedSelect
       var target = (e.target as Element).closest("g.node-group");
       if (target) {
         state.focus = (target as HTMLElement).dataset.id as string;
-        if (!state.selected) applyEmphasis();
+        if (!state.selected) updateViewState();
       }
     });
     svg.addEventListener("focusout", () => {
       state.focus = null;
-      if (!state.selected) applyEmphasis();
+      if (!state.selected) updateViewState();
     });
 
     // hover emphasis
@@ -606,7 +674,7 @@ import { emphasisIds, type Filters, matchesSearch, passesFilters, retainedSelect
       var id = target ? (target as HTMLElement).dataset.id : null;
       if (id !== state.hover) {
         state.hover = id;
-        if (!state.selected) applyEmphasis();
+        if (!state.selected) updateViewState();
       }
     });
 
@@ -638,11 +706,11 @@ import { emphasisIds, type Filters, matchesSearch, passesFilters, retainedSelect
 
     // background click clears selection
     svg.addEventListener("click", (e) => {
-      if (e.target === svg || e.target === root) {
+      if (e.target === svg || e.target === viewport) {
         if (state.selected) {
           state.selected = null;
           closeDrawer();
-          applyEmphasis();
+          updateViewState();
         }
       }
     });
@@ -653,7 +721,7 @@ import { emphasisIds, type Filters, matchesSearch, passesFilters, retainedSelect
         if (state.selected) {
           state.selected = null;
           closeDrawer();
-          applyEmphasis();
+          updateViewState();
         }
       }
     });
