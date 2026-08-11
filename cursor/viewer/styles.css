@@ -242,6 +242,22 @@ input[type="checkbox"]:focus-visible {
   marker-end: url(#arrow);
   transition: stroke var(--transition), opacity var(--transition);
 }
+/* marching-dash edge flow: presentation-attribute dasharray (CSP-safe) + CSS
+   stroke-dashoffset animation toward the target. -12 = one 6+6 dash+gap cycle,
+   so the march is seamless and direction follows the arrow marker convention. */
+.edge[data-dash="flow"] {
+  stroke-dashoffset: 0;
+  animation: edge-flow 1.2s linear infinite;
+}
+@keyframes edge-flow {
+  to {
+    stroke-dashoffset: -12;
+  }
+}
+/* emphasized edges march faster (accent stroke/width come from .edge.emph-conn) */
+.edge.emph-conn[data-dash="flow"] {
+  animation-duration: 0.4s;
+}
 .arrow-marker {
   fill: var(--hairline);
 }
@@ -399,6 +415,7 @@ input[type="checkbox"]:focus-visible {
   .node-group,
   .node-rect,
   .edge,
+  .edge[data-dash="flow"],
   .arrow-marker {
     animation: none !important;
     transition: none !important;
