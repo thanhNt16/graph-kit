@@ -30,7 +30,7 @@ describe("gk-template skill", () => {
   });
 
   test("cursor frontmatter and inventory target", () => {
-    expect(cursor).toContain("name: gk:template");
+    expect(cursor).toContain("name: gk-template");
     expect(cursor).toContain("gk inventory --target cursor --json");
   });
 
