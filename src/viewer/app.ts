@@ -382,8 +382,11 @@ import { emphasisIds, type Filters, matchesSearch, passesFilters, retainedSelect
       }
       updateNodeElement(group, id);
       // appendChild moves retained groups, preserving identity while restoring
-      // normalized keyboard/tab order after live level/order changes.
+      // normalized keyboard/tab order after live level/order changes. Moving a
+      // focused element out of and back into the DOM blurs it (focus loss on
+      // every SSE update), so restore focus to the active node after the move.
       layers.nodes.appendChild(group);
+      if (group === document.activeElement) group.focus();
     });
 
     var wantedEdges = new Set(state.edges.map((edge) => edgeKey(edge.v, edge.w)));
@@ -582,31 +585,29 @@ import { emphasisIds, type Filters, matchesSearch, passesFilters, retainedSelect
     aOpt.value = "";
     aOpt.appendChild(textNode("all"));
     agents.appendChild(aOpt);
-    var mSet: Record<string, boolean> = {};
-    var aSet: Record<string, boolean> = {};
+    var mSet = new Set<string>();
+    var aSet = new Set<string>();
     Object.keys(state.graph!.nodes).forEach((id) => {
       var n = state.graph!.nodes[id];
-      mSet[n.model] = true;
-      aSet[n.agent] = true;
+      mSet.add(n.model);
+      aSet.add(n.agent);
     });
     TIERS.forEach((t) => {
-      if (mSet[t]) {
+      if (mSet.has(t)) {
         var o = document.createElement("option");
         o.value = t;
         o.appendChild(textNode(t));
         models.appendChild(o);
       }
     });
-    Object.keys(aSet)
-      .sort()
-      .forEach((a) => {
-        var o = document.createElement("option");
-        o.value = a;
-        o.appendChild(textNode(a));
-        agents.appendChild(o);
-      });
-    if (!mSet[state.filterModel]) state.filterModel = "";
-    if (!aSet[state.filterAgent]) state.filterAgent = "";
+    [...aSet].sort().forEach((a) => {
+      var o = document.createElement("option");
+      o.value = a;
+      o.appendChild(textNode(a));
+      agents.appendChild(o);
+    });
+    if (!mSet.has(state.filterModel)) state.filterModel = "";
+    if (!aSet.has(state.filterAgent)) state.filterAgent = "";
     models.value = state.filterModel;
     agents.value = state.filterAgent;
     // Clearing stale state changes node visibility after reconcileTopology ran.

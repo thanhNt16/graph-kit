@@ -215,6 +215,11 @@ export class FakeEl {
   focus() {
     if (this.ownerDocument) this.ownerDocument.activeElement = this;
   }
+  blur() {
+    if (this.ownerDocument && this.ownerDocument.activeElement === this) {
+      this.ownerDocument.activeElement = this.ownerDocument.body;
+    }
+  }
 }
 
 /** Build the document object app.js expects. */
@@ -479,9 +484,13 @@ export function createViewerHarness(
     nodeTransform: (id) => harness.nodeGroup(id)?.getAttribute("transform") ?? null,
     focusNode: (id) => {
       const g = harness.nodeGroup(id);
-      if (g) doc.ids.canvas.dispatch("focusin", { target: g });
+      if (g) {
+        doc.activeElement = g;
+        doc.ids.canvas.dispatch("focusin", { target: g });
+      }
     },
     blurNode: () => {
+      doc.activeElement = doc.body;
       doc.ids.canvas.dispatch("focusout", { target: doc.ids.canvas });
     },
     hoverNode: (id) => {

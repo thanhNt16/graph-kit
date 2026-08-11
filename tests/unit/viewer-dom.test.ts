@@ -401,6 +401,51 @@ test("graph update preserves active model and agent filters when values still ex
   expect(harness.nodeGroup("a")?.classList.contains("filtered")).toBe(false);
 });
 
+test("agent named '__proto__' cannot pollute the agent filter options", async () => {
+  const harness = createViewerHarness(
+    APP_BUNDLE,
+    graph("g", {
+      a: node("a", { agent: "__proto__" }),
+      b: node("b", { agent: "Alpha" }),
+    }),
+  );
+  await flush();
+  const options = harness.getEl("filter-agent").querySelectorAll("option");
+  const values = options.map((o) => (o as unknown as { value: string }).value);
+  // no inherited proto pollution; only the real agents appear (plus the seed "all" option)
+  expect(values).toContain("__proto__");
+  expect(values).toContain("Alpha");
+  expect(values.filter((v) => v === "" || v === "Alpha" || v === "__proto__")).toHaveLength(3);
+  // selecting the proto-named agent applies the filter without leaking it
+  harness.setAgentFilter("__proto__");
+  expect(harness.nodeGroup("a")?.classList.contains("filtered")).toBe(false);
+  expect(harness.nodeGroup("b")?.classList.contains("filtered")).toBe(true);
+});
+
+test("graph update preserves keyboard focus on the active node", async () => {
+  const harness = createViewerHarness(
+    APP_BUNDLE,
+    graph("g", {
+      a: node("a", { level: 0, order: 0 }),
+      b: node("b", { level: 1, order: 0, depend_on: ["a"] }),
+    }),
+  );
+  await flush();
+  harness.focusNode("a");
+  expect(harness.doc.activeElement).toBe(harness.nodeGroup("a"));
+
+  // live SSE update re-appends groups for tab order; focus must survive it
+  harness.emitUpdate({
+    type: "graph",
+    graph: graph("g", {
+      a: node("a", { level: 0, order: 0 }),
+      b: node("b", { level: 1, order: 0, depend_on: ["a"] }),
+    }),
+  });
+  await flush();
+  expect(harness.doc.activeElement).toBe(harness.nodeGroup("a"));
+});
+
 test("graph update resets stale filters to all when the value disappears", async () => {
   const harness = createViewerHarness(APP_BUNDLE, graph("g", { a: node("a", { model: "sonnet", agent: "Alpha" }) }));
   await flush();
