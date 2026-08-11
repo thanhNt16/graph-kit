@@ -10,8 +10,6 @@ import { emphasisIds, type Filters, matchesSearch, passesFilters, retainedSelect
   var KEY = new URLSearchParams(location.search).get("key") || "";
   var NODE_W = 208;
   var NODE_H = 64;
-  var MIN_NODE_W = 120;
-  var MIN_NODE_H = 48;
   var nodeSizes = new Map<string, { width: number; height: number; key: string }>();
   var probeEl: SVGGElement | null = null;
   var TIERS = ["opus", "sonnet", "haiku", "fable"];
@@ -95,11 +93,17 @@ import { emphasisIds, type Filters, matchesSearch, passesFilters, retainedSelect
     if (!probe) {
       return { width: NODE_W, height: NODE_H };
     }
-    // reset probe text to the node's card content
+    // reset the probe with the card's two real <text> elements (same classes
+    // as updateNodeElement) so getBBox measures actual rendered text geometry
     probe.textContent = "";
-    probe.appendChild(textNode(node.id + "\n" + node.agent + " · " + node.model));
-    var w = Math.max(MIN_NODE_W, probe.getBBox().width + 24);
-    var h = Math.max(MIN_NODE_H, probe.getBBox().height + 16);
+    var idText = el("text", { class: "node-text-id" });
+    idText.appendChild(textNode(node.id));
+    var subText = el("text", { class: "node-text-sub" });
+    subText.appendChild(textNode(node.agent + " · " + node.model));
+    probe.appendChild(idText);
+    probe.appendChild(subText);
+    var w = Math.max(NODE_W, idText.getBBox().width + 24);
+    var h = Math.max(NODE_H, idText.getBBox().height + subText.getBBox().height + 16);
     nodeSizes.set(node.id, { width: w, height: h, key });
     return { width: w, height: h };
   }
@@ -809,8 +813,9 @@ import { emphasisIds, type Filters, matchesSearch, passesFilters, retainedSelect
       if (dragNodeId && dragAnchor) {
         var g = nodeEls.get(dragNodeId);
         if (g) {
-          var nx = dragAnchor.tx + (e.clientX - dragAnchor.x);
-          var ny = dragAnchor.ty + (e.clientY - dragAnchor.y);
+          var k = state.view ? state.view.k : 1;
+          var nx = dragAnchor.tx + (e.clientX - dragAnchor.x) / k;
+          var ny = dragAnchor.ty + (e.clientY - dragAnchor.y) / k;
           g.setAttribute("transform", `translate(${nx} ${ny})`);
         }
         return;

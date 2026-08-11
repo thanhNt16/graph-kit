@@ -198,10 +198,11 @@ export class FakeEl {
     };
   }
 
-  /** Deterministic fake text measurement: 1em = 6px monospace, char-per-line
-      floor of 2px. Width grows linearly with the longest line so a long node ID
-      measures strictly wider than a short one. Only the probe uses this — the
-      fake DOM has no real layout. */
+  /** Deterministic fake text measurement used by the auto-fit probe. The probe
+      calls getBBox() on individual <text> elements, so measure own textContent
+      (recursive): width = 6px/char + 2px pad per line (longest line), height =
+      12px per \n-separated line. Grows linearly so a long node ID measures
+      strictly wider than a short one. The fake DOM has no real layout. */
   getBBox(): { x: number; y: number; width: number; height: number } {
     const lines = textOf(this).split("\n");
     let width = 0;

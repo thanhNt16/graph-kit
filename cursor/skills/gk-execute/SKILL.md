@@ -90,7 +90,7 @@ Required evidence: {node.evidence}
 Return your output with these evidence keys: {node.evidence}
 ```
 
-Dispatch via the Task tool with the node's model tier and the matching `.cursor/agents/<agent>.md` definition.
+Dispatch via the Task tool with the node's RESOLVED Cursor model (see Model resolution below) and the matching `.cursor/agents/<agent>.md` definition.
 
 ## Model resolution (Cursor)
 
