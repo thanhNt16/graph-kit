@@ -1,5 +1,5 @@
 ---
-name: gk:evidence
+name: gk-evidence
 description: Produce a markdown evidence report from a completed graph run. Use after gk:execute finishes. Trigger: "show evidence", "graph results", "what did the graph produce", "evidence report".
 disable-model-invocation: false
 ---

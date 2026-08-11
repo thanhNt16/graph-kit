@@ -1,5 +1,5 @@
 ---
-name: gk:execute
+name: gk-execute
 description: Execute a graph.yaml by dispatching parallel subagents via the Task tool — no compilation, no Workflow tool. Transparent, real-time, interactive. Use when the user wants to execute a graph with full visibility — see each agent spawn, watch progress, debug failures. Trigger: "execute graph", "run graph directly", "spawn agents for graph", "direct execution".
 disable-model-invocation: false
 ---

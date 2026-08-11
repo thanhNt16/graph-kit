@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { existsSync, readdirSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 
 const ROOT = join(import.meta.dir, "..", "..");
@@ -34,4 +34,23 @@ describe("claude/cursor skill-set parity", () => {
     const claudeDiff = cursor.filter((s) => !claude.includes(s));
     expect(claudeDiff).toEqual([]);
   });
+});
+
+function skillFrontmatterName(kit: "claude" | "cursor", skill: string): string {
+  const raw = readFileSync(join(ROOT, kit, "skills", skill, "SKILL.md"), "utf8");
+  const m = raw.match(/^name:\s*(.*)$/m);
+  return m ? m[1].trim() : "";
+}
+
+test("cursor skill names use the dash form (no colon)", () => {
+  for (const skill of skillNames("cursor")) {
+    const name = skillFrontmatterName("cursor", skill);
+    expect(name, `cursor/${skill} name '${name}' must not contain ':'`).not.toContain(":");
+  }
+});
+
+test("cursor names match their directory (dash form)", () => {
+  for (const skill of skillNames("cursor")) {
+    expect(skillFrontmatterName("cursor", skill)).toBe(skill);
+  }
 });

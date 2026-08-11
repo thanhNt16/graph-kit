@@ -1,5 +1,5 @@
 ---
-name: gk:visualize
+name: gk-visualize
 description: Visualize a graph.yaml. Three modes: ASCII (in-session), SVG (visual export, opens in browser), Excalidraw (editable). Trigger: "visualize graph", "show diagram", "draw the graph", "what does the graph look like".
 when_to_use: User wants to see the graph structure visually — topology, nodes, model tiers, depend_on edges, fan-out/fan-in.
 user-invocable: true
