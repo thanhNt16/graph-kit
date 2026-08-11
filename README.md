@@ -24,16 +24,11 @@ Each build on `main` publishes a new patch release (e.g. `v0.2.1`) with binaries
 
 ```bash
 curl -fsSL https://github.com/thanhNt16/graph-kit/releases/latest/download/gk-darwin-arm64.tar.gz \
-  | sudo tar -xz -C /usr/bin
+  | sudo tar -xz -C /usr/local/bin
 ```
 
-> `releases/latest` always resolves to the newest version tag.
-> ⚠️ `/usr/bin` is SIP-protected on macOS — `sudo` is required, and you may need to temporarily disable SIP. If you hit `Operation not permitted`, install to `/usr/local/bin` instead (on `PATH`, not SIP-protected):
-
-```bash
-curl -fsSL https://github.com/thanhNt16/graph-kit/releases/latest/download/gk-darwin-arm64.tar.gz \
-  | tar -xz -C /usr/local/bin
-```
+> `releases/latest` always resolves to the newest version tag. `/usr/local/bin` is on `PATH` and is not SIP-protected, so no extra setup is needed.
+> ⚠️ Do **not** install to `/usr/bin` — it is SIP-protected on macOS; extraction fails with `Operation not permitted` even with `sudo`.
 
 Verify:
 
