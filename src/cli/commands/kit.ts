@@ -26,9 +26,11 @@ function kitSourceDir(target: KitTarget = "claude"): string {
     join(here, kitName),
     // 4. Standalone binary layout: <bin>/../share/gk/<kit>/
     join(dirname(process.execPath), "..", "share", "gk", kitName),
-    // 5. User home install: ~/.graphkit/<kit>/
+    // 5. Standalone binary layout: <bin>/share/gk/<kit>/ (extracted side-by-side)
+    join(dirname(process.execPath), "share", "gk", kitName),
+    // 6. User home install: ~/.graphkit/<kit>/
     join(process.env.HOME ?? "", ".graphkit", kitName),
-    // 6. cwd fallbacks (works from repo root)
+    // 7. cwd fallbacks (works from repo root)
     join(process.cwd(), kitName),
     join(process.cwd(), "apps", "gk", kitName),
   ];

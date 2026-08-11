@@ -60,8 +60,14 @@ jobs:
       - run: bun run build:bin
       - name: Build release archives
         run: |
-          npm pack --pack-destination dist
-          tar -C dist -czf "dist/gk-${{ matrix.target }}.tar.gz" gk
+          # Layout expected by the standalone binary's kit resolution:
+          # <bin>/../share/gk/<kit>/  → /usr/local/bin/gk reads /usr/local/share/gk/
+          # Stage the kit dirs next to the binary so one tar holds both.
+          mkdir -p dist/share/gk
+          cp -r claude dist/share/gk/claude
+          cp -r cursor dist/share/gk/cursor
+          tar -C dist -czf "dist/gk-${{ matrix.target }}.tar.gz" \
+            gk share
       - uses: actions/upload-artifact@v4
         with:
           name: graphkit-${{ matrix.target }}
