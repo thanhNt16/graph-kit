@@ -19,7 +19,9 @@ function runCli(args: string[], cwd: string) {
   console.log = (...a: unknown[]) => logs.push(a.map(String).join(" "));
   let exit = 0;
   const origExit = process.exit;
-  process.exit = (c?: number) => { exit = c ?? 1; };
+  process.exit = (c?: number) => {
+    exit = c ?? 1;
+  };
   const origCwd = process.cwd;
   process.cwd = () => cwd;
   try {
@@ -68,6 +70,13 @@ describe("gk models", () => {
     const parsed = JSON.parse(stdout);
     expect(parsed.data.sonnet).toBe("Claude Sonnet 4.5");
     expect(parsed.data.opus).toBe(CURSOR_MODEL_DEFAULTS.opus);
+  });
+
+  test("models cursor garbage exits nonzero with status fail", () => {
+    const { stdout, code } = runCli(["models", "cursor", "garbage"], cwd);
+    expect(code).toBe(1);
+    const parsed = JSON.parse(stdout);
+    expect(parsed.status).toBe("fail");
   });
 
   test("models cursor reset clears overrides", () => {

@@ -13,8 +13,13 @@ export function loadOverrides(cwd: string): Record<string, string> {
   const p = overridesPath(cwd);
   if (!existsSync(p)) return {};
   try {
-    const parsed = JSON.parse(readFileSync(p, "utf8")) as Record<string, string>;
-    return parsed && typeof parsed === "object" ? parsed : {};
+    const parsed = JSON.parse(readFileSync(p, "utf8")) as Record<string, unknown>;
+    if (!parsed || typeof parsed !== "object") return {};
+    const out: Record<string, string> = {};
+    for (const [k, v] of Object.entries(parsed)) {
+      if (typeof v === "string") out[k] = v;
+    }
+    return out;
   } catch {
     return {};
   }
@@ -46,9 +51,11 @@ export function registerModelsCommands(cli: CAC): void {
         return;
       }
       const rest = Array.isArray(args) ? args : args == null ? [] : [args];
-      if (rest[0] === "set") {
+      const action = rest[0] ?? "";
+      if (action === "set") {
         if (!opts.map) {
           console.log(JSON.stringify(fail("map", "Missing --map k=v pairs")));
+          process.exit(1);
           return;
         }
         const overrides = loadOverrides(process.cwd());
@@ -57,22 +64,31 @@ export function registerModelsCommands(cli: CAC): void {
           const v = tail.join("=");
           if (!k || !v) {
             console.log(JSON.stringify(fail("map", `Invalid mapping '${pair}', expected k=v`)));
+            process.exit(1);
             return;
           }
           overrides[k.trim()] = v.trim();
         }
         writeOverrides(process.cwd(), overrides);
         console.log(JSON.stringify(ok(overrides)));
-      } else if (rest[0] === "reset") {
+      } else if (action === "reset") {
         rmSync(overridesPath(process.cwd()), { force: true });
         console.log(JSON.stringify(ok({ reset: true })));
+      } else if (action !== "") {
+        console.log(
+          JSON.stringify(
+            fail("UNKNOWN_MODELS_SUBCOMMAND", `Unknown models subcommand "${action}"`, {
+              available: ["cursor"],
+            }),
+          ),
+        );
+        process.exit(1);
       } else {
         const overrides = loadOverrides(process.cwd());
         const data: Record<string, string> = {};
         for (const tier of Object.keys(CURSOR_MODEL_DEFAULTS) as Tier[]) {
           data[tier] = resolveCursorModel(tier, overrides);
         }
-        data._override_file = existsSync(overridesPath(process.cwd())) ? overridesPath(process.cwd()) : "";
         console.log(JSON.stringify(ok(data)));
       }
     });
