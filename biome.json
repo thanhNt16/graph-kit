@@ -15,7 +15,8 @@
       "!.graphkit",
       "!**/.tmp-*",
       "!src/viewer/app.ts",
-      "!claude/viewer"
+      "!claude/viewer",
+      "!docs/**/*.html"
     ]
   },
   "formatter": {
