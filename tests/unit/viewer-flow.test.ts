@@ -61,10 +61,7 @@ function graph(name: string, nodes: Record<string, unknown>): ViewerGraph {
 }
 
 test("edges carry a dash flow attribute", async () => {
-  const harness = createViewerHarness(
-    APP_BUNDLE,
-    graph("g", { a: node("a"), b: node("b", { depend_on: ["a"] }) }),
-  );
+  const harness = createViewerHarness(APP_BUNDLE, graph("g", { a: node("a"), b: node("b", { depend_on: ["a"] }) }));
   await flush();
   const path = harness.edge("a", "b");
   expect(path).not.toBeNull();
@@ -73,10 +70,7 @@ test("edges carry a dash flow attribute", async () => {
 });
 
 test("emphasized edges switch to the fast-flow variant", async () => {
-  const harness = createViewerHarness(
-    APP_BUNDLE,
-    graph("g", { a: node("a"), b: node("b", { depend_on: ["a"] }) }),
-  );
+  const harness = createViewerHarness(APP_BUNDLE, graph("g", { a: node("a"), b: node("b", { depend_on: ["a"] }) }));
   await flush();
   const path = harness.edge("a", "b");
   expect(path?.classList.contains("emph-conn")).toBe(false);

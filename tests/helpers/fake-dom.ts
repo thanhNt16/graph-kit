@@ -380,8 +380,8 @@ export function createViewerHarness(
     innerWidth: 1200,
     innerHeight: 800,
     addEventListener: (t: string, fn: (ev: any) => void) => {
-      const list = (win.listeners[t] ||= []);
-      list.push(fn);
+      if (!win.listeners[t]) win.listeners[t] = [];
+      win.listeners[t].push(fn);
     },
     dispatch: (t: string, init?: Record<string, unknown>) => {
       const ev = Object.assign(

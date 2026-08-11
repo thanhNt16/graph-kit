@@ -1,8 +1,8 @@
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import type { CAC } from "cac";
-import { CURSOR_MODEL_DEFAULTS, resolveCursorModel } from "../../models/cursor-map.js";
 import type { Tier } from "../../models/cursor-map.js";
+import { CURSOR_MODEL_DEFAULTS, resolveCursorModel } from "../../models/cursor-map.js";
 import { fail, ok } from "../output.js";
 
 function overridesPath(cwd: string): string {
@@ -23,7 +23,7 @@ export function loadOverrides(cwd: string): Record<string, string> {
 function writeOverrides(cwd: string, overrides: Record<string, string>): void {
   const p = overridesPath(cwd);
   mkdirSync(dirname(p), { recursive: true });
-  writeFileSync(p, JSON.stringify(overrides, null, 2) + "\n");
+  writeFileSync(p, `${JSON.stringify(overrides, null, 2)}\n`);
 }
 
 export function registerModelsCommands(cli: CAC): void {
@@ -72,7 +72,7 @@ export function registerModelsCommands(cli: CAC): void {
         for (const tier of Object.keys(CURSOR_MODEL_DEFAULTS) as Tier[]) {
           data[tier] = resolveCursorModel(tier, overrides);
         }
-        data["_override_file"] = existsSync(overridesPath(process.cwd())) ? overridesPath(process.cwd()) : "";
+        data._override_file = existsSync(overridesPath(process.cwd())) ? overridesPath(process.cwd()) : "";
         console.log(JSON.stringify(ok(data)));
       }
     });
