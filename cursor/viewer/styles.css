@@ -206,8 +206,9 @@ input[type="checkbox"]:focus-visible {
   transition: stroke var(--transition), opacity var(--transition), fill var(--transition);
 }
 .node-group.is-new {
+  /* Uniform entrance — no per-level delay. A per-level stagger would need an
+     inline --level custom property, which `style-src 'self'` blocks. */
   animation: node-enter 240ms cubic-bezier(0.2, 0, 0, 1) both;
-  animation-delay: calc(var(--level) * 30ms);
 }
 @keyframes node-enter {
   from {

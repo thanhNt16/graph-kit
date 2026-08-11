@@ -64,7 +64,6 @@ export class FakeEl {
   value = "";
   checked = false;
   id = "";
-  style: Record<string, string> = {};
 
   constructor(
     public tagName: string,
@@ -75,16 +74,6 @@ export class FakeEl {
 
   setAttribute(k: string, v: string) {
     this.attrs[k] = String(v);
-    if (k === "style") {
-      this.style = {};
-      String(v)
-        .split(";")
-        .filter(Boolean)
-        .forEach((decl) => {
-          const idx = decl.indexOf(":");
-          if (idx > 0) this.style[decl.slice(0, idx).trim()] = decl.slice(idx + 1).trim();
-        });
-    }
     if (k === "class") {
       this.classList.remove(...this.classList.values());
       String(v)

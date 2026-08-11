@@ -292,3 +292,28 @@ test("node cards include a model rail, model text, and loop badge", async () => 
   expect(group.querySelector("text.node-badge")?.textContent).toContain("↻");
   expect(group.textContent).toContain("opus");
 });
+
+test("hiding lanes toggles the lane-layer visibility attribute (CSP-safe, no inline style)", async () => {
+  const harness = createViewerHarness(APP_BUNDLE, graph("g", { a: node("a") }));
+  await flush();
+  const laneLayer = harness.doc.ids.canvas.querySelector("g.lane-layer");
+  expect(laneLayer).not.toBeNull();
+  expect(laneLayer?.getAttribute("visibility")).toBe("visible");
+
+  // flip the toggle-lanes checkbox off — lanes must hide via the attribute
+  const toggle = harness.doc.ids["toggle-lanes"];
+  toggle.checked = false;
+  toggle.dispatch("change", { target: toggle });
+  expect(laneLayer?.getAttribute("visibility")).toBe("hidden");
+  // style-string approach would set an inline style, which `style-src 'self'` blocks
+  expect(laneLayer?.getAttribute("style")).toBeUndefined();
+});
+
+test("new nodes get the entrance class via classList, with no inline style attribute", async () => {
+  const harness = createViewerHarness(APP_BUNDLE, graph("g", { a: node("a") }));
+  await flush();
+  const group = harness.nodeGroup("a")!;
+  expect(group.classList.contains("is-new")).toBe(true);
+  // the old approach set an inline `--level` custom property, blocked by CSP
+  expect(group.getAttribute("style")).toBeUndefined();
+});

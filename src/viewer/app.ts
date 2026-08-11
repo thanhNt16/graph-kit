@@ -234,9 +234,10 @@ import { emphasisIds, type Filters, matchesSearch, passesFilters, retainedSelect
       role: "button",
       "aria-label": "Node " + node.id + ", " + node.agent + ", " + node.model,
     }) as SVGGElement;
-    // entrance animation-delay keyed by normalized level via a style custom
-    // property — a numeric value only, never inline JS
-    g.setAttribute("style", "--level:" + String(node.level));
+    // Entrance animation is a single uniform fade+rise, applied by toggling a
+    // class (never an inline style, which `style-src 'self'` blocks). Animation
+    // runs once; the class is removed on animationend so retained nodes don't
+    // replay it on subsequent updates.
     g.addEventListener("animationend", () => {
       g.classList.remove("is-new");
     });
@@ -320,7 +321,9 @@ import { emphasisIds, type Filters, matchesSearch, passesFilters, retainedSelect
 
   function reconcileTopology(): void {
     reconcileLanes();
-    layers.lanes.setAttribute("style", "opacity:" + (state.showLanes ? "1" : "0"));
+    // Lane show/hide via the SVG visibility attribute — never an inline style,
+    // which `style-src 'self'` blocks. No relayout: geometry stays computed.
+    layers.lanes.setAttribute("visibility", state.showLanes ? "visible" : "hidden");
 
     var wantedNodes = new Set(Object.keys(state.nodes));
     removeMissing(nodeEls, wantedNodes);
@@ -697,8 +700,8 @@ import { emphasisIds, type Filters, matchesSearch, passesFilters, retainedSelect
       state.showLanes = lanesToggle.checked;
       lanesToggle.addEventListener("change", (e) => {
         state.showLanes = (e.target as HTMLInputElement).checked;
-        // toggle lane visibility without relayout — pure opacity flip
-        layers.lanes.setAttribute("style", "opacity:" + (state.showLanes ? "1" : "0"));
+        // toggle lane visibility without relayout via the visibility attribute
+        layers.lanes.setAttribute("visibility", state.showLanes ? "visible" : "hidden");
       });
     }
     searchEl.addEventListener("input", (e) => {
