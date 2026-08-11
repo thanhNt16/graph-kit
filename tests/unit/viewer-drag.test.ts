@@ -73,4 +73,25 @@ describe("viewer node drag", () => {
     harness.dragNode("a", 30, 40);
     expect(harness.viewportTransform()).toBe(vpBefore);
   });
+
+  test("drag deltas are divided by the viewport zoom (k)", async () => {
+    const harness = createViewerHarness(APP_BUNDLE, graph({ a: node("a", "x", "sonnet") }));
+    await flush();
+    // Zoom out once so state.view.k != 1; read the exact k from the viewport.
+    harness.zoomWheel(240); // deltaY > 0 -> zoomBy(1/1.1)
+    const vp = harness.viewportTransform()!;
+    const km = /scale\(([\d.]+)\)/.exec(vp);
+    expect(km).not.toBeNull();
+    const k = Number(km![1]);
+    expect(k).not.toBe(1);
+
+    const start = harness.nodeTransform("a") ?? "";
+    const sm = /translate\((-?[\d.]+)\s+(-?[\d.]+)\)/.exec(start);
+    const tx0 = sm ? Number(sm[1]) : 0;
+    const ty0 = sm ? Number(sm[2]) : 0;
+
+    harness.dragNode("a", 30, 40);
+    const expected = `translate(${tx0 + 30 / k} ${ty0 + 40 / k})`;
+    expect(harness.nodeTransform("a")).toBe(expected);
+  });
 });
