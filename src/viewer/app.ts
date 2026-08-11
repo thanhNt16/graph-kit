@@ -127,7 +127,7 @@ import { emphasisIds, type Filters, matchesSearch, passesFilters, retainedSelect
   }
 
   function edgeKey(from: string, to: string): string {
-    return from + "\n" + to;
+    return from.length + ":" + from + to.length + ":" + to;
   }
 
   function setView(v: { x: number; y: number; k: number }) {
@@ -262,6 +262,9 @@ import { emphasisIds, type Filters, matchesSearch, passesFilters, retainedSelect
     }) as SVGPathElement;
     arr.appendChild(textNode(""));
     edgeArrows.set(path, arr);
+    // each keyed edge owns both its path and its arrow
+    layers.edges.appendChild(path);
+    layers.edges.appendChild(arr);
     return path;
   }
 
@@ -294,14 +297,20 @@ import { emphasisIds, type Filters, matchesSearch, passesFilters, retainedSelect
     }
 
     var wantedEdges = new Set(state.edges.map((edge) => edgeKey(edge.v, edge.w)));
-    removeMissing(edgeEls, wantedEdges);
+    edgeEls.forEach((path, key) => {
+      if (wantedEdges.has(key)) return;
+      path.parentNode?.removeChild(path);
+      var arr = edgeArrows.get(path);
+      if (arr) arr.parentNode?.removeChild(arr);
+      edgeArrows.delete(path);
+      edgeEls.delete(key);
+    });
     state.edges.forEach((edge) => {
       var key = edgeKey(edge.v, edge.w);
       var path = edgeEls.get(key);
       if (!path) {
         path = createEdgeElement(edge);
         edgeEls.set(key, path);
-        layers.edges.appendChild(path);
       }
       updateEdgeElement(path, edge);
     });

@@ -183,6 +183,36 @@ test("graph updates reconcile keyed nodes instead of replacing retained nodes", 
   expect(harness.nodeGroup("c")).not.toBeNull();
 });
 
+test("keyed edge owns its arrow: rendered and removed with the edge", async () => {
+  const harness = createViewerHarness(APP_BUNDLE, graph("g", { a: node("a"), b: node("b", { depend_on: ["a"] }) }));
+  await flush();
+  expect(harness.doc.ids.canvas.querySelector('path.edge[data-from="a"][data-to="b"]')).not.toBeNull();
+  expect(harness.doc.ids.canvas.querySelector('path.edge-arrow[data-from="a"][data-to="b"]')).not.toBeNull();
+
+  // dropping the dependency removes the edge AND its arrow
+  harness.emitUpdate({ type: "graph", graph: graph("g", { a: node("a"), b: node("b") }) });
+  await flush();
+  expect(harness.doc.ids.canvas.querySelector('path.edge[data-from="a"][data-to="b"]')).toBeNull();
+  expect(harness.doc.ids.canvas.querySelector('path.edge-arrow[data-from="a"][data-to="b"]')).toBeNull();
+});
+
+test("edgeKey is collision-free: newline-containing IDs keep distinct edges", async () => {
+  const harness = createViewerHarness(
+    APP_BUNDLE,
+    graph("g", {
+      a: node("a"),
+      "a\nb": node("a\nb"),
+      "b\nc": node("b\nc", { depend_on: ["a"] }), // edge a -> b\nc
+      c: node("c", { depend_on: ["a\nb"] }), // edge a\nb -> c
+    }),
+  );
+  await flush();
+  const edges = harness.doc.ids.canvas.querySelectorAll("path.edge");
+  // under "from + sep + to" both edges key to "a\nb\nc" and would merge into one;
+  // the length-prefixed key keeps them distinct, so two path.edge elements render.
+  expect(edges.length).toBe(2);
+});
+
 test("viewport pan transform survives a graph update (no re-fit)", async () => {
   const harness = createViewerHarness(APP_BUNDLE, graph("g", { a: node("a") }));
   await flush();
