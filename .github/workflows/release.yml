@@ -1,9 +1,10 @@
 name: Release
 
+# Trigger only on main pushes: the publish job creates a new version tag,
+# so triggering on tags too would recurse into a duplicate release.
 on:
   push:
     branches: [main]
-    tags: ["v*"]
   workflow_dispatch:
 
 permissions:
@@ -42,22 +43,38 @@ jobs:
     needs: bundle
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Compute next version
+        id: version
+        run: |
+          git fetch --tags --force
+          latest=$(git tag --list 'v*' --sort=-v:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -n 1 || true)
+          echo "Latest tag: ${latest:-none}"
+          if [ -z "$latest" ]; then
+            next="v0.1.0"
+          else
+            base="${latest#v}"
+            IFS='.' read -r major minor patch <<< "$base"
+            next="v${major}.${minor}.$((patch + 1))"
+          fi
+          echo "Next tag: $next"
+          echo "next=$next" >> "$GITHUB_OUTPUT"
+      - name: Create and push tag
+        env:
+          NEXT: ${{ steps.version.outputs.next }}
+        run: |
+          git tag "$NEXT" "$GITHUB_SHA"
+          git push origin "$NEXT"
       - uses: actions/download-artifact@v4
         with:
           pattern: graphkit-*
           merge-multiple: true
-      - name: Publish rolling latest release (main)
-        if: github.ref == 'refs/heads/main'
+      - name: Publish release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: latest
-          name: Latest build
-          body: Auto-built from the latest main commit (${{ github.sha }}).
-          prerelease: true
-          files: gk-*.tar.gz
-      - name: Publish tagged release
-        if: startsWith(github.ref, 'refs/tags/')
-        uses: softprops/action-gh-release@v2
-        with:
+          tag_name: ${{ steps.version.outputs.next }}
+          name: ${{ steps.version.outputs.next }}
           generate_release_notes: true
           files: gk-*.tar.gz
