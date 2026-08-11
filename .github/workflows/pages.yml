@@ -29,9 +29,10 @@ jobs:
           cp -R docs/. _site/
           cat > _site/index.html <<'HTML'
           <!doctype html><html lang="en"><head><meta charset="utf-8">
-          <meta http-equiv="refresh" content="0; url=templates-and-viewer.md">
+          <meta http-equiv="refresh" content="0; url=graphkit-v0.2-report.html">
           <title>GraphKit</title></head><body>
-          <a href="templates-and-viewer.md">GraphKit documentation</a>
+          <a href="graphkit-v0.2-report.html">GraphKit v0.2 report</a> ·
+          <a href="templates-and-viewer.md">Templates &amp; viewer docs</a>
           </body></html>
           HTML
       - uses: actions/configure-pages@v5
