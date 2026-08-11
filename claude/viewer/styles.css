@@ -190,11 +190,13 @@ input[type="checkbox"]:focus-visible {
 /* nodes + edges */
 .node-group {
   cursor: pointer;
+  transform-box: fill-box;
+  transform-origin: center;
 }
 .node-group:focus {
   outline: none;
 }
-.node-group:focus .node-rect {
+.node-group:focus-visible .node-rect {
   stroke: var(--accent);
   stroke-width: 3;
 }
@@ -233,7 +235,7 @@ input[type="checkbox"]:focus-visible {
   transition: stroke var(--transition), opacity var(--transition);
 }
 .arrow-marker {
-  fill: var(--hairline);
+  fill: context-stroke;
 }
 .edge.emph-conn {
   stroke: var(--accent);
@@ -267,32 +269,27 @@ input[type="checkbox"]:focus-visible {
   stroke-width: 3;
   filter: drop-shadow(0 0 8px color-mix(in srgb, var(--accent) 35%, transparent));
 }
+.node-group.selected {
+  transform: translateY(-2px);
+}
 
-/* dim unrelated when a path is emphasized */
-.dim .node-rect,
-.dim .node-text-id,
-.dim .node-text-sub,
-.dim .edge {
+/* dim unrelated when a path is emphasized (applies to the whole group, so
+   emphasized edges stay full-strength while unconnected ones fade) */
+.node-group.dim,
+.edge.dim {
   opacity: var(--dim);
 }
 /* search/filter emphasis policy: non-matching nodes remain visible but dim,
    and the mode is labeled emphasis rather than filtering (the design doc: dim
    — never hide — when hiding would make remaining edges misleading). The
    runtime tags non-matching groups with the .filtered class + data-visible="0". */
-.node-group.filtered .node-rect,
-.node-group.filtered .node-text-id,
-.node-group.filtered .node-text-sub {
-  opacity: var(--dim);
-}
 .node-group.filtered {
+  opacity: var(--dim);
   pointer-events: none;
 }
 .emph .node-rect {
   stroke: var(--accent);
   stroke-width: 2.5;
-}
-.emph-conn .edge {
-  stroke: var(--accent);
 }
 
 /* drawer */
@@ -386,11 +383,11 @@ input[type="checkbox"]:focus-visible {
 
 /* reduced motion */
 @media (prefers-reduced-motion: reduce) {
+  .node-group,
   .node-rect,
-  .edge {
-    transition: none;
-  }
-  .node-group.is-new {
-    animation: none;
+  .edge,
+  .arrow-marker {
+    animation: none !important;
+    transition: none !important;
   }
 }

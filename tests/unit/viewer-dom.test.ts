@@ -317,3 +317,28 @@ test("new nodes get the entrance class via classList, with no inline style attri
   // the old approach set an inline `--level` custom property, blocked by CSP
   expect(group.getAttribute("style")).toBeUndefined();
 });
+
+test("lane toggle hides lanes without replacing graph elements", async () => {
+  const harness = createViewerHarness(APP_BUNDLE, graph("g", { a: node("a") }));
+  await flush();
+  const a = harness.nodeGroup("a");
+  harness.setLanes(false);
+  expect(harness.viewport()?.querySelector("g.lane-layer")?.getAttribute("aria-hidden")).toBe("true");
+  expect(harness.nodeGroup("a")).toBe(a);
+});
+
+test("selection uses a durable selected class and connected edge emphasis", async () => {
+  const harness = createViewerHarness(
+    APP_BUNDLE,
+    graph("g", {
+      a: node("a"),
+      b: node("b", { depend_on: ["a"] }),
+      c: node("c"),
+    }),
+  );
+  await flush();
+  harness.clickNode("a");
+  expect(harness.nodeGroup("a")?.classList.contains("selected")).toBe(true);
+  expect(harness.edge("a", "b")?.classList.contains("emph-conn")).toBe(true);
+  expect(harness.nodeGroup("c")?.classList.contains("dim")).toBe(true);
+});

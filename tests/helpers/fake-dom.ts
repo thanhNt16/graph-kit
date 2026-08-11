@@ -258,6 +258,7 @@ export interface ViewerHarness {
   emitUpdate(payload: unknown): void;
   setSearch(v: string): void;
   setModelFilter(v: string): void;
+  setLanes(checked: boolean): void;
   clickNode(id: string): void;
   focusNode(id: string): void;
   blurNode(id: string): void;
@@ -378,6 +379,11 @@ export function createViewerHarness(appJs: string, initialGraph: unknown): Viewe
       const s = doc.ids.search;
       s.value = v;
       s.dispatch("input", { target: s });
+    },
+    setLanes: (checked) => {
+      const control = doc.ids["toggle-lanes"];
+      control.checked = checked;
+      control.dispatch("change", { target: control });
     },
     setModelFilter: (v) => {
       const m = doc.ids["filter-model"];

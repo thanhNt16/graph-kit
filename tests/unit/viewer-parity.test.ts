@@ -98,6 +98,8 @@ describe("browser asset contracts", () => {
     const html = readFileSync(join(claudeViewer, "index.html"), "utf-8");
     expect(css).toContain("prefers-reduced-motion");
     expect(css).toContain(":focus-visible");
+    // reduced-motion parity: every motion source is disabled inside the block
+    expect(css).toMatch(/prefers-reduced-motion:\s*reduce[\s\S]*animation:\s*none/);
     expect(html).toContain("dagre.js");
   });
 

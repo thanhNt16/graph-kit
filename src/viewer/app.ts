@@ -52,7 +52,6 @@ import { emphasisIds, type Filters, matchesSearch, passesFilters, retainedSelect
   var drawerTitle: HTMLElement;
   var searchEl: HTMLInputElement;
   var mouseAnchor: { x: number; y: number; view: { x: number; y: number; k: number } } | null = null;
-  var keyboardOrder: string[] = [];
 
   function el(tag: string, props?: Record<string, string>, children?: Node[]) {
     var n = document.createElementNS("http://www.w3.org/2000/svg", tag);
@@ -324,10 +323,14 @@ import { emphasisIds, type Filters, matchesSearch, passesFilters, retainedSelect
     // Lane show/hide via the SVG visibility attribute — never an inline style,
     // which `style-src 'self'` blocks. No relayout: geometry stays computed.
     layers.lanes.setAttribute("visibility", state.showLanes ? "visible" : "hidden");
+    layers.lanes.setAttribute("aria-hidden", state.showLanes ? "false" : "true");
 
     var wantedNodes = new Set(Object.keys(state.nodes));
     removeMissing(nodeEls, wantedNodes);
-    for (const id of wantedNodes) {
+    // Append in normalized keyboard/tab order (level, order, then id) so Tab
+    // order follows the visual hierarchy regardless of source object order.
+    keyboardOrderBy().forEach((id) => {
+      if (!wantedNodes.has(id)) return;
       var group = nodeEls.get(id);
       if (!group) {
         group = createNodeElement(id);
@@ -336,7 +339,7 @@ import { emphasisIds, type Filters, matchesSearch, passesFilters, retainedSelect
         group.classList.add("is-new");
       }
       updateNodeElement(group, id);
-    }
+    });
 
     var wantedEdges = new Set(state.edges.map((edge) => edgeKey(edge.v, edge.w)));
     edgeEls.forEach((path, key) => {
@@ -603,7 +606,6 @@ import { emphasisIds, type Filters, matchesSearch, passesFilters, retainedSelect
     reconcileTopology();
     rebuildHeader();
     buildFilters();
-    keyboardOrder = keyboardOrderBy();
     hideStale();
     document.getElementById("error-screen")!.classList.add("hidden");
     // Refresh drawer for a still-selected node (its details may have changed);
@@ -644,7 +646,7 @@ import { emphasisIds, type Filters, matchesSearch, passesFilters, retainedSelect
       markerHeight: "7",
       orient: "auto-start-reverse",
     });
-    marker.appendChild(el("path", { class: "arrow-marker", d: "M 0 0 L 10 5 L 0 10 z" }));
+    marker.appendChild(el("path", { class: "arrow-marker", d: "M 0 0 L 10 5 L 0 10 z", fill: "context-stroke" }));
     defs.appendChild(marker);
     svg.appendChild(defs);
 
@@ -702,6 +704,7 @@ import { emphasisIds, type Filters, matchesSearch, passesFilters, retainedSelect
         state.showLanes = (e.target as HTMLInputElement).checked;
         // toggle lane visibility without relayout via the visibility attribute
         layers.lanes.setAttribute("visibility", state.showLanes ? "visible" : "hidden");
+        layers.lanes.setAttribute("aria-hidden", state.showLanes ? "false" : "true");
       });
     }
     searchEl.addEventListener("input", (e) => {
@@ -709,7 +712,8 @@ import { emphasisIds, type Filters, matchesSearch, passesFilters, retainedSelect
       updateViewState();
     });
 
-    // focus emulates hover for path emphasis (keyboard accessibility)
+    // focus emulates hover for path emphasis (keyboard accessibility); selection
+    // locks emphasis, so hover/focus updates only apply when nothing is selected
     svg.addEventListener("focusin", (e) => {
       var target = (e.target as Element).closest("g.node-group");
       if (target) {
