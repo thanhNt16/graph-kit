@@ -16,7 +16,19 @@ gk bridges to the [codebase-memory-mcp](https://github.com/) (CBM) MCP server fo
 
 ## Install
 
-### GitHub release (macOS Apple Silicon)
+### GitHub release
+
+Each build on `main` publishes a new patch release (e.g. `v0.2.1`) with binaries and auto-generated changelogs. Install the latest for your platform:
+
+**macOS Apple Silicon:**
+
+```bash
+curl -fsSL https://github.com/thanhNt16/graph-kit/releases/latest/download/gk-darwin-arm64.tar.gz \
+  | sudo tar -xz -C /usr/bin
+```
+
+> `releases/latest` always resolves to the newest version tag.
+> ⚠️ `/usr/bin` is SIP-protected on macOS — `sudo` is required, and you may need to temporarily disable SIP. If you hit `Operation not permitted`, install to `/usr/local/bin` instead (on `PATH`, not SIP-protected):
 
 ```bash
 curl -fsSL https://github.com/thanhNt16/graph-kit/releases/latest/download/gk-darwin-arm64.tar.gz \
