@@ -63,6 +63,11 @@ export const CLI_COMMANDS: { path: string; description: string; options: string[
     options: ["--json"],
   },
   {
+    path: "memory recall",
+    description: "Query .graphkit/memory (keyword×salience + validity filters); reinforces survivors",
+    options: ["--json"],
+  },
+  {
     path: "template pack",
     description: "Package a graph.yaml as a reusable GraphTemplate",
     options: ["--name <name>", "--global", "--force", "--input <file>"],

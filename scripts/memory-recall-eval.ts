@@ -13,7 +13,7 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import YAML from "yaml";
-import { applyRecallFilters, type RecallEntry } from "../src/eval/memory-recall.js";
+import { applyRecallFilters, loadMemories, rankByOverlap } from "../src/eval/memory-recall.js";
 
 const HIT_RATE_BASELINE = 0.8; // committed baseline (current 0.9; mr-04 known stemming gap) — ratchet only upward
 
@@ -28,58 +28,14 @@ const QUERIES = YAML.parse(readFileSync(resolve(ROOT, "eval/cbm/memory-recall.ya
 
 const TOP_K = 5;
 
-interface MemoryDoc extends RecallEntry {
-  terms: Set<string>;
-  salience: number;
-}
-
-function load(): MemoryDoc[] {
-  return readdirSync(FIXTURES)
-    .filter((f) => f.endsWith(".md"))
-    .map((f) => {
-      const raw = readFileSync(resolve(FIXTURES, f), "utf-8");
-      const fm = (YAML.parse(raw.match(/^---\n([\s\S]*?)\n---/)?.[1] ?? "{}") ?? {}) as Record<string, unknown>;
-      const terms = new Set(
-        raw
-          .toLowerCase()
-          .replace(/[^a-z0-9_\s]/g, " ")
-          .split(/\s+/)
-          .filter((t) => t.length > 2),
-      );
-      return {
-        id: String(fm.id ?? f.replace(/\.md$/, "")),
-        file: f,
-        valid_from: fm.valid_from as string | undefined,
-        valid_to: fm.valid_to as string | undefined,
-        expired: fm.expired as boolean | undefined,
-        superseded_by: fm.superseded_by as string | undefined,
-        salience: typeof fm.salience === "number" ? fm.salience : 0.5,
-        terms,
-      };
-    });
-}
-
-// gk-recall Degradation-path retriever: term overlap × salience
-function rank(query: string, docs: MemoryDoc[]): MemoryDoc[] {
-  const q = query
-    .toLowerCase()
-    .split(/\s+/)
-    .filter((t) => t.length > 2);
-  return docs
-    .map((d) => ({ d, s: q.filter((t) => d.terms.has(t)).length * d.salience }))
-    .filter((x) => x.s > 0)
-    .sort((a, b) => b.s - a.s)
-    .map((x) => x.d);
-}
-
 let hits = 0;
 let scored = 0;
 const violations: string[] = [];
 const detail: unknown[] = [];
 
-const docs = load();
+const docs = loadMemories(FIXTURES);
 for (const q of QUERIES) {
-  const top = applyRecallFilters(rank(q.query, docs), new Date().toISOString())
+  const top = applyRecallFilters(rankByOverlap(q.query, docs), new Date().toISOString())
     .slice(0, TOP_K)
     .map((e) => e.id);
   for (const want of q.must_surface) {

@@ -5,6 +5,7 @@ import YAML from "yaml";
 import { type CbmClient, createCbmClient } from "../../cbm/client.js";
 import { indexProject } from "../../cbm/index.js";
 import { actRScore, shouldExpire } from "../../eval/forgetting.js";
+import { recallTopK } from "../../eval/memory-recall.js";
 import { subcommandsFor } from "../command-registry.js";
 import { fail, ok } from "../output.js";
 
@@ -194,6 +195,21 @@ export function registerMemoryCommands(cli: CAC) {
           return;
         }
         console.log(JSON.stringify(ok(touched)));
+        return;
+      }
+      if (subcommand === "recall") {
+        const query = Array.isArray(_args) ? _args.join(" ") : _args;
+        if (!query) {
+          console.log(JSON.stringify(fail("MISSING_ARG", "recall requires a query")));
+          process.exit(1);
+          return;
+        }
+        // the working retriever (keyword×salience + validity/supersede filters) —
+        // CBM search_graph returns 0 over markdown-only projects (measured, see
+        // scripts/memory-recall-eval.ts). Reinforces survivors so decay keeps them.
+        const top = recallTopK(join(process.cwd(), ".graphkit", "memory"), query);
+        for (const h of top) touchMemory(process.cwd(), h.id);
+        console.log(JSON.stringify(ok({ query, top_k: top.length, results: top })));
         return;
       }
       if (subcommand !== "index") {

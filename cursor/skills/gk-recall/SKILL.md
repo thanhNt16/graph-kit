@@ -1,33 +1,36 @@
 ---
 name: gk-recall
-description: Query the run's memory graph for context relevant to the current node's objective. Fused semantic + temporal + entity retrieval. Use when a graph node needs prior-run or intra-run memory — constraints, past decisions, diagnosed errors, distilled experience. Trigger: "recall", "what do we know about", "memory", "prior context", "past decisions".
+description: Query the run's memory store for context relevant to the current node's objective. Keyword×salience retrieval with temporal-validity and supersede filters. Trigger: "recall", "what do we know about", "memory", "prior context", "past decisions".
+when_to_use: A graph node needs prior-run or intra-run memory — constraints, past decisions, diagnosed errors, distilled experience — that it would not otherwise know to ask for.
+user-invocable: true
 disable-model-invocation: false
 ---
 
 # gk recall
 
-Memory lives in the `codebase-memory-mcp` graph project named in `graph.yaml` `topology_config.memory.project` (default `graph-kit-memory`), populated from `.graphkit/memory/` OKF files by `gk memory index`.
-
-> **Note:** For full function, `codebase-memory-mcp` must be configured in `.cursor/mcp.json`. If unavailable, grep over `.graphkit/memory/` is used as fallback (see Degradation below).
+Memory lives in `.graphkit/memory/` OKF files. Retrieval is `gk memory recall` —
+NOT CBM: `search_graph` over a markdown-only project returns 0 hits (.md indexes
+as File/Module shells with no searchable content; measured 2026-08-15, see
+`scripts/memory-recall-eval.ts`).
 
 ## Process
 
-**0. Ensure the memory index is fresh.** If `.graphkit/.memory-dirty` exists OR `.graphkit/.last-index` is absent, the memory project is stale or unbuilt — run `gk memory index --json` before querying. (Skip silently if CBM is unavailable; the Degradation path below does not need it.)
+1. Build the query from the calling node's `objective` + any explicit query argument. Honor an `as_of` argument if the caller supplied one (defaults to now).
+2. Run `gk memory recall --json "<query>"`. This single command:
+   - ranks memories by keyword-overlap × salience,
+   - drops expired / not-yet-valid / past-valid entries,
+   - resolves `superseded_by` chains to the newest member,
+   - returns top `recall_topk` (default 5),
+   - and reinforces every survivor (`gk memory touch`: use_count + last_used_at bump, `.memory-dirty` flag) so ACT-R decay keeps what recall actually uses.
+3. Read each returned `file` under `.graphkit/memory/` for full content. Surface a `stale: true` flag if the memory's source evidence predates the current node's `depend_on` ancestors.
+4. Return each memory with: `id`, `type`, one-line summary, full `content`, `as_of` validity window.
 
-1. Read `graph.yaml` → `topology_config.memory.project` (default `graph-kit-memory`) and `recall_topk` (default 5).
-2. Build the query from the calling node's `objective` + any explicit query argument.
-3. **Semantic + keyword:** call `mcp__codebase-memory-mcp__search_graph` with `{ project, query: <objective>, limit: recall_topk * 3 }`. This runs BM25 + vector (`nomic-embed-code`) over memory files.
-4. **Temporal validity:** for each hit, read its YAML frontmatter `valid_from` / `valid_to` / `expired`. **Drop** any memory where `expired: true` or `now < valid_from` or `valid_to < now`. Honor an `as_of` argument if the caller supplied one.
-5. **Supersede resolution:** if a memory has `superseded_by`, follow the chain to the current version; surface only the newest non-expired member.
-6. **Entity traversal:** optionally call `mcp__codebase-memory-mcp__query_graph` with a Cypher predicate on tags / `[[wikilinks]]` to pull directly related memories.
-7. Rank survivors by `salience × recency` (parse `salience` and `last_used_at` from frontmatter); return top `recall_topk`.
-8. Return each memory with: `id`, `type`, one-line `content` summary, full `content`, `as_of` validity window. **Surface a `stale: true` flag** if the memory's source evidence predates the current node's `depend_on` ancestors.
-9. **Reinforce survivors:** for each returned memory, run `gk memory touch <id>`. This bumps `use_count`/`last_used_at`; without it, ACT-R decay (`gk memory trace`) expires the whole store uniformly (~day 10 for neutral memories) regardless of recall value.
+Reference implementation of the filters: `src/eval/memory-recall.ts` (unit-tested; the memory-recall eval holds it to `hit_rate ≥ 0.8` and zero validity violations).
 
 ## Degradation
 
-If `codebase-memory-mcp` tools are unavailable, fall back to scanning `.graphkit/memory/*.md` directly with `Grep`/`Read`, parse frontmatter, apply the same temporal/supersede/expires filters. Tag results `source: fallback-scan` and note the absence of semantic ranking.
+If the `gk` CLI is unavailable, scan `.graphkit/memory/*.md` directly with `Grep`/`Read`, parse frontmatter, and apply the same filters manually (expired / valid-window / supersede-chain — see `src/eval/memory-recall.ts`). Tag results `source: fallback-scan`.
 
 ## Output
 
-A concise ranked list handed back to the calling node's context. Writes only `use_count`/`last_used_at` bumps via `gk memory touch` — never content.
+A concise ranked list handed back to the calling node's context. The CLI writes only `use_count`/`last_used_at` bumps and the `.memory-dirty` flag — never content.
