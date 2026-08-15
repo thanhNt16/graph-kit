@@ -58,6 +58,11 @@ export const CLI_COMMANDS: { path: string; description: string; options: string[
     options: ["--json"],
   },
   {
+    path: "memory touch",
+    description: "Reinforce a memory (bump use_count/last_used_at) so decay keeps it",
+    options: ["--json"],
+  },
+  {
     path: "template pack",
     description: "Package a graph.yaml as a reusable GraphTemplate",
     options: ["--name <name>", "--global", "--force", "--input <file>"],

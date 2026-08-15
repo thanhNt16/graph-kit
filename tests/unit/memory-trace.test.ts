@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { traceMemory } from "../../src/cli/commands/memory.js";
+import { touchMemory, traceMemory } from "../../src/cli/commands/memory.js";
 
 const NOW = "2026-08-15T00:00:00.000Z";
 
@@ -77,5 +77,24 @@ describe("gk memory trace", () => {
   test("empty memory dir reports zeros", () => {
     const r = traceMemory(cwd, NOW);
     expect(r.total).toBe(0);
+  });
+
+  test("touchMemory reinforces: touched memory survives +21d decay, untouched twin expires", () => {
+    const LATER = "2026-09-05T00:00:00.000Z"; // NOW + 21 days
+    // identical neutral twins, both last used at creation
+    writeMemory(cwd, "touched.md", { id: "touched", salience: 0.5, expired: false, valid_from: NOW, tags: "[]" });
+    writeMemory(cwd, "twin.md", { id: "twin", salience: 0.5, expired: false, valid_from: NOW, tags: "[]" });
+
+    const t = touchMemory(cwd, "touched", LATER);
+    expect(t?.use_count).toBe(2); // default 1 + 1
+    expect(t?.last_used_at).toBe(LATER);
+
+    const r = traceMemory(cwd, LATER);
+    expect(r.memories.find((m) => m.id === "touched")?.state).toBe("live");
+    expect(r.memories.find((m) => m.id === "twin")?.state).toBe("expired");
+  });
+
+  test("touchMemory returns null for unknown id", () => {
+    expect(touchMemory(cwd, "nope")).toBeNull();
   });
 });

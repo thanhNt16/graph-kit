@@ -128,6 +128,32 @@ export function traceMemory(cwd: string, now = new Date().toISOString()): Memory
   return report;
 }
 
+// Reinforcement: recall that surfaces a memory must bump its use_count and
+// last_used_at, or ACT-R decay expires the entire store uniformly (~day 10 for
+// neutral memories) regardless of recall value. Called by gk-recall survivors.
+export function touchMemory(
+  cwd: string,
+  id: string,
+  now = new Date().toISOString(),
+): { id: string; file: string; use_count: number; last_used_at: string } | null {
+  const memDir = join(cwd, ".graphkit", "memory");
+  if (!existsSync(memDir)) return null;
+  for (const file of readdirSync(memDir).filter((f) => f.endsWith(".md"))) {
+    const path = join(memDir, file);
+    const raw = readFileSync(path, "utf-8");
+    const m = raw.match(/^---\n([\s\S]*?)\n---/);
+    if (!m) continue;
+    const fm = (YAML.parse(m[1]) ?? {}) as Record<string, unknown>;
+    if (String(fm.id ?? "") !== id && file.replace(/\.md$/, "") !== id) continue;
+    const useCount = (typeof fm.use_count === "number" ? fm.use_count : 1) + 1;
+    fm.use_count = useCount;
+    fm.last_used_at = now;
+    writeFileSync(path, `---\n${YAML.stringify(fm)}---\n${raw.slice(m[0].length)}`);
+    return { id: String(fm.id ?? id), file, use_count: useCount, last_used_at: now };
+  }
+  return null;
+}
+
 export function registerMemoryCommands(cli: CAC) {
   // cac (6.x) matches a single leading token only; "memory index" never
   // dispatches. Use one `memory` command with subcommand dispatch (like graph).
@@ -139,6 +165,17 @@ export function registerMemoryCommands(cli: CAC) {
       if (subcommand === "trace") {
         // decay pass: ACT-R score + expiry marking, no CBM needed
         console.log(JSON.stringify(ok(traceMemory(process.cwd()))));
+        return;
+      }
+      if (subcommand === "touch") {
+        const id = Array.isArray(_args) ? _args[0] : _args;
+        const touched = id ? touchMemory(process.cwd(), String(id)) : null;
+        if (!touched) {
+          console.log(JSON.stringify(fail("MEMORY_NOT_FOUND", `No memory with id "${id}"`)));
+          process.exit(1);
+          return;
+        }
+        console.log(JSON.stringify(ok(touched)));
         return;
       }
       if (subcommand !== "index") {

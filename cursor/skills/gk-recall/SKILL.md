@@ -22,6 +22,7 @@ Memory lives in the `codebase-memory-mcp` graph project named in `graph.yaml` `t
 6. **Entity traversal:** optionally call `mcp__codebase-memory-mcp__query_graph` with a Cypher predicate on tags / `[[wikilinks]]` to pull directly related memories.
 7. Rank survivors by `salience × recency` (parse `salience` and `last_used_at` from frontmatter); return top `recall_topk`.
 8. Return each memory with: `id`, `type`, one-line `content` summary, full `content`, `as_of` validity window. **Surface a `stale: true` flag** if the memory's source evidence predates the current node's `depend_on` ancestors.
+9. **Reinforce survivors:** for each returned memory, run `gk memory touch <id>`. This bumps `use_count`/`last_used_at`; without it, ACT-R decay (`gk memory trace`) expires the whole store uniformly (~day 10 for neutral memories) regardless of recall value.
 
 ## Degradation
 
@@ -29,4 +30,4 @@ If `codebase-memory-mcp` tools are unavailable, fall back to scanning `.graphkit
 
 ## Output
 
-A concise ranked list handed back to the calling node's context. Does not write files.
+A concise ranked list handed back to the calling node's context. Writes only `use_count`/`last_used_at` bumps via `gk memory touch` — never content.
