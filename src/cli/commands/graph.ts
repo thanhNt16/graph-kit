@@ -5,6 +5,7 @@ import YAML from "yaml";
 import { type CbmClient, createCbmClient } from "../../cbm/client.js";
 import type { QueryResult, SearchResult, TraceResult } from "../../cbm/contract.js";
 import { indexProject } from "../../cbm/index.js";
+import { routeAndRetrieve } from "../../cbm/route.js";
 import { compileGraph } from "../../compiler/emitter.js";
 import { validateGraph } from "../../compiler/validate.js";
 import { GraphKitError } from "../../errors.js";
@@ -791,6 +792,23 @@ export function registerGraphCommands(cli: CAC) {
               pattern,
               project: Array.isArray(args) ? args[1] : undefined,
             });
+            await client.close();
+            console.log(JSON.stringify(ok(raw)));
+          } catch (e) {
+            console.log(JSON.stringify(fail("CBM_UNAVAILABLE", String(e))));
+          }
+        })();
+      } else if (subcommand === "ask") {
+        (async () => {
+          try {
+            const q = Array.isArray(args) ? args.join(" ") : args;
+            if (!q) {
+              console.log(JSON.stringify(fail("MISSING_ARG", "ask requires a natural-language question")));
+              return;
+            }
+            const client = _cbmClientFactory();
+            // project undefined = CBM derives from cwd, same as `graph search`
+            const raw = await routeAndRetrieve(client, q, (undefined as string | undefined));
             await client.close();
             console.log(JSON.stringify(ok(raw)));
           } catch (e) {
