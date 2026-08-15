@@ -1,0 +1,64 @@
+# Memory-recall eval — frozen queries over eval/cbm/memory-fixtures/ (P3, fable consolidation).
+# Scorer: scripts/memory-recall-eval.ts. Baseline committed in the script (HIT_RATE_BASELINE);
+# no PR may lower hit_rate or add a validity_violation. must_surface = id in top-5 after
+# recall filters; must_not_surface = expired / superseded head / not-yet-valid must never appear.
+
+- id: mr-01
+  query: "how are benchmark axes partitioned"
+  must_surface: [axis-partition]
+  must_not_surface: []
+  note: direct knowledge lookup
+
+- id: mr-02
+  query: "what were the baseline benchmark numbers"
+  must_surface: [benchmark-baseline]
+  must_not_surface: []
+  note: metric recall
+
+- id: mr-03
+  query: "how does the decay threshold work"
+  must_surface: [decay-policy]
+  must_not_surface: [old-decay-policy]
+  note: expired predecessor must never surface
+
+- id: mr-04
+  query: "how are questions routed to cbm primitives"
+  must_surface: [routing-lexicon, routing-v2]
+  must_not_surface: [routing-v1]
+  note: superseded head must never surface; successor must
+
+- id: mr-05
+  query: "viewer sse keyboard focus"
+  must_surface: [viewer-sse-note]
+  must_not_surface: []
+  note: low-salience but live
+
+- id: mr-06
+  query: "routing strategy current"
+  must_surface: [routing-v2]
+  must_not_surface: [routing-v1, old-decay-policy]
+  note: supersede resolution under generic phrasing
+
+- id: mr-07
+  query: "register subcommands in the kit"
+  must_surface: []
+  must_not_surface: [kit-registration]
+  note: valid_from in the future — must not surface before its window opens
+
+- id: mr-08
+  query: "decay expiry policy act-r"
+  must_surface: [decay-policy]
+  must_not_surface: [old-decay-policy]
+  note: expired twin disambiguation
+
+- id: mr-09
+  query: "trace_path query_graph search_graph routing lexicon"
+  must_surface: [routing-lexicon]
+  must_not_surface: []
+  note: symbol-heavy query
+
+- id: mr-10
+  query: "expired decay threshold 0.3"
+  must_surface: [decay-policy]
+  must_not_surface: [old-decay-policy]
+  note: matches expired text strongly — the filter, not the ranker, must hold
