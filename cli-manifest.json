@@ -63,6 +63,11 @@
       "options": ["--json"]
     },
     {
+      "name": "graph ask",
+      "description": "Ask a natural-language question (routed to the right CBM primitive)",
+      "options": ["--json"]
+    },
+    {
       "name": "graph trace",
       "description": "Trace calls/callees in the CBM graph",
       "options": ["--json"]
@@ -70,6 +75,11 @@
     {
       "name": "graph query",
       "description": "Run a Cypher query against the CBM graph",
+      "options": ["--json"]
+    },
+    {
+      "name": "memory trace",
+      "description": "ACT-R score + expire .graphkit/memory/ entries (decay pass)",
       "options": ["--json"]
     },
     {

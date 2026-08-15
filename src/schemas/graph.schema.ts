@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { EvalConfig } from "./eval.schema.js";
+import { MemoryConfig } from "./memory.schema.js";
 
 const NodeRef = z.enum(["opus", "sonnet", "haiku", "fable"]);
 
@@ -97,7 +98,22 @@ const GraphSchema = z
     nodes: z.record(z.string(), NodeDefSchema).default({}),
     limits: LimitsSchema.optional().default(() => ({})),
     evidence: EvidenceSchema.optional().default(() => ({ required_keys: [], format: "markdown" as const })),
-    topology_config: z.record(z.string(), z.any()).default({}),
+    topology_config: z
+      .record(z.string(), z.any())
+      .default({})
+      .superRefine((cfg, ctx) => {
+        // memory config was previously read free-form and silently ignored —
+        // validate it here so typos fail at `gk validate`, not at runtime
+        if (cfg.memory !== undefined) {
+          const r = MemoryConfig.safeParse(cfg.memory);
+          if (!r.success) {
+            ctx.addIssue({
+              code: "custom",
+              message: `topology_config.memory: ${r.error.issues[0]?.message ?? "invalid"}`,
+            });
+          }
+        }
+      }),
     hooks: HookRef.optional().default(() => ({ on_node_complete: [], on_fanout_dispatch: [], on_graph_complete: [] })),
     outputs: OutputSchema.optional().default(() => ({
       evidence_dir: ".graphkit/evidence/",

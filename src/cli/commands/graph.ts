@@ -12,6 +12,7 @@ import { GraphKitError } from "../../errors.js";
 import { GraphSchema } from "../../schemas/graph.schema.js";
 import { getTopologyConfigKeys, TOPOLOGY_NAMES, type TopologyName } from "../../schemas/topology/index.js";
 import { renderAscii } from "../ascii.js";
+import { subcommandsFor } from "../command-registry.js";
 import { fail, ok } from "../output.js";
 import { renderSvg } from "../svg.js";
 import { templatesDir } from "./kit.js";
@@ -625,7 +626,7 @@ export function registerGraphCommands(cli: CAC) {
     });
 
   cli
-    .command("graph <subcommand> [args...]", "Graph lifecycle commands")
+    .command("graph <subcommand> [args...]", `Graph lifecycle commands\nSubcommands: ${subcommandsFor("graph")}`)
     .option("--json", "JSON output")
     .action((subcommand: string, args: string | string[] | undefined) => {
       if (subcommand === "list") {
@@ -818,7 +819,7 @@ export function registerGraphCommands(cli: CAC) {
               return;
             }
             // project undefined = CBM derives from cwd, same as `graph search`
-            const raw = await cbmCall((c) => routeAndRetrieve(c, q, undefined as string | undefined));
+            const raw = await cbmCall((c) => routeAndRetrieve(c, q));
             console.log(JSON.stringify(ok(raw)));
           } catch (e) {
             console.log(JSON.stringify(fail("CBM_UNAVAILABLE", String(e))));
@@ -872,7 +873,7 @@ export function registerGraphCommands(cli: CAC) {
           JSON.stringify(
             fail(
               "UNKNOWN_GRAPH_SUBCOMMAND",
-              `Unknown subcommand "${subcommand}". Use "graph list" or "graph inspect <topology>"`,
+              `Unknown subcommand "${subcommand}". Available: ${subcommandsFor("graph")}`,
             ),
           ),
         );

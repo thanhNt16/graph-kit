@@ -15,9 +15,7 @@ describe("classifyQuestion", () => {
 describe("deriveFiles", () => {
   test("derives file candidates from qualified names", () => {
     const proj = "Users-x.Desktop-graph-engineering-graph-kit";
-    expect(deriveFiles(`${proj}.src.cli.commands.graph.registerGraphCommands`)).toContain(
-      "src/cli/commands/graph.ts",
-    );
+    expect(deriveFiles(`${proj}.src.cli.commands.graph.registerGraphCommands`)).toContain("src/cli/commands/graph.ts");
     expect(deriveFiles(`${proj}.src.eval.forgetting.actRScore`)).toContain("src/eval/forgetting.ts");
     expect(deriveFiles(`${proj}.src.index`)).toContain("src/index.ts");
     expect(deriveFiles("noseparator")).toEqual([]);

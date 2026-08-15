@@ -15,4 +15,4 @@ export const MemoryConfig = z
     path: ["every"],
   });
 
-export type MemoryConfigType = z.infer<typeof MemoryConfig>;
+// MemoryConfigType deleted — zero consumers (fleet-compiler finding 4)

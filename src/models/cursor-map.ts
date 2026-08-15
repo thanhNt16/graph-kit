@@ -7,10 +7,7 @@ export const CURSOR_MODEL_DEFAULTS: Record<Tier, string> = {
   fable: "Auto",
 };
 
-export function resolveCursorModel(
-  model: string | undefined,
-  overrides: Record<string, string> = {},
-): string {
+export function resolveCursorModel(model: string | undefined, overrides: Record<string, string> = {}): string {
   if (!model) return "Auto";
   if (overrides[model]) return overrides[model];
   return CURSOR_MODEL_DEFAULTS[model as Tier] ?? "Auto";

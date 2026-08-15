@@ -40,12 +40,22 @@ export const CLI_COMMANDS: { path: string; description: string; options: string[
   { path: "graph waves", description: "Output topological wave structure", options: ["--json"] },
   { path: "graph index", description: "Index memory into CBM", options: ["--json"] },
   { path: "graph search", description: "Search the CBM memory graph", options: ["--json"] },
+  {
+    path: "graph ask",
+    description: "Ask a natural-language question (routed to the right CBM primitive)",
+    options: ["--json"],
+  },
   { path: "graph trace", description: "Trace calls/callees in the CBM graph", options: ["--json"] },
   { path: "graph query", description: "Run a Cypher query against the CBM graph", options: ["--json"] },
   {
     path: "memory index",
     description: "Index .graphkit/memory/ into the CBM memory project",
     options: ["--project <project>", "--json"],
+  },
+  {
+    path: "memory trace",
+    description: "ACT-R score + expire .graphkit/memory/ entries (decay pass)",
+    options: ["--json"],
   },
   {
     path: "template pack",
@@ -71,4 +81,11 @@ export function cliManifest(): { cli: string; version: string; commands: CliMani
     version: APP_VERSION,
     commands: CLI_COMMANDS.map((c) => ({ name: c.path, description: c.description, options: c.options })),
   };
+}
+
+/** Space-joined leaf names for a command group — injected into group --help and error hints. */
+export function subcommandsFor(group: string): string {
+  return CLI_COMMANDS.filter((c) => c.path.startsWith(`${group} `))
+    .map((c) => c.path.split(" ")[1])
+    .join(" ");
 }

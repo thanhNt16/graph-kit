@@ -10,7 +10,9 @@ function writeMemory(cwd: string, file: string, fm: Record<string, unknown>, bod
   writeFileSync(join(cwd, ".graphkit", "memory", file), `---\n${yamlFm(fm)}---\n${body}`);
 }
 function yamlFm(fm: Record<string, unknown>): string {
-  return Object.entries(fm).map(([k, v]) => `${k}: ${v}\n`).join("");
+  return Object.entries(fm)
+    .map(([k, v]) => `${k}: ${v}\n`)
+    .join("");
 }
 
 describe("gk memory trace", () => {
@@ -23,12 +25,20 @@ describe("gk memory trace", () => {
 
   test("marks stale low-salience memory expired, keeps fresh one live", () => {
     writeMemory(cwd, "stale.md", {
-      id: "stale", salience: 0.1, expired: false, valid_from: "2026-01-01T00:00:00.000Z", tags: [],
+      id: "stale",
+      salience: 0.1,
+      expired: false,
+      valid_from: "2026-01-01T00:00:00.000Z",
+      tags: [],
     });
     writeMemory(cwd, "fresh.md", {
       // neutral defaults (salience 0.5, untagged) — the realistic curator output;
       // guards the threshold calibration: peak ~0.15 must stay live
-      id: "fresh", salience: 0.5, expired: false, valid_from: NOW, tags: "[]",
+      id: "fresh",
+      salience: 0.5,
+      expired: false,
+      valid_from: NOW,
+      tags: "[]",
     });
 
     const r = traceMemory(cwd, NOW);
@@ -47,7 +57,14 @@ describe("gk memory trace", () => {
 
   test("already-expired and superseded memories are reported, not rewritten", () => {
     writeMemory(cwd, "exp.md", { id: "exp", salience: 0.9, expired: true, valid_from: NOW, tags: "[]" });
-    writeMemory(cwd, "sup.md", { id: "sup", salience: 0.9, expired: false, valid_from: NOW, superseded_by: "other", tags: "[]" });
+    writeMemory(cwd, "sup.md", {
+      id: "sup",
+      salience: 0.9,
+      expired: false,
+      valid_from: NOW,
+      superseded_by: "other",
+      tags: "[]",
+    });
 
     const r = traceMemory(cwd, NOW);
     expect(r.expired).toBe(1);

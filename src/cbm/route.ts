@@ -27,7 +27,7 @@ export function deriveFiles(qualifiedName: string): string[] {
   // anchor on ".src." — project prefixes may themselves contain dots
   const i = qualifiedName.indexOf(".src.");
   const tail = i >= 0 ? qualifiedName.slice(i + 1) : qualifiedName.replace(/^[^.]*\./, "");
-  if (!tail || !tail.startsWith("src")) return [];
+  if (!tail?.startsWith("src")) return [];
   const segs = tail.split(".");
   const full = `${segs.join("/")}.ts`;
   const parent = segs.length > 1 ? `${segs.slice(0, -1).join("/")}.ts` : full;
@@ -35,11 +35,52 @@ export function deriveFiles(qualifiedName: string): string[] {
 }
 
 const STOP = new Set([
-  "where", "what", "who", "which", "how", "does", "do", "are", "is", "the", "a", "an",
-  "in", "on", "at", "from", "to", "for", "of", "and", "or", "during", "with", "that",
-  "this", "it", "their", "its", "by", "elsewhere", "never", "call", "calls", "calling",
-  "defined", "implemented", "main", "function", "module", "code", "production", "source",
-  "find", "trace", "gk", "cli",
+  "where",
+  "what",
+  "who",
+  "which",
+  "how",
+  "does",
+  "do",
+  "are",
+  "is",
+  "the",
+  "a",
+  "an",
+  "in",
+  "on",
+  "at",
+  "from",
+  "to",
+  "for",
+  "of",
+  "and",
+  "or",
+  "during",
+  "with",
+  "that",
+  "this",
+  "it",
+  "their",
+  "its",
+  "by",
+  "elsewhere",
+  "never",
+  "call",
+  "calls",
+  "calling",
+  "defined",
+  "implemented",
+  "main",
+  "function",
+  "module",
+  "code",
+  "production",
+  "source",
+  "find",
+  "trace",
+  "gk",
+  "cli",
 ]);
 
 // identifier-looking tokens (camelCase / snake_case / ALLCAPS) — the strongest BM25 queries
@@ -100,18 +141,17 @@ function unwrap<T>(res: unknown): T {
   return text ? (JSON.parse(text) as T) : (res as T);
 }
 
-export async function routeAndRetrieve(
-  client: CbmClient,
-  question: string,
-  project: string,
-): Promise<RoutedResult> {
+export async function routeAndRetrieve(client: CbmClient, question: string, project?: string): Promise<RoutedResult> {
   const kind = classifyQuestion(question);
   const hit = (r: unknown) =>
-    unwrap<{ results: { name: string; qualified_name: string; file_path: string; label: string; start_line: number }[] }>(r).results.map(
-      (h) => ({ n: h.name, q: h.qualified_name, f: h.file_path, l: h.label, s: h.start_line }),
-    );
+    unwrap<{
+      results: { name: string; qualified_name: string; file_path: string; label: string; start_line: number }[];
+    }>(r).results.map((h) => ({ n: h.name, q: h.qualified_name, f: h.file_path, l: h.label, s: h.start_line }));
   const run = (query: string) =>
-    client.call("search_graph", { query, project, limit: 8 }).then(hit).catch(() => [] as TrimHit[]);
+    client
+      .call("search_graph", { query, project, limit: 8 })
+      .then(hit)
+      .catch(() => [] as TrimHit[]);
   // identifier query first (exact symbol match), token query as fallback/merge
   const symQ = symbols(question).join(" ");
   const [symHits, tokHits] = await Promise.all([
@@ -119,7 +159,7 @@ export async function routeAndRetrieve(
     run(contentTokens(question)),
   ]);
   const seen = new Set<string>();
-  const search = [...symHits, ...tokHits].filter((h) => !seen.has(h.n) && seen.add(h.n));
+  const search: TrimHit[] = [...symHits, ...tokHits].filter((h) => !seen.has(h.n) && seen.add(h.n));
 
   const out: RoutedResult = { kind, question, search };
   if (search.length === 0) return out;
@@ -132,9 +172,12 @@ export async function routeAndRetrieve(
     const t = await client
       .call("trace_path", { function_name: seed, project, depth: 3, direction })
       .then((r) =>
-        unwrap<{ callers?: { name: string; qualified_name: string }[]; callees?: { name: string; qualified_name: string }[] }>(r),
+        unwrap<{
+          callers?: { name: string; qualified_name: string }[];
+          callees?: { name: string; qualified_name: string }[];
+        }>(r),
       )
-      .catch(() => ({}));
+      .catch(() => ({ callers: [], callees: [] }));
     const hop = (h?: { name: string; qualified_name: string }[]) =>
       // parent candidate: "...graph.registerGraphCommands" -> "src/cli/commands/graph.ts";
       // the fn-as-directory candidate (".../graph/registerGraphCommands.ts") is wrong
@@ -176,15 +219,16 @@ export async function routeAndRetrieve(
   if (kind !== "deadcode" && kind !== "callers") {
     // file nodes outrank symbols in BM25; snippet only real code nodes
     const codeHits =
-      search.filter((h) => ["Function", "Method", "Class", "Variable"].includes(h.l)).slice(0, 3) ??
-      search.slice(0, 3);
+      search.filter((h) => ["Function", "Method", "Class", "Variable"].includes(h.l)).slice(0, 3) ?? search.slice(0, 3);
     const snips = await Promise.all(
-      codeHits.filter((h) => h.q).map((h) =>
-        client
-          .call("get_code_snippet", { qualified_name: h.q, project })
-          .then((r) => unwrap<{ name: string; source: string }>(r))
-          .catch(() => undefined),
-      ),
+      (codeHits as TrimHit[])
+        .filter((h) => h.q)
+        .map((h) =>
+          client
+            .call("get_code_snippet", { qualified_name: h.q, project })
+            .then((r) => unwrap<{ name: string; source: string }>(r))
+            .catch(() => undefined),
+        ),
     );
     const snippets = snips
       .filter((s): s is { name: string; source: string } => Boolean(s?.source))
@@ -192,5 +236,5 @@ export async function routeAndRetrieve(
     if (snippets.length) out.structural = { ...out.structural, snippets };
   }
 
-  return { ...out, search: out.search.map(({ q: _q, ...rest }) => rest) };
+  return { ...out, search: search.map(({ q: _q, ...rest }) => rest) };
 }
