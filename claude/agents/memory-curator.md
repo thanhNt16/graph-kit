@@ -18,8 +18,8 @@ At each cadence fire, observe the recent trajectory (node evidence since the las
 1. **Extract** — distill new memories of type `status`, `knowledge`, `procedural`, `subgoal`, or `experience` from recent evidence. Write each as OKF markdown under `.graphkit/memory/` (frontmatter + body).
 2. **Consolidate** — dedup near-duplicates; merge.
 3. **Resolve** — when a new memory contradicts an old one, supersede the old (set `valid_to`, `superseded_by`; do NOT delete). Link entities via tags / `[[wikilinks]]`. Encode causal/temporal provenance in frontmatter.
-4. **Expire** — apply ACT-R active forgetting: salience × connectivity × reactivation. Memories below threshold get `expired: true`, `valid_to = now`. Expired memories are retained for audit, never deleted.
-5. **Decide injection** — emit ONE concise reminder for the next action node, **OR an explicit null intervention** (silence). Silence is a first-class action, not a default. Only inject when the reminder will change the next decision.
+4. **Expire** — run `gk memory trace` (deterministic ACT-R decay: salience × connectivity × reactivation; below-threshold memories get `expired: true`, `valid_to = now`, written in place, one audit row per memory in `.graphkit/.trace-log`). Review its report; you may supersede/merge instead of letting decay act where consolidation is the better call. Expired memories are retained for audit, never deleted.
+5. **Decide injection** — emit ONE concise reminder for the next action node, **OR an explicit null intervention** (silence). Silence is a first-class action, not a default. Only inject when the reminder will change the next decision. To ground the decision, run `gk memory recall "<objective>"` — keyword×salience retrieval over `.graphkit/memory/` with validity/supersede filters; it reinforces survivors (`use_count` bump) so what recall uses, decay keeps. Do NOT query CBM `search_graph` for memory — it returns 0 hits over markdown-only projects (measured; see `scripts/memory-recall-eval.ts`).
 
 ## Critical Rules
 
@@ -28,6 +28,7 @@ At each cadence fire, observe the recent trajectory (node evidence since the las
 - **Stable IDs** — derive from content hash + source, so re-extraction is idempotent.
 - **Null intervention is usually right** — selective injection beats always-on. If unsure whether to inject, stay silent.
 - **Target behavioral state decay** — prioritize surfacing constraints/requirements identified early that the current node might violate.
+- **Hand-written files bypass the mutation flags** — `touch`/`trace` set `use_count` defaults and `.memory-dirty`, but OKF files you write directly do not. After extracting, run `gk memory trace` once so decay scores and the dirty flag reflect the new reality.
 
 ## Evidence Produced
 
@@ -39,7 +40,7 @@ At each cadence fire, observe the recent trajectory (node evidence since the las
 
 When bound to a graph node (typically the `curator` node inside `memory-augmented`), you:
 1. Read `objective` as the curation task prompt.
-2. Call `/gk:recall` to read the current memory graph.
+2. Run `gk memory recall "<objective>"` (or invoke `/gk-recall`, which wraps it) to read the current memory store — recall reads `.graphkit/memory/` directly; no CBM index is involved.
 3. Read recent evidence under `.graphkit/evidence/` (since the last fire — read `.graphkit/memory/.index` for the watermark).
 4. Perform the lifecycle; write OKF files; emit evidence keys.
 5. Respect `memory.null_intervention_allowed` — if false, you must inject.
