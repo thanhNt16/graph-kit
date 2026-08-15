@@ -30,6 +30,17 @@ export function _resetCbmSeam() {
   _indexProjectFn = indexProject;
 }
 
+// Own the create→call→close lifecycle so a thrown call can't leak the spawned
+// CBM child process (mirrors memory.ts indexMemory's try/finally).
+async function cbmCall<T>(fn: (client: CbmClient) => Promise<T>): Promise<T> {
+  const client = _cbmClientFactory();
+  try {
+    return await fn(client);
+  } finally {
+    await client.close();
+  }
+}
+
 export function loadGraph(file: string) {
   const raw = readFileSync(file, "utf-8");
   const doc = YAML.parse(raw);
@@ -771,12 +782,11 @@ export function registerGraphCommands(cli: CAC) {
         (async () => {
           try {
             const mode = Array.isArray(args) ? (args[0] as "fast" | "moderate" | "full" | undefined) : undefined;
-            const client = _cbmClientFactory();
-            const result = await _indexProjectFn(client, { repoPath: process.cwd(), mode });
-            await client.close();
+            const result = await cbmCall((c) => _indexProjectFn(c, { repoPath: process.cwd(), mode }));
             console.log(JSON.stringify(ok(result)));
           } catch (e) {
             console.log(JSON.stringify(fail("CBM_UNAVAILABLE", String(e))));
+            process.exit(1);
           }
         })();
       } else if (subcommand === "search") {
@@ -787,15 +797,16 @@ export function registerGraphCommands(cli: CAC) {
               console.log(JSON.stringify(fail("MISSING_ARG", "search requires a pattern argument")));
               return;
             }
-            const client = _cbmClientFactory();
-            const raw = await client.call<SearchResult>("search_graph", {
-              pattern,
-              project: Array.isArray(args) ? args[1] : undefined,
-            });
-            await client.close();
+            const raw = await cbmCall((c) =>
+              c.call<SearchResult>("search_graph", {
+                pattern,
+                project: Array.isArray(args) ? args[1] : undefined,
+              }),
+            );
             console.log(JSON.stringify(ok(raw)));
           } catch (e) {
             console.log(JSON.stringify(fail("CBM_UNAVAILABLE", String(e))));
+            process.exit(1);
           }
         })();
       } else if (subcommand === "ask") {
@@ -806,13 +817,12 @@ export function registerGraphCommands(cli: CAC) {
               console.log(JSON.stringify(fail("MISSING_ARG", "ask requires a natural-language question")));
               return;
             }
-            const client = _cbmClientFactory();
             // project undefined = CBM derives from cwd, same as `graph search`
-            const raw = await routeAndRetrieve(client, q, (undefined as string | undefined));
-            await client.close();
+            const raw = await cbmCall((c) => routeAndRetrieve(c, q, undefined as string | undefined));
             console.log(JSON.stringify(ok(raw)));
           } catch (e) {
             console.log(JSON.stringify(fail("CBM_UNAVAILABLE", String(e))));
+            process.exit(1);
           }
         })();
       } else if (subcommand === "trace") {
@@ -823,17 +833,18 @@ export function registerGraphCommands(cli: CAC) {
               console.log(JSON.stringify(fail("MISSING_ARG", "trace requires a function_name argument")));
               return;
             }
-            const client = _cbmClientFactory();
-            const raw = await client.call<TraceResult>("trace_path", {
-              function_name: fn,
-              project: Array.isArray(args) ? args[1] : undefined,
-              depth: 3,
-              direction: "both",
-            });
-            await client.close();
+            const raw = await cbmCall((c) =>
+              c.call<TraceResult>("trace_path", {
+                function_name: fn,
+                project: Array.isArray(args) ? args[1] : undefined,
+                depth: 3,
+                direction: "both",
+              }),
+            );
             console.log(JSON.stringify(ok(raw)));
           } catch (e) {
             console.log(JSON.stringify(fail("CBM_UNAVAILABLE", String(e))));
+            process.exit(1);
           }
         })();
       } else if (subcommand === "query") {
@@ -844,15 +855,16 @@ export function registerGraphCommands(cli: CAC) {
               console.log(JSON.stringify(fail("MISSING_ARG", "query requires a Cypher query argument")));
               return;
             }
-            const client = _cbmClientFactory();
-            const raw = await client.call<QueryResult>("query_graph", {
-              query: q,
-              project: Array.isArray(args) ? args[1] : undefined,
-            });
-            await client.close();
+            const raw = await cbmCall((c) =>
+              c.call<QueryResult>("query_graph", {
+                query: q,
+                project: Array.isArray(args) ? args[1] : undefined,
+              }),
+            );
             console.log(JSON.stringify(ok(raw)));
           } catch (e) {
             console.log(JSON.stringify(fail("CBM_UNAVAILABLE", String(e))));
+            process.exit(1);
           }
         })();
       } else {

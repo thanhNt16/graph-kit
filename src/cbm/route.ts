@@ -68,16 +68,20 @@ export function contentTokens(q: string): string {
 
 interface TrimHit {
   n: string;
-  q: string;
+  q: string; // qualified_name — snippet-fetch key only; stripped from output
   f: string;
   l: string;
   s: number;
 }
 
+// serialized hit: q is derivative (name+file carry the anchors); dropping it
+// cut tokens 13062→9270 on the frozen benchmark with wrong-count unchanged
+type TrimHitOut = Omit<TrimHit, "q">;
+
 export interface RoutedResult {
   kind: QueryKind;
   question: string;
-  search: TrimHit[];
+  search: TrimHitOut[];
   structural?: {
     callers?: { fn: string; file: string }[];
     callees?: { fn: string; file: string }[];
@@ -159,9 +163,10 @@ export async function routeAndRetrieve(
     out.structural = {
       isolated: all.rows
         .filter((r) => !linked.has(String(r[0])) && /\.(ts|js|cjs|mjs)$/.test(String(r[1])))
-        // production code first — yml/json/test fixtures flood the slot budget
-        .sort((a, b) => Number(String(b[1]).startsWith("src/")) - Number(String(a[1]).startsWith("src/")) || String(a[1]).localeCompare(String(b[1])))
-        .slice(0, 80)
+        // even alphanumeric sort — src-first bias buried scripts/ vars (_GK_BIN
+        // at idx 73); even sort keeps them reachable at slice 25 (idx 23)
+        .sort((a, b) => String(a[1]).localeCompare(String(b[1])))
+        .slice(0, 25)
         .map((r) => ({ name: String(r[0]), file: String(r[1]), line: Number(r[2]) })),
     };
   }
@@ -187,5 +192,5 @@ export async function routeAndRetrieve(
     if (snippets.length) out.structural = { ...out.structural, snippets };
   }
 
-  return out;
+  return { ...out, search: out.search.map(({ q: _q, ...rest }) => rest) };
 }

@@ -201,4 +201,19 @@ describe("gk graph CBM subcommands", () => {
 
     expect(closeCalled).toBe(true);
   });
+
+  test("client.close called even when the call throws (no child-process leak)", async () => {
+    let closeCalled = false;
+    fakeCallFn = async () => {
+      throw new Error("boom");
+    };
+    fakeCloseFn = async () => {
+      closeCalled = true;
+    };
+
+    runCli(["graph", "search", "sampleAdd"]);
+    await new Promise((r) => setTimeout(r, 50));
+
+    expect(closeCalled).toBe(true);
+  });
 });
