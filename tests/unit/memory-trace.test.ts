@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { touchMemory, traceMemory } from "../../src/cli/commands/memory.js";
@@ -96,5 +96,33 @@ describe("gk memory trace", () => {
 
   test("touchMemory returns null for unknown id", () => {
     expect(touchMemory(cwd, "nope")).toBeNull();
+  });
+
+  test("mutations set .memory-dirty (recall freshness gate now reachable)", () => {
+    writeMemory(cwd, "m.md", { id: "m", salience: 0.5, expired: false, valid_from: NOW, tags: "[]" });
+    touchMemory(cwd, "m", NOW);
+    expect(existsSync(join(cwd, ".graphkit", ".memory-dirty"))).toBe(true);
+  });
+
+  test("trace pass appends one audit JSONL row per memory, append-only", () => {
+    writeMemory(cwd, "a.md", { id: "a", salience: 0.5, expired: false, valid_from: NOW, tags: "[]" });
+    writeMemory(cwd, "b.md", {
+      id: "b",
+      salience: 0.1,
+      expired: false,
+      valid_from: "2026-01-01T00:00:00.000Z",
+      tags: "[]",
+    });
+    traceMemory(cwd, NOW);
+    traceMemory(cwd, NOW); // second pass: no truncation
+    const log = readFileSync(join(cwd, ".graphkit", ".trace-log"), "utf-8")
+      .trim()
+      .split("\n");
+    expect(log.length).toBe(4); // 2 memories × 2 passes
+    const rows = log.map((l) => JSON.parse(l));
+    const a = rows.find((r) => r.id === "a" && r.ts === NOW);
+    const b = rows.find((r) => r.id === "b");
+    expect(a?.action).toBe("kept");
+    expect(b?.action).toBe("newly-expired");
   });
 });

@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { CAC } from "cac";
 import YAML from "yaml";
@@ -70,9 +70,19 @@ export interface MemoryTraceReport {
   memories: MemoryTrace[];
 }
 
+// Any memory-file mutation (touch bump, expiry rewrite) outdates the CBM
+// index — flag it so gk-recall's freshness gate (step 0) actually fires.
+// `.memory-dirty` is checked+cleared by indexMemory; it was previously
+// never written, so mid-run curator writes were invisible to CBM search.
+function markDirty(cwd: string) {
+  writeFileSync(join(cwd, ".graphkit", ".memory-dirty"), String(Date.now()));
+}
+
 // Stage 5 of the memory pipeline (decay): score every memory with ACT-R and
 // mark below-threshold entries expired. Expired files are rewritten in place,
-// never deleted (audit rule from the curator contract).
+// never deleted (audit rule from the curator contract). Every pass appends
+// one JSONL row per memory to .graphkit/.trace-log — decay silently rewriting
+// files in place is otherwise unauditable.
 export function traceMemory(cwd: string, now = new Date().toISOString()): MemoryTraceReport {
   const memDir = join(cwd, ".graphkit", "memory");
   const report: MemoryTraceReport = { total: 0, live: 0, expired: 0, newly_expired: 0, superseded: 0, memories: [] };
@@ -113,6 +123,7 @@ export function traceMemory(cwd: string, now = new Date().toISOString()): Memory
     if (!wasExpired && shouldExpire(score, 0.1)) {
       fm.expired = true;
       fm.valid_to = now;
+      markDirty(cwd);
       writeFileSync(path, `---\n${YAML.stringify(fm)}---\n${raw.slice(m[0].length)}`);
       report.expired++;
       report.newly_expired++;
@@ -125,6 +136,12 @@ export function traceMemory(cwd: string, now = new Date().toISOString()): Memory
       report.memories.push({ id: String(fm.id ?? file), score, state: "live", action: "kept" });
     }
   }
+  appendFileSync(
+    join(cwd, ".graphkit", ".trace-log"),
+    report.memories
+      .map((m) => JSON.stringify({ ts: now, id: m.id, action: m.action, score: +m.score.toFixed(4) }))
+      .join("\n") + "\n",
+  );
   return report;
 }
 
@@ -148,6 +165,7 @@ export function touchMemory(
     const useCount = (typeof fm.use_count === "number" ? fm.use_count : 1) + 1;
     fm.use_count = useCount;
     fm.last_used_at = now;
+    markDirty(cwd);
     writeFileSync(path, `---\n${YAML.stringify(fm)}---\n${raw.slice(m[0].length)}`);
     return { id: String(fm.id ?? id), file, use_count: useCount, last_used_at: now };
   }
