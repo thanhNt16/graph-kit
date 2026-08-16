@@ -254,12 +254,15 @@ gk graph inspect diamond                 <span class="cmt"># → see topology co
   </div>
   <div class="bridge-grid">
     <div class="code-block" style="margin:0">
-      <div class="code-header"><div class="code-dot" style="background:#f85149"></div><div class="code-dot" style="background:#d29922"></div><div class="code-dot" style="background:#3fb950"></div> Four subcommands</div>
+      <div class="code-header"><div class="code-dot" style="background:#f85149"></div><div class="code-dot" style="background:#d29922"></div><div class="code-dot" style="background:#3fb950"></div> Five subcommands</div>
       <div class="code-body"><span class="cmt"># Index a repo into the CBM graph:</span>
 gk graph index /path/to/repo --mode fast
 
 <span class="cmt"># Natural-language code search (BM25 + semantic):</span>
 gk graph search <span class="str">"graph validation"</span>
+
+<span class="cmt"># Routed question — classify, then search/trace/query/snippet:</span>
+gk graph ask <span class="str">"Who calls validateGraph in production?"</span>
 
 <span class="cmt"># Caller/callee trace, 3-hop:</span>
 gk graph trace validateGraph
@@ -403,7 +406,7 @@ gk new --dir my-project --target cursor</div>
     <div class="lc-step"><div class="name">/gk-run</div><div class="desc">Workflow tool run</div></div>
     <div class="lc-step new"><div class="name">/gk-execute</div><div class="desc">Dispatch subagents</div></div>
     <div class="lc-step"><div class="name">/gk-eval</div><div class="desc">MERGE/BLOCK gate</div></div>
-    <div class="lc-step"><div class="name">/gk-recall</div><div class="desc">Query memory graph</div></div>
+    <div class="lc-step new"><div class="name">/gk-recall</div><div class="desc">Recall + reinforce</div></div>
     <div class="lc-step"><div class="name">/gk-evidence</div><div class="desc">Results report</div></div>
     <div class="lc-step"><div class="name">/gk-status</div><div class="desc">Run state</div></div>
   </div>
@@ -421,7 +424,7 @@ gk new --dir my-project --target cursor</div>
     <div class="agent-row"><div class="agent-emoji">🎨</div><div class="agent-info"><div class="agent-name">UI/UX Researcher</div><div class="agent-roles">worker · synthesizer</div></div><div class="agent-tier" style="background:rgba(88,166,255,0.15);color:var(--sonnet)">sonnet</div></div>
     <div class="agent-row"><div class="agent-emoji">🔧</div><div class="agent-info"><div class="agent-name">Agents Orchestrator</div><div class="agent-roles">scouter · synthesizer</div></div><div class="agent-tier" style="background:rgba(163,113,247,0.15);color:var(--opus)">opus</div></div>
     <div class="agent-row"><div class="agent-emoji">📝</div><div class="agent-info"><div class="agent-name">Document Generator</div><div class="agent-roles">synthesizer · worker</div></div><div class="agent-tier" style="background:rgba(88,166,255,0.15);color:var(--sonnet)">sonnet</div></div>
-    <div class="agent-row" style="border-color:var(--memory)"><div class="agent-emoji">🧠</div><div class="agent-info"><div class="agent-name">Memory Curator</div><div class="agent-roles">curator · injector</div></div><div class="agent-tier" style="background:rgba(163,113,247,0.15);color:var(--opus)">opus</div></div>
+    <div class="agent-row" style="border-color:var(--memory)"><div class="agent-emoji">🧠</div><div class="agent-info"><div class="agent-name">Memory Curator</div><div class="agent-roles">curator · injector · <code style="font-size:0.72rem">gk memory recall/trace</code></div></div><div class="agent-tier" style="background:rgba(163,113,247,0.15);color:var(--opus)">opus</div></div>
   </div>
 </div>
 
@@ -438,18 +441,36 @@ gk new --dir my-project --target cursor</div>
     <tr><td>M5 — recall &gt; grep</td><td>Recall@10 ≥ 0.95, ≥10× vs grep</td><td class="caveat">PASS · CBM 4/5 vs grep 0/5</td></tr>
   </table>
   <div class="stats-banner">
-    <div class="stat-cell"><div class="stat-cell-num">138</div><div class="stat-cell-label">Tests Pass</div></div>
+    <div class="stat-cell"><div class="stat-cell-num">341</div><div class="stat-cell-label">Tests Pass</div></div>
     <div class="stat-cell"><div class="stat-cell-num">0</div><div class="stat-cell-label">Failures</div></div>
-    <div class="stat-cell"><div class="stat-cell-num">402</div><div class="stat-cell-label">Expect Calls</div></div>
-    <div class="stat-cell"><div class="stat-cell-num">28</div><div class="stat-cell-label">Test Files</div></div>
+    <div class="stat-cell"><div class="stat-cell-num">1120</div><div class="stat-cell-label">Expect Calls</div></div>
+    <div class="stat-cell"><div class="stat-cell-num">52</div><div class="stat-cell-label">Test Files</div></div>
     <div class="stat-cell"><div class="stat-cell-num">5/5</div><div class="stat-cell-label">Metrics</div></div>
     <div class="stat-cell"><div class="stat-cell-num">0</div><div class="stat-cell-label">Lint Errors</div></div>
   </div>
 </div>
 
+<div class="section">
+  <div class="section-label">2026-08-15</div>
+  <h2>Autoresearch — The Kit Improved Itself</h2>
+  <p>Three rounds of the Karpathy-style loop: freeze a benchmark, mutate one axis, keep measured wins, reset the rest. Round 1 failed honestly (the instrument bypassed the product code — diagnosed, not papered over). Rounds 2–3 shipped the corrections.</p>
+  <table class="ac-table">
+    <tr><th>Frozen 20-question task-replay</th><th>Metric (lower = better)</th><th>Wrong</th></tr>
+    <tr><td>grep/glob reference</td><td>2,936</td><td>0</td></tr>
+    <tr><td>gk baseline — raw <code>search_graph</code></td><td>124,414</td><td>12</td></tr>
+    <tr><td>+ question-kind routing (<code>gk graph ask</code>)</td><td>63,115</td><td>5</td></tr>
+    <tr><td>+ tournament payload trims</td><td class="pass">59,309 · −52.4%</td><td class="pass">5</td></tr>
+  </table>
+  <div class="subsys" style="margin-top:1rem;border-color:var(--memory)">
+    <div class="subsys-tag" style="background:rgba(240,171,252,0.15);color:var(--memory)">MEMORY LAYER — MEASURED</div>
+    <p style="font-size:0.82rem;color:var(--text-dim)">A 6-agent research fleet + fable judge found the ACT-R decay shipped in 0.2 was a store-wide time bomb (no reinforcement → uniform ~day-10 expiry). Fixed with a closed loop: <code style="color:var(--text)">gk memory recall</code> retrieves (keyword×salience + validity/supersede filters) <em>and</em> reinforces survivors; <code style="color:var(--text)">gk memory touch</code> bumps use; <code style="color:var(--text)">gk memory trace</code> decays with a JSONL audit trail and freshness flag; <code style="color:var(--text)">bun run eval:memory</code> holds recall at <strong style="color:var(--text)">hit_rate 0.9 / 0 validity violations</strong>.</p>
+    <p style="font-size:0.82rem;color:var(--text-dim);margin-top:0.5rem">Two adversarial catches along the way: the fleet's deadcode trim was measured regressive before it shipped, and CBM <code>search_graph</code> was measured to return <strong style="color:var(--adversarial)">0 hits over markdown-only projects</strong> — gk-recall's semantic step had always been dead weight and was replaced with the measured retriever.</p>
+  </div>
+</div>
+
 <div class="footer">
   GraphKit 0.2 · graph engineering kit for Claude Code &amp; Cursor<br>
-  <span style="color:var(--memory)">8 agents</span> · <span style="color:var(--sonnet)">11 skills</span> · <span style="color:var(--bridge)">11 topologies</span> · <span style="color:var(--fable)">2 runtimes</span> · <span style="color:var(--haiku)">138 tests</span><br>
+  <span style="color:var(--memory)">8 agents</span> · <span style="color:var(--sonnet)">11 skills</span> · <span style="color:var(--bridge)">11 topologies</span> · <span style="color:var(--fable)">2 runtimes</span> · <span style="color:var(--haiku)">341 tests</span><br>
   gk never invokes a model · CBM is the graph authority · evidence-based gates
 </div>
 
