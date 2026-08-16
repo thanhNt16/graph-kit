@@ -17,14 +17,17 @@ const graphPath = resolve(process.argv[2] ?? join(process.cwd(), "graph.yaml"));
 const srv = await startViewerServer({ graphPath, assetDir });
 console.log(`GraphKit viewer: ${srv.url}`);
 
-// Open the default browser when possible; never fail if it cannot launch.
-// If browser startup fails the printed keyed URL remains available.
-const openCmd = process.platform === "darwin" ? "open" : process.platform === "win32" ? "cmd" : "xdg-open";
-try {
-  if (process.platform === "win32") spawn(openCmd, ["/c", "start", "", srv.url], { stdio: "ignore", detached: true });
-  else spawn(openCmd, [srv.url], { stdio: "ignore", detached: true });
-} catch {
-  /* browser open failed — the printed URL is the fallback */
+// No auto-open: the printed keyed URL is the interface. Agents surface the
+// link; humans click when they want it. Set GK_VIEWER_OPEN=1 to restore the
+// old spawn-a-browser behavior.
+if (process.env.GK_VIEWER_OPEN === "1") {
+  const openCmd = process.platform === "darwin" ? "open" : process.platform === "win32" ? "cmd" : "xdg-open";
+  try {
+    if (process.platform === "win32") spawn(openCmd, ["/c", "start", "", srv.url], { stdio: "ignore", detached: true });
+    else spawn(openCmd, [srv.url], { stdio: "ignore", detached: true });
+  } catch {
+    /* browser open failed — the printed URL is the fallback */
+  }
 }
 
 // Explicit stop or parent termination. (Idle timeout in server.ts also exits.)

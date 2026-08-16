@@ -30,7 +30,7 @@ bun cursor/viewer/server.mjs graph.yaml
 The launcher:
 1. Starts a read-only server bound to `127.0.0.1` on an ephemeral port with a cryptographically random access key.
 2. Prints the complete keyed URL: `GraphKit viewer: http://127.0.0.1:PORT/?key=...`
-3. Opens the default browser. If browser launch fails, the printed keyed URL remains usable.
+3. Does NOT auto-open a browser — surface the printed URL to the user and let them click. (Set `GK_VIEWER_OPEN=1` to restore auto-open.)
 
 Lifecycle and safety:
 - Key required for page, asset, and SSE requests.
@@ -71,7 +71,7 @@ Only use the `excalidraw-diagram` skill when the user explicitly says "excalidra
 Note: Excalidraw mode requires `uv sync && uv run playwright install chromium` in the excalidraw-diagram skill's references dir. If unavailable, fall back to SVG or ASCII and tell the user.
 
 ## Output
-- **Interactive**: keyed local URL, opens in browser
+- **Interactive**: keyed local URL (printed, not auto-opened)
 - **ASCII**: stdout (instant)
 - **SVG**: `.graphkit/diagrams/{name}.svg` — opens in browser
 - **Excalidraw**: `.graphkit/diagrams/{name}.excalidraw` — editable in Excalidraw app
