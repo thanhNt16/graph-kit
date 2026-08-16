@@ -32,6 +32,13 @@ describe("gk init/new", () => {
     expect(parsed).toHaveProperty("statusline");
   });
 
+  test("re-init overwrites stale kit files (upgrade refreshes skills)", () => {
+    const skill = join(tmp, ".claude", "skills", "gk-recall", "SKILL.md");
+    if (existsSync(skill)) writeFileSync(skill, "# stale v0.1 content\n");
+    installKit(tmp);
+    expect(readFileSync(skill, "utf-8")).not.toContain("stale v0.1 content");
+  });
+
   test("installKit does not overwrite existing .gk.json", () => {
     const gkJson = join(tmp, ".claude", ".gk.json");
     writeFileSync(gkJson, JSON.stringify({ codingLevel: 99, statusline: "minimal" }));

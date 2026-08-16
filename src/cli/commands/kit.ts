@@ -1,5 +1,5 @@
 import { cpSync, existsSync, mkdirSync, readdirSync, rmSync, writeFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { CAC } from "cac";
 import { GraphKitError } from "../../errors.js";
@@ -61,8 +61,16 @@ export function installKit(targetDir: string, fresh = false, target: KitTarget =
   }
 
   mkdirSync(destDir, { recursive: true });
-  // fresh → force:true (overwrite everything); else force:false (preserve user edits)
-  cpSync(source, destDir, { recursive: true, force: fresh });
+  // Kit-owned files always overwrite — re-running `gk init` after upgrading the
+  // gk binary must refresh stale skills in existing projects. Only .gk.json
+  // (user config) is preserved below; --force is the only path that removes
+  // files the kit no longer ships.
+  cpSync(source, destDir, {
+    recursive: true,
+    force: true,
+    // user config survives upgrades; created below if missing
+    filter: (s) => basename(s) !== ".gk.json",
+  });
 
   // settings.json is kit-owned infrastructure (hook config), always overwrite for claude
   // Cursor uses hooks.json shipped inside the cursor kit — no settings.json overwrite needed.
