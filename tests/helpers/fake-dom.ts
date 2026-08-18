@@ -106,6 +106,12 @@ export class FakeEl {
   removeChild(c: FakeEl | FakeText) {
     const i = this.children.indexOf(c);
     if (i >= 0) this.children.splice(i, 1);
+    // Real DOM: removing the focused element blurs it — activeElement falls
+    // back to body. appendChild of a moved element implicitly removes first, so
+    // this reproduces the pre-append blur the SSE focus-restore fix guards.
+    if (this.ownerDocument && this.ownerDocument.activeElement === c) {
+      this.ownerDocument.activeElement = this.ownerDocument.body;
+    }
     return c;
   }
 
@@ -252,24 +258,40 @@ function makeDocument() {
   reg("error-path", "p");
   reg("graph-name", "span");
   reg("graph-meta", "span");
+  // body and the owner() closure need the doc reference; the doc object is built
+  // first and `owner` reads the final object (not a hoisted `undefined`), so
+  // every FakeEl's ownerDocument round-trips the live document.
   let doc: any;
-  const body = new FakeEl("body");
   const owner = (e: FakeEl) => {
     e.ownerDocument = doc;
     return e;
   };
-  for (const id of Object.keys(ids)) owner(ids[id]);
   doc = {
     readyState: "complete",
-    body,
-    activeElement: body,
+    body: new FakeEl("body"),
+    activeElement: null,
+    listeners: {} as Record<string, Array<(ev: any) => void>>,
     getElementById: (id: string) => ids[id] ?? null,
     createElement: (tag: string) => owner(new FakeEl(tag)),
     createElementNS: (_ns: string, tag: string) => owner(new FakeEl(tag, true)),
     createTextNode: (d: unknown) => new FakeText(String(d == null ? "" : d)),
-    addEventListener: () => {},
+    addEventListener: (t: string, fn: (ev: any) => void) => {
+      if (!doc.listeners[t]) doc.listeners[t] = [];
+      doc.listeners[t].push(fn);
+    },
+    dispatch: (t: string, init?: Record<string, unknown>) => {
+      const ev = Object.assign(
+        { type: t, target: doc.body, currentTarget: doc, preventDefault() {}, stopPropagation() {} },
+        init ?? {},
+      );
+      for (const fn of doc.listeners[t] || []) fn(ev);
+      return ev;
+    },
     ids,
   };
+  doc.body.ownerDocument = doc;
+  doc.activeElement = doc.body;
+  for (const id of Object.keys(ids)) owner(ids[id]);
   return doc;
 }
 
@@ -298,6 +320,8 @@ export interface ViewerHarness {
   nodeTransform(id: string): string | null;
   focusNode(id: string): void;
   blurNode(): void;
+  keydown(key: string, target?: FakeEl): void;
+  closeDrawer(): void;
   hoverNode(id: string): void;
   zoomWheel(deltaY: number): void;
   viewportTransform(): string | null;
@@ -481,6 +505,23 @@ export function createViewerHarness(
       win.dispatch("mousemove", { target: g, clientX: 500 + dx, clientY: 400 + dy });
       win.dispatch("mouseup", { target: g, clientX: 500 + dx, clientY: 400 + dy });
     },
+    // Split a drag into N discrete mousemoves totaling (dx, dy). Real browsers
+    // fire one mousemove per pointer change; this reproduces a multi-event drag
+    // that a single-step dragNode masks (the re-route delta-compounding bug).
+    dragNodeSteps: (id, dx, dy, steps) => {
+      const g = harness.nodeGroup(id);
+      if (!g) return;
+      const canvas = doc.ids.canvas;
+      canvas.dispatch("mousedown", { target: g, clientX: 500, clientY: 400 });
+      for (let i = 1; i <= steps; i++) {
+        win.dispatch("mousemove", {
+          target: g,
+          clientX: 500 + (dx * i) / steps,
+          clientY: 400 + (dy * i) / steps,
+        });
+      }
+      win.dispatch("mouseup", { target: g, clientX: 500 + dx, clientY: 400 + dy });
+    },
     nodeTransform: (id) => harness.nodeGroup(id)?.getAttribute("transform") ?? null,
     focusNode: (id) => {
       const g = harness.nodeGroup(id);
@@ -492,6 +533,17 @@ export function createViewerHarness(
     blurNode: () => {
       doc.activeElement = doc.body;
       doc.ids.canvas.dispatch("focusout", { target: doc.ids.canvas });
+    },
+    keydown: (key, target) => {
+      const t = target ?? doc.body;
+      // document-level listeners (zoom guard, arrow nav, drawer tab trap) and
+      // window listeners both observe keydown in the real browser — fire both
+      win.dispatch("keydown", { key, target: t, currentTarget: win, bubbles: true });
+      doc.dispatch("keydown", { key, target: t, currentTarget: doc, bubbles: true });
+      t.dispatch("keydown", { key, target: t, currentTarget: t, bubbles: true });
+    },
+    closeDrawer: () => {
+      doc.ids["drawer-close"].dispatch("click", { target: doc.ids["drawer-close"] });
     },
     hoverNode: (id) => {
       const g = harness.nodeGroup(id);

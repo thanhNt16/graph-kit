@@ -22,7 +22,12 @@ export interface ViewerServerOptions {
   idleMs?: number;
   /** Optional external key (tests). Defaults to a fresh 24-byte random key. */
   key?: string;
+  /** Preferred bind port; falls back to next-free then ephemeral. Default: ephemeral (0). */
+  port?: number;
 }
+
+const HOST = "127.0.0.1";
+const PORT_PROBES = 10; // pinned, +1…+9, then ephemeral
 
 const DEBOUNCE_MS = 200;
 const IDLE_MS = 4 * 60 * 60 * 1000; // four hours
@@ -245,11 +250,32 @@ export async function startViewerServer(opts: ViewerServerOptions): Promise<{
     await new Promise<void>((resolveClose) => server.close(() => resolveClose()));
   };
 
-  await new Promise<void>((resolveListen) => {
-    server.listen(0, "127.0.0.1", () => resolveListen());
-  });
-  const address = server.address();
-  const port = typeof address === "object" && address ? address.port : 0;
+  const listenAt = (port: number) =>
+    new Promise<number>((resolve, reject) => {
+      server.removeAllListeners("error"); // avoid error-listener leak across retries
+      server.once("error", reject);
+      server.listen(port, HOST, () => {
+        const a = server.address();
+        resolve(typeof a === "object" && a ? a.port : 0);
+      });
+    });
+
+  let port = 0; // loop below always assigns or throws; 0 satisfies the type checker
+  if (opts.port) {
+    // Port-in-use fallback: probe pinned +1…+9, then drop to ephemeral (0) so
+    // the viewer always starts even under heavy port contention.
+    for (let attempt = 0; attempt <= PORT_PROBES; attempt++) {
+      const target = attempt === PORT_PROBES ? 0 : opts.port + attempt;
+      try {
+        port = await listenAt(target);
+        break;
+      } catch (e) {
+        if ((e as NodeJS.ErrnoException).code !== "EADDRINUSE" || attempt === PORT_PROBES) throw e;
+      }
+    }
+  } else {
+    port = await listenAt(0); // historical ephemeral behavior
+  }
 
   return {
     server,

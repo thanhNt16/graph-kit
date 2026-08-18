@@ -8,7 +8,7 @@ const cursorViewer = join(root, "cursor", "viewer");
 
 describe("viewer kit parity", () => {
   test("claude and cursor viewer assets are byte-equivalent", () => {
-    const files = ["index.html", "app.js", "styles.css", "dagre.js"];
+    const files = ["index.html", "app.js", "styles.css", "dagre.js", "server.mjs"];
     for (const f of files) {
       const c = join(claudeViewer, f);
       const cu = join(cursorViewer, f);

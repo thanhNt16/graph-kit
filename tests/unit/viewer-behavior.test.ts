@@ -7,6 +7,7 @@ import {
   matchesSearch,
   passesFilters,
   retainedSelection,
+  routeIds,
   shouldFit,
   visibleNodeIds,
 } from "../../src/viewer/view.js";
@@ -134,6 +135,39 @@ describe("visibleNodeIds", () => {
     const g2 = graph({ a: node({ id: "a", model: "opus" }), b: node({ id: "b", model: "sonnet" }) });
     const s = visibleNodeIds(g2, "", { ...F, model: "opus" });
     expect([...s]).toEqual(["a"]);
+  });
+});
+
+describe("routeIds", () => {
+  const g = graph({
+    a: node({ id: "a", depend_on: [], dependents: ["b"] }),
+    b: node({ id: "b", depend_on: ["a"], dependents: ["c"] }),
+    c: node({ id: "c", depend_on: ["b"], dependents: [] }),
+    x: node({ id: "x", depend_on: [], dependents: [] }),
+  });
+
+  test("straight chain a→b→c returns all three nodes and both edges", () => {
+    const r = routeIds(g, "a", "c");
+    expect([...r.nodes.values()].sort()).toEqual(["a", "b", "c"]);
+    expect([...r.edges.values()].sort()).toEqual(["1:a1:b", "1:b1:c"]);
+  });
+
+  test("disconnected endpoints return empty sets", () => {
+    const r = routeIds(g, "a", "x");
+    expect(r.nodes.size).toBe(0);
+    expect(r.edges.size).toBe(0);
+  });
+
+  test("from === to returns only that single node and no edges", () => {
+    const r = routeIds(g, "b", "b");
+    expect([...r.nodes.values()]).toEqual(["b"]);
+    expect(r.edges.size).toBe(0);
+  });
+
+  test("missing endpoint returns empty sets", () => {
+    const r = routeIds(g, "a", "ghost");
+    expect(r.nodes.size).toBe(0);
+    expect(r.edges.size).toBe(0);
   });
 });
 

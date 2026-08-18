@@ -483,6 +483,90 @@ test("arbitrary punctuation/whitespace node IDs emphasize their connected edges"
   expect(edge?.classList.contains("emph-conn")).toBe(true);
 });
 
+test("opening the drawer turns it into a modal dialog and focuses its title", async () => {
+  const harness = createViewerHarness(APP_BUNDLE, graph("g", { a: node("a") }));
+  await flush();
+  const drawer = harness.getEl("drawer");
+  // visitor LEAVES the accessible dialog state dirty on next open
+  drawer.setAttribute("role", "dialog");
+  drawer.setAttribute("aria-modal", "true");
+  harness.clickNode("a");
+  expect(harness.drawerVisible()).toBe(true);
+  expect(drawer.getAttribute("role")).toBe("dialog");
+  expect(drawer.getAttribute("aria-modal")).toBe("true");
+  expect(harness.doc.activeElement).toBe(harness.getEl("drawer-title"));
+});
+
+test("closing the drawer returns focus to the selected node", async () => {
+  const harness = createViewerHarness(APP_BUNDLE, graph("g", { a: node("a"), b: node("b", { depend_on: ["a"] }) }));
+  await flush();
+  harness.clickNode("a");
+  expect(harness.drawerVisible()).toBe(true);
+  harness.clickNode("b");
+  // focus was captured in a; b is now selected — close returns it to b
+  harness.emitUpdate({ type: "graph", graph: graph("g", { a: node("a"), b: node("b", { depend_on: ["a"] }) }) });
+  await flush();
+  harness.closeDrawer();
+  expect(harness.drawerVisible()).toBe(false);
+  expect(harness.doc.activeElement).toBe(harness.nodeGroup("b"));
+});
+
+test("ArrowRight moves focus to the nearest rightward visible neighbor", async () => {
+  const harness = createViewerHarness(
+    APP_BUNDLE,
+    graph("g", {
+      a: node("a", { level: 0, order: 0 }),
+      b: node("b", { level: 1, order: 0, depend_on: ["a"] }),
+      c: node("c", { level: 1, order: 1, depend_on: ["a"] }),
+    }),
+  );
+  await flush();
+  harness.focusNode("a");
+  harness.keydown("ArrowRight", harness.nodeGroup("a"));
+  expect(harness.doc.activeElement).toBe(harness.nodeGroup("b"));
+});
+
+test("arrow keys skip filtered-out nodes", async () => {
+  const harness = createViewerHarness(
+    APP_BUNDLE,
+    graph("g", {
+      a: node("a", { level: 0, order: 0 }),
+      b: node("b", { level: 1, order: 0, depend_on: ["a"], skills: ["hidden"] }),
+      c: node("c", { level: 1, order: 1, depend_on: ["a"] }),
+    }),
+  );
+  await flush();
+  harness.setModelFilter("sonnet");
+  // c is haiku -> filtered; b is sonnet -> visible
+  harness.focusNode("a");
+  harness.keydown("ArrowRight", harness.nodeGroup("a"));
+  expect(harness.doc.activeElement).toBe(harness.nodeGroup("b"));
+});
+
+test("ArrowDown moves focus to the nearest lower node even when same-column", async () => {
+  const harness = createViewerHarness(
+    APP_BUNDLE,
+    graph("g", {
+      a: node("a", { level: 0, order: 0 }),
+      b: node("b", { level: 1, order: 0, depend_on: [] }), // same column, below a
+      c: node("c", { level: 1, order: 1, depend_on: [] }), // offset right, below a
+    }),
+  );
+  await flush();
+  harness.focusNode("a");
+  harness.keydown("ArrowDown", harness.nodeGroup("a"));
+  expect(harness.doc.activeElement).toBe(harness.nodeGroup("b"));
+});
+
+test("+ / - zoom keys work while a node has focus (wider guard)", async () => {
+  const harness = createViewerHarness(APP_BUNDLE, graph("g", { a: node("a") }));
+  await flush();
+  harness.focusNode("a");
+  const before = harness.viewportTransform();
+  harness.keydown("+", harness.nodeGroup("a"));
+  expect(harness.viewportTransform()).not.toBe(before);
+});
+
 test("retained node DOM identity stays stable while keyboard order tracks level/order", async () => {
   const harness = createViewerHarness(
     APP_BUNDLE,

@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { ViewerGraph } from "../../src/viewer/normalize.js";
-import { createViewerHarness, flush } from "../helpers/fake-dom.js";
+import { createViewerHarness, flush, type FakeEl } from "../helpers/fake-dom.js";
 
 const here = fileURLToPath(new URL(".", import.meta.url));
 const APP_BUNDLE = readFileSync(join(here, "../../claude/viewer/app.js"), "utf8");
@@ -93,5 +93,118 @@ describe("viewer node drag", () => {
     harness.dragNode("a", 30, 40);
     const expected = `translate(${tx0 + 30 / k} ${ty0 + 40 / k})`;
     expect(harness.nodeTransform("a")).toBe(expected);
+  });
+
+  test("dragging a node re-routes its incident edges (endpoint translate)", async () => {
+    const harness = createViewerHarness(
+      APP_BUNDLE,
+      graph({
+        from: node("from", "x", "sonnet"),
+        mid: node("mid", "y", "sonnet", { depend_on: ["from"] }),
+        to: node("to", "z", "sonnet", { depend_on: ["mid"] }),
+      }),
+    );
+    await flush();
+    const incidentBefore = harness.edge("from", "mid")?.getAttribute("d");
+    expect(incidentBefore).toBeTruthy();
+    const nonIncidentBefore = harness.edge("mid", "to")?.getAttribute("d");
+    expect(nonIncidentBefore).toBeTruthy();
+
+    harness.dragNode("from", 40, 30);
+    const incidentAfter = harness.edge("from", "mid")?.getAttribute("d");
+    const nonIncidentAfter = harness.edge("mid", "to")?.getAttribute("d");
+    expect(incidentAfter).not.toBe(incidentBefore);
+    expect(nonIncidentAfter).toBe(nonIncidentBefore);
+  });
+
+  test("dragging a target node re-routes all incident edges (both branches)", async () => {
+    const harness = createViewerHarness(
+      APP_BUNDLE,
+      graph({
+        a: node("a", "x", "sonnet"),
+        mid: node("mid", "y", "sonnet", { depend_on: ["a"] }),
+        b: node("b", "z", "sonnet", { depend_on: ["mid"] }),
+      }),
+    );
+    await flush();
+    const inAsBefore = harness.edge("a", "mid")?.getAttribute("d");
+    const inBBefore = harness.edge("mid", "b")?.getAttribute("d");
+    expect(inAsBefore).toBeTruthy();
+    expect(inBBefore).toBeTruthy();
+
+    harness.dragNode("mid", 20, 10);
+    // mid is the target (w) of a->mid and the source (v) of mid->b
+    expect(harness.edge("a", "mid")?.getAttribute("d")).not.toBe(inAsBefore);
+    expect(harness.edge("mid", "b")?.getAttribute("d")).not.toBe(inBBefore);
+  });
+
+  test("re-route is dropped when a new graph is applied (drag state ephemeral)", async () => {
+    const harness = createViewerHarness(
+      APP_BUNDLE,
+      graph({
+        from: node("from", "x", "sonnet"),
+        mid: node("mid", "y", "sonnet", { depend_on: ["from"] }),
+      }),
+    );
+    await flush();
+    const before = harness.edge("from", "mid")?.getAttribute("d");
+    harness.dragNode("from", 40, 30);
+    expect(harness.edge("from", "mid")?.getAttribute("d")).not.toBe(before);
+    // a fresh graph repaint re-lays-out from scratch — the nudge never persists
+    harness.emitUpdate({
+      type: "graph",
+      graph: graph({
+        from: node("from", "x", "sonnet"),
+        mid: node("mid", "y", "sonnet", { depend_on: ["from"] }),
+      }),
+    });
+    await flush();
+    expect(harness.edge("from", "mid")?.getAttribute("d")).toBe(before);
+  });
+
+  test("multi-mousemove drag re-routes edges by the full delta exactly once", async () => {
+    const deps = {
+      from: node("from", "x", "sonnet"),
+      mid: node("mid", "y", "sonnet", { depend_on: ["from"] }),
+    };
+    const single = createViewerHarness(APP_BUNDLE, graph(deps));
+    await flush();
+    single.dragNode("from", 40, 30);
+    // leading "M x,y" is the dragged endpoint
+    const singleXY = single.edge("from", "mid")!.getAttribute("d")!.match(/^M ([\d.]+),([\d.]+)/)!;
+    const sx = Number(singleXY[1]);
+    const sy = Number(singleXY[2]);
+
+    const steps = createViewerHarness(APP_BUNDLE, graph(deps));
+    await flush();
+    steps.dragNodeSteps("from", 40, 30, 2);
+    const stepsXY = steps.edge("from", "mid")!.getAttribute("d")!.match(/^M ([\d.]+),([\d.]+)/)!;
+    const tx = Number(stepsXY[1]);
+    const ty = Number(stepsXY[2]);
+    // two 20px-moves must equal one 40px-move — the edge endpoint must not
+    // compound the cumulative dx per event (regression: rerouteIncidentEdges
+    // ADDED the cumulative dx to edge.points, overshooting on every event
+    // after the first; a 2-move drag across the same total would land well
+    // past the single-move position — far beyond float tolerance).
+    expect(Math.abs(tx - sx)).toBeLessThan(1e-6);
+    expect(Math.abs(ty - sy)).toBeLessThan(1e-6);
+  });
+
+  test("every visible edge has an edge-hit ribbon with pointer-events + aria-hidden", async () => {
+    const harness = createViewerHarness(
+      APP_BUNDLE,
+      graph({ a: node("a", "x", "sonnet"), b: node("b", "y", "opus", { depend_on: ["a"] }) }),
+    );
+    await flush();
+    const path = harness.edge("a", "b");
+    expect(path).not.toBeNull();
+    const hits = harness.doc.ids.canvas.querySelectorAll("path.edge-hit");
+    const hit = hits.find(
+      (h) => h.getAttribute("data-from") === "a" && h.getAttribute("data-to") === "b",
+    );
+    expect(hit).not.toBeNull();
+    expect((hit as FakeEl).getAttribute("pointer-events")).toBe("stroke");
+    expect((hit as FakeEl).getAttribute("aria-hidden")).toBe("true");
+    expect(hit?.getAttribute("d")).toBe(path?.getAttribute("d"));
   });
 });

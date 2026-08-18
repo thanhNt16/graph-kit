@@ -193,7 +193,7 @@ bun cursor/viewer/server.mjs graph.yaml
 
 The server:
 
-- binds only to `127.0.0.1` on an available ephemeral port,
+- binds only to `127.0.0.1` on port `4800` by default (`GK_VIEWER_PORT` overrides; the next free port or an ephemeral one is used if it's taken),
 - generates a cryptographically random access key,
 - requires that key on **every** request — HTML, asset, and SSE alike,
 - prints the complete keyed URL `GraphKit viewer: http://127.0.0.1:PORT/?key=...` (still usable if browser launch fails),

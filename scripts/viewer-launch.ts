@@ -14,20 +14,32 @@ const scriptDir = resolve(import.meta.dir ?? process.cwd());
 const assetDir = existsSync(join(scriptDir, "index.html")) ? scriptDir : resolve(scriptDir, "..", "claude", "viewer");
 const graphPath = resolve(process.argv[2] ?? join(process.cwd(), "graph.yaml"));
 
-const srv = await startViewerServer({ graphPath, assetDir });
+const srv = await startViewerServer({
+  graphPath,
+  assetDir,
+  // Default to the pinned 4800 when GK_VIEWER_PORT is unset; an explicit
+  // 0/empty falls back to the server's ephemeral (historical) behavior.
+  port: process.env.GK_VIEWER_PORT == null
+    ? 4800
+    : Number(process.env.GK_VIEWER_PORT) || undefined,
+});
 console.log(`GraphKit viewer: ${srv.url}`);
 
 // No auto-open: the printed keyed URL is the interface. Agents surface the
 // link; humans click when they want it. Set GK_VIEWER_OPEN=1 to restore the
-// old spawn-a-browser behavior.
-if (process.env.GK_VIEWER_OPEN === "1") {
-  const openCmd = process.platform === "darwin" ? "open" : process.platform === "win32" ? "cmd" : "xdg-open";
-  try {
-    if (process.platform === "win32") spawn(openCmd, ["/c", "start", "", srv.url], { stdio: "ignore", detached: true });
-    else spawn(openCmd, [srv.url], { stdio: "ignore", detached: true });
-  } catch {
-    /* browser open failed — the printed URL is the fallback */
-  }
+// old spawn-a-browser behavior; GK_VIEWER_BROWSER=chrome forces Chrome on
+// macOS (`open -a "Google Chrome"`).
+const wantOpen = process.env.GK_VIEWER_OPEN === "1";
+const chrome = process.env.GK_VIEWER_BROWSER === "chrome";
+if (wantOpen) {
+  let cmd: string, args: string[];
+  if (process.platform === "darwin") cmd = "open", args = chrome ? ["-a", "Google Chrome", srv.url] : [srv.url];
+  else if (process.platform === "win32") cmd = "cmd", args = ["/c", "start", "", srv.url];
+  else cmd = "xdg-open", args = [srv.url];
+  const child = spawn(cmd, args, { stdio: "ignore", detached: true });
+  // Browser missing (ENOENT) is emitted async as 'error', not thrown — swallow
+  // so a missing Chrome never crashes the launcher; the printed URL is the fallback.
+  child.on("error", () => {});
 }
 
 // Explicit stop or parent termination. (Idle timeout in server.ts also exits.)

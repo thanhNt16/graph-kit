@@ -1,5 +1,55 @@
 import type { ViewerGraph, ViewerNode } from "./normalize.js";
 
+/** app.ts edgeKey — length-prefixed so collisions are impossible. */
+function edgeKey(from: string, to: string): string {
+  return from.length + ":" + from + to.length + ":" + to;
+}
+
+/**
+ * Shortest path (BFS) over forward edges (dependents) from `from` to `to`, for
+ * the Shift+click route trace. Returns the chain's node IDs and edge key
+ * strings ({nodes, edges}). Empty sets when either endpoint is missing,
+ * disconnected, or the two are the same node (from===to → single node).
+ */
+export function routeIds(
+  graph: ViewerGraph,
+  from: string,
+  to: string,
+): { nodes: Set<string>; edges: Set<string> } {
+  const nodes = new Set<string>();
+  const edges = new Set<string>();
+  if (!graph.nodes[from] || !graph.nodes[to]) return { nodes, edges };
+  if (from === to) {
+    nodes.add(from);
+    return { nodes, edges };
+  }
+  const prev = new Map<string, string>();
+  const queue: string[] = [from];
+  const seen = new Set<string>([from]);
+  while (queue.length) {
+    const cur = queue.shift()!;
+    if (cur === to) break;
+    for (const next of graph.nodes[cur].dependents) {
+      if (!graph.nodes[next]) continue;
+      if (seen.has(next)) continue;
+      seen.add(next);
+      prev.set(next, cur);
+      queue.push(next);
+    }
+  }
+  if (!prev.has(to)) return { nodes, edges };
+  nodes.add(to);
+  let cur = to;
+  while (cur !== from) {
+    const p = prev.get(cur);
+    if (p === undefined) break;
+    edges.add(edgeKey(p, cur));
+    nodes.add(p);
+    cur = p;
+  }
+  return { nodes, edges };
+}
+
 /**
  * Pure, dependency-free rules for the interactive viewer. These are the
  * browser-visible behaviors that the design doc specifies (search/filter

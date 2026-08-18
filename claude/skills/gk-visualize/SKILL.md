@@ -28,9 +28,9 @@ bun cursor/viewer/server.mjs graph.yaml
 ```
 
 The launcher:
-1. Starts a read-only server bound to `127.0.0.1` on an ephemeral port with a cryptographically random access key.
+1. Starts a read-only server bound to `127.0.0.1` on port `4800` by default (env `GK_VIEWER_PORT` overrides; if that port is in use it falls back to the next free port, then to an ephemeral one) with a cryptographically random access key.
 2. Prints the complete keyed URL: `GraphKit viewer: http://127.0.0.1:PORT/?key=...`
-3. Does NOT auto-open a browser — surface the printed URL to the user and let them click. (Set `GK_VIEWER_OPEN=1` to restore auto-open.)
+3. Does NOT auto-open a browser — surface the printed URL to the user and let them click. (Set `GK_VIEWER_OPEN=1` to restore auto-open; add `GK_VIEWER_BROWSER=chrome` to open in Chrome — `open -a "Google Chrome"` on macOS, `xdg-open` elsewhere.)
 
 Lifecycle and safety:
 - Key required for page, asset, and SSE requests.

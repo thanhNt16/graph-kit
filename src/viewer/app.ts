@@ -4,7 +4,15 @@
    Pure search/filter/emphasis/state rules live in view.ts and are unit-tested. */
 
 import type { ViewerGraph } from "./normalize.js";
-import { emphasisIds, type Filters, matchesSearch, passesFilters, retainedSelection, shouldFit } from "./view.js";
+import {
+  emphasisIds,
+  type Filters,
+  matchesSearch,
+  passesFilters,
+  retainedSelection,
+  routeIds,
+  shouldFit,
+} from "./view.js";
 
 (() => {
   var KEY = new URLSearchParams(location.search).get("key") || "";
@@ -53,10 +61,29 @@ import { emphasisIds, type Filters, matchesSearch, passesFilters, retainedSelect
   var drawerBody: HTMLElement;
   var drawerTitle: HTMLElement;
   var searchEl: HTMLInputElement;
+  // Node the open drawer is for — focus is returned here on close. Kept as a
+  // module var (not read from state) because every close path nulls
+  // state.selected before calling closeDrawer.
+  var lastDrawerNode: string | null = null;
   var mouseAnchor: { x: number; y: number; view: { x: number; y: number; k: number } } | null = null;
   // Manual-nudge drag state — ephemeral, cleared on mouseup and any graph apply.
   var dragNodeId: string | null = null;
   var dragAnchor: { x: number; y: number; tx: number; ty: number } | null = null;
+  // Last layout-space delta applied to incident edges this drag. mousemove's dx
+  // is cumulative from dragAnchor, but rerouteIncidentEdges ADDS to edge.points
+  // which earlier events already moved — so the edge delta must be incremental
+  // (dx − prevDx), or the endpoint escapes by one delta every event.
+  var prevDragDx = 0;
+  var prevDragDy = 0;
+  // Edge hit-target (widened transparent ribbon a sibling ahead of each visible
+  // path) keyed by the visible path element, plus live hover/trace state.
+  var edgeHitEls = new WeakMap<SVGPathElement, SVGPathElement>();
+  var edgeHover: { from: string; to: string } | null = null;
+  // Route trace (Shift+click): pending source then an active chain of keys.
+  // traceFrom stays set after the second click so SSE self-heal knows the chain.
+  var traceFrom: string | null = null;
+  var traceTo: string | null = null;
+  var traceRoute: { nodes: Set<string>; edges: Set<string> } | null = null;
 
   function el(tag: string, props?: Record<string, string>, children?: Node[]) {
     var n = document.createElementNS("http://www.w3.org/2000/svg", tag);
@@ -280,7 +307,11 @@ import { emphasisIds, type Filters, matchesSearch, passesFilters, retainedSelect
     });
     // handlers read group.dataset.id at event time so retained elements keep
     // working after graph updates (id never changes for a retained element)
-    g.addEventListener("click", () => {
+    g.addEventListener("click", (ev) => {
+      // Shift+click is the trace gesture handled by the delegated svg listener;
+      // never select/open the drawer for it (plan state machine: "any → SELECTED
+      // click (no Shift)").
+      if ((ev as MouseEvent).shiftKey) return;
       select(g.dataset.id as string);
     });
     g.addEventListener("keydown", (ev) => {
@@ -348,6 +379,31 @@ import { emphasisIds, type Filters, matchesSearch, passesFilters, retainedSelect
       "stroke-dasharray": "6 6",
     }) as SVGPathElement;
     path.appendChild(textNode(""));
+    var hit = el("path", {
+      class: "edge-hit",
+      "data-from": edge.v,
+      "data-to": edge.w,
+      "aria-hidden": "true",
+      tabindex: "-1",
+      "pointer-events": "stroke",
+    }) as SVGPathElement;
+    hit.appendChild(textNode(""));
+    // hit ribbon sits immediately before the visible path so the arrowhead
+    // marker still paints over the top; pointer events land on the ribbon.
+    layers.edges.appendChild(hit);
+    edgeHitEls.set(path, hit);
+    // hover/click on the widened ribbon accents or selects the edge's target
+    hit.addEventListener("pointerenter", () => {
+      edgeHover = { from: edge.v, to: edge.w };
+      if (!state.selected) updateViewState();
+    });
+    hit.addEventListener("pointerleave", () => {
+      edgeHover = null;
+      if (!state.selected) updateViewState();
+    });
+    hit.addEventListener("click", () => {
+      select(edge.w);
+    });
     layers.edges.appendChild(path);
     return path;
   }
@@ -356,9 +412,32 @@ import { emphasisIds, type Filters, matchesSearch, passesFilters, retainedSelect
     var pts = edge.points || [];
     if (pts.length < 2) {
       path.setAttribute("d", "");
+      var hit = edgeHitEls.get(path);
+      if (hit) hit.setAttribute("d", "");
       return;
     }
-    path.setAttribute("d", curvedPath(pts));
+    var d = curvedPath(pts);
+    path.setAttribute("d", d);
+    var hit = edgeHitEls.get(path);
+    if (hit) hit.setAttribute("d", d);
+  }
+
+  /** Bump the endpoint points of every edge incident to the dragged node by a
+      layout-space delta, then refresh the path geometry. Endpoint translation
+      only — no dagre re-run, so the 250-node budget holds. */
+  function rerouteIncidentEdges(id: string, dx: number, dy: number): void {
+    state.edges.forEach((edge) => {
+      if (edge.v !== id && edge.w !== id) return;
+      if (!edge.points || edge.points.length < 2) return;
+      var pts = edge.points;
+      if (edge.v === id) {
+        pts[0] = { x: pts[0].x + dx, y: pts[0].y + dy };
+      } else {
+        pts[pts.length - 1] = { x: pts[pts.length - 1].x + dx, y: pts[pts.length - 1].y + dy };
+      }
+      var path = edgeEls.get(edgeKey(edge.v, edge.w));
+      if (path) updateEdgeElement(path, edge);
+    });
   }
 
   function reconcileTopology(): void {
@@ -383,15 +462,20 @@ import { emphasisIds, type Filters, matchesSearch, passesFilters, retainedSelect
       updateNodeElement(group, id);
       // appendChild moves retained groups, preserving identity while restoring
       // normalized keyboard/tab order after live level/order changes. Moving a
-      // focused element out of and back into the DOM blurs it (focus loss on
-      // every SSE update), so restore focus to the active node after the move.
+      // focused element out of the DOM blurs it (focus loss on every SSE
+      // update), so capture the focused node BEFORE the move and restore focus
+      // after — the post-move check is always false (the blur already fired).
+      var wasFocused = group === document.activeElement;
       layers.nodes.appendChild(group);
-      if (group === document.activeElement) group.focus();
+      if (wasFocused) group.focus();
     });
 
     var wantedEdges = new Set(state.edges.map((edge) => edgeKey(edge.v, edge.w)));
     edgeEls.forEach((path, key) => {
       if (wantedEdges.has(key)) return;
+      var hit = edgeHitEls.get(path);
+      if (hit) hit.parentNode?.removeChild(hit);
+      edgeHitEls.delete(path);
       path.parentNode?.removeChild(path);
       edgeEls.delete(key);
     });
@@ -408,22 +492,59 @@ import { emphasisIds, type Filters, matchesSearch, passesFilters, retainedSelect
     updateViewState();
   }
 
+  /** Drop a stale trace when an endpoint is removed by an SSE update. */
+  function selfHealTrace(): void {
+    if (!state.graph) return;
+    if (traceFrom && !state.graph.nodes[traceFrom]) {
+      traceFrom = null;
+      traceTo = null;
+      traceRoute = null;
+      return;
+    }
+    if (traceTo && !state.graph.nodes[traceTo]) {
+      traceFrom = null;
+      traceTo = null;
+      traceRoute = null;
+    }
+  }
+
+  /** Clear the trace and repaint without it (kept append-only by construction). */
+  function clearTrace(): void {
+    if (!traceRoute && !traceFrom) return;
+    traceFrom = null;
+    traceTo = null;
+    traceRoute = null;
+    updateViewState();
+  }
+
   function updateViewState(): void {
-    var focusId = state.selected || state.hover || state.focus;
+    selfHealTrace();
+    // hover accent on a widened edge ribbon accents that edge + both endpoints
+    var focusId = state.selected || state.hover || edgeHover?.from || state.focus;
     var connected = state.graph ? emphasisIds(state.graph, focusId) : undefined;
     nodeEls.forEach((group, id) => {
       var pn = state.nodes[id];
-      group.classList.remove("dim", "emph", "filtered", "selected");
+      // route is removed here with the emphasis classes and re-applied below:
+      // the trace accent is fully derived from traceRoute at every repaint.
+      group.classList.remove("dim", "emph", "filtered", "selected", "route");
       var vis = pn ? isVisible(pn.node) : false;
       if (!vis) group.classList.add("filtered");
       if (state.selected === id) group.classList.add("selected");
       if (connected) group.classList.add(connected.has(id) ? "emph" : "dim");
       group.dataset.visible = vis ? "1" : "0";
+      // trace accent is append-only — never strips the emphasis classes above
+      if (traceRoute && traceRoute.nodes.has(id)) group.classList.add("route");
     });
     edgeEls.forEach((path) => {
-      path.classList.remove("dim", "emph-conn");
+      path.classList.remove("dim", "emph-conn", "route");
+      var hit = edgeHitEls.get(path);
+      if (hit) hit.classList.remove("route");
       var adjacent = path.dataset.from === focusId || path.dataset.to === focusId;
       if (connected) path.classList.add(adjacent ? "emph-conn" : "dim");
+      if (traceRoute && traceRoute.edges.has(edgeKey(path.dataset.from!, path.dataset.to!))) {
+        path.classList.add("route");
+        if (hit) hit.classList.add("route");
+      }
     });
   }
 
@@ -453,8 +574,15 @@ import { emphasisIds, type Filters, matchesSearch, passesFilters, retainedSelect
   function openDrawer(id: string) {
     var node = state.graph!.nodes[id];
     if (!node) return;
+    lastDrawerNode = id;
     drawer.classList.remove("hidden");
     drawer.setAttribute("aria-hidden", "false");
+    // modal dialog semantics: announce the mode switch and move focus into it
+    drawer.setAttribute("role", "dialog");
+    drawer.setAttribute("aria-modal", "true");
+    drawer.setAttribute("aria-label", "Details for " + node.id);
+    drawerTitle.tabIndex = -1;
+    drawerTitle.focus();
     drawerTitle.textContent = "";
     drawerTitle.appendChild(textNode(node.id));
     drawerBody.innerHTML = "";
@@ -555,6 +683,12 @@ import { emphasisIds, type Filters, matchesSearch, passesFilters, retainedSelect
   function closeDrawer() {
     drawer.classList.add("hidden");
     drawer.setAttribute("aria-hidden", "true");
+    // return focus to the node the drawer last showed (WCAG on-dismiss focus)
+    if (lastDrawerNode) {
+      var returnTo = nodeEls.get(lastDrawerNode);
+      lastDrawerNode = null;
+      if (returnTo) returnTo.focus();
+    }
   }
 
   function rebuildHeader() {
@@ -649,6 +783,8 @@ import { emphasisIds, type Filters, matchesSearch, passesFilters, retainedSelect
     // residual translate before reconcileTopology. Manual nudge never persists.
     dragNodeId = null;
     dragAnchor = null;
+    prevDragDx = 0;
+    prevDragDy = 0;
     nodeEls.forEach((g) => g.removeAttribute("transform"));
     // Preserve viewport + selection across valid updates; fit only initial load.
     // The retained selection may have been dropped if the node no longer exists.
@@ -784,6 +920,7 @@ import { emphasisIds, type Filters, matchesSearch, passesFilters, retainedSelect
     });
     svg.addEventListener("focusout", () => {
       state.focus = null;
+      edgeHover = null;
       if (!state.selected) updateViewState();
     });
 
@@ -793,6 +930,16 @@ import { emphasisIds, type Filters, matchesSearch, passesFilters, retainedSelect
       var id = target ? (target as HTMLElement).dataset.id : null;
       if (id !== state.hover) {
         state.hover = id;
+        if (!state.selected) updateViewState();
+      }
+    });
+    // edge mousemove: when the pointer rests on a widened hit ribbon, expose
+    // its endpoints to updateViewState so the accent can span both ends
+    svg.addEventListener("mousemove", (e) => {
+      var hit = (e.target as Element).closest("path.edge-hit");
+      var cur = hit ? { from: hit.getAttribute("data-from")!, to: hit.getAttribute("data-to")! } : null;
+      if (cur?.from !== edgeHover?.from || cur?.to !== edgeHover?.to) {
+        edgeHover = cur;
         if (!state.selected) updateViewState();
       }
     });
@@ -809,15 +956,24 @@ import { emphasisIds, type Filters, matchesSearch, passesFilters, retainedSelect
       dragNodeId = g.dataset.id as string;
       var cur = parseTransform(nodeEls.get(dragNodeId));
       dragAnchor = { x: e.clientX, y: e.clientY, tx: cur.tx, ty: cur.ty };
+      prevDragDx = 0;
+      prevDragDy = 0;
     });
     window.addEventListener("mousemove", (e) => {
       if (dragNodeId && dragAnchor) {
         var g = nodeEls.get(dragNodeId);
         if (g) {
           var k = state.view ? state.view.k : 1;
-          var nx = dragAnchor.tx + (e.clientX - dragAnchor.x) / k;
-          var ny = dragAnchor.ty + (e.clientY - dragAnchor.y) / k;
-          g.setAttribute("transform", `translate(${nx} ${ny})`);
+          var dx = (e.clientX - dragAnchor.x) / k;
+          var dy = (e.clientY - dragAnchor.y) / k;
+          g.setAttribute("transform", `translate(${dragAnchor.tx + dx} ${dragAnchor.ty + dy})`);
+          // live re-route: translate each incident edge's dragged endpoint by
+          // the incremental delta since the last event so the arrow follows the
+          // node without relayout. dx is cumulative from dragAnchor, but edge
+          // points accumulate — apply only the movement added this event.
+          rerouteIncidentEdges(dragNodeId, dx - prevDragDx, dy - prevDragDy);
+          prevDragDx = dx;
+          prevDragDy = dy;
         }
         return;
       }
@@ -830,6 +986,8 @@ import { emphasisIds, type Filters, matchesSearch, passesFilters, retainedSelect
       mouseAnchor = null;
       dragNodeId = null;
       dragAnchor = null;
+      prevDragDx = 0;
+      prevDragDy = 0;
     });
     svg.addEventListener("wheel", (e) => {
       e.preventDefault();
@@ -854,7 +1012,8 @@ import { emphasisIds, type Filters, matchesSearch, passesFilters, retainedSelect
       }
     });
 
-    // keyboard: Escape clears
+    // Escape clears selection and any pending/completed trace (own handler so
+    // the two concerns stay independent — trace state and graph selection)
     window.addEventListener("keydown", (e) => {
       if ((e as KeyboardEvent).key === "Escape") {
         if (state.selected) {
@@ -862,16 +1021,113 @@ import { emphasisIds, type Filters, matchesSearch, passesFilters, retainedSelect
           closeDrawer();
           updateViewState();
         }
+        if (traceRoute || traceFrom) clearTrace();
       }
     });
 
-    // wheel zoom buttons
+    // route trace via Shift+click (delegated on the svg — createNodeElement
+    // stays untouched). First click sets the source, second computes the chain.
+    // Any plain click clears a pending or active trace.
+    svg.addEventListener("click", (e) => {
+      if (!(e as MouseEvent).shiftKey) {
+        if (traceRoute || traceFrom) clearTrace();
+        return;
+      }
+      var g = (e.target as Element).closest("g.node-group") as HTMLElement | null;
+      if (!g) return;
+      var id = g.dataset.id as string;
+      if (!state.graph!.nodes[id]) return;
+      if (traceRoute) clearTrace();
+      if (traceFrom === null) {
+        traceFrom = id;
+        return;
+      }
+      if (id === traceFrom) {
+        clearTrace();
+        return;
+      }
+      traceRoute = routeIds(state.graph!, traceFrom, id);
+      traceTo = id;
+      updateViewState();
+    });
+
+    // drawer tab trap: while the modal is open, keep Tab from escaping it. Only
+    // the close button and (fake-DOM) title are focusable; if the trap fires
+    // with nothing after the current element, wrap focus back to the first.
+    drawer.addEventListener("keydown", (e) => {
+      if ((e as KeyboardEvent).key !== "Tab") return;
+      if (drawer.classList.contains("hidden")) return;
+      var focusables = drawer.querySelectorAll(
+        'button:not([disabled]), [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
+      );
+      if (!focusables.length) {
+        // no tab stops (title is focused) — swallow so focus cannot leave
+        e.preventDefault();
+        return;
+      }
+      var first = focusables[0];
+      var last = focusables[focusables.length - 1];
+      // the title keeps tabindex="-1" so it is never in `focusables`; while
+      // focus sits on it (right after open), Shift+Tab would otherwise escape
+      // the modal backwards — treat the title as the wrap start.
+      if (e.shiftKey && (document.activeElement === first || document.activeElement === drawerTitle)) {
+        e.preventDefault();
+        (last as HTMLElement).focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        (first as HTMLElement).focus();
+      }
+    });
+
+    // wheel zoom buttons — guard widened so + / - work while a node or the
+    // canvas itself has focus (previously they required document.body focus)
     document.addEventListener("keydown", (e) => {
       var k = (e as KeyboardEvent).key;
+      var ae = document.activeElement as Element | null;
+      var onGraph =
+        !ae || ae === document.body || ae === svg || (ae && ae.classList && ae.classList.contains("node-group"));
       if (k === "+" || k === "=") {
-        if (document.activeElement === document.body) zoomBy(1.2, svg.clientWidth / 2, svg.clientHeight / 2);
+        if (onGraph) zoomBy(1.2, svg.clientWidth / 2, svg.clientHeight / 2);
       } else if (k === "-") {
-        if (document.activeElement === document.body) zoomBy(1 / 1.2, svg.clientWidth / 2, svg.clientHeight / 2);
+        if (onGraph) zoomBy(1 / 1.2, svg.clientWidth / 2, svg.clientHeight / 2);
+      }
+    });
+
+    // arrow-key spatial navigation: move DOM focus to the nearest visible node
+    // along the dominant axis, so filtered-out nodes are skipped
+    document.addEventListener("keydown", (e) => {
+      var k = (e as KeyboardEvent).key;
+      if (k !== "ArrowRight" && k !== "ArrowLeft" && k !== "ArrowUp" && k !== "ArrowDown") return;
+      var from = (e.target as Element).closest?.("g.node-group") as SVGGElement | null;
+      if (!from) return;
+      var fromId = (from as HTMLElement).dataset.id!;
+      var cur = state.nodes[fromId];
+      if (!cur) return;
+      var dirX = k === "ArrowRight" ? 1 : k === "ArrowLeft" ? -1 : 0;
+      var dirY = k === "ArrowDown" ? 1 : k === "ArrowUp" ? -1 : 0;
+      var best: { id: string; score: number } | null = null;
+      nodeEls.forEach((group, id) => {
+        if (id === fromId) return;
+        var n = state.nodes[id];
+        if (!n || group.dataset.visible !== "1") return; // skip filtered nodes
+        var dx = n.x - cur.x;
+        var dy = n.y - cur.y;
+        // reject candidates not on the requested side. A node is "right/left"
+        // of the source when it's past it on that axis; "below/above" when past
+        // on the vertical axis. Nodes sharing the current column (dx ≈ 0) are
+        // valid vertical targets — only an opposite-sign offset disqualifies.
+        if (dirX !== 0 && dx * dirX < 0) return;
+        if (dirY !== 0 && dy * dirY < 0) return;
+        // primary axis governs; |cross| is the tiebreak for same-column rows
+        var primary = dirY !== 0 ? Math.abs(dy) : Math.abs(dx);
+        var cross = dirY !== 0 ? Math.abs(dx) : Math.abs(dy);
+        var score = primary * (1 + cross * 0.01);
+        if (!best || score < best.score) best = { id, score };
+      });
+      if (best) {
+        e.preventDefault();
+        var target = nodeEls.get(best.id);
+        if (target) target.focus();
       }
     });
 

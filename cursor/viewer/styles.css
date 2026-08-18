@@ -271,6 +271,25 @@ input[type="checkbox"]:focus-visible {
   stroke-width: 3;
   filter: drop-shadow(0 0 4px color-mix(in srgb, var(--accent) 45%, transparent));
 }
+/* widened transparent hit ribbon behind each visible edge — the visible path
+   still paints the arrowhead on top, pointer events land on this wider target */
+.edge-hit {
+  fill: none;
+  stroke: transparent;
+  stroke-width: 14;
+  cursor: pointer;
+}
+/* orange route-trace accent applied to the node group and both the visible edge
+   and its hit ribbon; full-opacity so the chain survives any emphasis dimming */
+.node-group.route .node-rect {
+  stroke: var(--accent);
+  stroke-width: 2.5;
+}
+.edge.route,
+.edge-hit.route {
+  stroke: var(--tier-fable);
+  stroke-width: 3;
+}
 
 /* editorial shell — phase lanes and node-tier badges (Task 1 hooks) */
 .lane {

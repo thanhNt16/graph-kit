@@ -273,6 +273,87 @@ describe("viewer server", () => {
     }
   });
 
+  test("binds to an explicitly requested port", async () => {
+    const s = await startViewerServer({ graphPath: GRAPH, assetDir: ASSETS, key: KEY, port: 4800 });
+    try {
+      expect(s.port).toBe(4800);
+      expect(s.url).toContain(":4800/");
+    } finally {
+      await s.close();
+    }
+  });
+
+  test("falls back to the next free port when pinned is occupied", async () => {
+    const p = 4900;
+    // Block on 127.0.0.1: the server binds IPv4 explicitly, so a dual-stack
+    // blocker alone would not conflict on macOS.
+    const blocker = nodeHttp.createServer().listen(p, "127.0.0.1");
+    try {
+      const s = await startViewerServer({ graphPath: GRAPH, assetDir: ASSETS, key: KEY, port: p });
+      try {
+        expect(s.port).toBe(p + 1);
+      } finally {
+        await s.close();
+      }
+    } finally {
+      blocker.close();
+    }
+  });
+
+  test("falls back to ephemeral after bounded probes", async () => {
+    const p = 5000;
+    const blockers = Array.from({ length: 11 }, (_, i) => nodeHttp.createServer().listen(p + i, "127.0.0.1"));
+    // listen() binds asynchronously — settle before probing so every pinned
+    // port is genuinely occupied when the server starts its probe sequence.
+    await Promise.all(blockers.map((b) => new Promise<void>((r) => b.on("listening", () => r()))));
+    try {
+      const s = await startViewerServer({ graphPath: GRAPH, assetDir: ASSETS, key: KEY, port: p });
+      try {
+        // Ephemeral ports are typically high (49152+), NOT below the pinned
+        // range — assert the bound port is none of the 11 probe targets (p..p+10)
+        // and that the server actually answers.
+        // Not any of the 11 probe targets (p..p+10).
+        expect(s.port < p || s.port > p + 10).toBe(true);
+        const health = await httpGet(`/health?key=${KEY}`, s.port);
+        expect(health.status).toBe(200);
+      } finally {
+        await s.close();
+      }
+    } finally {
+      blockers.forEach((b) => b.close());
+    }
+  });
+
+  test("bundled launcher honors GK_VIEWER_PORT", async () => {
+    const launcher = join(import.meta.dir, "..", "..", "claude", "viewer", "server.mjs");
+    expect(existsSync(launcher)).toBe(true);
+    const bundledGraph = join(TMP, "launcher-port-graph.yaml");
+    writeFileSync(bundledGraph, VALID.replace("name: live", "name: launcher-port"));
+
+    const child = spawn("bun", [launcher, bundledGraph], {
+      stdio: ["ignore", "pipe", "pipe"],
+      env: { ...process.env, GK_VIEWER_PORT: "5151" },
+    });
+    try {
+      const url = await new Promise<string>((resolve, reject) => {
+        const timer = setTimeout(() => reject(new Error("launcher did not print URL in time")), 10000);
+        child.stdout.on("data", (chunk: Buffer) => {
+          const m = /GraphKit viewer: (http:\/\/127\.0\.0\.1:\d+\/\?key=[^\s]+)/.exec(chunk.toString());
+          if (m) {
+            clearTimeout(timer);
+            resolve(m[1]);
+          }
+        });
+        child.on("exit", () => reject(new Error("launcher exited before printing URL")));
+      });
+      const parsed = new URL(url);
+      expect(Number(parsed.port)).toBe(5151);
+    } finally {
+      child.kill("SIGTERM");
+      await new Promise((r) => setTimeout(r, 200));
+    }
+  });
+
   test("exposes no mutation endpoint", async () => {
     const post = await fetch(`http://127.0.0.1:${handle!.port}/somewhere?key=${KEY}`, { method: "POST" });
     // unknown routes return 404; no POST handler exists anywhere
