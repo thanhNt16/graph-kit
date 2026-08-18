@@ -468,9 +468,34 @@ gk new --dir my-project --target cursor</div>
   </div>
 </div>
 
+<div class="section">
+  <div class="section-label">2026-08-19</div>
+  <h2>The Kit Ran Its Own Flow — Viewer Interactivity Upgrade</h2>
+  <p>The superpowers preset was extended with a research fan-out and executed via <code>/gk:execute</code>: 3 parallel sonnet researchers → fable consolidation + plan (function-ownership map keeps parallel executors collision-free) → 3 sonnet executors with self-review loops → fable final review → sonnet fix loop → fable acceptance gate with a live smoke test. 10 nodes, 6 waves, one hotfix, zero commits until the gate passed.</p>
+  <table class="ac-table">
+    <tr><th>Shipped</th><th>Detail</th></tr>
+    <tr><td>Edges are first-class</td><td>invisible wide hit-target paths make edges hoverable/selectable; dragging a node re-routes incident edges live (incremental deltas, no dagre re-run); Shift+click traces a route (BFS <code>routeIds</code>)</td></tr>
+    <tr><td>Drawer &amp; keyboard</td><td>real SSE focus-restore (the 0.2 fix was a no-op — capture now happens before blur), drawer <code>role="dialog"</code> with focus trap/return, arrow-key nav skipping filtered nodes, coherent Escape</td></tr>
+    <tr><td>Launch ops</td><td>pinned port <strong>4800</strong> (<code>GK_VIEWER_PORT</code>), port-busy probe +1…+9 then ephemeral, opt-in Chrome via <code>GK_VIEWER_BROWSER=chrome</code> — default still just prints the keyed URL</td></tr>
+    <tr><td>Kit upgrades</td><td><code>gk init</code> now overwrites stale kit files on upgrade (skills refresh) while preserving user <code>.gk.json</code>; <code>--force</code> remains the wipe path</td></tr>
+  </table>
+  <div class="subsys" style="margin-top:1rem;border-color:var(--adversarial)">
+    <div class="subsys-tag" style="background:rgba(251,146,60,0.15);color:var(--adversarial)">REVIEW LOOP — EARNED ITS KEEP</div>
+    <p style="font-size:0.82rem;color:var(--text-dim)">Executor self-reviews caught 3 bugs pre-review (inverted drag endpoints, dropped Esc-clears-selection, dual-stack test bind). The fable gate still found <strong style="color:var(--text)">1 critical the tests masked</strong>: drag re-routing compounded mousemove deltas — one 40px move vs two 20px moves diverged, ~30× overshoot over a 60-event drag — because every test simulated exactly one mousemove. The reviewer runtime-reproduced it, the sonnet fixer shipped incremental deltas plus a two-moves-equal-one-move regression test, and 2 majors (stale <code>.route</code> ribbons, Shift+click popping the drawer) fell the same way. Acceptance re-proved every plan checkbox independently, including a live key-gated smoke on the pinned port.</p>
+  </div>
+  <div class="stats-banner">
+    <div class="stat-cell"><div class="stat-cell-num">364</div><div class="stat-cell-label">Tests Pass</div></div>
+    <div class="stat-cell"><div class="stat-cell-num">0</div><div class="stat-cell-label">Failures</div></div>
+    <div class="stat-cell"><div class="stat-cell-num">+22</div><div class="stat-cell-label">New Tests</div></div>
+    <div class="stat-cell"><div class="stat-cell-num">5/5</div><div class="stat-cell-label">Bundle Parity</div></div>
+    <div class="stat-cell"><div class="stat-cell-num">0</div><div class="stat-cell-label">New Deps</div></div>
+    <div class="stat-cell"><div class="stat-cell-num">tsc ✓</div><div class="stat-cell-label">Typecheck</div></div>
+  </div>
+</div>
+
 <div class="footer">
   GraphKit 0.2 · graph engineering kit for Claude Code &amp; Cursor<br>
-  <span style="color:var(--memory)">8 agents</span> · <span style="color:var(--sonnet)">11 skills</span> · <span style="color:var(--bridge)">11 topologies</span> · <span style="color:var(--fable)">2 runtimes</span> · <span style="color:var(--haiku)">341 tests</span><br>
+  <span style="color:var(--memory)">8 agents</span> · <span style="color:var(--sonnet)">11 skills</span> · <span style="color:var(--bridge)">11 topologies</span> · <span style="color:var(--fable)">2 runtimes</span> · <span style="color:var(--haiku)">364 tests</span><br>
   gk never invokes a model · CBM is the graph authority · evidence-based gates
 </div>
 
