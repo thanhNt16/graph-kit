@@ -67,16 +67,28 @@
   .cmp-table th:nth-child(3){ color:var(--haiku); }
 
   .topo-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(290px,1fr)); gap:1.1rem; margin:2rem 0; }
-  .topo-card { background:var(--bg-elev); border:1px solid var(--border); border-radius:14px; padding:1.3rem; transition:transform 0.15s,border-color 0.2s; overflow:hidden; }
-  .topo-card:hover { transform:translateY(-3px); border-color:var(--border-bright); }
+  .topo-card { background:var(--bg-elev); border:1px solid var(--border); border-radius:14px; padding:1.3rem; transition:transform 0.22s cubic-bezier(.2,.8,.3,1),border-color 0.2s,box-shadow 0.25s; overflow:hidden; animation:topo-rise 0.5s cubic-bezier(.2,.8,.3,1) both; }
+  .topo-card:hover { transform:translateY(-5px); border-color:var(--border-bright); box-shadow:0 12px 32px rgba(0,0,0,0.35); }
   .topo-card-header { display:flex; align-items:center; gap:0.6rem; margin-bottom:0.7rem; }
-  .topo-dot { width:10px; height:10px; border-radius:50%; flex-shrink:0; }
+  .topo-dot { width:10px; height:10px; border-radius:50%; flex-shrink:0; transition:transform 0.25s,box-shadow 0.25s; }
+  .topo-card:hover .topo-dot { transform:scale(1.4); box-shadow:0 0 10px currentColor; }
   .topo-name { font-size:0.98rem; font-weight:600; }
   .topo-shape { font-size:0.7rem; color:var(--text-muted); font-family:'IBM Plex Mono',monospace; margin-left:auto; }
   .topo-diagram { height:100px; display:flex; align-items:center; justify-content:center; margin:0.4rem 0 0.7rem; }
+  .topo-diagram svg { transition:transform 0.25s cubic-bezier(.2,.8,.3,1); }
+  .topo-card:hover .topo-diagram svg { transform:scale(1.07); }
+  .topo-card rect { fill:currentColor; fill-opacity:0; transition:fill-opacity 0.2s; }
+  .topo-card:hover rect { fill-opacity:0.08; }
+  .topo-card .svg-line { transition:stroke 0.2s; }
+  .topo-card:hover .svg-line { stroke:var(--text-dim); stroke-width:2; }
+  .topo-card:hover [stroke-dasharray] { animation:flow-dash 1.2s linear infinite; }
   .topo-desc { font-size:0.82rem; color:var(--text-dim); line-height:1.5; }
   .topo-use { font-size:0.72rem; color:var(--text-muted); margin-top:0.4rem; font-family:'IBM Plex Mono',monospace; }
   .svg-line { stroke:var(--border-bright); stroke-width:1.5; fill:none; }
+  @keyframes flow-dash { to { stroke-dashoffset:-24; } }
+  @keyframes topo-rise { from { opacity:0; transform:translateY(14px); } to { opacity:1; transform:none; } }
+  .topo-card:nth-child(1){animation-delay:.02s}.topo-card:nth-child(2){animation-delay:.06s}.topo-card:nth-child(3){animation-delay:.1s}.topo-card:nth-child(4){animation-delay:.14s}.topo-card:nth-child(5){animation-delay:.18s}.topo-card:nth-child(6){animation-delay:.22s}.topo-card:nth-child(7){animation-delay:.26s}.topo-card:nth-child(8){animation-delay:.3s}.topo-card:nth-child(9){animation-delay:.34s}.topo-card:nth-child(10){animation-delay:.38s}.topo-card:nth-child(11){animation-delay:.42s}
+  @media (prefers-reduced-motion: reduce) { .topo-card,.topo-dot,.topo-diagram svg { animation:none !important; transition:none !important; } }
 
   .bridge-flow { display:flex; align-items:center; justify-content:center; gap:0.5rem; flex-wrap:wrap; margin:1.5rem 0; padding:1.4rem; background:var(--bg-elev); border:1px solid var(--border); border-radius:12px; font-family:'IBM Plex Mono',monospace; font-size:0.78rem; }
   .flow-node { padding:0.45rem 0.8rem; border:1px solid var(--border-bright); border-radius:8px; background:var(--surface); white-space:nowrap; }
@@ -120,7 +132,7 @@
 <body>
 
 <div class="hero">
-  <div class="hero-badge">@graphkit/gk 0.2.0 · graph engineering kit</div>
+  <div class="hero-badge">gk v0.2.9 · graph engineering kit</div>
   <h1>GraphKit</h1>
   <p class="hero-tag">Define graph-structured agent workflows as YAML. Compile to Claude Code dynamic workflows — or dispatch subagents directly. Eleven topologies, two runtimes, Cursor support, and a live bridge to the codebase-memory graph. Per-node model tiering. Evidence-based gates. Zero custom runtime.</p>
   <div class="hero-stats">
@@ -128,33 +140,46 @@
     <div class="stat"><div class="stat-num">2</div><div class="stat-label">Runtimes</div></div>
     <div class="stat"><div class="stat-num">11</div><div class="stat-label">Skills</div></div>
     <div class="stat"><div class="stat-num">8</div><div class="stat-label">Agents</div></div>
-    <div class="stat"><div class="stat-num">138</div><div class="stat-label">Tests</div></div>
+    <div class="stat"><div class="stat-num">364</div><div class="stat-label">Tests</div></div>
   </div>
 </div>
 
 <div class="section">
   <div class="section-label">Quick Start</div>
-  <h2>Install from Source</h2>
-  <p>GraphKit isn't on npm yet. Clone, build, and install as a global <code>gk</code> command. Requires <a href="https://bun.sh" style="color:var(--sonnet)">Bun</a> and <a href="https://docs.claude.com/en/docs/claude-code" style="color:var(--sonnet)">Claude Code</a> (or Cursor).</p>
+  <h2>Install — Release Tarball or Source</h2>
+  <p>Easiest: every push to <code>main</code> publishes a patch release with prebuilt binaries. Or clone and build from source (not on npm yet). Requires <a href="https://bun.sh" style="color:var(--sonnet)">Bun</a> (source build) and <a href="https://docs.claude.com/en/docs/claude-code" style="color:var(--sonnet)">Claude Code</a> (or Cursor).</p>
 
   <div class="code-block">
-    <div class="code-header"><div class="code-dot" style="background:#f85149"></div><div class="code-dot" style="background:#d29922"></div><div class="code-dot" style="background:#3fb950"></div> 1. Clone &amp; build</div>
+    <div class="code-header"><div class="code-dot" style="background:#f85149"></div><div class="code-dot" style="background:#d29922"></div><div class="code-dot" style="background:#3fb950"></div> 1. Release tarball (recommended)</div>
+    <div class="code-body"><span class="cmt"># macOS Apple Silicon</span>
+curl -fsSL https://github.com/thanhNt16/graph-kit/releases/latest/download/gk-darwin-arm64.tar.gz \
+  | sudo tar -xz -C /usr/local/bin
+
+<span class="cmt"># Linux x64</span>
+curl -fsSL https://github.com/thanhNt16/graph-kit/releases/latest/download/gk-linux-x64.tar.gz \
+  | sudo tar -xz -C /usr/local/bin
+
+gk --version                <span class="cmt"># verify — then `gk init` in your project</span></div>
+  </div>
+
+  <div class="code-block">
+    <div class="code-header"><div class="code-dot" style="background:#f85149"></div><div class="code-dot" style="background:#d29922"></div><div class="code-dot" style="background:#3fb950"></div> 2. Or: clone &amp; build from source</div>
     <div class="code-body"><span class="cmt"># Clone the repo</span>
-git clone https://github.com/user/graph-kit.git
-cd graph-kit/apps/gk
+git clone https://github.com/thanhNt16/graph-kit.git
+cd graph-kit
 
 <span class="cmt"># Install deps + build</span>
 bun install
 bun run build                <span class="cmt"># → dist/index.js (executable, with shebang)</span>
 
 <span class="cmt"># Run the full gate to verify</span>
-bun run ci:local             <span class="cmt"># → typecheck + lint + build + 138 tests + cbm:parity</span></div>
+bun run ci:local             <span class="cmt"># → typecheck + lint + build + 364 tests + cbm:parity</span></div>
   </div>
 
   <div class="install-grid">
     <div class="code-block">
       <div class="code-header"><div class="code-dot" style="background:#f85149"></div><div class="code-dot" style="background:#d29922"></div><div class="code-dot" style="background:#3fb950"></div> 2a. Install globally (npm link)</div>
-      <div class="code-body"><span class="cmt"># From the apps/gk directory:</span>
+      <div class="code-body"><span class="cmt"># From the repo root:</span>
 npm link
 
 <span class="cmt"># If you have a conflicting 'gk' alias</span>

@@ -55,12 +55,6 @@ Verify:
 gk --version
 ```
 
-Or install from npm:
-
-```bash
-npm install -g @graphkit/gk
-```
-
 Install the kit into a project:
 
 ```bash
