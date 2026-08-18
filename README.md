@@ -10,6 +10,25 @@ GraphKit is a graph engineering kit for AI coding agents (Claude Code and Cursor
 
 gk never invokes a model, spawns an agent, or reads an API key. It validates and compiles only.
 
+## Viewer
+
+`/gk:visualize` launches a private, read-only local viewer (127.0.0.1, cryptographically random access key, live updates over SSE):
+
+- **Interactive graph** — drag nodes (edges re-route live), hover/select edges via wide hit-targets, Shift+click two nodes to trace a route, click a node for the detail sidebar (objective, model tier, depend_on, evidence, filters), arrow-key navigation, Esc to clear
+- **Pinned port** — binds `4800` by default; override with `GK_VIEWER_PORT`. Port busy → probes +1…+9, then falls back to ephemeral so it always starts
+- **Browser open is opt-in** — by default it just prints the keyed URL. Set `GK_VIEWER_OPEN=1` to open the default browser, or `GK_VIEWER_BROWSER=chrome` to target Chrome specifically
+- Up to 250 nodes; idle timeout shuts the server down
+
+## Memory
+
+`gk memory` keeps cross-run project memory in `.graphkit/memory/` — salience-ranked recall with validity/supersede filters, ACT-R decay, and a full audit trail:
+
+```bash
+gk memory recall "viewer port"   # top-k relevant memories (auto-touches)
+gk memory touch <id>             # reinforce a memory
+gk memory trace                  # decay pass + consolidation audit log
+```
+
 ## CBM boundary
 
 gk bridges to the [codebase-memory-mcp](https://github.com/) (CBM) MCP server for indexing and code-graph queries (`gk graph index|search|trace|query`). gk owns no graph database — CBM is the authority. This keeps gk a workflow compiler, not a re-implementation of CBM's LSP-backed indexer.
@@ -54,6 +73,19 @@ Or scaffold a new project:
 gk new --dir my-project
 ```
 
+Upgrading the binary does not touch installed projects — re-run `gk init` in each project to refresh agents/skills/hooks to the new kit. Kit files always overwrite; user config (`.gk.json`) is preserved. `gk init --force` wipes and reinstalls clean.
+
+## Quickstart
+
+```bash
+gk init                                   # install kit into .claude/
+gk graph new diamond > graph.yaml         # scaffold a graph
+gk validate graph.yaml                    # gate-check
+gk graph ascii graph.yaml                 # instant in-terminal preview
+```
+
+Then in a Claude Code session: `/gk:visualize` to see it, `/gk:execute` to run it wave by wave.
+
 ## Cursor IDE support
 
 GraphKit also targets Cursor. Pass `--target cursor` to install the Cursor-flavored kit into `.cursor/` instead of `.claude/`:
@@ -91,16 +123,16 @@ inputs:
     required: true
 nodes:
   scouter:
-    agent: Software Architect
+    agent: software-architect
     model: opus
     objective: Identify files to review
     depend_on: []
   worker:
-    agent: Code Reviewer
+    agent: code-reviewer
     model: sonnet
     depend_on: [scouter]
   synthesizer:
-    agent: Software Architect
+    agent: software-architect
     model: opus
     depend_on: [worker]
 limits:
@@ -153,7 +185,7 @@ Each node carries its own model tier, tools, skills, refs, constraints, and opti
 ```yaml
 nodes:
   scouter:
-    agent: Software Architect
+    agent: software-architect
     model: opus
     tools: [Read, Glob, Grep]
     refs:
