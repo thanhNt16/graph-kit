@@ -140,7 +140,7 @@
     <div class="stat"><div class="stat-num">2</div><div class="stat-label">Runtimes</div></div>
     <div class="stat"><div class="stat-num">11</div><div class="stat-label">Skills</div></div>
     <div class="stat"><div class="stat-num">8</div><div class="stat-label">Agents</div></div>
-    <div class="stat"><div class="stat-num">364</div><div class="stat-label">Tests</div></div>
+    <div class="stat"><div class="stat-num">375</div><div class="stat-label">Tests</div></div>
   </div>
 </div>
 
@@ -233,7 +233,7 @@ gk graph inspect diamond                 <span class="cmt"># → see topology co
       <div class="arch-layer-tag">Layer 1 — Kit Template</div>
       <div class="arch-layer-title">📦 .claude/ or .cursor/ directory</div>
       <div class="arch-layer-desc">Installed by <code>gk init</code>. Agents, skills, hooks, rules, schemas, topology templates — in the target host's native format.</div>
-      <div class="arch-flow"><span class="arch-pill">8 agents</span><span class="arch-arrow">·</span><span class="arch-pill">11 skills</span><span class="arch-arrow">·</span><span class="arch-pill">4 hooks</span><span class="arch-arrow">·</span><span class="arch-pill">3 rules</span><span class="arch-arrow">·</span><span class="arch-pill">11 templates</span></div>
+      <div class="arch-flow"><span class="arch-pill">8 agents</span><span class="arch-arrow">·</span><span class="arch-pill">13 skills (claude) · 11 (cursor)</span><span class="arch-arrow">·</span><span class="arch-pill">4 hooks</span><span class="arch-arrow">·</span><span class="arch-pill">3 rules</span><span class="arch-arrow">·</span><span class="arch-pill">11 templates</span></div>
     </div>
     <div class="arch-arrow-down">↓</div>
     <div class="arch-layer">
@@ -419,9 +419,9 @@ gk new --dir my-project --target cursor</div>
 </div>
 
 <div class="section">
-  <div class="section-label">Session Skills — 11 Total</div>
+  <div class="section-label">Session Skills — 13 (claude) · 11 (cursor)</div>
   <h2>The Full Lifecycle</h2>
-  <p>Inside a session, eleven skills walk the user from blank canvas to verified run. <code>/gk:execute</code> is new in 0.2 (cyan border).</p>
+  <p>Inside a session, the kit's skills walk the user from blank canvas to verified run — 13 shipped for Claude Code, 11 for Cursor. <code>/gk:execute</code> is new in 0.2 (cyan border).</p>
   <div class="lifecycle">
     <div class="lc-step"><div class="name">/gk-init-graph</div><div class="desc">Generate graph.yaml</div></div>
     <div class="lc-step"><div class="name">/gk-brainstorm</div><div class="desc">Refine nodes + tiers</div></div>
@@ -466,10 +466,10 @@ gk new --dir my-project --target cursor</div>
     <tr><td>M5 — recall &gt; grep</td><td>Recall@10 ≥ 0.95, ≥10× vs grep</td><td class="caveat">PASS · CBM 4/5 vs grep 0/5</td></tr>
   </table>
   <div class="stats-banner">
-    <div class="stat-cell"><div class="stat-cell-num">341</div><div class="stat-cell-label">Tests Pass</div></div>
+    <div class="stat-cell"><div class="stat-cell-num">375</div><div class="stat-cell-label">Tests Pass</div></div>
     <div class="stat-cell"><div class="stat-cell-num">0</div><div class="stat-cell-label">Failures</div></div>
-    <div class="stat-cell"><div class="stat-cell-num">1120</div><div class="stat-cell-label">Expect Calls</div></div>
-    <div class="stat-cell"><div class="stat-cell-num">52</div><div class="stat-cell-label">Test Files</div></div>
+    <div class="stat-cell"><div class="stat-cell-num">1210</div><div class="stat-cell-label">Expect Calls</div></div>
+    <div class="stat-cell"><div class="stat-cell-num">53</div><div class="stat-cell-label">Test Files</div></div>
     <div class="stat-cell"><div class="stat-cell-num">5/5</div><div class="stat-cell-label">Metrics</div></div>
     <div class="stat-cell"><div class="stat-cell-num">0</div><div class="stat-cell-label">Lint Errors</div></div>
   </div>
@@ -488,7 +488,7 @@ gk new --dir my-project --target cursor</div>
   </table>
   <div class="subsys" style="margin-top:1rem;border-color:var(--memory)">
     <div class="subsys-tag" style="background:rgba(240,171,252,0.15);color:var(--memory)">MEMORY LAYER — MEASURED</div>
-    <p style="font-size:0.82rem;color:var(--text-dim)">A 6-agent research fleet + fable judge found the ACT-R decay shipped in 0.2 was a store-wide time bomb (no reinforcement → uniform ~day-10 expiry). Fixed with a closed loop: <code style="color:var(--text)">gk memory recall</code> retrieves (keyword×salience + validity/supersede filters) <em>and</em> reinforces survivors; <code style="color:var(--text)">gk memory touch</code> bumps use; <code style="color:var(--text)">gk memory trace</code> decays with a JSONL audit trail and freshness flag; <code style="color:var(--text)">bun run eval:memory</code> holds recall at <strong style="color:var(--text)">hit_rate 0.9 / 0 validity violations</strong>.</p>
+    <p style="font-size:0.82rem;color:var(--text-dim)">A 6-agent research fleet + fable judge found the ACT-R decay shipped in 0.2 was a store-wide time bomb (no reinforcement → uniform ~day-10 expiry). Fixed with a closed loop: <code style="color:var(--text)">gk memory recall</code> retrieves (keyword×salience + validity/supersede filters) <em>and</em> reinforces survivors; <code style="color:var(--text)">gk memory touch</code> bumps use; <code style="color:var(--text)">gk memory trace</code> decays with a JSONL audit trail and freshness flag; <code style="color:var(--text)">bun run eval:memory</code> holds recall at <strong style="color:var(--text)">an ≥0.8 gate baseline (0.9 measured) / 0 validity violations</strong>.</p>
     <p style="font-size:0.82rem;color:var(--text-dim);margin-top:0.5rem">Two adversarial catches along the way: the fleet's deadcode trim was measured regressive before it shipped, and CBM <code>search_graph</code> was measured to return <strong style="color:var(--adversarial)">0 hits over markdown-only projects</strong> — gk-recall's semantic step had always been dead weight and was replaced with the measured retriever.</p>
   </div>
 </div>
@@ -509,7 +509,7 @@ gk new --dir my-project --target cursor</div>
     <p style="font-size:0.82rem;color:var(--text-dim)">Executor self-reviews caught 3 bugs pre-review (inverted drag endpoints, dropped Esc-clears-selection, dual-stack test bind). The fable gate still found <strong style="color:var(--text)">1 critical the tests masked</strong>: drag re-routing compounded mousemove deltas — one 40px move vs two 20px moves diverged, ~30× overshoot over a 60-event drag — because every test simulated exactly one mousemove. The reviewer runtime-reproduced it, the sonnet fixer shipped incremental deltas plus a two-moves-equal-one-move regression test, and 2 majors (stale <code>.route</code> ribbons, Shift+click popping the drawer) fell the same way. Acceptance re-proved every plan checkbox independently, including a live key-gated smoke on the pinned port.</p>
   </div>
   <div class="stats-banner">
-    <div class="stat-cell"><div class="stat-cell-num">364</div><div class="stat-cell-label">Tests Pass</div></div>
+    <div class="stat-cell"><div class="stat-cell-num">375</div><div class="stat-cell-label">Tests Pass</div></div>
     <div class="stat-cell"><div class="stat-cell-num">0</div><div class="stat-cell-label">Failures</div></div>
     <div class="stat-cell"><div class="stat-cell-num">+22</div><div class="stat-cell-label">New Tests</div></div>
     <div class="stat-cell"><div class="stat-cell-num">5/5</div><div class="stat-cell-label">Bundle Parity</div></div>
@@ -518,9 +518,43 @@ gk new --dir my-project --target cursor</div>
   </div>
 </div>
 
+<div class="section">
+  <div class="section-label">Positioning — graph-engineering compiler kit <span class="badge-new">2026-08-19</span></div>
+  <h2>The Part of the Stack Every Other Tool Makes You Run Itself</h2>
+  <p>gk is a <em>graph-engineering compiler kit</em>, not a "multi-agent framework." Where CrewAI/AutoGen/ADK ship a runtime that invokes models and owns the execution loop, gk declares the graph, gates it at validate, and compiles it to a deterministic <code>.workflow.js</code> the host already runs — with zero models orchestrating. gk never invokes a model; coordination is compiled from <code>graph.yaml</code>, not delegated to an LLM, which is where other stacks' empirically measured flakiness lives (<a href="https://github.com/crewAIInc/crewAI" style="color:var(--sonnet)">CrewAI</a>: a 34% non-deterministic failure rate over 3 weeks on identical inputs vs 4% under explicit orchestration — per 2025–26 dev-shop retrospectives). The term "graph engineering" is the field's own label for this rung (<a href="https://www.drjoshcsimmons.com/writing/we-are-entering-the-graph-engineering-phase" style="color:var(--sonnet)">Simmons, "We Are Entering the Graph Engineering Phase"</a>): the craft of what happens <em>between</em> context windows.</p>
+
+  <p><strong style="color:var(--text)">Budgets are the safety story.</strong> Every production postmortem independently converges on caps — hard turn/token/¤ ceilings, fail-closed defaults, checkpointed edges. gk's <code>limits</code>, <code>constraints</code>, and loop <code>max_rounds</code> are that blast-radius control (<a href="https://edgelesslab.com/blog/swarm-tried-to-bankrupt-itself/" style="color:var(--sonnet)">Edgeless Lab — the $50-night swarm</a>; <a href="https://turion.ai/blog/multi-agent-orchestration-infrastructure-production/" style="color:var(--sonnet)">TURION — "hard budgets, always"</a>). What you leave runnable will eventually run; gk makes the bound explicit and auditable.</p>
+
+  <p><strong style="color:var(--text)">Per-node binding kills the state-schema tax.</strong> The LangGraph scorecard's cost center is designing a typed state schema — 2–4 weeks per modest graph (<a href="https://www.orange-its.ch/en/insights/langgraph-review" style="color:var(--sonnet)">Orange ITS review</a>), "most of the time goes to state schema" (<a href="https://www.kalviumlabs.ai/blog/langgraph-vs-langchain-production/" style="color:var(--sonnet)">Kalvium</a>). gk binds <code>model</code>, <code>tools</code>, <code>skills</code>, <code>refs</code>, <code>loop</code>, <code>constraints</code> per node; there is no shared schema to hand-write. Agent names must resolve to a real file in <code>claude/agents/</code> — validation fails otherwise.</p>
+
+  <p><strong style="color:var(--text)">Verification is the field's #1 unmet demand — a partial answer today, not a claim it's solved.</strong> Users want a separate verifier; a model must not certify its own work (<a href="https://github.com/langchain-ai/langgraph/issues/7209" style="color:var(--sonnet)">langgraph #7209</a>; <a href="https://github.com/snarktank/antfarm" style="color:var(--sonnet)">antfarm README</a>). gk's answer is two existing primitives — the <code>adversarial-verification</code> topology (produce → refute → adjudicate) and the evidence gate's <code>required_keys</code> (a node only passes if it produced what its graph declared). That is a partial answer: there is no first-class recompute/verify-gate primitive, and no runtime telemetry. Verification is a direction gk has started, not a solved claim.</p>
+
+  <p><strong style="color:var(--text)">Host-native = subscription-safe.</strong> gk rides the host's supported first-party harness (Claude Code Workflow / native subagents, or Cursor) instead of a third-party orchestration layer — the exact harnesses Anthropic keeps first-class in the subscription, unlike third-party bridges now billed extra (<a href="https://www.theverge.com/ai-artificial-intelligence/907074/anthropic-openclaw-claude-subscription-ban" style="color:var(--sonnet)">The Verge</a>; <a href="https://techcrunch.com/2026/04/04/anthropic-says-claude-code-subscribers-will-need-to-pay-extra-for-openclaw-support/" style="color:var(--sonnet)">TechCrunch</a>). No runtime tax: gk ships no Python/TS runtime, no dependency graph.</p>
+
+  <h2 style="margin-top:1.5rem">Roadmap — Next Up</h2>
+  <p>Three ranked candidates, each grounded in the competitive scan. Deferred from this run by design — half-built is worse than none.</p>
+  <div class="bridge-grid">
+    <div class="subsys">
+      <div class="subsys-tag" style="background:rgba(240,171,252,0.15);color:var(--memory)">COMPETITIVE S1</div>
+      <div class="subsys-title" style="font-family:'IBM Plex Mono',monospace;font-size:0.8rem;color:var(--sonnet);margin-bottom:0.3rem">gk run --resume — run ledger</div>
+      <p style="font-size:0.85rem;color:var(--text-dim)">Persist an executed-waves ledger + per-node evidence manifest in <code>.graphkit/runs/&lt;run-id&gt;/</code>. Resume skips satisfied waves and re-dispatches only the pending — de-facto time-travel, no runtime.</p>
+    </div>
+    <div class="subsys">
+      <div class="subsys-tag" style="background:rgba(240,171,252,0.15);color:var(--memory)">COMPETITIVE S3</div>
+      <div class="subsys-title" style="font-family:'IBM Plex Mono',monospace;font-size:0.8rem;color:var(--sonnet);margin-bottom:0.3rem">Human-approval wave gate</div>
+      <p style="font-size:0.85rem;color:var(--text-dim)"><code>human_approval: true</code> pauses dispatch before write-capable waves — the production make-or-break primitive, implementable wholly in the compiler + host.</p>
+    </div>
+    <div class="subsys">
+      <div class="subsys-tag" style="background:rgba(240,171,252,0.15);color:var(--memory)">COMPETITIVE M1</div>
+      <div class="subsys-title" style="font-family:'IBM Plex Mono',monospace;font-size:0.8rem;color:var(--sonnet);margin-bottom:0.3rem">Model-tier bench sweep — gk bench</div>
+      <p style="font-size:0.85rem;color:var(--text-dim)">Deterministic "which per-node model tier passes the evidence gate at what cost" matrix — the reliability story competitors can't match.</p>
+    </div>
+  </div>
+</div>
+
 <div class="footer">
   GraphKit 0.2 · graph engineering kit for Claude Code &amp; Cursor<br>
-  <span style="color:var(--memory)">8 agents</span> · <span style="color:var(--sonnet)">11 skills</span> · <span style="color:var(--bridge)">11 topologies</span> · <span style="color:var(--fable)">2 runtimes</span> · <span style="color:var(--haiku)">364 tests</span><br>
+  <span style="color:var(--memory)">8 agents</span> · <span style="color:var(--sonnet)">13 skills (claude) · 11 (cursor)</span> · <span style="color:var(--bridge)">11 topologies</span> · <span style="color:var(--fable)">2 runtimes</span> · <span style="color:var(--haiku)">364 tests</span><br>
   gk never invokes a model · CBM is the graph authority · evidence-based gates
 </div>
 

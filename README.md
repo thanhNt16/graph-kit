@@ -10,6 +10,8 @@ GraphKit is a graph engineering kit for AI coding agents (Claude Code and Cursor
 
 gk never invokes a model, spawns an agent, or reads an API key. It validates and compiles only.
 
+This is a **graph engineering kit** ([Simmons — *We Are Entering the Graph Engineering Phase*](https://www.drjoshcsimmons.com/writing/we-are-entering-the-graph-engineering-phase)): it compiles the coordination that LLM-choreographed alternatives delegate to a language model into a deterministic workflow file ([TURION — multi-agent orchestration infrastructure in production](https://turion.ai/blog/multi-agent-orchestration-infrastructure-production/)). Budgets are the safety story — `limits`, `constraints`, and loop `max_rounds` cap the blast radius where swarm-style setups have incurred runaway costs ([Edgeless Lab](https://edgelesslab.com/blog/swarm-tried-to-bankrupt-itself/)). Per-node binding replaces the state-schema tax competitors pay: every node carries its own model tier, tools, skills, and constraints instead of a shared typed state ([Orange ITS — LangGraph review](https://www.orange-its.ch/en/insights/langgraph-review), [Kalvium — LangGraph vs LangChain in production](https://www.kalviumlabs.ai/blog/langgraph-vs-langchain-production/)).
+
 ## Viewer
 
 `/gk:visualize` launches a private, read-only local viewer (127.0.0.1, cryptographically random access key, live updates over SSE):
@@ -31,13 +33,15 @@ gk memory trace                  # decay pass + consolidation audit log
 
 ## CBM boundary
 
-gk bridges to the [codebase-memory-mcp](https://github.com/) (CBM) MCP server for indexing and code-graph queries (`gk graph index|search|trace|query`). gk owns no graph database — CBM is the authority. This keeps gk a workflow compiler, not a re-implementation of CBM's LSP-backed indexer.
+gk can bridge to the codebase-memory-mcp (CBM) MCP server for indexing and code-graph queries (`gk graph index|search|ask|trace|query`, `gk memory index`). gk owns no graph database — CBM is the authority. This keeps gk a workflow compiler, not a re-implementation of CBM's LSP-backed indexer.
+
+**The CBM bridge is currently unavailable**: `@graphkit/codebase-memory-mcp` is not yet published (npm 404). Until it is, those commands fail with code `CBM_UNAVAILABLE` and exit 1 unless you point `CBM_CMD`/`CBM_ARGS` at a local codebase-memory-mcp build. `gk memory recall|touch` (file-based) are unaffected and keep working.
 
 ## Install
 
 ### GitHub release
 
-Each build on `main` publishes a new patch release (e.g. `v0.2.1`) with binaries and auto-generated changelogs. Install the latest for your platform:
+Each build on `main` publishes a new patch release (e.g. `v0.2.9`) with binaries and auto-generated changelogs. Install the latest for your platform:
 
 **macOS Apple Silicon:**
 

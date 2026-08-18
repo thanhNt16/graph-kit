@@ -27,7 +27,7 @@ The CLI does all of the following internally:
 4. Inlines root + subgraph topology templates
 5. Writes `.claude/workflows/{metadata.name}.workflow.js`
 
-If the command is not found, the kit is not installed. Tell the user to run `gk init` or install via npm: `npm install -g @graphkit/gk`.
+If the command is not found, the kit is not installed. Tell the user to install `gk` from the GitHub release tarball (see the README's Install section) and then run `gk init`.
 
 ## Output
 

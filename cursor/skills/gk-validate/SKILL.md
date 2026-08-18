@@ -19,7 +19,7 @@ gk validate graph.yaml --json
 
 The CLI runs 9 checks: YAML syntax, schema conformance (zod), topology name, agent binding (files in `.cursor/agents/`), refs exist on disk, acyclic depend_on, evidence key coverage, loop exit conditions, constraint types.
 
-If the command is not found, the kit is not installed. Tell the user to run `gk init` or install via npm: `npm install -g @graphkit/gk`.
+If the command is not found, the kit is not installed. Tell the user to install `gk` from the GitHub release tarball (see the README's Install section) and then run `gk init`.
 
 ## Output
 
