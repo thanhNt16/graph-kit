@@ -2,7 +2,7 @@ import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, unlin
 import { join } from "node:path";
 import type { CAC } from "cac";
 import YAML from "yaml";
-import { type CbmClient, createCbmClient } from "../../cbm/client.js";
+import { type CbmClient, createCbmClient, CBM_UNAVAILABLE_MSG } from "../../cbm/client.js";
 import { indexProject } from "../../cbm/index.js";
 import { actRScore, shouldExpire } from "../../eval/forgetting.js";
 import { recallTopK } from "../../eval/memory-recall.js";
@@ -227,7 +227,10 @@ export function registerMemoryCommands(cli: CAC) {
         const result = await indexMemory(process.cwd(), opts.project);
         console.log(JSON.stringify(ok(result)));
       } catch (e) {
-        console.log(JSON.stringify(fail("CBM_UNAVAILABLE", String(e))));
+        const msg = String((e as Error)?.message ?? e);
+        console.log(
+          JSON.stringify(fail("CBM_UNAVAILABLE", msg.includes("@graphkit/codebase-memory-mcp") ? msg : `${CBM_UNAVAILABLE_MSG}\n${msg}`)),
+        );
         process.exit(1);
       }
     });

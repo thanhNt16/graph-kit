@@ -2,7 +2,7 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import type { CAC } from "cac";
 import YAML from "yaml";
-import { type CbmClient, createCbmClient } from "../../cbm/client.js";
+import { type CbmClient, createCbmClient, CBM_UNAVAILABLE_MSG } from "../../cbm/client.js";
 import type { QueryResult, SearchResult, TraceResult } from "../../cbm/contract.js";
 import { indexProject } from "../../cbm/index.js";
 import { routeAndRetrieve } from "../../cbm/route.js";
@@ -40,6 +40,13 @@ async function cbmCall<T>(fn: (client: CbmClient) => Promise<T>): Promise<T> {
   } finally {
     await client.close();
   }
+}
+
+// Prepend the F3 contract when the rejection isn't already carrying it, so gk
+// always exits with the honest CBM_CMD/CBM_ARGS guidance — never a bare errno.
+function cbmFailure(e: unknown): ReturnType<typeof fail> {
+  const msg = String((e as Error)?.message ?? e);
+  return fail("CBM_UNAVAILABLE", msg.includes("@graphkit/codebase-memory-mcp") ? msg : `${CBM_UNAVAILABLE_MSG}\n${msg}`);
 }
 
 export function loadGraph(file: string) {
@@ -618,7 +625,12 @@ export function registerGraphCommands(cli: CAC) {
           opts.output ?? join(process.cwd(), ".claude", "workflows", `${graph.metadata.name}.workflow.js`);
         mkdirSync(dirname(outPath), { recursive: true });
         writeFileSync(outPath, script);
-        console.log(JSON.stringify(ok({ compiled: outPath, topology: graph.topology })));
+        // F9: human mode voices the artifact path so the build is visible; --json stays structured.
+        if (opts.json) {
+          console.log(JSON.stringify(ok({ compiled: outPath, topology: graph.topology })));
+        } else {
+          console.log(`compiled ${outPath}`);
+        }
       } catch (e) {
         console.log(JSON.stringify(fail("COMPILE_ERROR", String(e))));
         process.exit(1);
@@ -786,7 +798,7 @@ export function registerGraphCommands(cli: CAC) {
             const result = await cbmCall((c) => _indexProjectFn(c, { repoPath: process.cwd(), mode }));
             console.log(JSON.stringify(ok(result)));
           } catch (e) {
-            console.log(JSON.stringify(fail("CBM_UNAVAILABLE", String(e))));
+            console.log(JSON.stringify(cbmFailure(e)));
             process.exit(1);
           }
         })();
@@ -806,7 +818,7 @@ export function registerGraphCommands(cli: CAC) {
             );
             console.log(JSON.stringify(ok(raw)));
           } catch (e) {
-            console.log(JSON.stringify(fail("CBM_UNAVAILABLE", String(e))));
+            console.log(JSON.stringify(cbmFailure(e)));
             process.exit(1);
           }
         })();
@@ -822,7 +834,7 @@ export function registerGraphCommands(cli: CAC) {
             const raw = await cbmCall((c) => routeAndRetrieve(c, q));
             console.log(JSON.stringify(ok(raw)));
           } catch (e) {
-            console.log(JSON.stringify(fail("CBM_UNAVAILABLE", String(e))));
+            console.log(JSON.stringify(cbmFailure(e)));
             process.exit(1);
           }
         })();
@@ -844,7 +856,7 @@ export function registerGraphCommands(cli: CAC) {
             );
             console.log(JSON.stringify(ok(raw)));
           } catch (e) {
-            console.log(JSON.stringify(fail("CBM_UNAVAILABLE", String(e))));
+            console.log(JSON.stringify(cbmFailure(e)));
             process.exit(1);
           }
         })();
@@ -864,7 +876,7 @@ export function registerGraphCommands(cli: CAC) {
             );
             console.log(JSON.stringify(ok(raw)));
           } catch (e) {
-            console.log(JSON.stringify(fail("CBM_UNAVAILABLE", String(e))));
+            console.log(JSON.stringify(cbmFailure(e)));
             process.exit(1);
           }
         })();

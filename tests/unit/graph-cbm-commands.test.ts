@@ -39,6 +39,7 @@ describe("gk graph CBM subcommands", () => {
   });
 
   afterEach(() => {
+    process.exitCode = 0; // fail() sets process.exitCode=1 — reset so bun:test exits 0
     console.log = origLog;
     process.exit = origExit;
     fakeCallFn = undefined;

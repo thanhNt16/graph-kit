@@ -40,7 +40,10 @@ describe("gk models", () => {
     cwd = mkdtempSync(join(tmpdir(), "gk-models-"));
     mkdirSync(join(cwd, ".graphkit"), { recursive: true });
   });
-  afterEach(() => rmSync(cwd, { recursive: true, force: true }));
+  afterEach(() => {
+    process.exitCode = 0; // fail() sets process.exitCode=1 — reset so bun:test exits 0
+    rmSync(cwd, { recursive: true, force: true });
+  });
 
   test("models cursor prints defaults when no override", () => {
     const { stdout, code } = runCli(["models", "cursor"], cwd);

@@ -42,6 +42,7 @@ describe("graph subcommand regression (new/ascii/svg/waves)", () => {
   });
 
   afterEach(() => {
+    process.exitCode = 0; // fail() sets process.exitCode=1 — reset so bun:test exits 0
     rmSync(root, { recursive: true, force: true });
   });
 

@@ -83,6 +83,7 @@ describe("CLI end-to-end: template pack/list/show", () => {
   });
 
   afterEach(() => {
+    process.exitCode = 0; // fail() sets process.exitCode=1 — reset so bun:test exits 0
     rmSync(root, { recursive: true, force: true });
   });
 
@@ -180,6 +181,7 @@ describe("CLI end-to-end: inventory registration", () => {
   });
 
   afterEach(() => {
+    process.exitCode = 0; // fail() sets process.exitCode=1 — reset so bun:test exits 0
     rmSync(root, { recursive: true, force: true });
   });
 
