@@ -173,7 +173,7 @@ bun install
 bun run build                <span class="cmt"># → dist/index.js (executable, with shebang)</span>
 
 <span class="cmt"># Run the full gate to verify</span>
-bun run ci:local             <span class="cmt"># → typecheck + lint + build + 364 tests + cbm:parity</span></div>
+bun run ci:local             <span class="cmt"># → typecheck + lint + build + 375 tests + cbm:parity</span></div>
   </div>
 
   <div class="install-grid">
@@ -233,7 +233,7 @@ gk graph inspect diamond                 <span class="cmt"># → see topology co
       <div class="arch-layer-tag">Layer 1 — Kit Template</div>
       <div class="arch-layer-title">📦 .claude/ or .cursor/ directory</div>
       <div class="arch-layer-desc">Installed by <code>gk init</code>. Agents, skills, hooks, rules, schemas, topology templates — in the target host's native format.</div>
-      <div class="arch-flow"><span class="arch-pill">8 agents</span><span class="arch-arrow">·</span><span class="arch-pill">13 skills (claude) · 11 (cursor)</span><span class="arch-arrow">·</span><span class="arch-pill">4 hooks</span><span class="arch-arrow">·</span><span class="arch-pill">3 rules</span><span class="arch-arrow">·</span><span class="arch-pill">11 templates</span></div>
+      <div class="arch-flow"><span class="arch-pill">8 agents</span><span class="arch-arrow">·</span><span class="arch-pill">14 skills (claude) · 12 (cursor)</span><span class="arch-arrow">·</span><span class="arch-pill">4 hooks</span><span class="arch-arrow">·</span><span class="arch-pill">3 rules</span><span class="arch-arrow">·</span><span class="arch-pill">11 templates</span></div>
     </div>
     <div class="arch-arrow-down">↓</div>
     <div class="arch-layer">
@@ -419,7 +419,7 @@ gk new --dir my-project --target cursor</div>
 </div>
 
 <div class="section">
-  <div class="section-label">Session Skills — 13 (claude) · 11 (cursor)</div>
+  <div class="section-label">Session Skills — 14 (claude) · 12 (cursor)</div>
   <h2>The Full Lifecycle</h2>
   <p>Inside a session, the kit's skills walk the user from blank canvas to verified run — 13 shipped for Claude Code, 11 for Cursor. <code>/gk:execute</code> is new in 0.2 (cyan border).</p>
   <div class="lifecycle">
@@ -554,7 +554,7 @@ gk new --dir my-project --target cursor</div>
 
 <div class="footer">
   GraphKit 0.2 · graph engineering kit for Claude Code &amp; Cursor<br>
-  <span style="color:var(--memory)">8 agents</span> · <span style="color:var(--sonnet)">13 skills (claude) · 11 (cursor)</span> · <span style="color:var(--bridge)">11 topologies</span> · <span style="color:var(--fable)">2 runtimes</span> · <span style="color:var(--haiku)">364 tests</span><br>
+  <span style="color:var(--memory)">8 agents</span> · <span style="color:var(--sonnet)">14 skills (claude) · 12 (cursor)</span> · <span style="color:var(--bridge)">11 topologies</span> · <span style="color:var(--fable)">2 runtimes</span> · <span style="color:var(--haiku)">375 tests</span><br>
   gk never invokes a model · CBM is the graph authority · evidence-based gates
 </div>
 
