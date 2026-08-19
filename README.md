@@ -150,8 +150,7 @@ Inside a Claude Code or Cursor session (after `gk init`):
 - `/gk:validate` — gate-check before compile
 - `/gk:compile` — graph.yaml → .workflow.js (Claude Code only)
 - `/gk:run` — execute via Claude Code Workflows (Claude Code only)
-- `/gk:execute` — execute by dispatching subagents directly (both hosts; **sole path in Cursor**)
-- `/gk:batch` — execute a write-heavy graph as worktree-isolated background agents — Claude Code's `/batch` technique with the graph as the decomposition (Claude Code; parallel nodes can't collide, merge is the wave barrier)
+- `/gk:execute` — execute by dispatching subagents directly (both hosts; **sole path in Cursor**). `--worktree` mode: write nodes run as worktree-isolated background agents (Claude Code's `/batch` technique, graph as the decomposition — parallel nodes can't collide, merge is the wave barrier)
 - `/gk:eval` — score evidence / memory against rubrics
 - `/gk:recall` — query the codebase-memory graph
 - `/gk:evidence` — report what the graph produced
