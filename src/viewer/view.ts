@@ -2,7 +2,7 @@ import type { ViewerGraph, ViewerNode } from "./normalize.js";
 
 /** app.ts edgeKey — length-prefixed so collisions are impossible. */
 function edgeKey(from: string, to: string): string {
-  return from.length + ":" + from + to.length + ":" + to;
+  return `${from.length}:${from}${to.length}:${to}`;
 }
 
 /**
@@ -11,11 +11,7 @@ function edgeKey(from: string, to: string): string {
  * strings ({nodes, edges}). Empty sets when either endpoint is missing,
  * disconnected, or the two are the same node (from===to → single node).
  */
-export function routeIds(
-  graph: ViewerGraph,
-  from: string,
-  to: string,
-): { nodes: Set<string>; edges: Set<string> } {
+export function routeIds(graph: ViewerGraph, from: string, to: string): { nodes: Set<string>; edges: Set<string> } {
   const nodes = new Set<string>();
   const edges = new Set<string>();
   if (!graph.nodes[from] || !graph.nodes[to]) return { nodes, edges };

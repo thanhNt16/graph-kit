@@ -10,7 +10,7 @@
 // (must_not_surface surfaced — hard failure). Baseline below; no PR may
 // lower hit_rate or add a violation. Exit 1 on regression.
 
-import { readdirSync, readFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import YAML from "yaml";
 import { applyRecallFilters, loadMemories, rankByOverlap } from "../src/eval/memory-recall.js";

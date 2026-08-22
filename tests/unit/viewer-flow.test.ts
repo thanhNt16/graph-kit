@@ -104,10 +104,7 @@ test("Shift+click A then Shift+click C traces the route a→b→c", async () => 
 });
 
 test("active trace clears on plain click", async () => {
-  const harness = createViewerHarness(
-    APP_BUNDLE,
-    graph("g", { a: node("a"), b: node("b", { depend_on: ["a"] }) }),
-  );
+  const harness = createViewerHarness(APP_BUNDLE, graph("g", { a: node("a"), b: node("b", { depend_on: ["a"] }) }));
   await flush();
   shiftClickNode(harness, "a");
   shiftClickNode(harness, "b");
@@ -121,10 +118,7 @@ test("active trace clears on plain click", async () => {
 });
 
 test("Shift+click traces WITHOUT changing selection or opening the drawer", async () => {
-  const harness = createViewerHarness(
-    APP_BUNDLE,
-    graph("g", { a: node("a"), b: node("b", { depend_on: ["a"] }) }),
-  );
+  const harness = createViewerHarness(APP_BUNDLE, graph("g", { a: node("a"), b: node("b", { depend_on: ["a"] }) }));
   await flush();
   expect(harness.drawerVisible()).toBe(false);
   // Shift+click the node group directly so the node's OWN click listener fires

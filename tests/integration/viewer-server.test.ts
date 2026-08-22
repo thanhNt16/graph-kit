@@ -320,7 +320,9 @@ describe("viewer server", () => {
         await s.close();
       }
     } finally {
-      blockers.forEach((b) => b.close());
+      blockers.forEach((b) => {
+        b.close();
+      });
     }
   });
 

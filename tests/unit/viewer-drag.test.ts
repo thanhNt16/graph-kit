@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { ViewerGraph } from "../../src/viewer/normalize.js";
-import { createViewerHarness, flush, type FakeEl } from "../helpers/fake-dom.js";
+import { createViewerHarness, type FakeEl, flush } from "../helpers/fake-dom.js";
 
 const here = fileURLToPath(new URL(".", import.meta.url));
 const APP_BUNDLE = readFileSync(join(here, "../../kits/claude/viewer/app.js"), "utf8");
@@ -171,14 +171,20 @@ describe("viewer node drag", () => {
     await flush();
     single.dragNode("from", 40, 30);
     // leading "M x,y" is the dragged endpoint
-    const singleXY = single.edge("from", "mid")!.getAttribute("d")!.match(/^M ([\d.]+),([\d.]+)/)!;
+    const singleXY = single
+      .edge("from", "mid")!
+      .getAttribute("d")!
+      .match(/^M ([\d.]+),([\d.]+)/)!;
     const sx = Number(singleXY[1]);
     const sy = Number(singleXY[2]);
 
     const steps = createViewerHarness(APP_BUNDLE, graph(deps));
     await flush();
     steps.dragNodeSteps("from", 40, 30, 2);
-    const stepsXY = steps.edge("from", "mid")!.getAttribute("d")!.match(/^M ([\d.]+),([\d.]+)/)!;
+    const stepsXY = steps
+      .edge("from", "mid")!
+      .getAttribute("d")!
+      .match(/^M ([\d.]+),([\d.]+)/)!;
     const tx = Number(stepsXY[1]);
     const ty = Number(stepsXY[2]);
     // two 20px-moves must equal one 40px-move — the edge endpoint must not
@@ -199,9 +205,7 @@ describe("viewer node drag", () => {
     const path = harness.edge("a", "b");
     expect(path).not.toBeNull();
     const hits = harness.doc.ids.canvas.querySelectorAll("path.edge-hit");
-    const hit = hits.find(
-      (h) => h.getAttribute("data-from") === "a" && h.getAttribute("data-to") === "b",
-    );
+    const hit = hits.find((h) => h.getAttribute("data-from") === "a" && h.getAttribute("data-to") === "b");
     expect(hit).not.toBeNull();
     expect((hit as FakeEl).getAttribute("pointer-events")).toBe("stroke");
     expect((hit as FakeEl).getAttribute("aria-hidden")).toBe("true");

@@ -69,7 +69,7 @@ export function createCbmClient(opts?: CbmClientOpts): CbmClient {
   // Child exited before any call resolved — the bridge couldn't come up.
   // Set fatal even with zero pending: a LATER call would otherwise write to a
   // corpse and hang (stdin callback never errs), the same silent-exit class.
-  child.on("exit", (code, signal) => {
+  child.on("exit", (_code, _signal) => {
     if (!fatal) {
       const withoutDetail = started ? `\n${cmd} exited unexpectedly.` : `\n${cmd} exited before handshake.`;
       const detail = stderrBuf.trim() !== "" ? `\nstderr tail: ${stderrBuf.trim()}` : withoutDetail;

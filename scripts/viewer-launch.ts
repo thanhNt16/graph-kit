@@ -19,9 +19,7 @@ const srv = await startViewerServer({
   assetDir,
   // Default to the pinned 4800 when GK_VIEWER_PORT is unset; an explicit
   // 0/empty falls back to the server's ephemeral (historical) behavior.
-  port: process.env.GK_VIEWER_PORT == null
-    ? 4800
-    : Number(process.env.GK_VIEWER_PORT) || undefined,
+  port: process.env.GK_VIEWER_PORT == null ? 4800 : Number(process.env.GK_VIEWER_PORT) || undefined,
 });
 console.log(`GraphKit viewer: ${srv.url}`);
 
@@ -32,10 +30,18 @@ console.log(`GraphKit viewer: ${srv.url}`);
 const wantOpen = process.env.GK_VIEWER_OPEN === "1";
 const chrome = process.env.GK_VIEWER_BROWSER === "chrome";
 if (wantOpen) {
-  let cmd: string, args: string[];
-  if (process.platform === "darwin") cmd = "open", args = chrome ? ["-a", "Google Chrome", srv.url] : [srv.url];
-  else if (process.platform === "win32") cmd = "cmd", args = ["/c", "start", "", srv.url];
-  else cmd = "xdg-open", args = [srv.url];
+  let cmd: string;
+  let args: string[];
+  if (process.platform === "darwin") {
+    cmd = "open";
+    args = chrome ? ["-a", "Google Chrome", srv.url] : [srv.url];
+  } else if (process.platform === "win32") {
+    cmd = "cmd";
+    args = ["/c", "start", "", srv.url];
+  } else {
+    cmd = "xdg-open";
+    args = [srv.url];
+  }
   const child = spawn(cmd, args, { stdio: "ignore", detached: true });
   // Browser missing (ENOENT) is emitted async as 'error', not thrown — swallow
   // so a missing Chrome never crashes the launcher; the printed URL is the fallback.

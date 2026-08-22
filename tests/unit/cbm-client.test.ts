@@ -85,8 +85,7 @@ describe("cbm client", () => {
 
   test("child that exits before handshake rejects pending call and buffers stderr tail", async () => {
     // A server that writes to stderr then exits immediately (0) without answering.
-    const script =
-      "process.stderr.write('runtime exploded on import\\n'); process.exit(0);";
+    const script = "process.stderr.write('runtime exploded on import\\n'); process.exit(0);";
     const client = createCbmClient({ cmd: "node", args: ["-e", script] });
     try {
       await client.call("index_repository", {}).then(

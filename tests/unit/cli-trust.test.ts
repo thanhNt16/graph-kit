@@ -3,15 +3,14 @@ import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { cac } from "cac";
+import { CBM_UNAVAILABLE_MSG } from "../../src/cbm/client.js";
 import { registerGraphCommands } from "../../src/cli/commands/graph.js";
 import { registerInventoryCommands } from "../../src/cli/commands/inventory.js";
 import { registerKitCommands } from "../../src/cli/commands/kit.js";
-import { registerMemoryCommands } from "../../src/cli/commands/memory.js";
-import { _resetMemoryCbmSeam, _setMemoryCbmSeam } from "../../src/cli/commands/memory.js";
+import { _resetMemoryCbmSeam, _setMemoryCbmSeam, registerMemoryCommands } from "../../src/cli/commands/memory.js";
 import { registerTemplateCommands } from "../../src/cli/commands/template.js";
-import { APP_VERSION } from "../../src/version.js";
 import { fail } from "../../src/cli/output.js";
-import { CBM_UNAVAILABLE_MSG } from "../../src/cbm/client.js";
+import { APP_VERSION } from "../../src/version.js";
 
 /**
  * Task 1 (executor-product) CLI-trust tests: all 364+ green, no silent exit-0.
