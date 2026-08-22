@@ -33,7 +33,7 @@ describe("init per target", () => {
     expect(existsSync(join(TMP, ".agents", "skills"))).toBe(true);
   });
 
-  test.skipIf(!existsSync(join(KITS, "pi")))("pi tree", () => {
+  test("pi tree", () => {
     initTmp("pi");
     expect(existsSync(join(TMP, ".pi", "extensions", "gk-subagent.ts"))).toBe(true);
     expect(existsSync(join(TMP, ".pi", "skills"))).toBe(true);
