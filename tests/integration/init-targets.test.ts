@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { execSync } from "node:child_process";
-import { existsSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, rmSync } from "node:fs";
 import { join } from "node:path";
 
 const TMP = join(import.meta.dir, "..", "..", ".tmp-init-test");
@@ -8,15 +8,16 @@ const KITS = join(import.meta.dir, "..", "..", "kits");
 
 function initTmp(target: string): string {
   rmSync(TMP, { recursive: true, force: true });
-  execSync(`bun run dist/index.js init --target ${target}`, {
-    cwd: process.cwd(),
+  mkdirSync(TMP, { recursive: true });
+  execSync(`bun run ${join(process.cwd(), "dist", "index.js")} init --target ${target}`, {
+    cwd: TMP,
     env: { ...process.env, GK_KIT_DIR: join(process.cwd(), "kits", target) },
   });
   return TMP;
 }
 
 describe("init per target", () => {
-  test.skipIf(!existsSync(join(KITS, "opencode")))("opencode tree", () => {
+  test("opencode tree", () => {
     initTmp("opencode");
     expect(existsSync(join(TMP, ".opencode", "agent"))).toBe(true);
     expect(existsSync(join(TMP, ".opencode", "skill"))).toBe(true);
