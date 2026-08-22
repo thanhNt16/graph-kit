@@ -41,7 +41,7 @@ interface TargetDescriptor {
 - `src/models/cursor-map.ts` folds into the registry; each target declares `modelTiers`.
 - `gk init --target <id>` reads the descriptor and copies `kits/<id>/`.
 - Claude and Cursor descriptors reproduce current layouts byte-for-byte (regression guard).
-- Kit dirs move to `kits/{claude,cursor,opencode,codex,pi}/`; old top-level `claude/` and `cursor/` paths keep re-export shims for one release.
+- Kit dirs move to `kits/{claude,cursor,opencode,codex,pi}/`; the old top-level `claude/` and `cursor/` paths are removed (package `files` updated to `"kits/"`). No shims — internal layout, no external consumers.
 
 ## 2. Per-host kits
 
@@ -84,17 +84,13 @@ All hosts: viewer, memory, and CBM commands work identically — they are pure C
 
 ## 3. Model tiers
 
-Abstract tiers stay canonical in graph.yaml (`opus`, `sonnet`, `haiku`, `fable`). Per-target mapping via descriptor defaults; per-project overrides in `.gk.json`:
+Abstract tiers stay canonical in graph.yaml (`opus`, `sonnet`, `haiku`, `fable`). Per-target mapping via descriptor defaults; per-project overrides via the existing `gk models` command, generalized from cursor-only to any target (stored at `.graphkit/models.<target>.json`):
 
-```json
-{
-  "targets": {
-    "codex": { "models": { "opus": "gpt-5.4", "sonnet": "gpt-5.3-codex-spark" } }
-  }
-}
+```bash
+gk models codex set --map opus=gpt-5.4,sonnet=gpt-5.3-codex-spark
 ```
 
-Resolution order: `.gk.json` override → descriptor default → `"Auto"` / host default (same pattern as existing Cursor overrides).
+Resolution order: `gk models <target>` override (`.graphkit/models.<target>.json`) → descriptor default → `"Auto"` / host default (same pattern as existing Cursor overrides).
 
 Default mappings:
 
@@ -119,7 +115,7 @@ Default mappings:
 
 ## 6. Testing
 
-- Unit: descriptor registry — paths, formats, tier resolution including `.gk.json` overrides.
+- Unit: descriptor registry — paths, formats, tier resolution including `gk models` overrides for every target.
 - Init integration per new target: temp dir → `init --target X` → assert file tree; parse frontmatter/TOML; assert skill discovery paths.
 - Emitter tests: agent markdown → Codex TOML conversion; model tier mapping.
 - Pi extension: typecheck + unit tests of dispatch argument-building and budget logic (no live pi run in CI).
