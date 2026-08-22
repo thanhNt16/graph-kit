@@ -1,4 +1,4 @@
-import { cpSync, existsSync, mkdirSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { CAC } from "cac";
@@ -91,6 +91,21 @@ export function installKit(
     const skillsSrc = join(source, "skills");
     if (existsSync(skillsSrc)) {
       cpSync(skillsSrc, join(targetDir, ".agents", "skills"), { recursive: true, force: true });
+    }
+  }
+
+  // rules: agents-md-sections targets append a marked section to AGENTS.md (idempotent)
+  if (t.rulesStrategy === "agents-md-sections") {
+    const sectionPath = join(source, "rules-section.md");
+    if (existsSync(sectionPath)) {
+      const section = readFileSync(sectionPath, "utf8");
+      const agentsMd = join(targetDir, "AGENTS.md");
+      const marker = "<!-- graphkit:start -->";
+      if (!existsSync(agentsMd)) {
+        writeFileSync(agentsMd, `${section}\n`);
+      } else if (!readFileSync(agentsMd, "utf8").includes(marker)) {
+        writeFileSync(agentsMd, `${readFileSync(agentsMd, "utf8")}\n${section}\n`);
+      }
     }
   }
 
