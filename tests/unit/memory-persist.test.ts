@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-const hooksDir = join(import.meta.dir, "..", "..", "claude", "hooks");
+const hooksDir = join(import.meta.dir, "..", "..", "kits", "claude", "hooks");
 
 async function runHook(stdin: string, cwd: string) {
   const proc = Bun.spawn(["node", join(hooksDir, "memory-persist.cjs")], {

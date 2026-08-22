@@ -6,7 +6,7 @@ import type { ViewerGraph } from "../../src/viewer/normalize.js";
 import { createViewerHarness, flush } from "../helpers/fake-dom.js";
 
 const here = fileURLToPath(new URL(".", import.meta.url));
-const APP_BUNDLE = readFileSync(join(here, "../../claude/viewer/app.js"), "utf8");
+const APP_BUNDLE = readFileSync(join(here, "../../kits/claude/viewer/app.js"), "utf8");
 
 function node(id: string, agent: string, model: string, over: Record<string, unknown> = {}): unknown {
   return {

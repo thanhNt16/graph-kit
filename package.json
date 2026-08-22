@@ -19,8 +19,7 @@
     "eval:memory": "bun run scripts/memory-recall-eval.ts"
   },
   "files": [
-    "claude/",
-    "cursor/"
+    "kits/"
   ],
   "dependencies": {
     "@dagrejs/dagre": "^3.1.1",

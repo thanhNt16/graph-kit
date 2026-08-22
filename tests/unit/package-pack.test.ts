@@ -21,19 +21,19 @@ describe("npm package tarball contents", () => {
   test("both kits ship viewer assets (claude + cursor)", () => {
     for (const kit of ["claude", "cursor"]) {
       for (const asset of ["app.js", "dagre.js", "index.html", "server.mjs", "styles.css"]) {
-        expect(listing, `${kit}/viewer/${asset} missing from tarball`).toContain(`${kit}/viewer/${asset}`);
+        expect(listing, `kits/${kit}/viewer/${asset} missing from tarball`).toContain(`kits/${kit}/viewer/${asset}`);
       }
     }
   });
 
   test("both kits ship the gk-template skill", () => {
-    expect(listing).toContain("claude/skills/gk-template/SKILL.md");
-    expect(listing).toContain("cursor/skills/gk-template/SKILL.md");
+    expect(listing).toContain("kits/claude/skills/gk-template/SKILL.md");
+    expect(listing).toContain("kits/cursor/skills/gk-template/SKILL.md");
   });
 
   test("both kits ship agents and the built bin entry", () => {
-    expect(listing).toContain("claude/agents/qa-engineer.md");
-    expect(listing).toContain("cursor/agents/qa-engineer.md");
+    expect(listing).toContain("kits/claude/agents/qa-engineer.md");
+    expect(listing).toContain("kits/cursor/agents/qa-engineer.md");
     // dist/index.js is the "gk" bin target
     expect(listing).toContain("dist/index.js");
   });

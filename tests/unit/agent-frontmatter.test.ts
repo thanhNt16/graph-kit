@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
-const AGENTS_DIR = join(import.meta.dir, "..", "..", "claude", "agents");
+const AGENTS_DIR = join(import.meta.dir, "..", "..", "kits", "claude", "agents");
 const AGENT_FILES = [
   "software-architect.md",
   "code-reviewer.md",

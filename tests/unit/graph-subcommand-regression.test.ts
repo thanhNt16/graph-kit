@@ -112,7 +112,7 @@ nodes:
 });
 
 describe("gk-execute skill", () => {
-  const skill = join(import.meta.dir, "..", "..", "claude", "skills", "gk-execute", "SKILL.md");
+  const skill = join(import.meta.dir, "..", "..", "kits", "claude", "skills", "gk-execute", "SKILL.md");
   test("claude gk-execute skill is present and spawns subagents directly (no Workflow tool)", () => {
     const { readFileSync } = require("node:fs") as typeof import("node:fs");
     const body = readFileSync(skill, "utf-8");

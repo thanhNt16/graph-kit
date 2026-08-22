@@ -5,7 +5,7 @@ import { join } from "node:path";
 const ROOT = join(import.meta.dir, "..", "..");
 
 function readSkill(kit: "claude" | "cursor", name: string): string {
-  return readFileSync(join(ROOT, kit, "skills", name, "SKILL.md"), "utf-8");
+  return readFileSync(join(ROOT, "kits", kit, "skills", name, "SKILL.md"), "utf-8");
 }
 
 describe("gk-template skill", () => {

@@ -325,7 +325,7 @@ describe("viewer server", () => {
   });
 
   test("bundled launcher honors GK_VIEWER_PORT", async () => {
-    const launcher = join(import.meta.dir, "..", "..", "claude", "viewer", "server.mjs");
+    const launcher = join(import.meta.dir, "..", "..", "kits", "claude", "viewer", "server.mjs");
     expect(existsSync(launcher)).toBe(true);
     const bundledGraph = join(TMP, "launcher-port-graph.yaml");
     writeFileSync(bundledGraph, VALID.replace("name: live", "name: launcher-port"));
@@ -364,7 +364,7 @@ describe("viewer server", () => {
     // The installed-kit launcher (claude/viewer/server.mjs) is a bundled
     // self-contained script. Spawn it pointing at a graph and verify it prints
     // a keyed URL and serves the graph over that URL.
-    const launcher = join(import.meta.dir, "..", "..", "claude", "viewer", "server.mjs");
+    const launcher = join(import.meta.dir, "..", "..", "kits", "claude", "viewer", "server.mjs");
     expect(existsSync(launcher)).toBe(true);
     const bundledGraph = join(TMP, "launcher-graph.yaml");
     writeFileSync(bundledGraph, VALID.replace("name: live", "name: launcher-live"));

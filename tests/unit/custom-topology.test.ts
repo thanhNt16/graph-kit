@@ -4,7 +4,7 @@ import YAML from "yaml";
 import { compileGraph } from "../../src/compiler/emitter.js";
 import { GraphSchema } from "../../src/schemas/graph.schema.js";
 
-const TEMPLATES = join(import.meta.dir, "..", "..", "claude", "templates");
+const TEMPLATES = join(import.meta.dir, "..", "..", "kits", "claude", "templates");
 
 describe("custom topology", () => {
   test("compiles with createCustomWorkflow", () => {

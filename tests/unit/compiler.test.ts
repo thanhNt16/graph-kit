@@ -6,7 +6,7 @@ import { compileGraph } from "../../src/compiler/emitter.js";
 import type { Graph } from "../../src/compiler/validate.js";
 import { GraphSchema } from "../../src/schemas/graph.schema.js";
 
-const FIXTURES = join(import.meta.dir, "..", "..", "claude", "templates");
+const FIXTURES = join(import.meta.dir, "..", "..", "kits", "claude", "templates");
 const YAML_FIXTURES = join(import.meta.dir, "..", "fixtures");
 const TMP = join(import.meta.dir, ".tmp-compiler");
 

@@ -3,8 +3,8 @@ import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
 const root = join(import.meta.dir, "..", "..");
-const claudeViewer = join(root, "claude", "viewer");
-const cursorViewer = join(root, "cursor", "viewer");
+const claudeViewer = join(root, "kits", "claude", "viewer");
+const cursorViewer = join(root, "kits", "cursor", "viewer");
 
 describe("viewer kit parity", () => {
   test("claude and cursor viewer assets are byte-equivalent", () => {

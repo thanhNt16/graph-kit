@@ -90,7 +90,7 @@ describe("AC04: gk compile resolves subgraph references", () => {
 
 describe("AC05: gk:visualize produces .excalidraw file", () => {
   test("excalidraw-diagram skill is vendored", () => {
-    const skillsDir = join(import.meta.dir, "..", "..", "claude", "skills");
+    const skillsDir = join(import.meta.dir, "..", "..", "kits", "claude", "skills");
     expect(existsSync(join(skillsDir, "excalidraw-diagram", "SKILL.md"))).toBe(true);
     expect(existsSync(join(skillsDir, "gk-visualize", "SKILL.md"))).toBe(true);
   });

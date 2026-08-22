@@ -17,7 +17,7 @@ describe("cbm:parity CI gate wiring", () => {
 });
 
 describe("agent tool-binding wire-up", () => {
-  const agents = ["claude/agents/code-reviewer.md", "claude/agents/data-engineer.md"];
+  const agents = ["kits/claude/agents/code-reviewer.md", "kits/claude/agents/data-engineer.md"];
 
   for (const rel of agents) {
     test(`${rel} contains 'gk graph search'`, () => {

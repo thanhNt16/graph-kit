@@ -3,9 +3,10 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
 const ROOT = join(import.meta.dir, "..", "..");
+const KITS = join(ROOT, "kits");
 
 function skillNames(kit: "claude" | "cursor"): string[] {
-  const dir = join(ROOT, kit, "skills");
+  const dir = join(KITS, kit, "skills");
   if (!existsSync(dir)) return [];
   return readdirSync(dir)
     .filter((d) => existsSync(join(dir, d, "SKILL.md")))
@@ -37,7 +38,7 @@ describe("claude/cursor skill-set parity", () => {
 });
 
 function skillFrontmatterName(kit: "claude" | "cursor", skill: string): string {
-  const raw = readFileSync(join(ROOT, kit, "skills", skill, "SKILL.md"), "utf8");
+  const raw = readFileSync(join(KITS, kit, "skills", skill, "SKILL.md"), "utf8");
   const m = raw.match(/^name:\s*(.*)$/m);
   return m ? m[1].trim() : "";
 }

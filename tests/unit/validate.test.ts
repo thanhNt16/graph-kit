@@ -6,7 +6,7 @@ import { agentFileName, validateGraph } from "../../src/compiler/validate.js";
 import { GraphSchema } from "../../src/schemas/graph.schema.js";
 
 const FIXTURES = join(import.meta.dir, "..", "fixtures");
-const PROJECT_ROOT = join(import.meta.dir, "..", "..");
+const PROJECT_ROOT = join(import.meta.dir, "..", "..", "kits");
 
 function loadYaml(name: string) {
   return YAML.parse(readFileSync(join(FIXTURES, name), "utf-8"));
