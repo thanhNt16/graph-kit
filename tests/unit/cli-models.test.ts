@@ -89,4 +89,35 @@ describe("gk models", () => {
     const file = join(cwd, ".graphkit", "models.cursor.json");
     expect(existsSync(file)).toBe(false);
   });
+
+  test("models codex show resolves codex defaults", () => {
+    const { stdout, code } = runCli(["models", "codex"], cwd);
+    expect(code).toBe(0);
+    const parsed = JSON.parse(stdout);
+    expect(parsed.status).toBe("ok");
+    expect(parsed.data.opus).toBe("gpt-5.4");
+    expect(parsed.data.sonnet).toBe("gpt-5.3-codex-spark");
+  });
+
+  test("models vscode is rejected with target list", () => {
+    const { stdout, code } = runCli(["models", "vscode"], cwd);
+    expect(code).toBe(1);
+    const parsed = JSON.parse(stdout);
+    expect(parsed.status).toBe("fail");
+    expect(parsed.error.code).toBe("UNKNOWN_MODELS_SUBCOMMAND");
+    expect(parsed.error.details.available).toEqual(["claude", "cursor", "opencode", "codex", "pi"]);
+  });
+
+  test("codex overrides persist to .graphkit/models.codex.json", () => {
+    const { stdout, code } = runCli(["models", "codex", "set", "--map", "opus=gpt-5.5"], cwd);
+    expect(code).toBe(0);
+    const parsed = JSON.parse(stdout);
+    expect(parsed.status).toBe("ok");
+    const file = join(cwd, ".graphkit", "models.codex.json");
+    expect(existsSync(file)).toBe(true);
+    const saved = JSON.parse(readFileSync(file, "utf8"));
+    expect(saved.opus).toBe("gpt-5.5");
+    const show = runCli(["models", "codex"], cwd);
+    expect(JSON.parse(show.stdout).data.opus).toBe("gpt-5.5");
+  });
 });

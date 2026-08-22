@@ -1,16 +1,16 @@
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import type { CAC } from "cac";
-import type { Tier } from "../../models/cursor-map.js";
-import { CURSOR_MODEL_DEFAULTS, resolveCursorModel } from "../../models/cursor-map.js";
+import type { Tier } from "../../targets/index.js";
+import { isValidTarget, listTargets, resolveModel } from "../../targets/index.js";
 import { fail, ok } from "../output.js";
 
-function overridesPath(cwd: string): string {
-  return join(cwd, ".graphkit", "models.cursor.json");
+function overridesPath(cwd: string, target: string): string {
+  return join(cwd, ".graphkit", `models.${target}.json`);
 }
 
-export function loadOverrides(cwd: string): Record<string, string> {
-  const p = overridesPath(cwd);
+export function loadOverrides(cwd: string, target: string): Record<string, string> {
+  const p = overridesPath(cwd, target);
   if (!existsSync(p)) return {};
   try {
     const parsed = JSON.parse(readFileSync(p, "utf8")) as Record<string, unknown>;
@@ -25,8 +25,8 @@ export function loadOverrides(cwd: string): Record<string, string> {
   }
 }
 
-function writeOverrides(cwd: string, overrides: Record<string, string>): void {
-  const p = overridesPath(cwd);
+function writeOverrides(cwd: string, target: string, overrides: Record<string, string>): void {
+  const p = overridesPath(cwd, target);
   mkdirSync(dirname(p), { recursive: true });
   writeFileSync(p, `${JSON.stringify(overrides, null, 2)}\n`);
 }
@@ -35,15 +35,15 @@ export function registerModelsCommands(cli: CAC): void {
   // cac (6.x) matches a single leading token only; "models cursor" never
   // dispatches. Use one `models` command with subcommand dispatch (like memory).
   cli
-    .command("models <subcommand> [args...]", "Cursor model mapping commands")
+    .command("models <subcommand> [args...]", "Per-target model mapping commands")
     .option("--map <k=v,...>", "comma-separated model=override pairs")
     .option("--json", "JSON output")
     .action((subcommand: string, args: string | string[] | undefined, opts: { map?: string }) => {
-      if (subcommand !== "cursor") {
+      if (!isValidTarget(subcommand)) {
         console.log(
           JSON.stringify(
             fail("UNKNOWN_MODELS_SUBCOMMAND", `Unknown models subcommand "${subcommand}"`, {
-              available: ["cursor"],
+              available: listTargets().map((t) => t.id),
             }),
           ),
         );
@@ -58,7 +58,7 @@ export function registerModelsCommands(cli: CAC): void {
           process.exit(1);
           return;
         }
-        const overrides = loadOverrides(process.cwd());
+        const overrides = loadOverrides(process.cwd(), subcommand);
         for (const pair of opts.map.split(",")) {
           const [k, ...tail] = pair.split("=");
           const v = tail.join("=");
@@ -69,25 +69,25 @@ export function registerModelsCommands(cli: CAC): void {
           }
           overrides[k.trim()] = v.trim();
         }
-        writeOverrides(process.cwd(), overrides);
+        writeOverrides(process.cwd(), subcommand, overrides);
         console.log(JSON.stringify(ok(overrides)));
       } else if (action === "reset") {
-        rmSync(overridesPath(process.cwd()), { force: true });
+        rmSync(overridesPath(process.cwd(), subcommand), { force: true });
         console.log(JSON.stringify(ok({ reset: true })));
       } else if (action !== "") {
         console.log(
           JSON.stringify(
             fail("UNKNOWN_MODELS_SUBCOMMAND", `Unknown models subcommand "${action}"`, {
-              available: ["cursor"],
+              available: listTargets().map((t) => t.id),
             }),
           ),
         );
         process.exit(1);
       } else {
-        const overrides = loadOverrides(process.cwd());
+        const overrides = loadOverrides(process.cwd(), subcommand);
         const data: Record<string, string> = {};
-        for (const tier of Object.keys(CURSOR_MODEL_DEFAULTS) as Tier[]) {
-          data[tier] = resolveCursorModel(tier, overrides);
+        for (const tier of ["opus", "sonnet", "haiku", "fable"] as Tier[]) {
+          data[tier] = resolveModel(subcommand, tier, overrides);
         }
         console.log(JSON.stringify(ok(data)));
       }
