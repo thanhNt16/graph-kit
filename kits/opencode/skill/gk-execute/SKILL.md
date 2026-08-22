@@ -151,9 +151,9 @@ Graph authority is unchanged in worktree mode — topology, `depend_on` ordering
 
 ## Run-state contract
 
-The gk plugin (`.opencode/plugin/gk.ts`) reads `.graphkit/runs/.active` and `.graphkit/runs/current.json`:
+The gk plugin (`.opencode/plugins/gk.ts`) reads `.graphkit/runs/.active` and `.graphkit/runs/current.json`:
 - While `.active` exists, manual writes to `.graphkit/evidence/**` are blocked — evidence files are workflow-owned during a run.
-- Node `constraints` (`assigned_only`, `no_write`) from `current.json` are enforced on Edit/Write attempts in leased paths.
+- Node `constraints` (`assigned_only`, `no_write`) from `current.json` are injected into each node's Task dispatch prompt — respect them when touching files.
 - Writes under `.graphkit/evidence/` are auto-indexed to `.graphkit/evidence/.index` and distilled into `.graphkit/memory/`.
 
 Always create the markers at run start and remove `.active` at run end, or these guards misfire.

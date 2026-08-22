@@ -11,7 +11,7 @@ disable-model-invocation: false
 ## Process
 
 1. Read `graph.yaml` → `metadata.name`, `evidence.required_keys`, `nodes` (each node's declared `evidence` keys).
-2. Read `.graphkit/evidence/.index` (written by .opencode/plugin/gk.ts) to enumerate which evidence files landed. Fall back to scanning `.graphkit/evidence/**/*.md` if no index.
+2. Read `.graphkit/evidence/.index` (written by .opencode/plugins/gk.ts) to enumerate which evidence files landed. Fall back to scanning `.graphkit/evidence/**/*.md` if no index.
 3. For each node declared in graph.yaml, find its evidence files and extract:
    - The node id, agent name, model tier
    - Each declared evidence key and its value (summary first line + full content)
