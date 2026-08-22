@@ -1,4 +1,4 @@
-import { TARGET_MODEL_DEFAULTS, resolveModel } from "../targets/model-tiers.js";
+import { resolveModel, TARGET_MODEL_DEFAULTS } from "../targets/model-tiers.js";
 
 export type Tier = "opus" | "sonnet" | "haiku" | "fable";
 
