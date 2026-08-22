@@ -1,6 +1,6 @@
-import type { TargetDescriptor } from "./types.js";
+import type { TargetDescriptor, TargetId } from "./types.js";
 
-const TARGETS: Record<string, TargetDescriptor> = {
+const TARGETS: Record<TargetId, TargetDescriptor> = {
   claude: {
     id: "claude",
     kitDirName: "claude",
@@ -58,16 +58,14 @@ const TARGETS: Record<string, TargetDescriptor> = {
   },
 };
 
-const VALID = new Set(Object.keys(TARGETS));
+const VALID = new Set<TargetId>(Object.keys(TARGETS) as TargetId[]);
 
-export function isValidTarget(s: string): s is keyof typeof TARGETS & string {
-  return VALID.has(s);
+export function isValidTarget(s: string): s is TargetId {
+  return (VALID as Set<string>).has(s);
 }
 
-export function getTarget(id: string): TargetDescriptor {
-  const t = TARGETS[id];
-  if (!t) throw new Error(`Unknown target: ${id}`);
-  return t;
+export function getTarget(id: TargetId): TargetDescriptor {
+  return TARGETS[id];
 }
 
 export function listTargets(): TargetDescriptor[] {

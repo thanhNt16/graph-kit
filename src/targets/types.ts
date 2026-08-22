@@ -1,5 +1,7 @@
 export type Tier = "opus" | "sonnet" | "haiku" | "fable";
 
+export type TargetId = "claude" | "cursor" | "opencode" | "codex" | "pi";
+
 export type AgentFormat = "md-frontmatter" | "mdc" | "toml" | "prompt-fragment";
 export type RulesStrategy = "rules-dir" | "agents-md-sections" | "instructions-md";
 export type HooksKind = "settings-json" | "hooks-json" | "plugin-ts" | "extension-ts" | "instructions";
