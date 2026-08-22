@@ -35,7 +35,7 @@ init-graph [--template <name>] [--task "<description>"]
 
 2. **Inventory installed capabilities** for the active target:
    ```bash
-   gk inventory --target cursor --json
+   gk inventory --target pi --json
    ```
    Note the discovered agents, skills, tools, MCP servers, and their model tiers.
 

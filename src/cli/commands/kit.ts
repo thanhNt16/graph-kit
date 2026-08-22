@@ -1,4 +1,4 @@
-import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { CAC } from "cac";
@@ -52,6 +52,30 @@ export function templatesDir(target: TargetId = "claude"): string {
   return join(kitSourceDir(target), "templates");
 }
 
+// Merge the GraphKit rules section into an existing AGENTS.md.
+// - null existing → the section becomes the whole file
+// - no markers → append a marked section
+// - markers present → refresh: replace content between (and including) the
+//   graphkit:start / graphkit:end markers with the new section, preserving
+//   all user content outside the markers
+export function mergeAgentsMd(existing: string | null, section: string): string {
+  const START = "<!-- graphkit:start -->";
+  const END = "<!-- graphkit:end -->";
+  const sec = section.replace(/\n+$/, "");
+  if (!existing) return `${sec}\n`;
+  const startIdx = existing.indexOf(START);
+  const endIdx = existing.indexOf(END, startIdx === -1 ? 0 : startIdx);
+  if (startIdx === -1 || endIdx === -1) {
+    return `${existing.replace(/\n+$/, "")}\n${sec}\n`;
+  }
+  // collapse the whitespace seam after the end marker so repeated refreshes
+  // don't accumulate trailing newlines (idempotent byte-for-byte on re-init)
+  const rest = existing.slice(endIdx + END.length);
+  const body = rest.replace(/^(\r?\n)+/, "");
+  const seam = body.length < rest.length || body.length > 0 ? "\n" : "";
+  return `${existing.slice(0, startIdx)}${sec}${seam}${body}`;
+}
+
 export function installKit(
   targetDir: string,
   fresh = false,
@@ -72,6 +96,11 @@ export function installKit(
   // --force / fresh: wipe old dir and reinstall clean
   if (fresh && existsSync(destDir)) {
     rmSync(destDir, { recursive: true, force: true });
+    // codex special case: skills also install into sibling .agents/skills/
+    // — --force must remove stale skills there too, not just .codex/skills/
+    if (t.id === "codex") {
+      rmSync(join(targetDir, ".agents", "skills"), { recursive: true, force: true });
+    }
   }
 
   mkdirSync(destDir, { recursive: true });
@@ -94,19 +123,19 @@ export function installKit(
     }
   }
 
-  // rules: agents-md-sections targets append a marked section to AGENTS.md (idempotent)
+  // rules: agents-md-sections targets merge a marked section into AGENTS.md
+  // (refresh on every init so upgrades propagate rule changes)
   if (t.rulesStrategy === "agents-md-sections") {
     const sectionPath = join(source, "rules-section.md");
-    if (existsSync(sectionPath)) {
-      const section = readFileSync(sectionPath, "utf8");
-      const agentsMd = join(targetDir, "AGENTS.md");
-      const marker = "<!-- graphkit:start -->";
-      if (!existsSync(agentsMd)) {
-        writeFileSync(agentsMd, `${section}\n`);
-      } else if (!readFileSync(agentsMd, "utf8").includes(marker)) {
-        writeFileSync(agentsMd, `${readFileSync(agentsMd, "utf8")}\n${section}\n`);
-      }
+    if (!existsSync(sectionPath)) {
+      throw new GraphKitError("RULES_SECTION_MISSING", `Bundled kits/${t.kitDirName}/rules-section.md not found`, {
+        hint: `The ${target} kit declares rulesStrategy "agents-md-sections" but ships no rules-section.md; the install is incomplete. Reinstall gk or set GK_KIT_DIR to a valid kits/${t.kitDirName}/ directory.`,
+      });
     }
+    const section = readFileSync(sectionPath, "utf8");
+    const agentsMd = join(targetDir, "AGENTS.md");
+    const existing = existsSync(agentsMd) ? readFileSync(agentsMd, "utf8") : null;
+    writeFileSync(agentsMd, mergeAgentsMd(existing, section));
   }
 
   // settings.json is kit-owned infrastructure (hook config), always overwrite for claude

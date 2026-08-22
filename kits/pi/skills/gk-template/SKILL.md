@@ -39,7 +39,7 @@ Storage (via `gk template pack`):
 
 4. **Inventory installed capabilities.** Run:
    ```bash
-   gk inventory --target cursor --json
+   gk inventory --target pi --json
    ```
    Use the returned agents, skills, tools, and MCP servers to populate `recommendations`.
 

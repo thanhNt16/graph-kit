@@ -39,7 +39,7 @@ Storage (via `gk template pack`):
 
 4. **Inventory installed capabilities.** Run:
    ```bash
-   gk inventory --target claude --json
+   gk inventory --target opencode --json
    ```
    Use the returned agents, skills, tools, and MCP servers to populate `recommendations`.
 

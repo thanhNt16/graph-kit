@@ -35,7 +35,7 @@ Invocation:
 
 2. **Inventory installed capabilities** for the active target:
    ```bash
-   gk inventory --target claude --json
+   gk inventory --target opencode --json
    ```
    Note the discovered agents, skills, tools, MCP servers, and their model tiers.
 
