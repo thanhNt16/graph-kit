@@ -50,6 +50,22 @@
   .install-grid { display:grid; grid-template-columns:1fr 1fr; gap:1.2rem; margin:1.5rem 0; }
   @media(max-width:768px){ .install-grid{ grid-template-columns:1fr; } }
 
+  .demo-grid { display:grid; grid-template-columns:1fr 1fr; gap:1.2rem; margin-top:1.8rem; }
+  @media(max-width:860px){ .demo-grid{ grid-template-columns:1fr; } }
+  .demo-card { background:var(--bg-elev); border:1px solid var(--border); border-radius:12px; padding:1.2rem 1.3rem; display:flex; flex-direction:column; }
+  .demo-card:hover { border-color:var(--border-bright); }
+  .demo-head { display:flex; align-items:center; justify-content:space-between; gap:0.8rem; margin-bottom:0.25rem; }
+  .demo-name { font-size:0.95rem; font-weight:600; color:var(--text); }
+  .demo-verdict { font-family:'IBM Plex Mono',monospace; font-size:0.66rem; font-weight:600; padding:0.14rem 0.55rem; border-radius:10px; letter-spacing:0.05em; white-space:nowrap; }
+  .demo-verdict.pass { background:rgba(46,160,67,0.15); color:var(--memory); }
+  .demo-verdict.partial { background:rgba(210,153,34,0.15); color:var(--loop); }
+  .demo-meta { font-size:0.72rem; color:var(--text-muted); margin-bottom:0.7rem; }
+  .demo-card p { font-size:0.85rem; color:var(--text-dim); margin-bottom:1rem; }
+  .demo-card img { width:100%; height:auto; border-radius:8px; border:1px solid var(--border); background:#0a0e14; margin-bottom:0.8rem; }
+  .demo-links { font-size:0.74rem; margin-top:auto; }
+  .demo-links a { color:var(--sonnet); text-decoration:none; }
+  .demo-links a:hover { text-decoration:underline; }
+
   .arch { display:flex; flex-direction:column; gap:1rem; margin:2rem 0; }
   .arch-layer { background:var(--bg-elev); border:1px solid var(--border-bright); border-radius:12px; padding:1.4rem; position:relative; }
   .arch-layer-tag { position:absolute; top:-10px; left:1.5rem; background:var(--bg); padding:0 0.6rem; font-family:'IBM Plex Mono',monospace; font-size:0.72rem; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.1em; }
@@ -429,6 +445,59 @@ gk models opencode set --map <span class="field">opus</span>=<span class="str">a
     </div>
   </div>
   <p style="margin-top:1rem;max-width:none">Agent formats stay host-native: markdown frontmatter for Claude/Cursor/OpenCode; Codex TOML (<code>name</code>, <code>description</code>, <code>developer_instructions</code>, <code>model</code>, <code>sandbox_mode</code>); Pi prompt fragments. Dispatch paths: Claude Code / Cursor / OpenCode spawn Task-tool subagents wave by wave (parallel within a wave); Codex uses a spawn-prompt protocol against custom TOML agents — the wave barrier is instruction-enforced, not tool-enforced (documented limitation); Pi dispatches via the <code>gk_dispatch_agent</code> tool from its extension, running headless <code>pi -p</code> child processes (requires <code>pi</code> on your PATH). Skills <code>gk-compile</code>/<code>gk-run</code> ship only for Claude Code — 13 there, 11 on every other target.</p>
+
+<div class="section">
+  <div class="section-label">Real Workflows Run In This Repo <span class="badge-new">0.2</span></div>
+  <h2>Dogfooded, Not Mocked</h2>
+  <p>Every graph below actually executed in this repository via <code>/gk:execute</code> — the features shipped on this page (viewer interactivity, CLI hardening, this very report's positioning pass) were built by these graphs. Each card links its <code>graph.yaml</code> and the run report with the full wave ledger.</p>
+  <div class="demo-grid">
+
+    <div class="demo-card">
+      <div class="demo-head">
+        <span class="mono demo-name">gk-social-improve</span>
+        <span class="demo-verdict pass">PASSED</span>
+      </div>
+      <div class="demo-meta mono">custom · 12 nodes · 6 waves · 2026-08-19</div>
+      <p>Sonnet research fleet (Reddit/X/HN sweep, docs audit, product-gap probe, competitive scan) → fable consolidation + plan → 3 parallel sonnet executors → fable review (1 critical found) → fix loop → acceptance gate. Shipped the CLI fail-loudly contract and docs honesty batch.</p>
+      <img src="demos/gk-social-improve.svg" alt="gk-social-improve graph" loading="lazy">
+      <div class="demo-links mono"><a href="https://github.com/thanhNt16/graph-kit/blob/main/docs/demos/gk-social-improve.yaml">graph.yaml</a> · <a href="https://github.com/thanhNt16/graph-kit/blob/main/.graphkit/reports/gk-social-improve.md">run report</a></div>
+    </div>
+
+    <div class="demo-card">
+      <div class="demo-head">
+        <span class="mono demo-name">viewer-interactivity-upgrade</span>
+        <span class="demo-verdict pass">PASSED</span>
+      </div>
+      <div class="demo-meta mono">custom · 10 nodes · 6 waves · 2026-08-18</div>
+      <p>Built this viewer's interactive edges, drag re-routing, and a11y drawer. The review wave caught what every executor self-review missed: drag deltas compounding across mousemove events (~30× overshoot) — runtime-reproduced by the fable reviewer, fixed with regression tests.</p>
+      <img src="demos/viewer-interactivity-upgrade.svg" alt="viewer-interactivity-upgrade graph" loading="lazy">
+      <div class="demo-links mono"><a href="https://github.com/thanhNt16/graph-kit/blob/main/docs/demos/viewer-interactivity-upgrade.yaml">graph.yaml</a> · <a href="https://github.com/thanhNt16/graph-kit/blob/main/.graphkit/reports/viewer-interactivity-upgrade.md">run report</a></div>
+    </div>
+
+    <div class="demo-card">
+      <div class="demo-head">
+        <span class="mono demo-name">gk-improve-tournament</span>
+        <span class="demo-verdict pass">PASSED</span>
+      </div>
+      <div class="demo-meta mono">tournament · 11 nodes · 3 waves · 2026-08-18</div>
+      <p>Six sonnet fleet sweeps → four optimization-lens candidates → fable-judged pairwise elimination. Champion measured −29% tokens on the frozen benchmark; the judge also falsified one fleet proposal that regressed accuracy — adversarial checking working as designed.</p>
+      <img src="demos/gk-improve-tournament.svg" alt="gk-improve-tournament graph" loading="lazy">
+      <div class="demo-links mono"><a href="https://github.com/thanhNt16/graph-kit/blob/main/docs/demos/gk-improve-tournament.yaml">graph.yaml</a> · <a href="https://github.com/thanhNt16/graph-kit/blob/main/.graphkit/reports/gk-improve-tournament.md">run report</a></div>
+    </div>
+
+    <div class="demo-card">
+      <div class="demo-head">
+        <span class="mono demo-name">gk-autoresearch</span>
+        <span class="demo-verdict partial">PARTIAL → −52%</span>
+      </div>
+      <div class="demo-meta mono">custom · 11 nodes · 7 waves · 2026-08-15</div>
+      <p>Self-improvement loop: parallel web research → plan → benchmark harness build → routing experiment. Three rounds took gk's code-graph recall from 124,414 → 59,309 tokens (−52.4%) with wrong-hits 12 → 5, measured on a frozen replay benchmark.</p>
+      <img src="demos/gk-autoresearch.svg" alt="gk-autoresearch graph" loading="lazy">
+      <div class="demo-links mono"><a href="https://github.com/thanhNt16/graph-kit/blob/main/docs/demos/gk-autoresearch.yaml">graph.yaml</a> · <a href="https://github.com/thanhNt16/graph-kit/blob/main/.graphkit/reports/gk-autoresearch.md">run report</a></div>
+    </div>
+
+  </div>
+</div>
 
 <div class="section">
   <div class="section-label">Session Skills — 13 (claude) · 11 (other hosts)</div>

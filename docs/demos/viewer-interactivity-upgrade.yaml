@@ -1,0 +1,160 @@
+apiVersion: graphkit.dev/v2
+kind: Graph
+metadata:
+  name: viewer-interactivity-upgrade
+  description: Parallel sonnet research on interactive graph visualization → fable consolidation + plan → parallel sonnet execution → fable review with sonnet fix loop
+topology: custom
+inputs:
+  task: { type: string, required: true }
+nodes:
+  # ── Wave 1: parallel research fleet (sonnet) ──────────────────────────────
+  research-viz-engines:
+    agent: ui-ux-researcher
+    model: sonnet
+    objective: |
+      Research interactive graph/workflow visualization for the gk viewer.
+      Current stack: dagre layout + vanilla DOM/canvas in claude/viewer/app.js.
+      Topics: canvas vs SVG vs WebGL at 250 nodes; node dragging with edge
+      re-routing; movable/reshapable edges; edge hit-targets and selection;
+      path highlight between two nodes. Constraint: NO new npm dependencies —
+      vanilla browser APIs or the already-bundled dagre only.
+      Write ranked findings (what/why/code-sketch/effort) to
+      .graphkit/evidence/research-viz.md.
+    refs:
+      - { path: claude/viewer/app.js, purpose: current canvas rendering and interaction code }
+      - { path: claude/viewer/index.html, purpose: viewer DOM structure }
+    depend_on: []
+    evidence: [research_findings]
+  research-interaction-ux:
+    agent: ui-ux-researcher
+    model: sonnet
+    objective: |
+      Research interaction UX for the gk viewer: click node → right sidebar
+      detail drawer (objective, model tier, depend_on, evidence keys, live
+      status); hover highlight of connected edges/nodes; multi-select;
+      keyboard navigation. Audit current app.js drawer (openDrawer) and the
+      SSE reorder focus handling; list gaps vs the target experience with
+      concrete interaction-state-model sketches. Write to
+      .graphkit/evidence/research-ux.md.
+    refs:
+      - { path: claude/viewer/app.js, purpose: drawer and focus handling to audit }
+      - { path: claude/skills/gk-visualize/SKILL.md, purpose: documented viewer behavior }
+    depend_on: []
+    evidence: [research_findings]
+  research-launch-ops:
+    agent: data-engineer
+    model: sonnet
+    objective: |
+      Research viewer launch operations: open in Chrome at a specific port.
+      Current: scripts/viewer-launch.ts binds 127.0.0.1 ephemeral port,
+      keyed URL, no auto-open (GK_VIEWER_OPEN gate). Design: GK_VIEWER_PORT
+      pinned default port, port-in-use fallback, `open -a "Google Chrome"`
+      on darwin with xdg-open fallback, key preserved. Exact diff sketches
+      for viewer-launch.ts + src/viewer/server.ts. Write to
+      .graphkit/evidence/research-ops.md.
+    refs:
+      - { path: scripts/viewer-launch.ts, purpose: launcher to modify for port + Chrome }
+      - { path: src/viewer/server.ts, purpose: server bind and key logic }
+    depend_on: []
+    evidence: [research_findings]
+  # ── Wave 2: fable consolidation → brainstorm → plan ───────────────────────
+  consolidate-plan:
+    agent: software-architect
+    model: fable
+    objective: |
+      Consolidate the three research reports. Brainstorm from multiple
+      angles (dev experience, perf at 250 nodes, keyed-URL security,
+      claude/cursor parity), keep the best ideas, and write a bite-sized
+      implementation plan to .graphkit/reports/viewer-plan.md. Split into
+      exactly 3 independent, testable tasks — one per executor — each with
+      files touched, acceptance checks, and test-first steps.
+      Hard constraints: no new npm dependencies; preserve key auth and the
+      read-only server; claude/cursor viewer parity (viewer-parity.test.ts);
+      no auto-open default (Chrome open is opt-in via env).
+    depend_on: [research-viz-engines, research-interaction-ux, research-launch-ops]
+    evidence: [plan]
+  # ── Wave 3: parallel execution (sonnet) — implement then self-review ──────
+  executor-viz:
+    agent: ui-ux-researcher
+    model: sonnet
+    objective: |
+      Read .graphkit/reports/viewer-plan.md and implement YOUR assigned task
+      (the viz-engine one: drag, edges, highlight). Test first. Then
+      SELF-REVIEW your diff against the task's acceptance checks and fix
+      your findings before stopping.
+    depend_on: [consolidate-plan]
+    loop:
+      enabled: true
+      stop_when: acceptance checks pass and bun test green
+      max_rounds: 3
+    evidence: [code, tests]
+  executor-ux:
+    agent: ui-ux-researcher
+    model: sonnet
+    objective: |
+      Read .graphkit/reports/viewer-plan.md and implement YOUR assigned task
+      (the sidebar/interaction one). Test first. Then SELF-REVIEW your diff
+      against the task's acceptance checks and fix your findings before
+      stopping.
+    depend_on: [consolidate-plan]
+    loop:
+      enabled: true
+      stop_when: acceptance checks pass and bun test green
+      max_rounds: 3
+    evidence: [code, tests]
+  executor-ops:
+    agent: data-engineer
+    model: sonnet
+    objective: |
+      Read .graphkit/reports/viewer-plan.md and implement YOUR assigned task
+      (the port/Chrome-launch one). Test first. Then SELF-REVIEW your diff
+      against the task's acceptance checks and fix your findings before
+      stopping.
+    depend_on: [consolidate-plan]
+    loop:
+      enabled: true
+      stop_when: acceptance checks pass and bun test green
+      max_rounds: 3
+    evidence: [code, tests]
+  # ── Wave 4: fable final review → prioritized fix list ─────────────────────
+  final-review:
+    agent: code-reviewer
+    model: fable
+    objective: |
+      Review ALL executor diffs against .graphkit/reports/viewer-plan.md.
+      Check correctness, the hard constraints (no new deps, key auth,
+      parity, no auto-open default), and interaction quality. Write a
+      prioritized fix list to .graphkit/evidence/final-review.md — one
+      checkbox item per finding with file:line, severity (critical/major/
+      minor), and fix sketch. Empty list only if the work is done.
+    depend_on: [executor-viz, executor-ux, executor-ops]
+    evidence: [fix_list, review_verdict]
+  # ── Wave 5: sonnet fix loop — burn down the fix list ──────────────────────
+  fixer:
+    agent: code-reviewer
+    model: sonnet
+    objective: |
+      Read .graphkit/evidence/final-review.md. Apply fix-list items top-down
+      (critical first), marking each resolved in place. Re-run bun test and
+      the parity test after each batch. Stop when the list has no open
+      critical/major items.
+    depend_on: [final-review]
+    loop:
+      enabled: true
+      stop_when: no open critical or major fix items
+      max_rounds: 4
+    evidence: [fix_list, tests]
+  # ── Wave 6: fable acceptance gate ─────────────────────────────────────────
+  acceptance:
+    agent: qa-engineer
+    model: fable
+    objective: |
+      Verify the finished work: plan acceptance checks met, bun test green,
+      viewer parity intact, fix list has no open critical/major items, and
+      a real graph.yaml renders with drag + highlight + sidebar drawer +
+      Chrome-at-pinned-port (opt-in). Evidence-driven verdict — fail if any
+      check cannot be demonstrated.
+    depend_on: [fixer]
+    evidence: [acceptance]
+evidence:
+  required_keys: [plan, acceptance]

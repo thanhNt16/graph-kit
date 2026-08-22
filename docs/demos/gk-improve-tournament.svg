@@ -1,0 +1,89 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1930" height="430" viewBox="0 0 1930 430" style="background:#0a0e14">
+  <rect width="100%" height="100%" fill="#0a0e14"/>
+  <text x="965" y="25" text-anchor="middle" fill="#e6edf3" font-family="sans-serif" font-size="16" font-weight="bold">gk-improve-tournament (tournament)</text>
+  
+    <path d="M 1742.7272727272727,90 L 1770,120 L 1360,165.1" fill="none" stroke="#30363d" stroke-width="1.5"/>
+    <path d="M 1546.8181818181818,90 L 1615,120 L 1360,160.65217391304347" fill="none" stroke="#30363d" stroke-width="1.5"/>
+    <path d="M 1316.8181818181818,90 L 1385,120 L 1322.2727272727273,150" fill="none" stroke="#30363d" stroke-width="1.5"/>
+    <path d="M 680,80.23076923076923 L 915,120 L 1180,161.05633802816902" fill="none" stroke="#30363d" stroke-width="1.5"/>
+    <path d="M 398.6363636363636,90 L 445,120 L 1180,169" fill="none" stroke="#30363d" stroke-width="1.5"/>
+    <path d="M 168.63636363636363,90 L 215,120 L 1180,170.30805687203792" fill="none" stroke="#30363d" stroke-width="1.5"/>
+    <path d="M 1699.5454545454545,90 L 1675,120 L 1130,167.20472440944883" fill="none" stroke="#30363d" stroke-width="1.5"/>
+    <path d="M 1503.6363636363637,90 L 1520,120 L 1130,164.6875" fill="none" stroke="#30363d" stroke-width="1.5"/>
+    <path d="M 1260,90 L 1260,120 L 1130,152.5" fill="none" stroke="#30363d" stroke-width="1.5"/>
+    <path d="M 680,89.75 L 790,120 L 950,155.2" fill="none" stroke="#30363d" stroke-width="1.5"/>
+    <path d="M 389.54545454545456,90 L 425,120 L 950,166.9512195121951" fill="none" stroke="#30363d" stroke-width="1.5"/>
+    <path d="M 159.54545454545456,90 L 195,120 L 950,169.14201183431953" fill="none" stroke="#30363d" stroke-width="1.5"/>
+    <path d="M 1690.4545454545455,90 L 1655,120 L 900,169.14201183431953" fill="none" stroke="#30363d" stroke-width="1.5"/>
+    <path d="M 1460.4545454545455,90 L 1425,120 L 900,166.9512195121951" fill="none" stroke="#30363d" stroke-width="1.5"/>
+    <path d="M 1170,89.75 L 1060,120 L 900,155.2" fill="none" stroke="#30363d" stroke-width="1.5"/>
+    <path d="M 590,90 L 590,120 L 720,152.5" fill="none" stroke="#30363d" stroke-width="1.5"/>
+    <path d="M 346.3636363636364,90 L 330,120 L 720,164.6875" fill="none" stroke="#30363d" stroke-width="1.5"/>
+    <path d="M 150.45454545454544,90 L 175,120 L 720,167.20472440944883" fill="none" stroke="#30363d" stroke-width="1.5"/>
+    <path d="M 1681.3636363636363,90 L 1635,120 L 670,170.30805687203792" fill="none" stroke="#30363d" stroke-width="1.5"/>
+    <path d="M 1451.3636363636363,90 L 1405,120 L 670,169" fill="none" stroke="#30363d" stroke-width="1.5"/>
+    <path d="M 1170,80.23076923076923 L 935,120 L 670,161.05633802816902" fill="none" stroke="#30363d" stroke-width="1.5"/>
+    <path d="M 533.1818181818181,90 L 465,120 L 527.7272727272727,150" fill="none" stroke="#30363d" stroke-width="1.5"/>
+    <path d="M 303.1818181818182,90 L 235,120 L 490,160.65217391304347" fill="none" stroke="#30363d" stroke-width="1.5"/>
+    <path d="M 107.27272727272728,90 L 80,120 L 490,165.1" fill="none" stroke="#30363d" stroke-width="1.5"/>
+    <path d="M 1270,200 L 1270,230 L 1015,270.6521739130435" fill="none" stroke="#30363d" stroke-width="1.5"/>
+    <path d="M 1040,200 L 1040,230 L 977.2727272727273,260" fill="none" stroke="#30363d" stroke-width="1.5"/>
+    <path d="M 810,200 L 810,230 L 872.7272727272727,260" fill="none" stroke="#30363d" stroke-width="1.5"/>
+    <path d="M 580,200 L 580,230 L 835,270.6521739130435" fill="none" stroke="#30363d" stroke-width="1.5"/>
+  
+    <g transform="translate(1630,40)">
+      <rect width="180" height="50" rx="8" fill="#0d1117" stroke="#58a6ff" stroke-width="2"/>
+      <text x="90" y="20" text-anchor="middle" fill="#58a6ff" font-family="monospace" font-size="13" font-weight="bold">fleet-cli</text>
+      <text x="90" y="38" text-anchor="middle" fill="#8b949e" font-family="monospace" font-size="11">data-engineer · sonnet</text>
+    </g>
+    <g transform="translate(1400,40)">
+      <rect width="180" height="50" rx="8" fill="#0d1117" stroke="#58a6ff" stroke-width="2"/>
+      <text x="90" y="20" text-anchor="middle" fill="#58a6ff" font-family="monospace" font-size="13" font-weight="bold">fleet-compiler</text>
+      <text x="90" y="38" text-anchor="middle" fill="#8b949e" font-family="monospace" font-size="11">data-engineer · sonnet</text>
+    </g>
+    <g transform="translate(1170,40)">
+      <rect width="180" height="50" rx="8" fill="#0d1117" stroke="#58a6ff" stroke-width="2"/>
+      <text x="90" y="20" text-anchor="middle" fill="#58a6ff" font-family="monospace" font-size="13" font-weight="bold">fleet-cbm</text>
+      <text x="90" y="38" text-anchor="middle" fill="#8b949e" font-family="monospace" font-size="11">data-engineer · sonnet</text>
+    </g>
+    <g transform="translate(500,40)">
+      <rect width="180" height="50" rx="8" fill="#0d1117" stroke="#58a6ff" stroke-width="2"/>
+      <text x="90" y="20" text-anchor="middle" fill="#58a6ff" font-family="monospace" font-size="13" font-weight="bold">fleet-eval</text>
+      <text x="90" y="38" text-anchor="middle" fill="#8b949e" font-family="monospace" font-size="11">data-engineer · sonnet</text>
+    </g>
+    <g transform="translate(270,40)">
+      <rect width="180" height="50" rx="8" fill="#0d1117" stroke="#58a6ff" stroke-width="2"/>
+      <text x="90" y="20" text-anchor="middle" fill="#58a6ff" font-family="monospace" font-size="13" font-weight="bold">fleet-tests</text>
+      <text x="90" y="38" text-anchor="middle" fill="#8b949e" font-family="monospace" font-size="11">data-engineer · sonnet</text>
+    </g>
+    <g transform="translate(40,40)">
+      <rect width="180" height="50" rx="8" fill="#0d1117" stroke="#58a6ff" stroke-width="2"/>
+      <text x="90" y="20" text-anchor="middle" fill="#58a6ff" font-family="monospace" font-size="13" font-weight="bold">fleet-docs</text>
+      <text x="90" y="38" text-anchor="middle" fill="#8b949e" font-family="monospace" font-size="11">data-engineer · sonnet</text>
+    </g>
+    <g transform="translate(1180,150)">
+      <rect width="180" height="50" rx="8" fill="#0d1117" stroke="#58a6ff" stroke-width="2"/>
+      <text x="90" y="20" text-anchor="middle" fill="#58a6ff" font-family="monospace" font-size="13" font-weight="bold">candidate-1</text>
+      <text x="90" y="38" text-anchor="middle" fill="#8b949e" font-family="monospace" font-size="11">software-architect · sonnet</text>
+    </g>
+    <g transform="translate(950,150)">
+      <rect width="180" height="50" rx="8" fill="#0d1117" stroke="#58a6ff" stroke-width="2"/>
+      <text x="90" y="20" text-anchor="middle" fill="#58a6ff" font-family="monospace" font-size="13" font-weight="bold">candidate-2</text>
+      <text x="90" y="38" text-anchor="middle" fill="#8b949e" font-family="monospace" font-size="11">code-reviewer · sonnet</text>
+    </g>
+    <g transform="translate(720,150)">
+      <rect width="180" height="50" rx="8" fill="#0d1117" stroke="#58a6ff" stroke-width="2"/>
+      <text x="90" y="20" text-anchor="middle" fill="#58a6ff" font-family="monospace" font-size="13" font-weight="bold">candidate-3</text>
+      <text x="90" y="38" text-anchor="middle" fill="#8b949e" font-family="monospace" font-size="11">data-engineer · sonnet</text>
+    </g>
+    <g transform="translate(490,150)">
+      <rect width="180" height="50" rx="8" fill="#0d1117" stroke="#58a6ff" stroke-width="2"/>
+      <text x="90" y="20" text-anchor="middle" fill="#58a6ff" font-family="monospace" font-size="13" font-weight="bold">candidate-4</text>
+      <text x="90" y="38" text-anchor="middle" fill="#8b949e" font-family="monospace" font-size="11">qa-engineer · sonnet</text>
+    </g>
+    <g transform="translate(835,260)">
+      <rect width="180" height="50" rx="8" fill="#0d1117" stroke="#f0883e" stroke-width="2"/>
+      <text x="90" y="20" text-anchor="middle" fill="#f0883e" font-family="monospace" font-size="13" font-weight="bold">judge</text>
+      <text x="90" y="38" text-anchor="middle" fill="#8b949e" font-family="monospace" font-size="11">software-architect · fable</text>
+    </g>
+</svg>

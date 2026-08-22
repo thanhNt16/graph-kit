@@ -1,0 +1,221 @@
+apiVersion: graphkit.dev/v2
+kind: Graph
+metadata:
+  name: gk-autoresearch
+  description: >
+    Karpathy autoresearch + parallel internet research, self-improving graph-kit
+    until a frozen task-replay benchmark proves it makes us faster. One read-only
+    ground-truth metric (tokens + wall-clock + wrong-answer rate on ~20 real repo
+    questions), a fixed time budget per experiment, disjoint in-scope files per
+    axis, keep/discard loops (edit -> commit -> benchmark -> keep / git-reset ->
+    log to results.tsv). A looping dispatcher fans out parallel web-research
+    agents each round to refill the idea backlogs so workers never run dry.
+topology: custom
+# ponytail: graph-kit node-loops re-run the SAME node — a verifier cannot
+# re-trigger upstream workers. So "self-improve until efficient" is expressed as
+# three genuine sequential node-loops (dispatch/research -> workers -> verify),
+# not one re-entrant cycle. Upgrade path: if graph-kit adds edge-level loop-back,
+# collapse these into a single metric-driven outer loop.
+inputs:
+  task:
+    type: string
+    required: true
+    description: >
+      The improvement mission, framed as efficiency: "make graph-kit resolve
+      real questions about this repo faster/cheaper/more correctly than
+      grep+glob". The benchmark frame builds measures exactly this.
+  tag:
+    type: string
+    required: false
+    description: Branch tag for the run (default today). Branch autoresearch/<tag>.
+  time_budget:
+    type: string
+    required: false
+    description: Wall-clock cap per experiment (default 5m). Keeps runs comparable.
+  benchmark_size:
+    type: string
+    required: false
+    description: Number of frozen repo questions in the task-replay benchmark (default 20).
+nodes:
+  # ── Phase 1: freeze the efficiency ground truth, then baseline ──────────────
+  frame:
+    agent: agents-orchestrator
+    model: opus
+    objective: |
+      Build and FREEZE the efficiency ground truth — this is graph-kit's
+      prepare.py: read-only after this node, never moved.
+      Create benchmark.jsonl: ~20 REAL questions a dev would ask about THIS repo
+      (input.benchmark_size, default 20), each with the known-correct answer +
+      the grep/glob command that finds it. Span: "where is X defined", "who
+      calls Y", "what does Z depend on", "find dead code", "trace this data flow".
+      Define the METRIC as one number, lower = better, three terms summed:
+        tokens_used + (wall_clock_seconds * 100) + (wrong_answers * 10000)
+      Run the baseline BOTH ways on the untouched code and record both rows in
+      results.tsv: gk's metric and grep/glob's metric. gk must beat grep/glob.
+      Then fix the autoresearch invariants in program.md: time budget
+      (input.time_budget, default 5m), in-scope file per axis (eval/benchmark
+      code OFF-LIMITS), branch autoresearch/<tag>, results.tsv header
+      (commit<TAB>metric<TAB>memory_mb<TAB>status<TAB>description).
+    depend_on: []
+    evidence: [benchmark_jsonl, baseline_metric, program_md]
+
+  # ── Phase 2: partition axes + seed local idea backlogs ──────────────────────
+  scout:
+    agent: software-architect
+    model: sonnet
+    objective: |
+      Survey the graph-kit codebase ONCE. Partition the optimization space into
+      three DISJOINT axes (disjoint in-scope files, so parallel workers never
+      conflict):
+        axis-index    — indexing speed + symbol/edge write path
+        axis-retrieve — traversal + retrieval recall/precision vs grep/glob
+        axis-extract  — entity/edge extraction quality
+      For each axis: name the single in-scope file and seed idea-backlog.md with
+      5-8 LOCAL ideas grounded in the real code. This is the only whole-codebase
+      read; researchers and workers start from your partition.
+    depend_on: [frame]
+    evidence: [axis_partition, idea_backlogs]
+
+  # ── Phase 3: looping dispatcher fans out parallel web research ──────────────
+  dispatch:
+    agent: agents-orchestrator
+    model: opus
+    objective: |
+      Each round: read the current metric gaps (from latest verify report if
+      present, else the scout's axis partition) and assign the three most
+      pressing OPEN research questions — one per axis slot. Write research-slots.md
+      (slot -> axis, question, what-to-find, search-pointers). Return empty
+      slots when every axis is saturated (no new question for 2 rounds).
+      This node is the research loop driver: it decides WHAT the parallel
+      internet researchers hunt for each round.
+    depend_on: [scout]
+    loop:
+      enabled: true
+      stop_when: all three axis slots empty for 2 consecutive rounds
+      max_rounds: 6
+    evidence: [research_slots]
+
+  research-index:
+    agent: software-architect
+    model: sonnet
+    objective: |
+      Internet research for the axis-index slot from research-slots.md. Use
+      web_search + web_fetch. Hunt concrete, code-grounded mechanisms (not
+      surveys): hash-based symbol indexes, incremental re-indexing, edge
+      lookup, content-addressing. For each idea: cite the source URL, state the
+      expected metric impact, and sketch the diff to the in-scope file. Append
+      findings to idea-backlog.md under axis-index. Skip anything already tried
+      in results.tsv.
+    depend_on: [dispatch]
+    evidence: [research_findings]
+  research-retrieve:
+    agent: software-architect
+    model: sonnet
+    objective: |
+      Internet research for the axis-retrieve slot. Use web_search + web_fetch.
+      Hunt retrieval/ranking mechanisms that beat grep/glob on recall+precision:
+      hybrid lexical+semantic ranking, graph-traversal heuristics, BFS/DFS
+      pruning, pagerank-style node weighting. Cite source URL, expected metric
+      impact, and a diff sketch per idea. Append to idea-backlog.md under
+      axis-retrieve. Skip anything already tried in results.tsv.
+    depend_on: [dispatch]
+    evidence: [research_findings]
+  research-extract:
+    agent: software-architect
+    model: sonnet
+    objective: |
+      Internet research for the axis-extract slot. Use web_search + web_fetch.
+      Hunt extraction-quality mechanisms: entity/edge heuristics, batch-merge
+      approaches (understand-anything), any-input ingestion (graphify), LSP-grade
+      call/usage resolution. Cite source URL, expected metric impact, diff sketch
+      per idea. Append to idea-backlog.md under axis-extract. Skip anything
+      already tried in results.tsv.
+    depend_on: [dispatch]
+    evidence: [research_findings]
+
+  merge:
+    agent: memory-curator
+    model: sonnet
+    objective: |
+      Consolidate the three research streams + the scout's local backlogs into
+      one deduped, ranked backlog per axis (highest expected metric impact first).
+      Drop ideas already in results.tsv. Write the merged backlogs back to
+      idea-backlog.md so each worker reads a single clean queue.
+    depend_on: [research-index, research-retrieve, research-extract]
+    evidence: [merged_backlogs]
+
+  # ── Phase 4: three parallel keep/discard loops (autoresearch workers) ───────
+  worker-index:
+    agent: data-engineer
+    model: sonnet
+    objective: |
+      Run the autoresearch loop on axis-index. Each round, Karpathy-style:
+        1. read git state + results.tsv + your axis backlog
+        2. pick the next idea (backlog, or synthesize a new one)
+        3. edit the axis-index in-scope file ONLY
+        4. git commit
+        5. run the FROZEN benchmark under the time budget -> run.log
+        6. read the metric; empty = crash, read the traceback
+        7. append results.tsv row (commit, metric, memory, status, description)
+        8. metric < best -> KEEP, advance; else -> git reset
+      Simplicity criterion: a gain from deleting code beats an equal gain from
+      adding complexity. Typos: fix+rerun. Fundamental crash: log+move on. NEVER
+      modify the benchmark/eval. NEVER commit results.tsv.
+    depend_on: [merge]
+    loop:
+      enabled: true
+      stop_when: backlog empty or 5 consecutive non-improvements
+      max_rounds: 12
+    evidence: [code, results_tsv]
+  worker-retrieve:
+    agent: data-engineer
+    model: sonnet
+    objective: |
+      Run the autoresearch loop on axis-retrieve. Same nine-step loop, touching
+      ONLY the axis-retrieve in-scope file. Metric is the frozen benchmark;
+      lower is better. Keep/discard every round, log every attempt, never touch
+      the benchmark/eval, never commit results.tsv.
+    depend_on: [merge]
+    loop:
+      enabled: true
+      stop_when: backlog empty or 5 consecutive non-improvements
+      max_rounds: 12
+    evidence: [code, results_tsv]
+  worker-extract:
+    agent: data-engineer
+    model: sonnet
+    objective: |
+      Run the autoresearch loop on axis-extract. Same nine-step loop, touching
+      ONLY the axis-extract in-scope file. Keep/discard every round, log every
+      attempt, never touch the benchmark/eval, never commit results.tsv.
+    depend_on: [merge]
+    loop:
+      enabled: true
+      stop_when: backlog empty or 5 consecutive non-improvements
+      max_rounds: 12
+    evidence: [code, results_tsv]
+
+  # ── Phase 5: prove it actually makes us faster ──────────────────────────────
+  verify:
+    agent: qa-engineer
+    model: opus
+    objective: |
+      You are the benchmark's enforcer, not a worker. Run the FROZEN benchmark
+      on the final autoresearch branch and compare to BOTH baselines frame
+      recorded (gk-baseline and grep/glob-baseline).
+        - gk_metric < grep_glob_baseline -> SUCCESS: graph-kit now beats
+          grep/glob. Name the single biggest lever from results.tsv.
+        - improved over gk-baseline but still >= grep/glob -> PARTIAL: report
+          which axis is weakest and what the next research round should target.
+        - regressed -> FAIL: name the axis that regressed.
+      Re-measure up to 3 times to rule out timing noise. Do not edit code.
+    depend_on: [worker-index, worker-retrieve, worker-extract]
+    loop:
+      enabled: true
+      stop_when: gk_metric beats grep/glob baseline OR 3 stable measurements
+      max_rounds: 3
+    evidence: [metric_report]
+
+evidence:
+  required_keys: [metric_report, benchmark_jsonl]
+  format: markdown

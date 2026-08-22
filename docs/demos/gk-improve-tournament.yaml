@@ -1,0 +1,145 @@
+apiVersion: graphkit.dev/v2
+kind: Graph
+metadata:
+  name: gk-improve-tournament
+  description: Sonnet research fleet → four lens candidates → fable-judged tournament
+topology: tournament
+inputs:
+  task:
+    type: string
+    required: true
+nodes:
+  # ── Wave 1: sonnet research fleet — six parallel improvement sweeps ─────────
+  fleet-cli:
+    agent: data-engineer
+    model: sonnet
+    objective: |
+      Sweep src/cli/ (commands, output, command-registry, svg, ascii). Hunt
+      improvements: ergonomics, error messages, duplicated client/spawn/ok-fail
+      boilerplate across subcommand branches, dead flags. Write your top 3-5
+      ranked findings to .graphkit/evidence/fleet-cli.md — each with what/why,
+      file:line, diff sketch, expected impact (benchmark metric or dev-minutes),
+      and how to verify. Measured claims only; no dependency installs.
+    depend_on: []
+    evidence: [fleet_findings]
+  fleet-compiler:
+    agent: data-engineer
+    model: sonnet
+    objective: |
+      Sweep src/compiler/ + src/schemas/ (validate, emitter, resolver, topology).
+      Hunt: validation gaps, schema strictness, compile-time errors that could
+      be caught earlier, dead exports. Write top 3-5 ranked findings to
+      .graphkit/evidence/fleet-compiler.md (same format: what/why, file:line,
+      diff sketch, impact, verification).
+    depend_on: []
+    evidence: [fleet_findings]
+  fleet-cbm:
+    agent: data-engineer
+    model: sonnet
+    objective: |
+      Sweep src/cbm/ (client, contract, index, route). Hunt: the 5 remaining
+      benchmark misses (q01 q06 q09 q16 q20 — capacity-limited), token payload
+      bloat (13062 tokens vs grep 2922), contract types unused at runtime,
+      connect-time version guard. Write top 3-5 ranked findings to
+      .graphkit/evidence/fleet-cbm.md. Efficiency claims must carry a measured
+      before/after on the frozen benchmark or a concrete sizing argument.
+    depend_on: []
+    evidence: [fleet_findings]
+  fleet-eval:
+    agent: data-engineer
+    model: sonnet
+    objective: |
+      Sweep src/eval/ + src/viewer/ (metrics, replay, rubrics, forgetting,
+      server, app). Hunt: dead code (forgetting.ts consumers), replay
+      ergonomics, viewer SSE/layout debt. Write top 3-5 ranked findings to
+      .graphkit/evidence/fleet-eval.md (what/why, file:line, diff sketch,
+      impact, verification).
+    depend_on: []
+    evidence: [fleet_findings]
+  fleet-tests:
+    agent: data-engineer
+    model: sonnet
+    objective: |
+      Sweep tests/ (unit, integration, acceptance). Hunt: untested paths in
+      new code (route.ts classify/route, memory trace expiry marking), flaky
+      patterns (tmpdir, Date.now), test seams leaking. Write top 3-5 ranked
+      findings to .graphkit/evidence/fleet-tests.md.
+    depend_on: []
+    evidence: [fleet_findings]
+  fleet-docs:
+    agent: data-engineer
+    model: sonnet
+    objective: |
+      Sweep README.md, docs/, claude/skills/ promised UX vs shipped CLI.
+      Hunt: documented-but-missing commands, stale examples, missing error
+      docs, onboarding friction. Write top 3-5 ranked findings to
+      .graphkit/evidence/fleet-docs.md.
+    depend_on: []
+    evidence: [fleet_findings]
+
+  # ── Wave 2: four lens candidates compete on the fleet's evidence ────────────
+  candidate-1:
+    agent: software-architect
+    model: sonnet
+    objective: |
+      Lens: USEFUL. Read all six .graphkit/evidence/fleet-*.md reports.
+      Pick or synthesize the single highest-value feature gap a developer hits
+      daily. Propose ONE concrete feature with a minimal diff sketch (file,
+      ~lines), the user story it serves, and how you would verify it. Cite
+      which fleet findings support it. No dependency installs, no
+      benchmark/eval edits.
+    depend_on: [fleet-cli, fleet-compiler, fleet-cbm, fleet-eval, fleet-tests, fleet-docs]
+    evidence: [solution]
+  candidate-2:
+    agent: code-reviewer
+    model: sonnet
+    objective: |
+      Lens: CLEANER. Read all six .graphkit/evidence/fleet-*.md reports.
+      Pick the single highest-leverage cleanup (deletion beats refactor).
+      Provide a diff sketch and the test that proves behavior is unchanged.
+      329 tests must stay green. Cite supporting fleet findings.
+    depend_on: [fleet-cli, fleet-compiler, fleet-cbm, fleet-eval, fleet-tests, fleet-docs]
+    evidence: [solution]
+  candidate-3:
+    agent: data-engineer
+    model: sonnet
+    objective: |
+      Lens: EFFICIENT. Read .graphkit/evidence/fleet-cbm.md plus the other
+      fleet reports. The gk arm scores 63115 vs grep 2936; tokens=13062
+      dominate (wrong=5, capacity-limited misses). Propose ONE payload-shaping
+      or retrieval change that cuts tokens without losing answers — measure on
+      the frozen benchmark.jsonl and report metric before/after. Never edit
+      benchmark.jsonl or the score() function.
+    depend_on: [fleet-cli, fleet-compiler, fleet-cbm, fleet-eval, fleet-tests, fleet-docs]
+    evidence: [solution]
+  candidate-4:
+    agent: qa-engineer
+    model: sonnet
+    objective: |
+      Lens: PRODUCTIVE. Read all six .graphkit/evidence/fleet-*.md reports.
+      Pick the biggest workflow friction (CLI ergonomics, error messages,
+      evidence/reports flow, agent-binding validation). Propose ONE friction
+      fix with highest developer-minutes saved, diff sketch, and verification
+      plan. Cite supporting fleet findings.
+    depend_on: [fleet-cli, fleet-compiler, fleet-cbm, fleet-eval, fleet-tests, fleet-docs]
+    evidence: [solution]
+
+  # ── Wave 3: fable judge — pairwise elimination to one champion ──────────────
+  judge:
+    agent: software-architect
+    model: fable
+    objective: |
+      Run pairwise elimination over the four candidates. Score each on:
+      impact (benchmark metric or developer-minutes), effort (diff size),
+      risk (regression probability), and honesty (measured vs asserted —
+      distrust any before/after that has no run behind it). Reject any
+      proposal that edits the frozen benchmark/eval, installs dependencies,
+      or claims unmeasured wins. Return the champion as
+      {winner: "<candidate-name>", reason: "...", runner_up_idea: "..."}.
+    depend_on: [candidate-1, candidate-2, candidate-3, candidate-4]
+    evidence: [champion]
+topology_config:
+  candidates: [candidate-1, candidate-2, candidate-3, candidate-4]
+  judge: judge
+evidence:
+  required_keys: [champion]

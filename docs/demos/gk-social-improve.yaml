@@ -1,0 +1,180 @@
+apiVersion: graphkit.dev/v2
+kind: Graph
+metadata:
+  name: gk-social-improve
+  description: Sonnet research fleet (social + internal + competitive) → fable consolidation + plan → parallel execution → fable review with sonnet fix loop
+topology: custom
+inputs:
+  task: { type: string, required: true }
+nodes:
+  # ── Wave 1: research fleet (sonnet, parallel) ─────────────────────────────
+  social-reddit:
+    agent: ui-ux-researcher
+    model: sonnet
+    objective: |
+      Social research on Reddit (r/ClaudeAI, r/ChatGPTCoding, r/LocalLLaMA,
+      r/AgenticAI, r/AI_Agents, r/ClaudeCode): what users say about agent
+      orchestration tools (CrewAI, LangGraph, claude-flow, AutoGen, Agent
+      crews). Extract recurring pain points, wished-for features, criticisms
+      of YAML/config-heavy tools, and what makes people adopt or bounce.
+      Cite real thread URLs. Write to .graphkit/evidence/social-reddit.md.
+    refs:
+      - { path: README.md, purpose: current positioning to compare against }
+    depend_on: []
+    evidence: [research_findings]
+  social-x-substack:
+    agent: ui-ux-researcher
+    model: sonnet
+    objective: |
+      Social research on X/Twitter, Substack, Hacker News: current discourse
+      on multi-agent orchestration, graph-based agent workflows, Claude Code
+      subagents/skills ecosystem. What language resonates ("compile", "graph",
+      "fleet", "workflow")? What do practitioners warn against (overhead,
+      cost, complexity)? Cite real URLs. Write to
+      .graphkit/evidence/social-x.md.
+    refs:
+      - { path: README.md, purpose: current positioning to compare against }
+    depend_on: []
+    evidence: [research_findings]
+  docs-consistency:
+    agent: qa-engineer
+    model: sonnet
+    objective: |
+      Audit ALL user-facing docs for inconsistencies and staleness:
+      README.md, docs/graphkit-v0.2-report.html, docs/templates-and-viewer.md,
+      claude/skills/*/SKILL.md, cursor/skills/*/SKILL.md. Check: test counts,
+      version numbers, command examples (do they actually work?), agent-name
+      examples (must be kebab-case filenames), links, claims vs reality
+      (grep the code). Every finding with file:line + what's wrong + fix.
+      Write to .graphkit/evidence/docs-consistency.md.
+    refs:
+      - { path: README.md, purpose: primary doc to audit }
+      - { path: docs/graphkit-v0.2-report.html, purpose: pages site source }
+    depend_on: []
+    evidence: [research_findings]
+  product-gaps:
+    agent: data-engineer
+    model: sonnet
+    objective: |
+      Explore the repo + CLI for product gaps and friction: run `gk --help`,
+      every subcommand's help, try representative commands (validate, graph
+      new/list/ascii/svg, memory, template). Hunt: missing commands users
+      would expect, poor error messages, no-progress operations, awkward
+      flags, dead code, upgrade rough edges. Measured findings only.
+      Write to .graphkit/evidence/product-gaps.md.
+    refs:
+      - { path: src/cli, purpose: command surface to explore }
+    depend_on: []
+    evidence: [research_findings]
+  competitive:
+    agent: ui-ux-researcher
+    model: sonnet
+    objective: |
+      Competitive scan of agent-orchestration repos (LangGraph, CrewAI,
+      AutoGen/AG2, claude-flow, OpenAI Swarm, Google ADK, smolagents):
+      README positioning, star counts, their killer features gk lacks
+      (observability, streaming UI, human-in-the-loop, persistence,
+      time-travel). What do they do badly that gk's compile-only + host-
+      native-execution angle beats? Cite repo URLs. Write to
+      .graphkit/evidence/competitive.md.
+    refs:
+      - { path: README.md, purpose: current positioning to compare against }
+    depend_on: []
+    evidence: [research_findings]
+  # ── Wave 2: fable consolidation → brainstorm → plan ───────────────────────
+  consolidate-plan:
+    agent: software-architect
+    model: fable
+    objective: |
+      Consolidate the five research reports. Brainstorm across angles
+      (positioning clarity, onboarding friction, docs trust, feature gaps
+      worth building vs deferring), keep the best ideas, write a bite-sized
+      plan to .graphkit/reports/improve-plan.md. Exactly 3-4 independent,
+      testable tasks — one per executor — with files touched, acceptance
+      checks, test-first steps. MUST include updating the Pages document
+      (docs/graphkit-v0.2-report.html) and README per findings. Hard
+      constraints: no new npm dependencies; no fabricated social quotes
+      (cite or don't claim); parity claude/cursor kit; tests stay green.
+    depend_on: [social-reddit, social-x-substack, docs-consistency, product-gaps, competitive]
+    evidence: [plan]
+  # ── Wave 3: parallel execution (sonnet) — implement + self-review ─────────
+  executor-docs:
+    agent: qa-engineer
+    model: sonnet
+    objective: |
+      Read .graphkit/reports/improve-plan.md and implement YOUR assigned task
+      (the docs/README/pages-site one). Every fix verifiable (grep, command
+      run). Test first where code-adjacent. Then SELF-REVIEW your diff and
+      fix your findings before stopping.
+    depend_on: [consolidate-plan]
+    loop:
+      enabled: true
+      stop_when: acceptance checks pass and bun test green
+      max_rounds: 3
+    evidence: [code, tests]
+  executor-product:
+    agent: data-engineer
+    model: sonnet
+    objective: |
+      Read .graphkit/reports/improve-plan.md and implement YOUR assigned task
+      (the product/CLI one). Test first. Then SELF-REVIEW your diff against
+      the task's acceptance checks and fix findings before stopping.
+    depend_on: [consolidate-plan]
+    loop:
+      enabled: true
+      stop_when: acceptance checks pass and bun test green
+      max_rounds: 3
+    evidence: [code, tests]
+  executor-positioning:
+    agent: ui-ux-researcher
+    model: sonnet
+    objective: |
+      Read .graphkit/reports/improve-plan.md and implement YOUR assigned task
+      (the positioning/report-section one — grounded ONLY in cited research,
+      no invented claims). Then SELF-REVIEW your diff and fix findings.
+    depend_on: [consolidate-plan]
+    loop:
+      enabled: true
+      stop_when: acceptance checks pass
+      max_rounds: 3
+    evidence: [code, tests]
+  # ── Wave 4: fable final review → prioritized fix list ─────────────────────
+  final-review:
+    agent: code-reviewer
+    model: fable
+    objective: |
+      Review ALL executor diffs against .graphkit/reports/improve-plan.md:
+      correctness, constraints (no new deps, no fabricated citations, parity,
+      green tests), and whether the doc page + README actually resolve the
+      inconsistencies found. Write a prioritized fix list to
+      .graphkit/evidence/improve-review.md — checkbox per finding with
+      file:line, severity, fix sketch. Empty only if done.
+    depend_on: [executor-docs, executor-product, executor-positioning]
+    evidence: [fix_list, review_verdict]
+  # ── Wave 5: sonnet fix loop ───────────────────────────────────────────────
+  fixer:
+    agent: code-reviewer
+    model: sonnet
+    objective: |
+      Read .graphkit/evidence/improve-review.md. Apply fix-list items top-down
+      (critical first), marking each resolved in place. Re-run bun test after
+      each batch. Stop when no open critical/major items.
+    depend_on: [final-review]
+    loop:
+      enabled: true
+      stop_when: no open critical or major fix items
+      max_rounds: 4
+    evidence: [fix_list, tests]
+  # ── Wave 6: fable acceptance gate ─────────────────────────────────────────
+  acceptance:
+    agent: qa-engineer
+    model: fable
+    objective: |
+      Verify: plan acceptance checks met, bun test green, tsc clean, kit
+      parity intact, no fabricated social claims (spot-check citations),
+      docs inconsistencies from evidence/docs-consistency.md resolved.
+      Evidence-driven verdict — fail if any check cannot be demonstrated.
+    depend_on: [fixer]
+    evidence: [acceptance]
+evidence:
+  required_keys: [plan, acceptance]
