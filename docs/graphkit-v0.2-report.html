@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>GraphKit 0.2 — Graph Engineering Kit for Claude Code & Cursor</title>
+<title>GraphKit 0.2 — Graph Engineering Kit for Claude Code, Cursor, OpenCode, Codex &amp; Pi</title>
 <style>
   :root {
     --bg: #0a0e14; --bg-elev: #0d1117; --surface: #131822;
@@ -14,6 +14,7 @@
     --loop: #d29922; --generate: #79c0ff; --tournament: #bc8cff;
     --memory: #2ea043; --eval: #f85149; --gold: #d29922;
     --bridge: #39d0d8; --custom: #d2a8ff; --flow: #f0883e; --cursor: #56d3dd;
+    --opencode: #ffa657; --codex: #ff7b72; --pi: #a5d6ff;
   }
   * { margin:0; padding:0; box-sizing:border-box; }
   body { font-family:'IBM Plex Sans',-apple-system,system-ui,sans-serif; background:var(--bg); color:var(--text); line-height:1.65; -webkit-font-smoothing:antialiased; }
@@ -134,20 +135,20 @@
 <div class="hero">
   <div class="hero-badge">gk v0.2.9 · graph engineering kit</div>
   <h1>GraphKit</h1>
-  <p class="hero-tag">Define graph-structured agent workflows as YAML. Compile to Claude Code dynamic workflows — or dispatch subagents directly. Eleven topologies, two runtimes, Cursor support, and a live bridge to the codebase-memory graph. Per-node model tiering. Evidence-based gates. Zero custom runtime.</p>
+  <p class="hero-tag">Define graph-structured agent workflows as YAML. Compile to host-native execution across five targets — Claude Code, Cursor, OpenCode, Codex and Pi — each with its own native dispatch path. Eleven topologies, five targets, one CLI. Per-node model tiering. Evidence-based gates. Zero custom runtime.</p>
   <div class="hero-stats">
     <div class="stat"><div class="stat-num">11</div><div class="stat-label">Topologies</div></div>
-    <div class="stat"><div class="stat-num">2</div><div class="stat-label">Runtimes</div></div>
-    <div class="stat"><div class="stat-num">11</div><div class="stat-label">Skills</div></div>
+    <div class="stat"><div class="stat-num">5</div><div class="stat-label">Targets</div></div>
+    <div class="stat"><div class="stat-num">13</div><div class="stat-label">Skills (claude)</div></div>
     <div class="stat"><div class="stat-num">8</div><div class="stat-label">Agents</div></div>
-    <div class="stat"><div class="stat-num">375</div><div class="stat-label">Tests</div></div>
+    <div class="stat"><div class="stat-num">429</div><div class="stat-label">Tests</div></div>
   </div>
 </div>
 
 <div class="section">
   <div class="section-label">Quick Start</div>
   <h2>Install — Release Tarball or Source</h2>
-  <p>Easiest: every push to <code>main</code> publishes a patch release with prebuilt binaries. Or clone and build from source (not on npm yet). Requires <a href="https://bun.sh" style="color:var(--sonnet)">Bun</a> (source build) and <a href="https://docs.claude.com/en/docs/claude-code" style="color:var(--sonnet)">Claude Code</a> (or Cursor).</p>
+  <p>Easiest: every push to <code>main</code> publishes a patch release with prebuilt binaries. Or clone and build from source (not on npm yet). Requires <a href="https://bun.sh" style="color:var(--sonnet)">Bun</a> (source build) and at least one supported host — Claude Code, Cursor, OpenCode, Codex or Pi.</p>
 
   <div class="code-block">
     <div class="code-header"><div class="code-dot" style="background:#f85149"></div><div class="code-dot" style="background:#d29922"></div><div class="code-dot" style="background:#3fb950"></div> 1. Release tarball (recommended)</div>
@@ -173,7 +174,7 @@ bun install
 bun run build                <span class="cmt"># → dist/index.js (executable, with shebang)</span>
 
 <span class="cmt"># Run the full gate to verify</span>
-bun run ci:local             <span class="cmt"># → typecheck + lint + build + 375 tests + cbm:parity</span></div>
+bun run ci:local             <span class="cmt"># → typecheck + lint + build + 429 tests + cbm:parity</span></div>
   </div>
 
   <div class="install-grid">
@@ -208,18 +209,22 @@ gk graph list --json</div>
     <div class="code-header"><div class="code-dot" style="background:#f85149"></div><div class="code-dot" style="background:#d29922"></div><div class="code-dot" style="background:#3fb950"></div> 3. Install the kit + use it</div>
     <div class="code-body"><span class="cmt"># Install the kit into your project (agents, skills, hooks, rules):</span>
 cd /path/to/your-project
-gk init                                  <span class="cmt"># → .claude/  (default target)</span>
-gk init --target cursor                  <span class="cmt"># → .cursor/  (Cursor IDE)</span>
+gk init                                  <span class="cmt"># → .claude/   (default target)</span>
+gk init --target cursor                  <span class="cmt"># → .cursor/</span>
+gk init --target opencode                <span class="cmt"># → .opencode/ (TS plugin hooks)</span>
+gk init --target codex                   <span class="cmt"># → .codex/    (TOML agents + AGENTS.md rules)</span>
+gk init --target pi                      <span class="cmt"># → .pi/       (extension + prompt fragments)</span>
 
 <span class="cmt"># Or scaffold a new project from scratch:</span>
 gk new --dir my-project
+gk new --dir my-project --target opencode
 
 <span class="cmt"># Define, validate, compile a graph:</span>
 gk validate graph.yaml --json
 gk compile graph.yaml --json             <span class="cmt"># → .claude/workflows/{name}.workflow.js</span>
 gk graph inspect diamond                 <span class="cmt"># → see topology config keys</span>
 
-<span class="cmt"># Inside a session, skills auto-discover from .claude/skills/:</span>
+<span class="cmt"># Inside a session, skills auto-discover from the active kit's skills directory:</span>
 <span class="cmt"># /gk-init-graph  /gk-validate  /gk-compile  /gk-run  /gk-execute</span></div>
   </div>
 </div>
@@ -231,9 +236,9 @@ gk graph inspect diamond                 <span class="cmt"># → see topology co
   <div class="arch">
     <div class="arch-layer">
       <div class="arch-layer-tag">Layer 1 — Kit Template</div>
-      <div class="arch-layer-title">📦 .claude/ or .cursor/ directory</div>
-      <div class="arch-layer-desc">Installed by <code>gk init</code>. Agents, skills, hooks, rules, schemas, topology templates — in the target host's native format.</div>
-      <div class="arch-flow"><span class="arch-pill">8 agents</span><span class="arch-arrow">·</span><span class="arch-pill">13 skills (claude) · 11 (cursor)</span><span class="arch-arrow">·</span><span class="arch-pill">4 hooks</span><span class="arch-arrow">·</span><span class="arch-pill">3 rules</span><span class="arch-arrow">·</span><span class="arch-pill">11 templates</span></div>
+      <div class="arch-layer-title">📦 kits/&lt;target&gt;/ installed into the host directory</div>
+      <div class="arch-layer-desc">Installed by <code>gk init --target &lt;id&gt;</code> — <code>.claude/</code>, <code>.cursor/</code>, <code>.opencode/</code>, <code>.codex/</code> or <code>.pi/</code>. Agents, skills, hooks, rules, schemas, topology templates — in the target host's native format.</div>
+      <div class="arch-flow"><span class="arch-pill">8 agents (every host)</span><span class="arch-arrow">·</span><span class="arch-pill">13 skills (claude) · 11 (others)</span><span class="arch-arrow">·</span><span class="arch-pill">4 hooks</span><span class="arch-arrow">·</span><span class="arch-pill">3 rules</span><span class="arch-arrow">·</span><span class="arch-pill">11 templates</span></div>
     </div>
     <div class="arch-arrow-down">↓</div>
     <div class="arch-layer">
@@ -246,18 +251,18 @@ gk graph inspect diamond                 <span class="cmt"># → see topology co
     <div class="arch-layer">
       <div class="arch-layer-tag">Layer 3 — Host Runtime</div>
       <div class="arch-layer-title">▶️ Workflow Tool &nbsp;/&nbsp; Native Subagents</div>
-      <div class="arch-layer-desc">Two execution paths. Claude Code's Workflow tool runs the compiled <code>.workflow.js</code> via <code>agent()</code>, <code>parallel()</code>, <code>pipeline()</code>. Or <code>/gk:execute</code> dispatches host subagents directly, wave by wave — works in both Claude Code and Cursor.</div>
+      <div class="arch-layer-desc">Two execution paths. <code>/gk:run</code> is Claude Code only — its Workflow tool runs the compiled <code>.workflow.js</code> via <code>agent()</code>, <code>parallel()</code>, <code>pipeline()</code>. <code>/gk:execute</code> works on all five hosts, dispatching through each one's native mechanism: Task-tool subagents (Claude Code, Cursor, OpenCode), spawn-prompt protocol (Codex), or the gk-subagent extension's headless child processes (Pi).</div>
     </div>
   </div>
 </div>
 
 <div class="section">
-  <div class="section-label">Two Runtimes <span class="badge-new">0.2</span></div>
+  <div class="section-label">Execution Paths <span class="badge-new">0.2</span></div>
   <h2>Compile-and-Run, or Dispatch Directly</h2>
-  <p>Same graph, two execution paths. <code>/gk:run</code> is the opaque high-scale path inside Claude Code. <code>/gk:execute</code> is the transparent path — you watch each subagent spawn, debug failures interactively, and skip compilation entirely. Cursor has no Workflow tool, so <code>/gk:execute</code> is its sole path.</p>
+  <p>Same graph, two execution paths. <code>/gk:run</code> is the opaque high-scale path inside Claude Code — the only host with a Workflow tool. <code>/gk:execute</code> is the transparent path on all five targets: you watch each subagent spawn, debug failures interactively, and skip compilation entirely. Each host dispatches through its own native mechanism (see the five-host table below).</p>
   <table class="cmp-table">
     <tr><th></th><th>/gk:run</th><th>/gk:execute</th></tr>
-    <tr><td>Host</td><td>Claude Code only</td><td>Claude Code + Cursor</td></tr>
+    <tr><td>Host</td><td>Claude Code only</td><td>All five targets</td></tr>
     <tr><td>Compile step</td><td>Required (gk compile)</td><td>Not needed — reads waves</td></tr>
     <tr><td>Visibility</td><td>Opaque background job</td><td>Full — every agent visible</td></tr>
     <tr><td>Debugging</td><td>Hard</td><td>Interactive, adaptive</td></tr>
@@ -339,7 +344,7 @@ CBM direct  63.2ms   ·   CBM-via-MCP  525.6ms   ·   <span class="str">gk CLI  
 <div class="section">
   <div class="section-label">Per-Node Binding</div>
   <h2>Model Tiering, Tools, Loops, Constraints</h2>
-  <p>Every node carries its own configuration. The scouter runs at opus for deep analysis. The verifier runs at haiku for cheap checks. Workers get their own tools, refs, and internal loops. Agent names must resolve to a file in <code>claude/agents/</code> — validation fails otherwise.</p>
+  <p>Every node carries its own configuration. The scouter runs at opus for deep analysis. The verifier runs at haiku for cheap checks. Workers get their own tools, refs, and internal loops. Agent names must resolve to a file in the active kit's agents directory — validation fails otherwise.</p>
   <div class="install-grid">
     <div class="code-block">
       <div class="code-header"><div class="code-dot" style="background:#f85149"></div><div class="code-dot" style="background:#d29922"></div><div class="code-dot" style="background:#3fb950"></div> graph.yaml</div>
@@ -393,35 +398,42 @@ CBM direct  63.2ms   ·   CBM-via-MCP  525.6ms   ·   <span class="str">gk CLI  
 </div>
 
 <div class="section">
-  <div class="section-label">Cursor IDE <span class="badge-new">0.2</span></div>
-  <h2>Same CLI, Two Hosts</h2>
-  <p>Pass <code>--target cursor</code> to install the Cursor-flavored kit into <code>.cursor/</code>. The <code>gk</code> CLI is identical across targets — <code>validate</code>, <code>graph new/ascii/svg/waves</code> all work the same. The kit differs. Cursor has no Workflow tool, so <code>/gk:execute</code> is the sole execution path there.</p>
+  <div class="section-label">Five Hosts, One CLI <span class="badge-new">0.2</span></div>
+  <h2>Same CLI, Five Targets</h2>
+  <p>Pass <code>--target &lt;id&gt;</code> to install the host-flavored kit — the same eight agents in each host's native format. The <code>gk</code> CLI is identical across targets — <code>validate</code>, <code>graph new/ascii/svg/waves</code>, viewer, memory all work the same (pure CLI). The kit differs per host.</p>
   <div class="install-grid" style="margin-bottom:0">
     <div class="code-block">
-      <div class="code-header"><div class="code-dot" style="background:#f85149"></div><div class="code-dot" style="background:#d29922"></div><div class="code-dot" style="background:#3fb950"></div> install for Cursor</div>
+      <div class="code-header"><div class="code-dot" style="background:#f85149"></div><div class="code-dot" style="background:#d29922"></div><div class="code-dot" style="background:#3fb950"></div> install for any host</div>
       <div class="code-body"><span class="cmt"># Into an existing project:</span>
 gk init --target cursor
+gk init --target opencode
+gk init --target codex
+gk init --target pi
 
 <span class="cmt"># Or scaffold fresh:</span>
-gk new --dir my-project --target cursor</div>
+gk new --dir my-project --target codex
+
+<span class="cmt"># Map abstract tiers to host models:</span>
+gk models opencode set --map <span class="field">opus</span>=<span class="str">anthropic/claude-opus-4.5</span>
+<span class="cmt"># stored in .graphkit/models.opencode.json</span></div>
     </div>
     <div>
-      <table class="cmp-table" style="margin:0">
-        <tr><th></th><th style="color:var(--sonnet)">Claude Code</th><th style="color:var(--cursor)">Cursor</th></tr>
-        <tr><td>Rules</td><td>.claude/rules/*.md</td><td>.cursor/rules/*.mdc</td></tr>
-        <tr><td>Agents</td><td>.claude/agents/*.md</td><td>.cursor/agents/*.md</td></tr>
-        <tr><td>Skills</td><td>.claude/skills/*/SKILL.md</td><td>.cursor/skills/*/SKILL.md</td></tr>
-        <tr><td>Hooks</td><td>settings.json + *.cjs</td><td>hooks.json + *.cjs</td></tr>
-        <tr><td>Run</td><td>/gk:run + /gk:execute</td><td>/gk:execute only</td></tr>
+      <table class="cmp-table" style="margin:0;font-size:0.74rem">
+        <tr><th></th><th style="color:var(--sonnet)">Claude</th><th style="color:var(--cursor)">Cursor</th><th style="color:var(--opencode)">OpenCode</th><th style="color:var(--codex)">Codex</th><th style="color:var(--pi)">Pi</th></tr>
+        <tr><td>Rules</td><td>.claude/rules/*.md</td><td>.cursor/rules/*.mdc</td><td>AGENTS.md</td><td>AGENTS.md rules section</td><td>AGENTS.md</td></tr>
+        <tr><td>Agents</td><td>.claude/agents/*.md</td><td>.cursor/agents/*.md</td><td>.opencode/agent/*.md</td><td>.codex/agents/*.toml</td><td>.pi/agents/ fragments</td></tr>
+        <tr><td>Skills</td><td>13 · .claude/skills/</td><td>11 · .cursor/skills/</td><td>11 · .opencode/skills/</td><td>11 · .codex/skills/</td><td>11 · .pi/skills/</td></tr>
+        <tr><td>Hooks</td><td>settings.json + *.cjs</td><td>hooks.json + *.cjs</td><td>TS plugin gk.ts</td><td>none — AGENTS.md rules</td><td>extension handlers</td></tr>
+        <tr><td>Execution</td><td>/gk:run + /gk:execute</td><td>/gk:execute</td><td>/gk:execute</td><td>/gk:execute</td><td>/gk:execute</td></tr>
       </table>
     </div>
   </div>
-</div>
+  <p style="margin-top:1rem;max-width:none">Agent formats stay host-native: markdown frontmatter for Claude/Cursor/OpenCode; Codex TOML (<code>name</code>, <code>description</code>, <code>developer_instructions</code>, <code>model</code>, <code>sandbox_mode</code>); Pi prompt fragments. Dispatch paths: Claude Code / Cursor / OpenCode spawn Task-tool subagents wave by wave (parallel within a wave); Codex uses a spawn-prompt protocol against custom TOML agents — the wave barrier is instruction-enforced, not tool-enforced (documented limitation); Pi dispatches via the <code>gk_dispatch_agent</code> tool from its extension, running headless <code>pi -p</code> child processes (requires <code>pi</code> on your PATH). Skills <code>gk-compile</code>/<code>gk-run</code> ship only for Claude Code — 13 there, 11 on every other target.</p>
 
 <div class="section">
-  <div class="section-label">Session Skills — 13 (claude) · 11 (cursor)</div>
+  <div class="section-label">Session Skills — 13 (claude) · 11 (other hosts)</div>
   <h2>The Full Lifecycle</h2>
-  <p>Inside a session, the kit's skills walk the user from blank canvas to verified run — 13 shipped for Claude Code, 11 for Cursor. <code>/gk:execute</code> is new in 0.2 (cyan border).</p>
+  <p>Inside a session, the kit's skills walk the user from blank canvas to verified run — 13 shipped for Claude Code (including <code>gk-compile</code> and <code>gk-run</code>), 11 for every other target. <code>/gk:execute</code> is new in 0.2 (cyan border).</p>
   <div class="lifecycle">
     <div class="lc-step"><div class="name">/gk-init-graph</div><div class="desc">Generate graph.yaml</div></div>
     <div class="lc-step"><div class="name">/gk-brainstorm</div><div class="desc">Refine nodes + tiers</div></div>
@@ -466,7 +478,7 @@ gk new --dir my-project --target cursor</div>
     <tr><td>M5 — recall &gt; grep</td><td>Recall@10 ≥ 0.95, ≥10× vs grep</td><td class="caveat">PASS · CBM 4/5 vs grep 0/5</td></tr>
   </table>
   <div class="stats-banner">
-    <div class="stat-cell"><div class="stat-cell-num">375</div><div class="stat-cell-label">Tests Pass</div></div>
+    <div class="stat-cell"><div class="stat-cell-num">429</div><div class="stat-cell-label">Tests Pass</div></div>
     <div class="stat-cell"><div class="stat-cell-num">0</div><div class="stat-cell-label">Failures</div></div>
     <div class="stat-cell"><div class="stat-cell-num">1210</div><div class="stat-cell-label">Expect Calls</div></div>
     <div class="stat-cell"><div class="stat-cell-num">53</div><div class="stat-cell-label">Test Files</div></div>
@@ -509,7 +521,7 @@ gk new --dir my-project --target cursor</div>
     <p style="font-size:0.82rem;color:var(--text-dim)">Executor self-reviews caught 3 bugs pre-review (inverted drag endpoints, dropped Esc-clears-selection, dual-stack test bind). The fable gate still found <strong style="color:var(--text)">1 critical the tests masked</strong>: drag re-routing compounded mousemove deltas — one 40px move vs two 20px moves diverged, ~30× overshoot over a 60-event drag — because every test simulated exactly one mousemove. The reviewer runtime-reproduced it, the sonnet fixer shipped incremental deltas plus a two-moves-equal-one-move regression test, and 2 majors (stale <code>.route</code> ribbons, Shift+click popping the drawer) fell the same way. Acceptance re-proved every plan checkbox independently, including a live key-gated smoke on the pinned port.</p>
   </div>
   <div class="stats-banner">
-    <div class="stat-cell"><div class="stat-cell-num">375</div><div class="stat-cell-label">Tests Pass</div></div>
+    <div class="stat-cell"><div class="stat-cell-num">429</div><div class="stat-cell-label">Tests Pass</div></div>
     <div class="stat-cell"><div class="stat-cell-num">0</div><div class="stat-cell-label">Failures</div></div>
     <div class="stat-cell"><div class="stat-cell-num">+22</div><div class="stat-cell-label">New Tests</div></div>
     <div class="stat-cell"><div class="stat-cell-num">5/5</div><div class="stat-cell-label">Bundle Parity</div></div>
@@ -525,11 +537,11 @@ gk new --dir my-project --target cursor</div>
 
   <p><strong style="color:var(--text)">Budgets are the safety story.</strong> Every production postmortem independently converges on caps — hard turn/token/¤ ceilings, fail-closed defaults, checkpointed edges. gk's <code>limits</code>, <code>constraints</code>, and loop <code>max_rounds</code> are that blast-radius control (<a href="https://edgelesslab.com/blog/swarm-tried-to-bankrupt-itself/" style="color:var(--sonnet)">Edgeless Lab — the $50-night swarm</a>; <a href="https://turion.ai/blog/multi-agent-orchestration-infrastructure-production/" style="color:var(--sonnet)">TURION — "hard budgets, always"</a>). What you leave runnable will eventually run; gk makes the bound explicit and auditable.</p>
 
-  <p><strong style="color:var(--text)">Per-node binding kills the state-schema tax.</strong> The LangGraph scorecard's cost center is designing a typed state schema — 2–4 weeks per modest graph (<a href="https://www.orange-its.ch/en/insights/langgraph-review" style="color:var(--sonnet)">Orange ITS review</a>), "most of the time goes to state schema" (<a href="https://www.kalviumlabs.ai/blog/langgraph-vs-langchain-production/" style="color:var(--sonnet)">Kalvium</a>). gk binds <code>model</code>, <code>tools</code>, <code>skills</code>, <code>refs</code>, <code>loop</code>, <code>constraints</code> per node; there is no shared schema to hand-write. Agent names must resolve to a real file in <code>claude/agents/</code> — validation fails otherwise.</p>
+  <p><strong style="color:var(--text)">Per-node binding kills the state-schema tax.</strong> The LangGraph scorecard's cost center is designing a typed state schema — 2–4 weeks per modest graph (<a href="https://www.orange-its.ch/en/insights/langgraph-review" style="color:var(--sonnet)">Orange ITS review</a>), "most of the time goes to state schema" (<a href="https://www.kalviumlabs.ai/blog/langgraph-vs-langchain-production/" style="color:var(--sonnet)">Kalvium</a>). gk binds <code>model</code>, <code>tools</code>, <code>skills</code>, <code>refs</code>, <code>loop</code>, <code>constraints</code> per node; there is no shared schema to hand-write. Agent names must resolve to a real file in the active kit's agents directory — validation fails otherwise.</p>
 
   <p><strong style="color:var(--text)">Verification is the field's #1 unmet demand — a partial answer today, not a claim it's solved.</strong> Users want a separate verifier; a model must not certify its own work (<a href="https://github.com/langchain-ai/langgraph/issues/7209" style="color:var(--sonnet)">langgraph #7209</a>; <a href="https://github.com/snarktank/antfarm" style="color:var(--sonnet)">antfarm README</a>). gk's answer is two existing primitives — the <code>adversarial-verification</code> topology (produce → refute → adjudicate) and the evidence gate's <code>required_keys</code> (a node only passes if it produced what its graph declared). That is a partial answer: there is no first-class recompute/verify-gate primitive, and no runtime telemetry. Verification is a direction gk has started, not a solved claim.</p>
 
-  <p><strong style="color:var(--text)">Host-native = subscription-safe.</strong> gk rides the host's supported first-party harness (Claude Code Workflow / native subagents, or Cursor) instead of a third-party orchestration layer — the exact harnesses Anthropic keeps first-class in the subscription, unlike third-party bridges now billed extra (<a href="https://www.theverge.com/ai-artificial-intelligence/907074/anthropic-openclaw-claude-subscription-ban" style="color:var(--sonnet)">The Verge</a>; <a href="https://techcrunch.com/2026/04/04/anthropic-says-claude-code-subscribers-will-need-to-pay-extra-for-openclaw-support/" style="color:var(--sonnet)">TechCrunch</a>). No runtime tax: gk ships no Python/TS runtime, no dependency graph.</p>
+  <p><strong style="color:var(--text)">Host-native = subscription-safe.</strong> gk rides each host's supported first-party harness — Claude Code Workflow / native subagents, Cursor, OpenCode, Codex, or Pi — instead of a third-party orchestration layer — the exact harnesses Anthropic keeps first-class in the subscription, unlike third-party bridges now billed extra (<a href="https://www.theverge.com/ai-artificial-intelligence/907074/anthropic-openclaw-claude-subscription-ban" style="color:var(--sonnet)">The Verge</a>; <a href="https://techcrunch.com/2026/04/04/anthropic-says-claude-code-subscribers-will-need-to-pay-extra-for-openclaw-support/" style="color:var(--sonnet)">TechCrunch</a>). No runtime tax: gk ships no Python/TS runtime, no dependency graph.</p>
 
   <h2 style="margin-top:1.5rem">Roadmap — Next Up</h2>
   <p>Three ranked candidates, each grounded in the competitive scan. Deferred from this run by design — half-built is worse than none.</p>
@@ -553,8 +565,8 @@ gk new --dir my-project --target cursor</div>
 </div>
 
 <div class="footer">
-  GraphKit 0.2 · graph engineering kit for Claude Code &amp; Cursor<br>
-  <span style="color:var(--memory)">8 agents</span> · <span style="color:var(--sonnet)">13 skills (claude) · 11 (cursor)</span> · <span style="color:var(--bridge)">11 topologies</span> · <span style="color:var(--fable)">2 runtimes</span> · <span style="color:var(--haiku)">375 tests</span><br>
+  GraphKit 0.2 · graph engineering kit for Claude Code, Cursor, OpenCode, Codex &amp; Pi<br>
+  <span style="color:var(--memory)">8 agents</span> · <span style="color:var(--sonnet)">13 skills (claude) · 11 (others)</span> · <span style="color:var(--bridge)">11 topologies</span> · <span style="color:var(--fable)">5 targets</span> · <span style="color:var(--haiku)">429 tests</span><br>
   gk never invokes a model · CBM is the graph authority · evidence-based gates
 </div>
 
