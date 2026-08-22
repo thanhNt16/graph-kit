@@ -1,14 +1,9 @@
+import { TARGET_MODEL_DEFAULTS, resolveModel } from "../targets/model-tiers.js";
+
 export type Tier = "opus" | "sonnet" | "haiku" | "fable";
 
-export const CURSOR_MODEL_DEFAULTS: Record<Tier, string> = {
-  opus: "Grok 4.5",
-  sonnet: "Composer 2.5",
-  haiku: "Auto",
-  fable: "Auto",
-};
+export const CURSOR_MODEL_DEFAULTS: Record<Tier, string> = TARGET_MODEL_DEFAULTS.cursor;
 
 export function resolveCursorModel(model: string | undefined, overrides: Record<string, string> = {}): string {
-  if (!model) return "Auto";
-  if (overrides[model]) return overrides[model];
-  return CURSOR_MODEL_DEFAULTS[model as Tier] ?? "Auto";
+  return resolveModel("cursor", model, overrides);
 }
