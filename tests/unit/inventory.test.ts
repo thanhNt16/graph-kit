@@ -61,6 +61,38 @@ describe("gk inventory", () => {
     }
   });
 
+  test("opencode target reads descriptor dirs (agent/, skill/, command/, plugins/)", () => {
+    const inv = runInventory({ cwd: tmp, target: "opencode", userDir: join(tmp, "user") });
+    const byName = new Map(inv.agents.map((a) => [a.name, a.model]));
+    expect(byName.get("oc-agent")).toBe("sonnet");
+    expect(inv.skills).toContain("oc-skill");
+    expect(inv.commands).toContain("gk-execute.md");
+    expect(inv.hooks).toContain("gk.ts");
+    expect(inv.tools).toContain("Task");
+  });
+
+  test("codex target parses TOML agents and discovers skills in sibling .agents/skills", () => {
+    const inv = runInventory({ cwd: tmp, target: "codex", userDir: join(tmp, "user") });
+    const byName = new Map(inv.agents.map((a) => [a.name, a.model]));
+    expect(byName.get("reviewer")).toBe("gpt-5.3-codex-spark");
+    expect(inv.skills).toContain("codex-skill");
+    // Instruction-based hooks and prompt-driven commands: no artifacts to list.
+    expect(inv.hooks).toEqual([]);
+  });
+
+  test("pi target lists fragments by name, prompts as commands, extensions as hooks", () => {
+    const inv = runInventory({ cwd: tmp, target: "pi", userDir: join(tmp, "user") });
+    expect(inv.agents.map((a) => a.name)).toContain("pi-fragment");
+    expect(inv.skills).toContain("pi-skill");
+    expect(inv.commands).toContain("gk.md");
+    expect(inv.hooks).toContain("gk-subagent.ts");
+    expect(inv.tools).toContain("gk_dispatch_agent");
+  });
+
+  test("invalid target throws with the valid target list", () => {
+    expect(() => runInventory({ cwd: tmp, target: "nope" })).toThrow(/claude.*cursor.*opencode.*codex.*pi/);
+  });
+
   test("mcp server/tool names discovered from supported config; secrets excluded", () => {
     const inv = runInventory({ cwd: tmp, target: "claude", userDir: join(tmp, "user") });
     const srv = inv.mcpServers.find((s) => s.name === "codebase-memory");

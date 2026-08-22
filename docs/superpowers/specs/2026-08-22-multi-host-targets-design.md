@@ -52,7 +52,7 @@ interface TargetDescriptor {
 | Agents | `.opencode/agent/*.md` | 8 agents, frontmatter (`description`, `mode`, `model`, `tools`) |
 | Skills | `.opencode/skill/*/SKILL.md` | Same 13 gk skills, adjusted paths |
 | Commands | `.opencode/command/gk-*.md` | Slash commands wrapping skills |
-| Plugin | `.opencode/plugin/gk.ts` | Ports the 4 hooks: evidence-persist, graph-state-guard, lease-enforce, memory-persist |
+| Plugin | `.opencode/plugins/gk.ts` | Ports the 4 hooks: evidence-persist, graph-state-guard, lease-enforce, memory-persist |
 | Rules | `AGENTS.md` sections appended by init | graph-authority, agent-binding, topology-routing |
 
 **Execution:** `/gk:execute` reads `gk graph waves --json`, dispatches each wave's nodes via the Task tool with kit agents as subagents, wave barrier between waves.

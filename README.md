@@ -1,12 +1,12 @@
 # GraphKit
 
-GraphKit is a graph engineering kit for AI coding agents (Claude Code and Cursor). It installs agents, skills, hooks, and rules that let you define, validate, compile, and execute graph-structured agent workflows.
+GraphKit is a graph engineering kit for AI coding agents (Claude Code, Cursor, OpenCode, Codex CLI, and pi). It installs agents, skills, hooks, and rules that let you define, validate, compile, and execute graph-structured agent workflows.
 
 ## What it is
 
-- A **kit template** per target: `claude/` (Claude Code) and `cursor/` (Cursor) — each with 8 agents, skills, 4 hooks, and rules in the target's native format
+- A **kit template** per target — `claude/`, `cursor/`, `opencode/`, `codex/`, `pi/` — each with 8 agents, skills, hooks (or their host-native equivalent), and rules in the target's native format
 - A **compiler** (`gk`) that turns a `graph.yaml` into a runnable workflow
-- **Two runtimes**: Claude Code's Workflow tool (`/gk:run`) or direct subagent dispatch (`/gk:execute`, works in both hosts)
+- **Two runtimes**: Claude Code's Workflow tool (`/gk:run`) or direct subagent dispatch (`/gk:execute`, works on every target)
 
 gk never invokes a model, spawns an agent, or reads an API key. It validates and compiles only.
 
@@ -84,26 +84,31 @@ gk graph ascii graph.yaml                 # instant in-terminal preview
 
 Then in a Claude Code session: `/gk:visualize` to see it, `/gk:execute` to run it wave by wave.
 
-## Cursor IDE support
+## Host support
 
-GraphKit also targets Cursor. Pass `--target cursor` to install the Cursor-flavored kit into `.cursor/` instead of `.claude/`:
+GraphKit targets five hosts. Pass `--target <id>` to install the host-flavored kit instead of `.claude/`:
 
 ```bash
-gk init --target cursor      # install into an existing project
-gk new --dir my-project --target cursor   # scaffold fresh
+gk init --target cursor      # also: opencode | codex | pi
+gk new --dir my-project --target opencode   # scaffold fresh
 ```
 
 The `gk` CLI is identical across targets — `validate`, `graph new/ascii/svg/waves` all work the same. The kit differs:
 
-| | Claude Code (`--target claude`) | Cursor (`--target cursor`) |
-|---|---|---|
-| Rules | `.claude/rules/*.md` | `.cursor/rules/*.mdc` (Cursor frontmatter) |
-| Agents | `.claude/agents/*.md` | `.cursor/agents/*.md` (+ `readonly`, `is_background`) |
-| Skills | `.claude/skills/*/SKILL.md` | `.cursor/skills/*/SKILL.md` |
-| Hooks | `.claude/settings.json` + `hooks/*.cjs` | `.cursor/hooks.json` (lowercase events) + `hooks/*.cjs` |
-| Execution | `/gk:run` (Workflow tool) + `/gk:execute` | **`/gk:execute` only** (Cursor has no Workflow tool) |
+| | Claude Code (`claude`) | Cursor (`cursor`) | OpenCode (`opencode`) | Codex CLI (`codex`) | pi (`pi`) |
+|---|---|---|---|---|---|
+| Rules | `.claude/rules/*.md` | `.cursor/rules/*.mdc` (Cursor frontmatter) | `AGENTS.md` sections appended by init | `AGENTS.md` section (+ spawn protocol) | `.pi/instructions.md` |
+| Agents | `.claude/agents/*.md` | `.cursor/agents/*.md` (+ `readonly`, `is_background`) | `.opencode/agent/*.md` (frontmatter) | `.codex/agents/*.toml` | `.pi/agents/*.md` (prompt fragments) |
+| Skills | `.claude/skills/*/SKILL.md` | `.cursor/skills/*/SKILL.md` | `.opencode/skill/*/SKILL.md` | `.agents/skills/*/SKILL.md` (sibling dir, read natively by Codex) | `.pi/skills/*/SKILL.md` |
+| Hooks | `.claude/settings.json` + `hooks/*.cjs` | `.cursor/hooks.json` (lowercase events) + `hooks/*.cjs` | TS plugin at `.opencode/plugins/gk.ts` | none — guards folded into `AGENTS.md` + skill checklists | TS extension `.pi/extensions/gk-subagent.ts` |
+| Execution | `/gk:run` (Workflow tool) + `/gk:execute` | **`/gk:execute` only** (Task tool) | `/gk:execute` (Task-tool dispatch, wave barrier between waves) | `/gk:execute` (spawn-prompt driven; **wave barrier is instruction-enforced, not tool-enforced**) | `/skill:gk-execute` via the `gk_dispatch_agent` extension (**requires `pi` on PATH**) |
 
-Cursor has no Workflow tool, so the compile→run path is omitted — `/gk:execute` is the sole execution path. It reads `gk graph waves --json` and dispatches Cursor subagents via the Task tool, wave by wave (parallel within a wave).
+Cursor has no Workflow tool, so the compile→run path is omitted there too — `/gk:execute` is the sole execution path on every non-Claude target. It reads `gk graph waves --json` and dispatches subagents wave by wave (parallel within a wave). Two host-specific caveats:
+
+- **Codex** spawns agents via prompt instructions rather than a subagent tool. The wave barrier ("wait for all results before continuing") is enforced by instruction, not by the host — a weaker guarantee than Task-tool hosts.
+- **pi** has no built-in subagents or hooks; both are provided by the installed `gk_dispatch_agent` extension, which shells out to `pi -p`. The `pi` binary must be on your `PATH`.
+
+`gk inventory --target <id>` reports installed agents/skills/hooks/commands for any target — names only, no credentials/tokens.
 
 ## Define a graph
 
@@ -150,7 +155,7 @@ Inside a Claude Code or Cursor session (after `gk init`):
 - `/gk:validate` — gate-check before compile
 - `/gk:compile` — graph.yaml → .workflow.js (Claude Code only)
 - `/gk:run` — execute via Claude Code Workflows (Claude Code only)
-- `/gk:execute` — execute by dispatching subagents directly (both hosts; **sole path in Cursor**). `--worktree` mode: write nodes run as worktree-isolated background agents (Claude Code's `/batch` technique, graph as the decomposition — parallel nodes can't collide, merge is the wave barrier)
+- `/gk:execute` — execute by dispatching subagents directly (all targets; **sole path outside Claude Code**). `--worktree` mode: write nodes run as worktree-isolated background agents (Claude Code's `/batch` technique, graph as the decomposition — parallel nodes can't collide, merge is the wave barrier)
 - `/gk:eval` — score evidence / memory against rubrics
 - `/gk:recall` — query the codebase-memory graph
 - `/gk:evidence` — report what the graph produced
@@ -201,4 +206,4 @@ nodes:
 
 ## Boundary
 
-gk is the compiler, not a runtime. It never invokes a model, spawns an agent, or reads an API key. Execution is delegated to the host: Claude Code's Workflow tool (`/gk:run`) or native subagent dispatch (`/gk:execute`, both hosts).
+gk is the compiler, not a runtime. It never invokes a model, spawns an agent, or reads an API key. Execution is delegated to the host: Claude Code's Workflow tool (`/gk:run`) or native subagent dispatch (`/gk:execute`, all targets).

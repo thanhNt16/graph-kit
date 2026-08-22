@@ -1,0 +1,9 @@
+name = "reviewer"
+description = "Codex reviewer"
+model = "gpt-5.3-codex-spark"
+sandbox_mode = "read-only"
+
+developer_instructions = """
+
+Review the diff.
+"""

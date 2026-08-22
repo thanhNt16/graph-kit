@@ -3,8 +3,9 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import type { CAC } from "cac";
 import YAML from "yaml";
+import { getTarget, isValidTarget, listTargets } from "../../targets/index.js";
+import type { TargetId } from "../../targets/types.js";
 import { fail, ok } from "../output.js";
-import type { KitTarget } from "./kit.js";
 
 export interface InventoryAgent {
   name: string;
@@ -15,10 +16,12 @@ export interface McpServerInventory {
   tools: string[];
 }
 export interface InventoryResult {
-  target: KitTarget;
+  target: TargetId;
   tools: string[];
   agents: InventoryAgent[];
   skills: string[];
+  hooks: string[];
+  commands: string[];
   mcpServers: McpServerInventory[];
   warnings: string[];
 }
@@ -62,10 +65,40 @@ const BUILTIN_TOOLS_CURSOR = [
   "ExitPlanMode",
   "Skill",
 ];
+const BUILTIN_TOOLS_OPENCODE = [
+  "Read",
+  "Write",
+  "Edit",
+  "Bash",
+  "Glob",
+  "Grep",
+  "WebFetch",
+  "WebSearch",
+  "Task", // subagent dispatch
+  "TodoWrite",
+  "Skill",
+];
+// Codex has no subagent tool — waves are driven by spawn-prompt instructions.
+const BUILTIN_TOOLS_CODEX = ["Read", "Write", "Edit", "Bash", "Glob", "Grep", "WebFetch", "WebSearch"];
+// pi registers gk_dispatch_agent via .pi/extensions/gk-subagent.ts.
+const BUILTIN_TOOLS_PI = [
+  "Read",
+  "Write",
+  "Edit",
+  "Bash",
+  "Glob",
+  "Grep",
+  "WebFetch",
+  "WebSearch",
+  "gk_dispatch_agent",
+];
 
-const TOOLS_BY_TARGET: Record<KitTarget, string[]> = {
+const TOOLS_BY_TARGET: Record<TargetId, string[]> = {
   claude: BUILTIN_TOOLS_CLAUDE,
   cursor: BUILTIN_TOOLS_CURSOR,
+  opencode: BUILTIN_TOOLS_OPENCODE,
+  codex: BUILTIN_TOOLS_CODEX,
+  pi: BUILTIN_TOOLS_PI,
 };
 
 // Only these keys are ever read from MCP config. Everything else is secret/excluded.
@@ -89,11 +122,28 @@ function parseFrontmatterModel(content: string): { model?: string; name?: string
   };
 }
 
-function collectAgents(dir: string, warnings: string[]): Map<string, InventoryAgent> {
+// Minimal TOML scalar extraction — names only, never parses developer_instructions bodies.
+function parseTomlAgent(content: string): { model?: string; name?: string } {
+  const nameMatch = content.match(/^name\s*=\s*"([^"]+)"/m);
+  const modelMatch = content.match(/^model\s*=\s*"([^"]+)"/m);
+  return {
+    name: nameMatch?.[1]?.trim() || undefined,
+    model: modelMatch?.[1]?.trim() || undefined,
+  };
+}
+
+function collectAgents(dir: string, format: string, warnings: string[]): Map<string, InventoryAgent> {
   const out = new Map<string, InventoryAgent>();
   if (!existsSync(dir)) return out;
+  const ext = format === "toml" ? ".toml" : ".md";
   for (const entry of readdirSync(dir)) {
-    if (!entry.endsWith(".md")) continue;
+    if (!entry.endsWith(ext)) continue;
+    const base = entry.replace(/\.(md|toml)$/, "");
+    if (format === "prompt-fragment") {
+      // pi fragments have no frontmatter — basename is the agent name.
+      out.set(base, { name: base });
+      continue;
+    }
     const file = join(dir, entry);
     let content: string;
     try {
@@ -102,13 +152,12 @@ function collectAgents(dir: string, warnings: string[]): Map<string, InventoryAg
       warnings.push(`Failed to read agent "${entry}": ${String(e)}`);
       continue;
     }
-    const { model, name } = parseFrontmatterModel(content);
-    if (!name) {
+    const parsed = format === "toml" ? parseTomlAgent(content) : parseFrontmatterModel(content);
+    if (!parsed.name) {
       warnings.push(`Skipped agent "${entry}": missing or malformed frontmatter`);
       continue;
     }
-    const base = entry.replace(/\.md$/, "");
-    out.set(base, { name: base, model });
+    out.set(base, { name: base, model: parsed.model });
   }
   return out;
 }
@@ -123,6 +172,24 @@ function collectSkills(dir: string): string[] {
     if (existsSync(join(sub, "SKILL.md"))) out.push(dirent.name);
   }
   return out.sort();
+}
+
+// Names of hook artifacts on disk for the target's hook kind; instruction-based hosts report none.
+function collectHooks(installDir: string, hooksKind: string): string[] {
+  let dir: string | null = null;
+  if (hooksKind === "plugin-ts") dir = join(installDir, "plugins");
+  else if (hooksKind === "extension-ts") dir = join(installDir, "extensions");
+  else if (hooksKind === "settings-json" || hooksKind === "hooks-json") dir = join(installDir, "hooks");
+  if (!dir || !existsSync(dir)) return [];
+  return readdirSync(dir).sort();
+}
+
+// Names of command artifacts per kind; slash-skill hosts surface commands via their skills dir instead.
+function collectCommands(installDir: string, commandsKind: string): string[] {
+  if (commandsKind === "slash-skill") return [];
+  const dir = commandsKind === "command-md" ? join(installDir, "command") : join(installDir, "prompts");
+  if (!existsSync(dir)) return [];
+  return readdirSync(dir).sort();
 }
 
 function collectMcpFromJson(file: string, warnings: string[]): McpServerInventory[] {
@@ -159,37 +226,61 @@ function collectMcpFromJson(file: string, warnings: string[]): McpServerInventor
   return out;
 }
 
-export function runInventory(opts: { cwd?: string; target?: KitTarget; userDir?: string }): InventoryResult {
-  const target: KitTarget = opts.target === "cursor" ? "cursor" : "claude";
+export function runInventory(opts: { cwd?: string; target?: string; userDir?: string }): InventoryResult {
+  const requested = opts.target ?? "claude";
+  if (!isValidTarget(requested)) {
+    const valid = listTargets()
+      .map((t) => t.id)
+      .join(", ");
+    throw new Error(`Invalid target: ${requested}. Must be one of: ${valid}`);
+  }
+  const target = requested as TargetId;
+  const desc = getTarget(target);
   const cwd = opts.cwd ?? process.cwd();
   const warnings: string[] = [];
 
-  const kitDir = target === "cursor" ? ".cursor" : ".claude";
+  const installDir = (base: string) => join(base, desc.installDir);
   const home = opts.userDir ?? homedir();
 
   // Project agents/skills, then user-global; project overrides user by name.
-  const projectAgents = collectAgents(join(cwd, kitDir, "agents"), warnings);
-  const userAgents = collectAgents(join(home, kitDir, "agents"), warnings);
+  const projectAgents = collectAgents(join(installDir(cwd), desc.agents.dir), desc.agents.format, warnings);
+  const userAgents = collectAgents(join(installDir(home), desc.agents.dir), desc.agents.format, warnings);
   const agents = new Map<string, InventoryAgent>();
   for (const [k, v] of userAgents) agents.set(k, v);
   for (const [k, v] of projectAgents) agents.set(k, v); // project wins
 
-  const projectSkills = collectSkills(join(cwd, kitDir, "skills"));
-  const userSkills = collectSkills(join(home, kitDir, "skills"));
+  // skills.dir may point outside installDir (codex installs into sibling .agents/skills).
+  const projectSkills = collectSkills(join(cwd, desc.installDir, desc.skills.dir));
+  const userSkills = collectSkills(join(home, desc.installDir, desc.skills.dir));
   const skills = [...new Set([...userSkills, ...projectSkills])].sort();
 
-  // MCP discovery: project .mcp.json (Claude) / .cursor/mcp.json (Cursor), then user-global.
+  const hooks = [
+    ...new Set([...collectHooks(installDir(home), desc.hooksKind), ...collectHooks(installDir(cwd), desc.hooksKind)]),
+  ].sort();
+  const commands = [
+    ...new Set([
+      ...collectCommands(installDir(home), desc.commandsKind),
+      ...collectCommands(installDir(cwd), desc.commandsKind),
+    ]),
+  ].sort();
+
+  // MCP discovery is defined per-host: project .mcp.json / .cursor/mcp.json, then user-global.
+  // Other hosts' MCP config formats are not inventoried yet.
   const mcpServers: McpServerInventory[] = [];
-  const projectMcp = target === "cursor" ? join(cwd, ".cursor", "mcp.json") : join(cwd, ".mcp.json");
-  const userMcp = target === "cursor" ? join(home, ".cursor", "mcp.json") : join(home, ".claude.json");
-  mcpServers.push(...collectMcpFromJson(projectMcp, warnings));
-  mcpServers.push(...collectMcpFromJson(userMcp, warnings));
+  if (target === "claude" || target === "cursor") {
+    const projectMcp = target === "cursor" ? join(cwd, ".cursor", "mcp.json") : join(cwd, ".mcp.json");
+    const userMcp = target === "cursor" ? join(home, ".cursor", "mcp.json") : join(home, ".claude.json");
+    mcpServers.push(...collectMcpFromJson(projectMcp, warnings));
+    mcpServers.push(...collectMcpFromJson(userMcp, warnings));
+  }
 
   return {
     target,
     tools: TOOLS_BY_TARGET[target],
     agents: [...agents.values()].sort((a, b) => a.name.localeCompare(b.name)),
     skills,
+    hooks,
+    commands,
     mcpServers,
     warnings,
   };
@@ -198,11 +289,22 @@ export function runInventory(opts: { cwd?: string; target?: KitTarget; userDir?:
 export function registerInventoryCommands(cli: CAC) {
   cli
     .command("inventory", "Inventory installed agents, skills, tools, and MCP servers")
-    .option("--target <target>", "Kit target: claude or cursor (default: claude)", { default: "claude" })
+    .option(
+      "--target <target>",
+      `Kit target: ${listTargets()
+        .map((t) => t.id)
+        .join(" | ")} (default: claude)`,
+      {
+        default: "claude",
+      },
+    )
     .option("--json", "JSON output")
     .action((opts) => {
-      if (!["claude", "cursor"].includes(opts.target)) {
-        console.log(JSON.stringify(fail("BAD_TARGET", `Invalid target: ${opts.target}. Must be "claude" or "cursor"`)));
+      if (typeof opts.target !== "string" || !isValidTarget(opts.target)) {
+        const valid = listTargets()
+          .map((t) => t.id)
+          .join(", ");
+        console.log(JSON.stringify(fail("BAD_TARGET", `Invalid target: ${opts.target}. Must be one of: ${valid}`)));
         process.exit(1);
         return;
       }

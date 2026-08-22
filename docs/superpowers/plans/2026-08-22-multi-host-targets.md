@@ -30,7 +30,7 @@ src/targets/
 kits/
   claude/             # moved from ./claude (git mv)
   cursor/             # moved from ./cursor (git mv)
-  opencode/           # new: agent/, skill/, command/, plugin/, rules sections
+  opencode/           # new: agent/, skill/, command/, plugins/, rules sections
   codex/              # new: agents/*.toml, skills -> .agents/skills at install, AGENTS.md section
   pi/                 # new: extensions/gk-subagent.ts, agents/*.md, skills/, prompts/gk.md
 src/cli/commands/kit.ts       # modify: descriptor-driven init/new
@@ -434,7 +434,7 @@ describe("init per target", () => {
     initTmp("opencode");
     expect(existsSync(join(TMP, ".opencode", "agent"))).toBe(true);
     expect(existsSync(join(TMP, ".opencode", "skill"))).toBe(true);
-    expect(existsSync(join(TMP, ".opencode", "plugin", "gk.ts"))).toBe(true);
+    expect(existsSync(join(TMP, ".opencode", "plugins", "gk.ts"))).toBe(true);
     expect(existsSync(join(TMP, ".opencode", "command"))).toBe(true);
   });
 
@@ -558,7 +558,7 @@ git add -A && git commit -m "refactor(kit): descriptor-driven gk init/new; kit d
 - Create: `kits/opencode/agent/{8 agents}.md`
 - Create: `kits/opencode/skill/<13 skills>/SKILL.md`
 - Create: `kits/opencode/command/gk-{visualize,init-graph,template,brainstorm,validate,eval,recall,evidence,status,execute}.md`
-- Create: `kits/opencode/plugin/gk.ts`
+- Create: `kits/opencode/plugins/gk.ts`
 - Create: `kits/opencode/metadata.json`
 - Test: extend `tests/integration/init-targets.test.ts` (remove skip guards for opencode)
 
@@ -607,7 +607,7 @@ Repeat for the 10 skills listed above (skip eval-only helpers if claude kit does
 
 - [ ] **Step 4: Plugin porting the 4 hooks**
 
-Create `kits/opencode/plugin/gk.ts` implementing OpenCode's plugin hook API. Port semantics from `kits/claude/hooks/*.cjs`:
+Create `kits/opencode/plugins/gk.ts` implementing OpenCode's plugin hook API. Port semantics from `kits/claude/hooks/*.cjs`:
 
 - `evidence-persist` → on tool result matching evidence write path, persist to `.graphkit/evidence/`
 - `graph-state-guard` → block writes to `.graphkit/state/*` outside the executing session
