@@ -1,5 +1,26 @@
 import { z } from "zod";
 
+const MemoryDate = z.string().datetime({ offset: true });
+
+export const MemoryFileSchema = z
+  .object({
+    id: z.string().trim().min(1),
+    type: z.string().trim().min(1),
+    source: z.string().optional(),
+    created_at: MemoryDate.optional(),
+    valid_from: MemoryDate.optional(),
+    valid_to: MemoryDate.nullable().optional(),
+    salience: z.number().optional(),
+    expired: z.boolean().optional(),
+    tags: z.array(z.string()).optional(),
+    superseded_by: z.string().trim().min(1).nullable().optional(),
+    generated: z.object({ by: z.string().min(1), at: MemoryDate }).optional(),
+    recorded_at: MemoryDate.optional(),
+    status: z.enum(["draft", "stable", "deprecated"]).optional(),
+    sources: z.array(z.object({ resource: z.string().min(1) })).optional(),
+  })
+  .passthrough();
+
 export const MemoryConfig = z
   .object({
     project: z.string().default("graph-kit-memory"),

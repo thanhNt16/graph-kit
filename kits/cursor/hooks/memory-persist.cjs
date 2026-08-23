@@ -1,10 +1,22 @@
 #!/usr/bin/env node
 // PostToolUse: distill evidence writes into OKF memory files under .graphkit/memory/.
-// Recall reindexes on demand: this hook sets .graphkit/.memory-dirty; /gk:recall runs `gk memory index`. Fail-open.
-// ponytail: Cursor payload fields assumed: tool_name, tool_input.file_path (same as Claude Code).
+// Identity = basename + sha1(source + body)[:8]; same id → idempotent skip;
+// changed same-source content → predecessor superseded (valid_to/superseded_by/
+// status: deprecated, body retained), stable successor emitted. Additive fields
+// generated/recorded_at/status/sources. Fail-open. No .memory-dirty.
 const fs = require("node:fs");
 const path = require("node:path");
 const crypto = require("node:crypto");
+
+function captureId(src, source, body) {
+  const hash = crypto.createHash("sha1").update(source + body).digest("hex").slice(0, 8);
+  return `${src}-${hash}`;
+}
+
+function readFrontmatter(raw) {
+  const m = raw.match(/^---\n([\s\S]*?)\n---/);
+  return { m, fm: m ? require("yaml").parse(m[1]) : {} };
+}
 
 function main() {
   let input = "";
@@ -12,17 +24,18 @@ function main() {
   try {
     const event = JSON.parse(input);
     if (event.tool_name !== "Write") process.exit(0);
-    const file = event.tool_input?.file_path ?? event.tool_input?.path ?? "";
+    const file = event.tool_input?.file_path ?? "";
     if (!file.includes(".graphkit/evidence/")) process.exit(0);
 
     const src = path.basename(file, ".md");
-    const id = `${src}-${crypto.createHash("sha1").update(file).digest("hex").slice(0, 8)}`;
+    const body = fs.existsSync(file) ? fs.readFileSync(file, "utf-8") : "";
+    const id = captureId(src, file, body);
     const memDir = ".graphkit/memory";
     const memFile = path.join(memDir, `${id}.md`);
     fs.mkdirSync(memDir, { recursive: true });
+    if (fs.existsSync(memFile)) process.exit(0); // identical capture: no write/index row
 
-    const body = fs.existsSync(file) ? fs.readFileSync(file, "utf-8") : "";
-    const now = new Date().toISOString();
+    const now = new Date().toISOString(); // UTC ISO-8601 with offset
     const frontmatter = [
       "---",
       `id: ${id}`,
@@ -34,6 +47,13 @@ function main() {
       "salience: 0.5",
       "expired: false",
       "tags: []",
+      "generated:",
+      "  by: process:memory-persist",
+      `  at: ${now}`,
+      `recorded_at: ${now}`,
+      "status: stable",
+      "sources:",
+      `  - resource: ${file}`,
       "---",
       "",
       body,
@@ -43,8 +63,18 @@ function main() {
 
     const indexFile = path.join(memDir, ".index");
     fs.appendFileSync(indexFile, JSON.stringify({ id, source: file, file: memFile, at: now }) + "\n");
-    // Flag memory as stale so /gk:recall reindexes before its next query.
-    try { fs.writeFileSync(path.join(".graphkit", ".memory-dirty"), String(Date.now())); } catch {}
+
+    // Supersede any prior capture of the same evidence source with different content.
+    for (const prev of fs.readdirSync(memDir).filter((f) => f.endsWith(".md") && f !== `${id}.md`)) {
+      const prevPath = path.join(memDir, prev);
+      const raw = fs.readFileSync(prevPath, "utf-8");
+      const { m, fm } = readFrontmatter(raw);
+      if (!m || fm.source !== file || fm.id === id) continue;
+      fm.superseded_by = id;
+      fm.status = "deprecated";
+      if (!fm.valid_to) fm.valid_to = now;
+      fs.writeFileSync(prevPath, `---\n${require("yaml").stringify(fm)}---\n${raw.slice(m[0].length)}`);
+    }
   } catch {
     /* fail-open */
   }

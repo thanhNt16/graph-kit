@@ -1,11 +1,12 @@
-import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { CAC } from "cac";
 import YAML from "yaml";
 import { CBM_UNAVAILABLE_MSG, type CbmClient, createCbmClient } from "../../cbm/client.js";
 import { indexProject } from "../../cbm/index.js";
 import { actRScore, shouldExpire } from "../../eval/forgetting.js";
-import { recallTopK } from "../../eval/memory-recall.js";
+import { recallWithStats } from "../../eval/memory-recall.js";
+import { MemoryConfig, MemoryFileSchema } from "../../schemas/memory.schema.js";
 import { subcommandsFor } from "../command-registry.js";
 import { fail, ok } from "../output.js";
 
@@ -49,9 +50,10 @@ export async function indexMemory(cwd: string, projectOverride?: string) {
   }
 
   const watermark = new Date().toISOString();
+  // ponytail: .last-index stays CBM-only — it is the freshness watermark the
+  // gk-recall skill checks before querying the CBM project populated by indexMemory.
+  // Compiled/workflow paths never read or write it.
   writeFileSync(join(cwd, ".graphkit", ".last-index"), watermark);
-  const dirty = join(cwd, ".graphkit", ".memory-dirty");
-  if (existsSync(dirty)) unlinkSync(dirty);
   return { project, indexed: true, watermark };
 }
 
@@ -71,30 +73,56 @@ export interface MemoryTraceReport {
   memories: MemoryTrace[];
 }
 
-// Any memory-file mutation (touch bump, expiry rewrite) outdates the CBM
-// index — flag it so gk-recall's freshness gate (step 0) actually fires.
-// `.memory-dirty` is checked+cleared by indexMemory; it was previously
-// never written, so mid-run curator writes were invisible to CBM search.
-function markDirty(cwd: string) {
-  writeFileSync(join(cwd, ".graphkit", ".memory-dirty"), String(Date.now()));
-}
+// ponytail: `.last-index` remains CBM-only; file mutations do not create a
+// dirty marker. Re-index explicitly when the CBM freshness watermark requires it.
 
 // Stage 5 of the memory pipeline (decay): score every memory with ACT-R and
 // mark below-threshold entries expired. Expired files are rewritten in place,
 // never deleted (audit rule from the curator contract). Every pass appends
 // one JSONL row per memory to .graphkit/.trace-log — decay silently rewriting
 // files in place is otherwise unauditable.
-export function traceMemory(cwd: string, now = new Date().toISOString()): MemoryTraceReport {
+export function traceMemory(
+  cwd: string,
+  now = new Date().toISOString(),
+  opts?: { expire_policy?: "act_r" | "manual" },
+): MemoryTraceReport {
   const memDir = join(cwd, ".graphkit", "memory");
   const report: MemoryTraceReport = { total: 0, live: 0, expired: 0, newly_expired: 0, superseded: 0, memories: [] };
-  if (!existsSync(memDir)) return report;
+  // Reserved names are workflows' indexes, not memory entries.
+  const files = existsSync(memDir) ? readdirSync(memDir) : [];
+  const entries = files.filter((f) => f.endsWith(".md") && f !== "index.md" && f !== "log.md");
+  if (!existsSync(memDir) || entries.length === 0) return report;
 
-  for (const file of readdirSync(memDir).filter((f) => f.endsWith(".md"))) {
+  const expireActive = opts?.expire_policy !== "manual";
+
+  for (const file of entries) {
     const path = join(memDir, file);
     const raw = readFileSync(path, "utf-8");
+    // Strict schema parse before rewrites; malformed entries are counted but skipped.
     const m = raw.match(/^---\n([\s\S]*?)\n---/);
     if (!m) continue;
-    const fm = (YAML.parse(m[1]) ?? {}) as Record<string, unknown>;
+    const parsedYaml = YAML.parse(m[1]);
+    const fm = (parsedYaml && typeof parsedYaml === "object" ? parsedYaml : {}) as Record<string, unknown>;
+    const legacyTags = Array.isArray(fm.tags)
+      ? fm.tags
+      : typeof fm.tags === "string"
+        ? (() => {
+            try {
+              const parsed = YAML.parse(fm.tags);
+              return Array.isArray(parsed) ? parsed : [];
+            } catch {
+              return [];
+            }
+          })()
+        : [];
+    const validated = MemoryFileSchema.safeParse({
+      ...fm,
+      tags: legacyTags,
+      id: typeof fm.id === "string" && fm.id.trim() ? fm.id : file.replace(/\.md$/, ""),
+      type: typeof fm.type === "string" && fm.type.trim() ? fm.type : "knowledge",
+    });
+    if (!validated.success) continue;
+    Object.assign(fm, validated.data);
     report.total++;
 
     if (fm.superseded_by) {
@@ -105,10 +133,10 @@ export function traceMemory(cwd: string, now = new Date().toISOString()): Memory
 
     const tags = Array.isArray(fm.tags) ? fm.tags.length : 0;
     const links = (raw.match(/\[\[[^\]]+\]\]/g) ?? []).length;
-    // ponytail: connectivity heuristic — neutral 0.5 with no signal, tags+wikilinks
-    // normalized at 3 above that; upgrade to real graph degree if memory entries
-    // ever get CBM-indexed edges.
-    const connectivity = tags + links > 0 ? Math.min(1, (tags + links) / 3) : 0.5;
+    // ponytail: connectivity heuristic — floor 0.5 with no signal, tags+wikilinks
+    // normalized at 3 above that; monotonic so adding a tag never lowers a score.
+    // Upgrade to real graph degree if memory entries ever get CBM-indexed edges.
+    const connectivity = Math.max(0.5, Math.min(1, (tags + links) / 3));
     const score = actRScore({
       relevance: typeof fm.salience === "number" ? fm.salience : 0.5,
       connectivity,
@@ -120,11 +148,12 @@ export function traceMemory(cwd: string, now = new Date().toISOString()): Memory
     const wasExpired = fm.expired === true;
     // 0.1, not forgetting.ts's 0.3 default: three ≤1 factors multiply, so a
     // neutral memory (salience 0.5 × connectivity 0.5) scores ~0.15 at peak and
-    // could never survive a 0.3 gate.
-    if (!wasExpired && shouldExpire(score, 0.1)) {
+    // could never survive a 0.3 gate. `expire_policy: manual` scores and reports
+    // only, never mutates the store.
+    if (!wasExpired && expireActive && shouldExpire(score, 0.1)) {
       fm.expired = true;
       fm.valid_to = now;
-      markDirty(cwd);
+      fm.status = "deprecated";
       writeFileSync(path, `---\n${YAML.stringify(fm)}---\n${raw.slice(m[0].length)}`);
       report.expired++;
       report.newly_expired++;
@@ -166,8 +195,13 @@ export function touchMemory(
     const useCount = (typeof fm.use_count === "number" ? fm.use_count : 1) + 1;
     fm.use_count = useCount;
     fm.last_used_at = now;
-    markDirty(cwd);
-    writeFileSync(path, `---\n${YAML.stringify(fm)}---\n${raw.slice(m[0].length)}`);
+    const validated = MemoryFileSchema.safeParse({
+      ...fm,
+      id: typeof fm.id === "string" && fm.id.trim() ? fm.id : file.replace(/\.md$/, ""),
+      type: typeof fm.type === "string" && fm.type.trim() ? fm.type : "knowledge",
+    });
+    if (!validated.success) continue;
+    writeFileSync(path, `---\n${YAML.stringify(validated.data)}---\n${raw.slice(m[0].length)}`);
     return { id: String(fm.id ?? id), file, use_count: useCount, last_used_at: now };
   }
   return null;
@@ -177,10 +211,18 @@ export function registerMemoryCommands(cli: CAC) {
   // cac (6.x) matches a single leading token only; "memory index" never
   // dispatches. Use one `memory` command with subcommand dispatch (like graph).
   cli
-    .command("memory <subcommand> [args...]", `Memory commands\nSubcommands: ${subcommandsFor("memory")}`)
+    .command("memory [subcommand] [args...]", `Memory commands\nSubcommands: ${subcommandsFor("memory")}`)
     .option("--project <project>", "CBM project name (default: graph.yaml memory.project or graph-kit-memory)")
     .option("--json", "JSON output")
     .action(async (subcommand, _args, opts) => {
+      if (!subcommand) {
+        // Bare `gk memory` prints usage and exits 0 — a documented surface, not an error.
+        console.log(
+          `gk memory — memory lifecycle commands\n\nUsage:\n  gk memory <subcommand> [args...]\n
+Subcommands: ${subcommandsFor("memory")}\n\nOptions:\n  --project <project>  CBM project name\n  --json               JSON output`,
+        );
+        return;
+      }
       if (subcommand === "trace") {
         // decay pass: ACT-R score + expiry marking, no CBM needed
         console.log(JSON.stringify(ok(traceMemory(process.cwd()))));
@@ -207,9 +249,37 @@ export function registerMemoryCommands(cli: CAC) {
         // the working retriever (keyword×salience + validity/supersede filters) —
         // CBM search_graph returns 0 over markdown-only projects (measured, see
         // scripts/memory-recall-eval.ts). Reinforces survivors so decay keeps them.
-        const top = recallTopK(join(process.cwd(), ".graphkit", "memory"), query);
-        for (const h of top) touchMemory(process.cwd(), h.id);
-        console.log(JSON.stringify(ok({ query, top_k: top.length, results: top })));
+        const memDir = join(process.cwd(), ".graphkit", "memory");
+        // Configured recall_topk takes precedence (graph.yaml topology_config.memory).
+        let topk = 5;
+        let malformed = 0;
+        try {
+          const graph = YAML.parse(readFileSync(join(process.cwd(), "graph.yaml"), "utf-8"));
+          const memCfg = MemoryConfig.safeParse(graph?.topology_config?.memory);
+          if (memCfg.success) topk = memCfg.data.recall_topk;
+        } catch {
+          /* no graph.yaml — default topk */
+        }
+        let results: Array<{ id: string; file: string; salience: number }> = [];
+        try {
+          const stats = recallWithStats(memDir, query, topk);
+          results = stats.results;
+          malformed = stats.malformed;
+        } catch (e) {
+          console.log(
+            JSON.stringify(
+              fail("MEMORY_DIR_UNREADABLE", `memory store unreadable: ${String((e as Error)?.message ?? e)}`),
+            ),
+          );
+          process.exit(1);
+          return;
+        }
+        for (const h of results) touchMemory(process.cwd(), h.id);
+        console.log(
+          JSON.stringify(
+            ok({ query, top_k: results.length, results, malformed, recall_topk: topk }),
+          ),
+        );
         return;
       }
       if (subcommand !== "index") {

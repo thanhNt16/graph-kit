@@ -6,7 +6,7 @@
 // active-run evidence guard, which blocks like its Claude PreToolUse counterpart.
 
 import { createHash } from "node:crypto";
-import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 
 type ToolInput = { tool: string };
@@ -70,6 +70,9 @@ export const GraphKitPlugin = async () => {
         appendFileSync(indexFile, `${JSON.stringify({ file, at: new Date().toISOString() })}\n`);
 
         // memory-persist: distill the evidence write into an OKF memory file.
+        // Identity = basename + sha1(source + body)[:8]; same id → idempotent skip;
+        // changed source content → predecessor superseded, stable successor.
+        // Additive fields: generated, recorded_at, status, sources. No .memory-dirty.
         let body = "";
         try {
           body = readFileSync(file, "utf-8");
@@ -77,10 +80,14 @@ export const GraphKitPlugin = async () => {
           /* fail-open */
         }
         const src = basename(file, ".md");
-        const id = `${src}-${createHash("sha1").update(file).digest("hex").slice(0, 8)}`;
+        const id = `${src}-${createHash("sha1")
+          .update(file + body)
+          .digest("hex")
+          .slice(0, 8)}`;
         const memDir = ".graphkit/memory";
         const memFile = join(memDir, `${id}.md`);
         mkdirSync(memDir, { recursive: true });
+        if (existsSync(memFile)) return; // idempotent skip — nothing to write or supersede
         const now = new Date().toISOString();
         const frontmatter = [
           "---",
@@ -93,6 +100,10 @@ export const GraphKitPlugin = async () => {
           "salience: 0.5",
           "expired: false",
           "tags: []",
+          `generated: { by: "process:memory-persist", at: ${now} }`,
+          `recorded_at: ${now}`,
+          "status: stable",
+          `sources: [{ resource: ${file} }]`,
           "---",
           "",
           body,
@@ -100,7 +111,18 @@ export const GraphKitPlugin = async () => {
         ].join("\n");
         writeFileSync(memFile, frontmatter);
         appendFileSync(join(memDir, ".index"), `${JSON.stringify({ id, source: file, file: memFile, at: now })}\n`);
-        writeFileSync(join(".graphkit", ".memory-dirty"), String(Date.now()));
+        // Supersede prior captures of the same evidence source with different content.
+        for (const prev of readdirSync(memDir).filter((f) => f.endsWith(".md") && f !== `${id}.md`)) {
+          const prevPath = join(memDir, prev);
+          const raw = readFileSync(prevPath, "utf-8");
+          const m = raw.match(/^---\n([\s\S]*?)\n---/);
+          if (!m || !raw.includes(`source: ${file}`) || raw.includes(`id: ${id}`)) continue;
+          let prevFm = m[1];
+          if (!prevFm.includes("superseded_by:")) prevFm += `\nsuperseded_by: ${id}`;
+          if (!prevFm.includes("status:")) prevFm += "\nstatus: deprecated";
+          if (!prevFm.includes("valid_to:")) prevFm += `\nvalid_to: ${now}`;
+          writeFileSync(prevPath, `---\n${prevFm}\n---\n${raw.slice(m[0].length)}`);
+        }
       } catch {
         /* fail-open */
       }

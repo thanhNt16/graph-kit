@@ -63,39 +63,86 @@ export function applyRecallFilters(entries: RecallEntry[], now: string): RecallE
 import { readdirSync, readFileSync } from "node:fs";
 import { resolve as pathResolve } from "node:path";
 import YAML from "yaml";
+import { MemoryFileSchema } from "../schemas/memory.schema.js";
 
 export interface MemoryDoc extends RecallEntry {
   salience: number;
   terms: Set<string>;
 }
 
-export function loadMemories(dir: string): MemoryDoc[] {
+interface LoadedMemories {
+  docs: MemoryDoc[];
+  malformed: number;
+}
+
+function readMemories(dir: string): LoadedMemories {
+  let files: string[];
   try {
-    return readdirSync(dir)
-      .filter((f) => f.endsWith(".md"))
-      .map((f) => {
-        const raw = readFileSync(pathResolve(dir, f), "utf-8");
-        const fm = (YAML.parse(raw.match(/^---\n([\s\S]*?)\n---/)?.[1] ?? "{}") ?? {}) as Record<string, unknown>;
-        return {
-          id: String(fm.id ?? f.replace(/\.md$/, "")),
-          file: f,
-          valid_from: fm.valid_from as string | undefined,
-          valid_to: fm.valid_to as string | undefined,
-          expired: fm.expired as boolean | undefined,
-          superseded_by: fm.superseded_by as string | undefined,
-          salience: typeof fm.salience === "number" ? fm.salience : 0.5,
-          terms: new Set(
-            raw
-              .toLowerCase()
-              .replace(/[^a-z0-9_\s]/g, " ")
-              .split(/\s+/)
-              .filter((t) => t.length > 2),
-          ),
-        };
-      });
-  } catch {
-    return []; // no memory dir yet
+    files = readdirSync(dir);
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code;
+    if (code === "ENOENT" || code === "ENOTDIR") return { docs: [], malformed: 0 };
+    throw error;
   }
+
+  const docs: MemoryDoc[] = [];
+  let malformed = 0;
+  for (const file of files.filter((f) => f.endsWith(".md") && f !== "index.md" && f !== "log.md")) {
+    const raw = readFileSync(pathResolve(dir, file), "utf-8");
+    try {
+      const parsedYaml = YAML.parse(raw.match(/^---\n([\s\S]*?)\n---/)?.[1] ?? "{}");
+      const fm = parsedYaml && typeof parsedYaml === "object" ? (parsedYaml as Record<string, unknown>) : {};
+      // Legacy stores omitted type; infer the historical knowledge type before validation.
+      const candidate = {
+        ...fm,
+        id: typeof fm.id === "string" && fm.id.trim() ? fm.id : file.replace(/\.md$/, ""),
+        type: typeof fm.type === "string" && fm.type.trim() ? fm.type : "knowledge",
+      };
+      const validated = MemoryFileSchema.safeParse(candidate);
+      if (!validated.success) {
+        malformed++;
+        continue;
+      }
+      const value = validated.data;
+      docs.push({
+        id: value.id,
+        file,
+        valid_from: value.valid_from,
+        valid_to: value.valid_to ?? undefined,
+        expired: value.expired,
+        superseded_by: value.superseded_by ?? undefined,
+        salience: typeof value.salience === "number" ? value.salience : 0.5,
+        terms: new Set(
+          raw
+            .toLowerCase()
+            .replace(/[^a-z0-9_\s]/g, " ")
+            .split(/\s+/)
+            .filter((t) => t.length > 2),
+        ),
+      });
+    } catch {
+      malformed++;
+    }
+  }
+  return { docs, malformed };
+}
+
+export function loadMemories(dir: string): MemoryDoc[] {
+  return readMemories(dir).docs;
+}
+
+export interface RecallWithStats {
+  results: RecallHit[];
+  malformed: number;
+}
+
+export function recallWithStats(dir: string, query: string, k = 5, now = new Date().toISOString()): RecallWithStats {
+  const loaded = readMemories(dir);
+  const filtered = applyRecallFilters(rankByOverlap(query, loaded.docs), now) as MemoryDoc[];
+  return {
+    results: filtered.slice(0, k).map((e) => ({ id: e.id, file: e.file, salience: e.salience })),
+    malformed: loaded.malformed,
+  };
 }
 
 export function rankByOverlap(query: string, docs: MemoryDoc[]): MemoryDoc[] {

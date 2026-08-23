@@ -743,18 +743,27 @@ export function registerGraphCommands(cli: CAC) {
           // Interleave curator waves at cadence; always finish with one end-of-run curation.
           type PlanWave = { kind: "action"; ids: string[] } | { kind: "curator" };
           const plan: PlanWave[] = [];
-          actionWaves.forEach((w, i) => {
+          let completedActions = 0;
+          let lastCuratedAt = 0;
+          actionWaves.forEach((w) => {
             plan.push({ kind: "action", ids: w });
+            completedActions += w.length;
             if (hasCurator) {
-              const fire = cadence === "on_node_complete" || (cadence === "every" && (i + 1) % every === 0);
-              if (fire) plan.push({ kind: "curator" });
+              const fire = cadence === "on_node_complete" ||
+                (cadence === "every" && Math.floor(completedActions / every) > Math.floor(lastCuratedAt / every));
+              if (fire) {
+                plan.push({ kind: "curator" });
+                lastCuratedAt = completedActions;
+              }
             }
           });
-          if (hasCurator && actionWaves.length > 0) {
-            // End-of-run curation — only if the last action wave didn't already curate.
-            const last = actionWaves.length - 1;
-            const lastFired = cadence === "on_node_complete" || (cadence === "every" && (last + 1) % every === 0);
-            if (!lastFired) plan.push({ kind: "curator" });
+          // End-of-run curation: fire if the last crossing happened at a multiple of
+          // `every` but the current cumulative total no longer is — a threshold was
+          // passed since the last fire.
+          if (hasCurator && actionWaves.length > 0 && lastCuratedAt > 0 &&
+              lastCuratedAt < completedActions && completedActions % every !== 0 &&
+              lastCuratedAt % every === 0) {
+            plan.push({ kind: "curator" });
           }
 
           const nodeObj = (id: string) => ({
@@ -787,7 +796,16 @@ export function registerGraphCommands(cli: CAC) {
             waves: waveData,
             evidence_required: graph.evidence?.required_keys || [],
           };
-          if (hasCurator) payload.memory = { curator_node: curatorName, cadence, every };
+          if (hasCurator) {
+            payload.memory = {
+              curator_node: curatorName,
+              cadence,
+              every,
+              recall_topk: memCfg.recall_topk ?? 5,
+              expire_policy: memCfg.expire_policy ?? "act_r",
+              null_intervention_allowed: memCfg.null_intervention_allowed ?? true,
+            };
+          }
 
           console.log(JSON.stringify(ok(payload)));
         } catch (e) {

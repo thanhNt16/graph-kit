@@ -28,6 +28,8 @@ const TOPOLOGY_CONFIG_KEYS: Record<TopologyName, string[]> = {
     "memory.curator_node",
     "memory.recall_topk",
     "memory.expire_policy",
+    "memory.every",
+    "memory.null_intervention_allowed",
   ],
   custom: [],
   sdd: [],
