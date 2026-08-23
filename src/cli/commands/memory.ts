@@ -275,11 +275,7 @@ Subcommands: ${subcommandsFor("memory")}\n\nOptions:\n  --project <project>  CBM
           return;
         }
         for (const h of results) touchMemory(process.cwd(), h.id);
-        console.log(
-          JSON.stringify(
-            ok({ query, top_k: results.length, results, malformed, recall_topk: topk }),
-          ),
-        );
+        console.log(JSON.stringify(ok({ query, top_k: results.length, results, malformed, recall_topk: topk })));
         return;
       }
       if (subcommand !== "index") {

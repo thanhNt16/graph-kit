@@ -13,7 +13,7 @@ const INNER_FN = {
 // `INJECTION: <reminder>` or `INJECTION: null`. Parse only that line. Parse
 // failure logs a diagnostic and acts as null. Non-null reminders are prepended
 // as `[memory] ...` to the next action dispatch.
-function parseInjection(output) {
+function parseInjection(output, nullAllowed = true) {
   if (typeof output !== "string") {
     console.error("[memory] curator output not a string; no terminal INJECTION line — acting null");
     return null;
@@ -28,7 +28,14 @@ function parseInjection(output) {
     return null;
   }
   const value = last.slice("INJECTION:".length).trim();
-  if (value === "" || value === "null") return null;
+  if (value === "" || value === "null") {
+    if (!nullAllowed) {
+      const error = new Error("null intervention is forbidden by memory.null_intervention_allowed=false");
+      error.code = "NULL_INTERVENTION_FORBIDDEN";
+      throw error;
+    }
+    return null;
+  }
   return value;
 }
 
@@ -66,7 +73,7 @@ export function createMemoryAugmentedWorkflow(config) {
     let pendingInjection = null;
     const curatorPrompt = nullAllowed
       ? curatorNode.objective
-      : `${curatorNode.objective}\n\nMUST end your response with a final line "INJECTION: <reminder>" (or "INJECTION: null").`;
+      : `${curatorNode.objective}\n\nMUST end your response with a final line "INJECTION: <reminder>". Null intervention is forbidden.`;
 
     // Wrap context.agent so the Curator runs at cadence after each action call.
     // Cadence counts completed ACTION nodes only — curator dispatches go through
@@ -85,8 +92,9 @@ export function createMemoryAugmentedWorkflow(config) {
             tools: curatorNode.tools,
             skills: ["gk-recall"],
           });
-          pendingInjection = parseInjection(curation);
-        } catch {
+          pendingInjection = parseInjection(curation, nullAllowed);
+        } catch (error) {
+          if (error?.code === "NULL_INTERVENTION_FORBIDDEN") throw error;
           // curator failure is advisory — never blocks the action pipeline
           console.error("[memory] curator dispatch failed — acting null");
           pendingInjection = null;

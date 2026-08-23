@@ -161,24 +161,22 @@ evidence:
     });
   });
 
-  test("mandatory suffix when null_intervention_allowed=false: curator output must end with an INJECTION line even when null", () => {
+  test("null_intervention_allowed=false rejects an explicit null intervention", async () => {
     const cfg = graphYaml("cadence: on_node_complete\nnull_intervention_allowed: false") as {
       topology_config: { memory: Record<string, unknown> };
     };
     cfg.topology_config.memory.null_intervention_allowed = false;
     const log: Call[] = [];
     const ctx = {
-      agent: fakeAgent(log, ["thinking without a terminal line", "INJECTION: null", "INJECTION: null"]),
+      agent: fakeAgent(log, ["INJECTION: null"]),
       parallel: async (thunks: (() => Promise<unknown>)[]) => Promise.all(thunks.map((t) => t())),
       inputs: {},
     };
-    return runCompiled(cfg, ctx).then(() => {
-      const curatorPrompts = log.filter((c) => c.prompt.includes("Curate memory")).map((c) => c.prompt);
-      // The wrapper's curator objective prompt carries the mandatory-suffix instruction
-      expect(curatorPrompts.length).toBeGreaterThan(0);
-      expect(curatorPrompts[0]).toMatch(/MUST end|must end/i);
-      expect(curatorPrompts[0]).toContain("INJECTION:");
-    });
+
+    await expect(runCompiled(cfg, ctx)).rejects.toThrow(/null intervention.*forbidden/i);
+    const curatorPrompts = log.filter((c) => c.prompt.includes("Curate memory")).map((c) => c.prompt);
+    expect(curatorPrompts[0]).toMatch(/MUST end|must end/i);
+    expect(curatorPrompts[0]).not.toContain('or "INJECTION: null"');
   });
 
   test(".last-index remains CBM-only: compiled template does not reference .memory-dirty", () => {

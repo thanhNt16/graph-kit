@@ -72,5 +72,4 @@ console.log(
   ),
 );
 
-if (violations.length > 0 || malformedTotal !== malformedExpected || hitRate < HIT_RATE_BASELINE)
-  process.exit(1);
+if (violations.length > 0 || malformedTotal !== malformedExpected || hitRate < HIT_RATE_BASELINE) process.exit(1);

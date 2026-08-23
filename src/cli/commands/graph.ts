@@ -749,7 +749,8 @@ export function registerGraphCommands(cli: CAC) {
             plan.push({ kind: "action", ids: w });
             completedActions += w.length;
             if (hasCurator) {
-              const fire = cadence === "on_node_complete" ||
+              const fire =
+                cadence === "on_node_complete" ||
                 (cadence === "every" && Math.floor(completedActions / every) > Math.floor(lastCuratedAt / every));
               if (fire) {
                 plan.push({ kind: "curator" });
@@ -760,9 +761,14 @@ export function registerGraphCommands(cli: CAC) {
           // End-of-run curation: fire if the last crossing happened at a multiple of
           // `every` but the current cumulative total no longer is — a threshold was
           // passed since the last fire.
-          if (hasCurator && actionWaves.length > 0 && lastCuratedAt > 0 &&
-              lastCuratedAt < completedActions && completedActions % every !== 0 &&
-              lastCuratedAt % every === 0) {
+          if (
+            hasCurator &&
+            actionWaves.length > 0 &&
+            lastCuratedAt > 0 &&
+            lastCuratedAt < completedActions &&
+            completedActions % every !== 0 &&
+            lastCuratedAt % every === 0
+          ) {
             plan.push({ kind: "curator" });
           }
 

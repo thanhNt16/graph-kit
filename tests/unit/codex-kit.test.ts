@@ -30,7 +30,13 @@ describe("codex kit", () => {
 
   test("read-only agents get read-only sandbox, writers get workspace-write", () => {
     const readOnly = ["code-reviewer.toml", "ui-ux-researcher.toml", "agents-orchestrator.toml"];
-    const writers = ["memory-curator.toml", "data-engineer.toml", "qa-engineer.toml", "software-architect.toml", "document-generator.toml"];
+    const writers = [
+      "memory-curator.toml",
+      "data-engineer.toml",
+      "qa-engineer.toml",
+      "software-architect.toml",
+      "document-generator.toml",
+    ];
     for (const f of readOnly) {
       expect(readFileSync(join(agentsDir, f), "utf8")).toContain('sandbox_mode = "read-only"');
     }
