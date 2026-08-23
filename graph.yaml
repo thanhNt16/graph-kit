@@ -1,180 +1,320 @@
 apiVersion: graphkit.dev/v2
 kind: Graph
 metadata:
-  name: gk-social-improve
-  description: Sonnet research fleet (social + internal + competitive) → fable consolidation + plan → parallel execution → fable review with sonnet fix loop
+  name: gk-memory-improve
+  description: >-
+    Haiku research fleet (OKF, LLM-wiki, agent memory, knowledge graphs, gk
+    internals) → opus consolidate → superpowers brainstorm → plan → sonnet+haiku
+    execution → fable review → opus self-update plan → haiku/sonnet fix →
+    docs + GitHub Pages update
 topology: custom
 inputs:
   task: { type: string, required: true }
 nodes:
-  # ── Wave 1: research fleet (sonnet, parallel) ─────────────────────────────
-  social-reddit:
+  # ── Wave 1: haiku research fleet (parallel) ───────────────────────────────
+  research-okf:
     agent: ui-ux-researcher
-    model: sonnet
+    model: haiku
     objective: |
-      Social research on Reddit (r/ClaudeAI, r/ChatGPTCoding, r/LocalLLaMA,
-      r/AgenticAI, r/AI_Agents, r/ClaudeCode): what users say about agent
-      orchestration tools (CrewAI, LangGraph, claude-flow, AutoGen, Agent
-      crews). Extract recurring pain points, wished-for features, criticisms
-      of YAML/config-heavy tools, and what makes people adopt or bounce.
-      Cite real thread URLs. Write to .graphkit/evidence/social-reddit.md.
-    refs:
-      - { path: README.md, purpose: current positioning to compare against }
+      Research the Open Knowledge Format (OKF) by Google Cloud:
+      github.com/GoogleCloudPlatform/knowledge-catalog (okf/SPEC.md, okf/README.md)
+      and the Google Cloud blog post announcing it. Extract, with citations:
+      the concept-document model (markdown + YAML frontmatter, one concept per
+      file, path = identity), reserved filenames (index.md, log.md), the
+      required `type` field, the provenance/trust/lifecycle families
+      (`sources`, `generated`, `verified`, `status`, `stale_after`), markdown
+      cross-links as the graph, progressive disclosure via index.md, and the
+      Attested Computation concept. For each, state concretely whether Graph
+      Kit's memory layer could adopt it and what it would cost.
+      Write to .graphkit/evidence/research-okf.md.
+    tools: [WebSearch, WebFetch, Read, Write]
     depend_on: []
     evidence: [research_findings]
-  social-x-substack:
+  research-llm-wiki:
     agent: ui-ux-researcher
-    model: sonnet
+    model: haiku
     objective: |
-      Social research on X/Twitter, Substack, Hacker News: current discourse
-      on multi-agent orchestration, graph-based agent workflows, Claude Code
-      subagents/skills ecosystem. What language resonates ("compile", "graph",
-      "fleet", "workflow")? What do practitioners warn against (overhead,
-      cost, complexity)? Cite real URLs. Write to
-      .graphkit/evidence/social-x.md.
-    refs:
-      - { path: README.md, purpose: current positioning to compare against }
+      Research the "LLM wiki" pattern that OKF formalizes: agent-maintained
+      markdown knowledge corpora, progressive disclosure, index/log
+      conventions, staleness handling, and how agents traverse them without an
+      SDK. Include this repo's own `wiki:*` skills (wiki-ingest, wiki-query,
+      wiki-lint, wiki-digest, wiki-update, _shared conventions) as a live
+      reference implementation — read them and record what conventions they
+      already encode. Cite real URLs and file paths.
+      Write to .graphkit/evidence/research-llm-wiki.md.
+    tools: [WebSearch, WebFetch, Read, Glob, Grep, Write]
     depend_on: []
     evidence: [research_findings]
-  docs-consistency:
-    agent: qa-engineer
-    model: sonnet
-    objective: |
-      Audit ALL user-facing docs for inconsistencies and staleness:
-      README.md, docs/graphkit-v0.2-report.html, docs/templates-and-viewer.md,
-      claude/skills/*/SKILL.md, cursor/skills/*/SKILL.md. Check: test counts,
-      version numbers, command examples (do they actually work?), agent-name
-      examples (must be kebab-case filenames), links, claims vs reality
-      (grep the code). Every finding with file:line + what's wrong + fix.
-      Write to .graphkit/evidence/docs-consistency.md.
-    refs:
-      - { path: README.md, purpose: primary doc to audit }
-      - { path: docs/graphkit-v0.2-report.html, purpose: pages site source }
-    depend_on: []
-    evidence: [research_findings]
-  product-gaps:
+  research-agent-memory:
     agent: data-engineer
-    model: sonnet
+    model: haiku
     objective: |
-      Explore the repo + CLI for product gaps and friction: run `gk --help`,
-      every subcommand's help, try representative commands (validate, graph
-      new/list/ascii/svg, memory, template). Hunt: missing commands users
-      would expect, poor error messages, no-progress operations, awkward
-      flags, dead code, upgrade rough edges. Measured findings only.
-      Write to .graphkit/evidence/product-gaps.md.
-    refs:
-      - { path: src/cli, purpose: command surface to explore }
+      Research agent memory systems and their evaluation: Letta/MemGPT
+      (including the Letta 2x2 memory eval — adherence, retrieval,
+      generalization, hygiene), mem0, Zep/Graphiti, LangGraph checkpointers
+      and store, and OpenAI/Anthropic memory tooling. For each: memory model
+      (episodic/semantic/procedural), write path, retrieval path, consolidation
+      or forgetting policy, and how it is evaluated. Cite real URLs and note
+      which ideas map onto gk's per-run memory graph.
+      Write to .graphkit/evidence/research-agent-memory.md.
+    tools: [WebSearch, WebFetch, Read, Write]
     depend_on: []
     evidence: [research_findings]
-  competitive:
+  research-knowledge-graphs:
+    agent: data-engineer
+    model: haiku
+    objective: |
+      Research knowledge-graph retrieval for agents: Microsoft GraphRAG,
+      temporal knowledge graphs, entity resolution and deduplication,
+      community detection for summarization, and fused semantic + temporal +
+      entity retrieval. Focus on what is implementable without new runtime
+      dependencies. Cite real URLs. Assess each technique against gk's
+      existing recall path.
+      Write to .graphkit/evidence/research-knowledge-graphs.md.
+    tools: [WebSearch, WebFetch, Read, Write]
+    depend_on: []
+    evidence: [research_findings]
+  audit-gk-memory:
+    agent: qa-engineer
+    model: haiku
+    objective: |
+      Audit Graph Kit's CURRENT memory implementation from the code, not from
+      docs. Read src/schemas/memory.schema.ts, every memory-related file under
+      src/, the memory-curator agent, and the gk-recall / gk-eval skills in
+      both kits/claude and kits/cursor. Run `gk memory --help` and every
+      subcommand's help. Record: what is stored, where, in what format; the
+      extract/consolidate/resolve/expire lifecycle; the recall query path;
+      what is tested and what is not (cite test files); and every gap or
+      stale claim, each with file:line.
+      Write to .graphkit/evidence/audit-gk-memory.md.
+    tools: [Read, Glob, Grep, Bash, Write]
+    skills: [codebase-memory]
+    refs:
+      - { path: src/schemas/memory.schema.ts, purpose: current memory config surface }
+      - { path: kits/claude/agents/memory-curator.md, purpose: curator behavior }
+    depend_on: []
+    evidence: [research_findings]
+  research-competitive-memory:
     agent: ui-ux-researcher
-    model: sonnet
+    model: haiku
     objective: |
-      Competitive scan of agent-orchestration repos (LangGraph, CrewAI,
-      AutoGen/AG2, claude-flow, OpenAI Swarm, Google ADK, smolagents):
-      README positioning, star counts, their killer features gk lacks
-      (observability, streaming UI, human-in-the-loop, persistence,
-      time-travel). What do they do badly that gk's compile-only + host-
-      native-execution angle beats? Cite repo URLs. Write to
-      .graphkit/evidence/competitive.md.
-    refs:
-      - { path: README.md, purpose: current positioning to compare against }
+      Competitive scan of memory in agent-orchestration frameworks: LangGraph,
+      CrewAI, AutoGen/AG2, claude-flow, Google ADK, smolagents. For each:
+      does it persist across runs, what is the storage substrate, what is the
+      developer-facing API, and what does it get wrong (cost, opacity, lock-in)?
+      Identify the specific memory capability gap Graph Kit's compile-only,
+      host-native-execution angle can win on. Cite repo and doc URLs.
+      Write to .graphkit/evidence/research-competitive-memory.md.
+    tools: [WebSearch, WebFetch, Read, Write]
     depend_on: []
     evidence: [research_findings]
-  # ── Wave 2: fable consolidation → brainstorm → plan ───────────────────────
-  consolidate-plan:
+  # ── Wave 2: opus consolidation ────────────────────────────────────────────
+  consolidate:
     agent: software-architect
-    model: fable
+    model: opus
     objective: |
-      Consolidate the five research reports. Brainstorm across angles
-      (positioning clarity, onboarding friction, docs trust, feature gaps
-      worth building vs deferring), keep the best ideas, write a bite-sized
-      plan to .graphkit/reports/improve-plan.md. Exactly 3-4 independent,
-      testable tasks — one per executor — with files touched, acceptance
-      checks, test-first steps. MUST include updating the Pages document
-      (docs/graphkit-v0.2-report.html) and README per findings. Hard
-      constraints: no new npm dependencies; no fabricated social quotes
-      (cite or don't claim); parity claude/cursor kit; tests stay green.
-    depend_on: [social-reddit, social-x-substack, docs-consistency, product-gaps, competitive]
+      Consolidate all six research reports from .graphkit/evidence/ into one
+      synthesis. Resolve contradictions between sources; drop claims that are
+      not cited. Produce: (1) what OKF and the LLM-wiki pattern actually
+      specify that gk's memory layer lacks, (2) which agent-memory and
+      knowledge-graph techniques are worth adopting versus deferring, with
+      reasoning, (3) the concrete gap list from the code audit, ranked by
+      user-visible impact, (4) the competitive wedge. No implementation
+      decisions yet — this is the evidence base the brainstorm reasons over.
+      Write to .graphkit/reports/memory-synthesis.md.
+    depend_on:
+      - research-okf
+      - research-llm-wiki
+      - research-agent-memory
+      - research-knowledge-graphs
+      - audit-gk-memory
+      - research-competitive-memory
+    evidence: [synthesis]
+  # ── Wave 3: opus brainstorm (superpowers) ─────────────────────────────────
+  brainstorm:
+    agent: software-architect
+    model: opus
+    objective: |
+      Invoke the `superpowers:brainstorming` skill and follow it exactly.
+      Input is .graphkit/reports/memory-synthesis.md. Classify the work
+      (spike / bounded / architectural) and say so. Explore 2-3 approaches to
+      improving Graph Kit's memory layer with trade-offs and a recommendation
+      — for example: adopt OKF as gk's on-disk memory format; keep the current
+      format but add OKF-compatible frontmatter; or improve retrieval only.
+      YAGNI ruthlessly. Write the approved design to
+      .graphkit/reports/memory-design.md.
+      Hard constraints: no new npm dependencies; parity between kits/claude and
+      kits/cursor; every claim traceable to a cited source in the evidence dir.
+    depend_on: [consolidate]
+    constraints:
+      - no_new_dependencies: true
+      - kit_parity_required: true
+    evidence: [design]
+  # ── Wave 4: opus plan ─────────────────────────────────────────────────────
+  plan:
+    agent: software-architect
+    model: opus
+    objective: |
+      Invoke the `superpowers:writing-plans` skill and follow it exactly.
+      Turn .graphkit/reports/memory-design.md into an executable plan at
+      .graphkit/reports/memory-plan.md with EXACTLY four independent,
+      testable tasks — one per executor node below, each labeled with its
+      executor id (exec-schema, exec-recall, exec-skills, exec-tests).
+      Each task states: files touched, test-first steps, acceptance checks
+      runnable as commands, and its dependency on nothing but the plan.
+      Tasks must not edit the same files as each other.
+    depend_on: [brainstorm]
     evidence: [plan]
-  # ── Wave 3: parallel execution (sonnet) — implement + self-review ─────────
-  executor-docs:
-    agent: qa-engineer
-    model: sonnet
-    objective: |
-      Read .graphkit/reports/improve-plan.md and implement YOUR assigned task
-      (the docs/README/pages-site one). Every fix verifiable (grep, command
-      run). Test first where code-adjacent. Then SELF-REVIEW your diff and
-      fix your findings before stopping.
-    depend_on: [consolidate-plan]
-    loop:
-      enabled: true
-      stop_when: acceptance checks pass and bun test green
-      max_rounds: 3
-    evidence: [code, tests]
-  executor-product:
+  # ── Wave 5: parallel execution (sonnet + haiku) ───────────────────────────
+  exec-schema:
     agent: data-engineer
     model: sonnet
     objective: |
-      Read .graphkit/reports/improve-plan.md and implement YOUR assigned task
-      (the product/CLI one). Test first. Then SELF-REVIEW your diff against
-      the task's acceptance checks and fix findings before stopping.
-    depend_on: [consolidate-plan]
+      Read .graphkit/reports/memory-plan.md and implement task `exec-schema`
+      (the memory schema / storage-format work). Test first: write the failing
+      test, then the code. Then self-review your diff against the task's
+      acceptance checks and fix your own findings before stopping.
+    depend_on: [plan]
     loop:
       enabled: true
       stop_when: acceptance checks pass and bun test green
       max_rounds: 3
     evidence: [code, tests]
-  executor-positioning:
-    agent: ui-ux-researcher
+  exec-recall:
+    agent: data-engineer
     model: sonnet
     objective: |
-      Read .graphkit/reports/improve-plan.md and implement YOUR assigned task
-      (the positioning/report-section one — grounded ONLY in cited research,
-      no invented claims). Then SELF-REVIEW your diff and fix findings.
-    depend_on: [consolidate-plan]
+      Read .graphkit/reports/memory-plan.md and implement task `exec-recall`
+      (the retrieval / consolidation path). Test first. Then self-review your
+      diff against the task's acceptance checks and fix findings before
+      stopping.
+    depend_on: [plan]
     loop:
       enabled: true
-      stop_when: acceptance checks pass
+      stop_when: acceptance checks pass and bun test green
       max_rounds: 3
     evidence: [code, tests]
-  # ── Wave 4: fable final review → prioritized fix list ─────────────────────
-  final-review:
+  exec-skills:
+    agent: qa-engineer
+    model: haiku
+    objective: |
+      Read .graphkit/reports/memory-plan.md and implement task `exec-skills`
+      (the gk-recall / gk-eval / memory-curator skill and agent text updates).
+      Apply every change to BOTH kits/claude and kits/cursor — parity is an
+      acceptance check. Self-review the diff before stopping.
+    depend_on: [plan]
+    loop:
+      enabled: true
+      stop_when: acceptance checks pass and kit parity verified
+      max_rounds: 3
+    evidence: [code, tests]
+  exec-tests:
+    agent: qa-engineer
+    model: haiku
+    objective: |
+      Read .graphkit/reports/memory-plan.md and implement task `exec-tests`
+      (test coverage for the memory layer's untested paths named in
+      .graphkit/evidence/audit-gk-memory.md). Each new test must fail against
+      the pre-change behavior it pins. Run `bun test` and report the count
+      before and after.
+    depend_on: [plan]
+    loop:
+      enabled: true
+      stop_when: bun test green and every new test demonstrated failing first
+      max_rounds: 3
+    evidence: [tests]
+  # ── Wave 6: fable review ──────────────────────────────────────────────────
+  review:
     agent: code-reviewer
     model: fable
     objective: |
-      Review ALL executor diffs against .graphkit/reports/improve-plan.md:
-      correctness, constraints (no new deps, no fabricated citations, parity,
-      green tests), and whether the doc page + README actually resolve the
-      inconsistencies found. Write a prioritized fix list to
-      .graphkit/evidence/improve-review.md — checkbox per finding with
-      file:line, severity, fix sketch. Empty only if done.
-    depend_on: [executor-docs, executor-product, executor-positioning]
+      Review ALL four executor diffs against .graphkit/reports/memory-plan.md
+      and .graphkit/reports/memory-design.md: correctness, whether the design
+      was actually implemented or only approximated, constraint compliance
+      (no new npm deps, kit parity, cited claims only), test quality (do the
+      tests pin behavior or just execute code?), and `tsc` cleanliness.
+      Write a prioritized fix list to .graphkit/evidence/memory-review.md —
+      one checkbox per finding with file:line, severity, and a fix sketch.
+      Empty only if genuinely nothing is wrong.
+    depend_on: [exec-schema, exec-recall, exec-skills, exec-tests]
     evidence: [fix_list, review_verdict]
-  # ── Wave 5: sonnet fix loop ───────────────────────────────────────────────
-  fixer:
+  # ── Wave 7: opus self-update plan ─────────────────────────────────────────
+  replan:
+    agent: software-architect
+    model: opus
+    objective: |
+      Read .graphkit/evidence/memory-review.md alongside the original design
+      and plan. Decide which findings are real, which are the reviewer
+      misreading intent, and which reveal that the DESIGN was wrong rather
+      than the implementation. Write a self-update plan to
+      .graphkit/reports/memory-fix-plan.md: findings grouped into
+      `fix-mechanical` (rote, haiku-suitable) and `fix-substantive`
+      (judgment required, sonnet), each with file:line and an acceptance
+      check. Explicitly list any finding you are dismissing, with why.
+    depend_on: [review]
+    evidence: [plan]
+  # ── Wave 8: fix loop (haiku + sonnet) ─────────────────────────────────────
+  fix-mechanical:
+    agent: qa-engineer
+    model: haiku
+    objective: |
+      Read .graphkit/reports/memory-fix-plan.md and apply every item in the
+      `fix-mechanical` group, marking each resolved in place. Re-run
+      `bun test` after each batch. Do not touch `fix-substantive` items.
+    depend_on: [replan]
+    loop:
+      enabled: true
+      stop_when: no open fix-mechanical items and bun test green
+      max_rounds: 3
+    evidence: [fix_list, tests]
+  fix-substantive:
     agent: code-reviewer
     model: sonnet
     objective: |
-      Read .graphkit/evidence/improve-review.md. Apply fix-list items top-down
-      (critical first), marking each resolved in place. Re-run bun test after
-      each batch. Stop when no open critical/major items.
-    depend_on: [final-review]
+      Read .graphkit/reports/memory-fix-plan.md and apply every item in the
+      `fix-substantive` group, critical first, marking each resolved in place.
+      Re-run `bun test` and `tsc` after each batch. Do not touch
+      `fix-mechanical` items.
+    depend_on: [replan]
     loop:
       enabled: true
-      stop_when: no open critical or major fix items
+      stop_when: no open critical or major fix-substantive items
       max_rounds: 4
     evidence: [fix_list, tests]
-  # ── Wave 6: fable acceptance gate ─────────────────────────────────────────
+  # ── Wave 9: documentation + GitHub Pages ──────────────────────────────────
+  document:
+    agent: document-generator
+    model: sonnet
+    objective: |
+      Update all user-facing documentation to match what actually shipped —
+      verify every claim against the code before writing it. Touch: README.md
+      (memory section), docs/ (including the Pages site source), the gk-recall
+      / gk-eval / gk-status skill docs in BOTH kits/claude and kits/cursor,
+      and any test-count or version claims that the diff invalidated. If the
+      design adopted OKF conventions, document the mapping explicitly and link
+      the OKF spec. No fabricated numbers: run the commands and quote real
+      output.
+    refs:
+      - { path: README.md, purpose: primary doc to update }
+      - { path: docs, purpose: pages site source }
+    depend_on: [fix-mechanical, fix-substantive]
+    constraints:
+      - no_fabricated_metrics: true
+    evidence: [docs]
+  # ── Wave 10: fable acceptance gate ────────────────────────────────────────
   acceptance:
     agent: qa-engineer
     model: fable
     objective: |
-      Verify: plan acceptance checks met, bun test green, tsc clean, kit
-      parity intact, no fabricated social claims (spot-check citations),
-      docs inconsistencies from evidence/docs-consistency.md resolved.
-      Evidence-driven verdict — fail if any check cannot be demonstrated.
-    depend_on: [fixer]
+      Evidence-driven final gate. Verify and demonstrate each: plan acceptance
+      checks met; `bun test` green with the count quoted; `tsc` clean; kit
+      parity between kits/claude and kits/cursor intact; no new npm
+      dependencies in package.json; every fix-plan item closed or explicitly
+      dismissed with reasoning; docs claims spot-checked against real command
+      output; OKF/research claims traceable to a cited source. Fail if any
+      check cannot be demonstrated — do not infer success from absence of
+      failure.
+    depend_on: [document]
     evidence: [acceptance]
 evidence:
-  required_keys: [plan, acceptance]
+  required_keys: [synthesis, design, plan, acceptance]
