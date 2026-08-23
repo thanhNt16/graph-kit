@@ -98,12 +98,6 @@ describe("gk memory trace", () => {
     expect(touchMemory(cwd, "nope")).toBeNull();
   });
 
-  test("mutations set .memory-dirty (recall freshness gate now reachable)", () => {
-    writeMemory(cwd, "m.md", { id: "m", salience: 0.5, expired: false, valid_from: NOW, tags: "[]" });
-    touchMemory(cwd, "m", NOW);
-    expect(existsSync(join(cwd, ".graphkit", ".memory-dirty"))).toBe(true);
-  });
-
   test("trace pass appends one audit JSONL row per memory, append-only", () => {
     writeMemory(cwd, "a.md", { id: "a", salience: 0.5, expired: false, valid_from: NOW, tags: "[]" });
     writeMemory(cwd, "b.md", {
@@ -124,5 +118,100 @@ describe("gk memory trace", () => {
     const b = rows.find((r) => r.id === "b");
     expect(a?.action).toBe("kept");
     expect(b?.action).toBe("newly-expired");
+  });
+});
+
+describe("memory lifecycle semantics (exec-tests step 4)", () => {
+  let cwd: string;
+  beforeEach(() => {
+    cwd = join(tmpdir(), `gk-mem-life-${process.pid}-${Date.now()}`);
+    mkdirSync(join(cwd, ".graphkit", "memory"), { recursive: true });
+  });
+  afterEach(() => rmSync(cwd, { recursive: true, force: true }));
+
+  test("expiry rewrite also sets status: deprecated alongside expired:true", () => {
+    writeMemory(cwd, "stale.md", {
+      id: "stale",
+      salience: 0.1,
+      expired: false,
+      valid_from: "2026-01-01T00:00:00.000Z",
+      tags: [],
+    });
+    traceMemory(cwd, NOW);
+    const stale = readFileSync(join(cwd, ".graphkit", "memory", "stale.md"), "utf-8");
+    expect(stale).toContain("expired: true");
+    expect(stale).toContain("status: deprecated");
+  });
+
+  test("expiry/touch rewrites preserve unknown frontmatter keys", () => {
+    writeMemory(cwd, "keep.md", {
+      id: "keep",
+      salience: 0.1,
+      expired: false,
+      valid_from: "2026-01-01T00:00:00.000Z",
+      ponytail_note: "user-added provenance",
+    });
+    traceMemory(cwd, NOW); // expiry rewrite path
+    const raw = readFileSync(join(cwd, ".graphkit", "memory", "keep.md"), "utf-8");
+    expect(raw).toContain("ponytail_note: user-added provenance");
+
+    writeMemory(cwd, "touch.md", { id: "touch", salience: 0.5, expired: false, valid_from: NOW, tags: "[]" });
+    touchMemory(cwd, "touch", NOW); // touch rewrite path
+    const touched = readFileSync(join(cwd, ".graphkit", "memory", "touch.md"), "utf-8"); // different file, no cross-contamination
+    expect(touched).toContain("use_count: 2"); // reinforcement applied to the touched file
+    // the touched file must keep its own unknown keys if any were present
+    writeMemory(cwd, "touch2.md", {
+      id: "touch2",
+      salience: 0.5,
+      expired: false,
+      valid_from: NOW,
+      tags: "[]",
+      custom_field: "survives-touch",
+    });
+    touchMemory(cwd, "touch2", NOW);
+    const raw2 = readFileSync(join(cwd, ".graphkit", "memory", "touch2.md"), "utf-8");
+    expect(raw2).toContain("custom_field: survives-touch");
+  });
+
+  test("expire_policy manual: scores are reported but no memory is mutated", () => {
+    writeMemory(cwd, "stale.md", {
+      id: "stale",
+      salience: 0.1,
+      expired: false,
+      valid_from: "2026-01-01T00:00:00.000Z",
+      tags: [],
+    });
+    const before = readFileSync(join(cwd, ".graphkit", "memory", "stale.md"), "utf-8");
+    const r = traceMemory(cwd, NOW, { expire_policy: "manual" });
+    const after = readFileSync(join(cwd, ".graphkit", "memory", "stale.md"), "utf-8");
+    expect(after).toBe(before); // byte-identical: no expiry marking
+    expect(r.memories.find((m) => m.id === "stale")).toBeDefined(); // scoring still reported
+  });
+
+  test("connectivity is monotonic: one tag never scores below untagged baseline", () => {
+    writeMemory(cwd, "tagged.md", { id: "tagged", salience: 0.5, expired: false, valid_from: NOW, tags: "[one]" });
+    writeMemory(cwd, "bare.md", { id: "bare", salience: 0.5, expired: false, valid_from: NOW, tags: "[]" });
+    const r = traceMemory(cwd, NOW);
+    const tagged = r.memories.find((m) => m.id === "tagged")?.score ?? -1;
+    const bare = r.memories.find((m) => m.id === "bare")?.score ?? -1;
+    expect(tagged).toBeGreaterThanOrEqual(bare); // floor at 0.5 — no tag can lower a score
+    expect(tagged).toBeGreaterThan(0);
+  });
+
+  test("mutations never write .memory-dirty (dead flag removed)", () => {
+    writeMemory(cwd, "m.md", { id: "m", salience: 0.5, expired: false, valid_from: NOW, tags: "[]" });
+    touchMemory(cwd, "m", NOW);
+    traceMemory(cwd, NOW);
+    expect(existsSync(join(cwd, ".graphkit", ".memory-dirty"))).toBe(false);
+  });
+
+  test("trace parses MemoryFileSchema-valid files with reserved names skipped", () => {
+    // type: "knowledge" makes these schema-valid memories, so the skip below is
+    // exercised for the reserved-name rule — not merely schema rejection
+    writeMemory(cwd, "index.md", { id: "index", salience: 0.5, type: "knowledge" }); // reserved — not a memory
+    writeMemory(cwd, "log.md", { id: "log", salience: 0.5, type: "knowledge" }); // reserved
+    const r = traceMemory(cwd, NOW);
+    expect(r.total).toBe(0); // reserved files ignored
+    expect(r.memories.length).toBe(0);
   });
 });

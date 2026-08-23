@@ -20,17 +20,19 @@ as File/Module shells with no searchable content; measured 2026-08-15, see
    - ranks memories by keyword-overlap × salience,
    - drops expired / not-yet-valid / past-valid entries,
    - resolves `superseded_by` chains to the newest member,
-   - returns top `recall_topk` (default 5),
-   - and reinforces every survivor (`gk memory touch`: use_count + last_used_at bump, `.memory-dirty` flag) so ACT-R decay keeps what recall actually uses.
-3. Read each returned `file` under `.graphkit/memory/` for full content. Surface a `stale: true` flag if the memory's source evidence predates the current node's `depend_on` ancestors.
+   - returns top `recall_topk` — resolved from the graph's `memory.recall_topk` (default 5),
+   - reports entries dropped for malformed validity dates in a `malformed` count (they are excluded and counted, not silently kept),
+   - fails with `MEMORY_DIR_UNREADABLE` (exit 1) when the store exists but cannot be read — only a missing store returns empty results,
+   - and reinforces every survivor (`gk memory touch`: `use_count` + `last_used_at` bump) so ACT-R decay keeps what recall actually uses.
+3. Read each returned `file` under `.graphkit/memory/` for full content. Surface a `stale: true` flag if the memory's source evidence predates the current node's `depend_on` ancestors. Report the `malformed` count alongside results when nonzero.
 4. Return each memory with: `id`, `type`, one-line summary, full `content`, `as_of` validity window.
 
 Reference implementation of the filters: `src/eval/memory-recall.ts` (unit-tested; the memory-recall eval holds it to `hit_rate ≥ 0.8` and zero validity violations).
 
 ## Degradation
 
-If the `gk` CLI is unavailable, scan `.graphkit/memory/*.md` directly with `Grep`/`Read`, parse frontmatter, and apply the same filters manually (expired / valid-window / supersede-chain — see `src/eval/memory-recall.ts`). Tag results `source: fallback-scan`.
+If the `gk` CLI is unavailable, scan `.graphkit/memory/*.md` directly with `Grep`/`Read`, parse frontmatter, and apply the same filters manually (expired / valid-window / supersede-chain / malformed-date exclusion — see `src/eval/memory-recall.ts`). Tag results `source: fallback-scan`.
 
 ## Output
 
-A concise ranked list handed back to the calling node's context. The CLI writes only `use_count`/`last_used_at` bumps and the `.memory-dirty` flag — never content.
+A concise ranked list handed back to the calling node's context. Touch writes only reinforcement fields (`use_count`, `last_used_at`) — never content.

@@ -13,3 +13,8 @@ kits/claude/viewer/*.js
 kits/claude/viewer/*.mjs
 kits/cursor/viewer/*.js
 kits/cursor/viewer/*.mjs
+
+# memory/CBM runtime artifacts — ignore, never delete
+.fastembed_cache/
+.kg/
+raw/

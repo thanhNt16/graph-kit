@@ -38,12 +38,15 @@ describe("gk memory index", () => {
     expect(wm).toBe(res.watermark);
   });
 
-  test("clears a pre-existing .memory-dirty flag", async () => {
+  test("indexMemory never creates a .memory-dirty flag; leaves a stray pre-existing flag untouched", async () => {
     mkdirSync(join(cwd, ".graphkit"), { recursive: true });
     const dirty = join(cwd, ".graphkit", ".memory-dirty");
     writeFileSync(dirty, "123");
     await indexMemory(cwd);
-    expect(existsSync(dirty)).toBe(false);
+    expect(existsSync(dirty)).toBe(true); // dead flag: indexMemory neither writes nor clears it
+    unlinkSync(dirty);
+    await indexMemory(cwd);
+    expect(existsSync(join(cwd, ".graphkit", ".memory-dirty"))).toBe(false); // no new flag created
   });
 
   test("project precedence: --project flag beats graph.yaml beats default", async () => {
@@ -59,7 +62,7 @@ describe("gk memory index", () => {
     expect(calls.at(-1)?.name).toBe("from-flag");
   });
 
-  test("unlinks stale dirty flag only when present (no throw if absent)", async () => {
+  test("absent .memory-dirty stays absent after indexMemory (no throw)", async () => {
     // no dirty flag present — should not throw
     await expect(indexMemory(cwd)).resolves.toBeDefined();
     expect(existsSync(join(cwd, ".graphkit", ".memory-dirty"))).toBe(false);

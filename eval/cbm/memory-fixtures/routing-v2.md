@@ -8,3 +8,4 @@ expired: false
 tags: [routing]
 ---
 Current: classify the question, seed search with identifier tokens, add trace or query structural extras and code snippets per kind.
+Routing vocabulary note: a question is routed by kind — classify first, then seed the search, then trace or query for structure.

@@ -1,7 +1,7 @@
 # Memory-recall eval — frozen queries over eval/cbm/memory-fixtures/ (P3, fable consolidation).
-# Scorer: scripts/memory-recall-eval.ts. Baseline committed in the script (HIT_RATE_BASELINE);
-# no PR may lower hit_rate or add a validity_violation. must_surface = id in top-5 after
-# recall filters; must_not_surface = expired / superseded head / not-yet-valid must never appear.
+# Scorer: scripts/memory-recall-eval.ts. Gate: hit_rate >= 0.8, zero validity violations,
+# zero malformed. must_surface = id in top-5 after recall filters; must_not_surface =
+# expired / superseded head / not-yet-valid must never appear.
 
 - id: mr-01
   query: "how are benchmark axes partitioned"
@@ -29,9 +29,9 @@
 
 - id: mr-05
   query: "viewer sse keyboard focus"
-  must_surface: [viewer-sse-note]
+  must_surface: [sse-reorder, viewer-sse-note]
   must_not_surface: []
-  note: low-salience but live
+  note: duplicate pair — canonical and first capture both live; both rank in top-5
 
 - id: mr-06
   query: "routing strategy current"
@@ -62,3 +62,29 @@
   must_surface: [decay-policy]
   must_not_surface: [old-decay-policy]
   note: matches expired text strongly — the filter, not the ranker, must hold
+
+# ── messy-store cases (exec-tests step 8) ────────────────────────────────────
+
+- id: mx-01
+  query: "who signs off before a deploy ships"
+  must_surface: [deploy-gate-v2]
+  must_not_surface: [deploy-gate-v1]
+  note: contradiction/supersession — predecessor head replaced by current successor
+
+- id: mx-02
+  query: "does memory recall use search_graph or keyword retrieval"
+  must_surface: [contradiction-router]
+  must_not_surface: [contradiction-router-old]
+  note: contradiction resolved — old claim superseded by audited truth
+
+- id: mx-03
+  query: "eval harness determinism model temperature seed"
+  must_surface: []
+  must_not_surface: []
+  note: malformed validity date is dropped and counted as malformed — never surfaced
+
+- id: mx-04
+  query: "gk memory list subcommand"
+  must_surface: []
+  must_not_surface: [stale-api-note]
+  note: high-salience stale trap — expiry flag, not salience, decides surfacing

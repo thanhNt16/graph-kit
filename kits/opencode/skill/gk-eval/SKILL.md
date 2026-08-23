@@ -21,7 +21,7 @@ The gate reads evidence and decides. "An agent finishes a change, opens it, and 
 5. (Optional) **LLM-as-judge:** if `eval.llm_as_judge.enabled`, spin the existing `adversarial-verification` topology as a subgraph — refuter agents (from `eval.llm_as_judge.refuters`) try to refute the verdict; the gate survives only if ≥ `survive_threshold` refuters fail. Pin model/temp 0/`seed` for determinism.
 
 ### `memory` mode
-6. Gather memory state from `.graphkit/memory/`: adherence (did node outputs respect recalled constraints?), retrieval (were relevant memories fetched — check recall logs), generalization (did distilled `experience`-type memories transfer?), hygiene (count stale / contradictory / duplicate — parse `expired`, `superseded_by`).
+6. Gather memory state from `.graphkit/memory/`: adherence (did node outputs respect recalled constraints?), retrieval (run `bun run eval:memory` over the fixtures — hit-rate ≥ 0.8 with zero validity violations is the retrieval measurement), generalization (did distilled `experience`-type memories transfer?), hygiene (count stale / contradictory / duplicate — parse `expired`, `superseded_by`).
 7. Apply `scoreMemory(state, { abstention_weighted })`. **Abstention-weighted:** confidently answering from a stale memory is penalized more than admitting ignorance.
 
 ### `both` mode
@@ -35,7 +35,3 @@ The gate reads evidence and decides. "An agent finishes a change, opens it, and 
 ## Determinism
 
 The rubric is code; the only model involvement is the optional pinned LLM-as-judge. If the harness isn't deterministic, the number is an ad — so the runner pins model, temperature 0, and seed.
-
-## Degradation
-
-If `codebase-memory-mcp` is unavailable, `memory` mode reports `UNAVAILABLE` (not `BLOCK`); `work_product` mode still completes.

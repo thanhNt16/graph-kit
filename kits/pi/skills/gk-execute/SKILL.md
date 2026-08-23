@@ -41,9 +41,9 @@ This outputs the topological wave structure — which nodes run in parallel, whi
 
 For each wave in the output:
 
-**Curator waves (`wave.curator === true`):** if the wave is a curator wave (emitted by `memory-augmented` graphs at cadence), dispatch its single node — the **Memory Curator** (`memory-curator`) — with the gk-recall skill. Pass it the evidence paths written by the just-completed action wave. Collect its `injection_decision` evidence key:
-- If `injection_decision` is non-null (a reminder, not silence): prepend that reminder to the **next** action wave's node `objective`(s).
-- If null (explicit silence): inject nothing.
+**Curator waves (`wave.curator === true`):** if the wave is a curator wave (emitted by `memory-augmented` graphs at cadence), dispatch its single node — the **Memory Curator** (`memory-curator`) — with the gk-recall skill. Pass it the evidence paths written by the just-completed action wave. Curator calls are excluded from cadence counting — cadence counts completed **action-node** executions only, so a curator wave never triggers another. Read the curator's terminal line — its final non-empty line must be exactly `INJECTION: <reminder>` or `INJECTION: null`; parse only that line and treat it as the `injection_decision`:
+- If the terminal line is `INJECTION: <reminder>` (non-null): prepend `[memory] <reminder>` to the **next** action wave's node `objective`(s).
+- If `INJECTION: null` or malformed output (terminal line missing/unparseable): log a diagnostic to stderr and inject nothing — a malformed terminal line never blocks the action node.
 
 Then continue to the next wave — skip the action-wave steps below for curator waves.
 
