@@ -157,7 +157,7 @@
     <div class="stat"><div class="stat-num">5</div><div class="stat-label">Targets</div></div>
     <div class="stat"><div class="stat-num">13</div><div class="stat-label">Skills (claude)</div></div>
     <div class="stat"><div class="stat-num">8</div><div class="stat-label">Agents</div></div>
-    <div class="stat"><div class="stat-num">429</div><div class="stat-label">Tests</div></div>
+    <div class="stat"><div class="stat-num">461</div><div class="stat-label">Tests</div></div>
   </div>
 </div>
 
@@ -190,7 +190,7 @@ bun install
 bun run build                <span class="cmt"># → dist/index.js (executable, with shebang)</span>
 
 <span class="cmt"># Run the full gate to verify</span>
-bun run ci:local             <span class="cmt"># → typecheck + lint + build + 429 tests + cbm:parity</span></div>
+bun run ci:local             <span class="cmt"># → typecheck + lint + build + 461 tests + cbm:parity</span></div>
   </div>
 
   <div class="install-grid">
@@ -547,10 +547,10 @@ gk models opencode set --map <span class="field">opus</span>=<span class="str">a
     <tr><td>M5 — recall &gt; grep</td><td>Recall@10 ≥ 0.95, ≥10× vs grep</td><td class="caveat">PASS · CBM 4/5 vs grep 0/5</td></tr>
   </table>
   <div class="stats-banner">
-    <div class="stat-cell"><div class="stat-cell-num">429</div><div class="stat-cell-label">Tests Pass</div></div>
+    <div class="stat-cell"><div class="stat-cell-num">461</div><div class="stat-cell-label">Tests Pass</div></div>
     <div class="stat-cell"><div class="stat-cell-num">0</div><div class="stat-cell-label">Failures</div></div>
-    <div class="stat-cell"><div class="stat-cell-num">1210</div><div class="stat-cell-label">Expect Calls</div></div>
-    <div class="stat-cell"><div class="stat-cell-num">53</div><div class="stat-cell-label">Test Files</div></div>
+    <div class="stat-cell"><div class="stat-cell-num">1545</div><div class="stat-cell-label">Expect Calls</div></div>
+    <div class="stat-cell"><div class="stat-cell-num">60</div><div class="stat-cell-label">Test Files</div></div>
     <div class="stat-cell"><div class="stat-cell-num">5/5</div><div class="stat-cell-label">Metrics</div></div>
     <div class="stat-cell"><div class="stat-cell-num">0</div><div class="stat-cell-label">Lint Errors</div></div>
   </div>
@@ -569,9 +569,43 @@ gk models opencode set --map <span class="field">opus</span>=<span class="str">a
   </table>
   <div class="subsys" style="margin-top:1rem;border-color:var(--memory)">
     <div class="subsys-tag" style="background:rgba(240,171,252,0.15);color:var(--memory)">MEMORY LAYER — MEASURED</div>
-    <p style="font-size:0.82rem;color:var(--text-dim)">A 6-agent research fleet + fable judge found the ACT-R decay shipped in 0.2 was a store-wide time bomb (no reinforcement → uniform ~day-10 expiry). Fixed with a closed loop: <code style="color:var(--text)">gk memory recall</code> retrieves (keyword×salience + validity/supersede filters) <em>and</em> reinforces survivors; <code style="color:var(--text)">gk memory touch</code> bumps use; <code style="color:var(--text)">gk memory trace</code> decays with a JSONL audit trail and freshness flag; <code style="color:var(--text)">bun run eval:memory</code> holds recall at <strong style="color:var(--text)">an ≥0.8 gate baseline (0.9 measured) / 0 validity violations</strong>.</p>
+    <p style="font-size:0.82rem;color:var(--text-dim)">A 6-agent research fleet + fable judge found the ACT-R decay shipped in 0.2 was a store-wide time bomb (no reinforcement → uniform ~day-10 expiry). Fixed with a closed loop: <code style="color:var(--text)">gk memory recall</code> retrieves (keyword×salience + validity/supersede filters) <em>and</em> reinforces survivors; <code style="color:var(--text)">gk memory touch</code> bumps use; <code style="color:var(--text)">gk memory trace</code> decays with a JSONL audit trail; <code style="color:var(--text)">bun run eval:memory</code> reports <strong style="color:var(--text)">hit_rate 1 / 0 validity violations / 14 malformed entries counted as expected</strong>.</p>
     <p style="font-size:0.82rem;color:var(--text-dim);margin-top:0.5rem">Two adversarial catches along the way: the fleet's deadcode trim was measured regressive before it shipped, and CBM <code>search_graph</code> was measured to return <strong style="color:var(--adversarial)">0 hits over markdown-only projects</strong> — gk-recall's semantic step had always been dead weight and was replaced with the measured retriever.</p>
   </div>
+</div>
+
+<div class="section">
+  <div class="section-label">Memory Contract <span class="badge-new">0.2</span></div>
+  <h2>Durable Memory, Strict Boundaries</h2>
+  <p>Memory capture remains GraphKit's markdown store, with additive OKF-compatible provenance fields: <code>generated</code>, <code>recorded_at</code>, <code>status</code>, and <code>sources</code>. This is deliberately <strong style="color:var(--text)">not an OKF conformance claim</strong>; existing GraphKit fields stay authoritative and unknown fields survive rewrites. See the <a href="https://github.com/GoogleCloudPlatform/open-knowledge-format/blob/main/SPEC.md" style="color:var(--sonnet)">current OKF specification</a>.</p>
+  <div class="lifecycle">
+    <div class="lc-step new"><div class="name">Capture identity</div><div class="desc">basename + content hash of source and body</div></div>
+    <div class="lc-step new"><div class="name">Re-capture</div><div class="desc">same content → idempotent skip</div></div>
+    <div class="lc-step new"><div class="name">Changed content</div><div class="desc">new file; old entry superseded, never overwritten</div></div>
+    <div class="lc-step"><div class="name">Recall</div><div class="desc">keyword × salience, validity and supersede filters</div></div>
+    <div class="lc-step"><div class="name">Trace</div><div class="desc">ACT-R decay; expired entries retained for audit</div></div>
+  </div>
+  <div class="bridge-grid">
+    <div class="subsys" style="margin:0;border-color:var(--memory)">
+      <div class="subsys-tag" style="background:rgba(46,160,67,0.15);color:var(--memory)">READER CONTRACT</div>
+      <p>Malformed memory entries are dropped and counted in <code>malformed</code>. A missing memory directory is empty. Other filesystem failures return <code>MEMORY_DIR_UNREADABLE</code> and fail instead of silently erasing recall.</p>
+      <p>Memory-augmented workflows share one terminal contract: the curator's final non-empty line is exactly <code>INJECTION: &lt;reminder&gt;</code> or <code>INJECTION: null</code>. A non-null reminder is prepended to the next action dispatch; malformed output becomes null and never blocks the action node.</p>
+    </div>
+    <div class="subsys" style="margin:0;border-color:var(--bridge)">
+      <div class="subsys-tag" style="background:rgba(57,208,216,0.15);color:var(--bridge)">CONFIG + PARITY</div>
+      <p>Cadence counts completed action-node executions, not curator calls. <code>recall_topk</code>, <code>expire_policy: manual</code>, and <code>null_intervention_allowed</code> are honored from graph configuration.</p>
+      <p>Curator contract parity is tested across Claude Code, Cursor, OpenCode, Codex, and pi. Codex uses <code>sandbox_mode = "workspace-write"</code> for persistence.</p>
+    </div>
+  </div>
+  <div class="stats-banner">
+    <div class="stat-cell"><div class="stat-cell-num">461</div><div class="stat-cell-label">Tests Pass</div></div>
+    <div class="stat-cell"><div class="stat-cell-num">0</div><div class="stat-cell-label">Failures</div></div>
+    <div class="stat-cell"><div class="stat-cell-num">1.0</div><div class="stat-cell-label">Eval Hit Rate</div></div>
+    <div class="stat-cell"><div class="stat-cell-num">14/14</div><div class="stat-cell-label">Malformed Expected</div></div>
+    <div class="stat-cell"><div class="stat-cell-num">0</div><div class="stat-cell-label">Validity Violations</div></div>
+    <div class="stat-cell"><div class="stat-cell-num">tsc ✓</div><div class="stat-cell-label">Typecheck</div></div>
+  </div>
+  <p style="font-size:0.78rem;color:var(--text-muted)">These are deterministic fixture and behavior checks, not benchmark-superiority claims. The <a href="https://x.com/0xwast3/status/2084625810112032849" style="color:var(--sonnet)">@0xwast3 memory-engineering article</a> is third-party validation only. Its <code>status: conflicted</code> field and three-month capture criterion are follow-up scope, not shipped behavior.</p>
 </div>
 
 <div class="section">
@@ -590,7 +624,7 @@ gk models opencode set --map <span class="field">opus</span>=<span class="str">a
     <p style="font-size:0.82rem;color:var(--text-dim)">Executor self-reviews caught 3 bugs pre-review (inverted drag endpoints, dropped Esc-clears-selection, dual-stack test bind). The fable gate still found <strong style="color:var(--text)">1 critical the tests masked</strong>: drag re-routing compounded mousemove deltas — one 40px move vs two 20px moves diverged, ~30× overshoot over a 60-event drag — because every test simulated exactly one mousemove. The reviewer runtime-reproduced it, the sonnet fixer shipped incremental deltas plus a two-moves-equal-one-move regression test, and 2 majors (stale <code>.route</code> ribbons, Shift+click popping the drawer) fell the same way. Acceptance re-proved every plan checkbox independently, including a live key-gated smoke on the pinned port.</p>
   </div>
   <div class="stats-banner">
-    <div class="stat-cell"><div class="stat-cell-num">429</div><div class="stat-cell-label">Tests Pass</div></div>
+    <div class="stat-cell"><div class="stat-cell-num">461</div><div class="stat-cell-label">Tests Pass</div></div>
     <div class="stat-cell"><div class="stat-cell-num">0</div><div class="stat-cell-label">Failures</div></div>
     <div class="stat-cell"><div class="stat-cell-num">+22</div><div class="stat-cell-label">New Tests</div></div>
     <div class="stat-cell"><div class="stat-cell-num">5/5</div><div class="stat-cell-label">Bundle Parity</div></div>
@@ -635,7 +669,7 @@ gk models opencode set --map <span class="field">opus</span>=<span class="str">a
 
 <div class="footer">
   GraphKit 0.2 · graph engineering kit for Claude Code, Cursor, OpenCode, Codex &amp; Pi<br>
-  <span style="color:var(--memory)">8 agents</span> · <span style="color:var(--sonnet)">13 skills (claude) · 11 (others)</span> · <span style="color:var(--bridge)">11 topologies</span> · <span style="color:var(--fable)">5 targets</span> · <span style="color:var(--haiku)">429 tests</span><br>
+  <span style="color:var(--memory)">8 agents</span> · <span style="color:var(--sonnet)">13 skills (claude) · 11 (others)</span> · <span style="color:var(--bridge)">11 topologies</span> · <span style="color:var(--fable)">5 targets</span> · <span style="color:var(--haiku)">461 tests</span><br>
   gk never invokes a model · CBM is the graph authority · evidence-based gates
 </div>
 

@@ -31,6 +31,12 @@ gk memory touch <id>             # reinforce a memory
 gk memory trace                  # decay pass + consolidation audit log
 ```
 
+Memory files retain GraphKit's existing frontmatter and add OKF-compatible fields: `generated`, `recorded_at`, `status`, and `sources`. This is additive compatibility, not OKF conformance; see the [current OKF specification](https://github.com/GoogleCloudPlatform/open-knowledge-format/blob/main/SPEC.md). Unknown fields survive rewrites. Capture identity is `basename + sha1(source + body)[:8]`: identical re-captures are idempotent, while changed content creates a new file and supersedes the old one (`valid_to`, `superseded_by`, `status: deprecated`) rather than overwriting it.
+
+The reader is strict at the filesystem boundary: malformed entries are dropped and counted in `malformed`; unreadable memory directories return `MEMORY_DIR_UNREADABLE` and fail, while a missing directory is treated as empty. Memory-augmented workflows use one terminal `INJECTION: <reminder>` / `INJECTION: null` contract on both execution paths. Curator cadence counts completed action-node executions, not curator calls. `recall_topk`, `expire_policy: manual`, and `null_intervention_allowed` are honored from graph configuration. Curator behavior is parity-tested across Claude Code, Cursor, OpenCode, Codex, and pi; Codex uses `workspace-write` so it can persist memory.
+
+Deterministic checks: `bun test` — **461 pass, 0 fail**; `bun run eval:memory` — `hit_rate: 1`, `validity_violations: []`, `malformed: 14` / `malformed_expected: 14`; `bun run typecheck` passes. These are fixture and behavior checks, not benchmark-superiority claims. The [@0xwast3 memory-engineering article](https://x.com/0xwast3/status/2084625810112032849) is third-party evidence only; its `status: conflicted` and three-month capture criterion are follow-up scope, not shipped behavior.
+
 ## CBM boundary
 
 gk can bridge to the codebase-memory-mcp (CBM) MCP server for indexing and code-graph queries (`gk graph index|search|ask|trace|query`, `gk memory index`). gk owns no graph database — CBM is the authority. This keeps gk a workflow compiler, not a re-implementation of CBM's LSP-backed indexer.
