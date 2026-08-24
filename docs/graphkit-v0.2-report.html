@@ -229,7 +229,7 @@ gk init                                  <span class="cmt"># → .claude/   (def
 gk init --target cursor                  <span class="cmt"># → .cursor/</span>
 gk init --target opencode                <span class="cmt"># → .opencode/ (TS plugin hooks)</span>
 gk init --target codex                   <span class="cmt"># → .codex/    (TOML agents + AGENTS.md rules)</span>
-gk init --target pi                      <span class="cmt"># → .pi/       (extension + prompt fragments)</span>
+gk init --target pi                      <span class="cmt"># → .omp/       (OMP extension + prompt fragments)</span>
 
 <span class="cmt"># Or scaffold a new project from scratch:</span>
 gk new --dir my-project
@@ -253,7 +253,7 @@ gk graph inspect diamond                 <span class="cmt"># → see topology co
     <div class="arch-layer">
       <div class="arch-layer-tag">Layer 1 — Kit Template</div>
       <div class="arch-layer-title">📦 kits/&lt;target&gt;/ installed into the host directory</div>
-      <div class="arch-layer-desc">Installed by <code>gk init --target &lt;id&gt;</code> — <code>.claude/</code>, <code>.cursor/</code>, <code>.opencode/</code>, <code>.codex/</code> or <code>.pi/</code>. Agents, skills, hooks, rules, schemas, topology templates — in the target host's native format.</div>
+      <div class="arch-layer-desc">Installed by <code>gk init --target &lt;id&gt;</code> — <code>.claude/</code>, <code>.cursor/</code>, <code>.opencode/</code>, <code>.codex/</code> or <code>.omp/</code>. Agents, skills, hooks, rules, schemas, topology templates — in the target host's native format.</div>
       <div class="arch-flow"><span class="arch-pill">8 agents (every host)</span><span class="arch-arrow">·</span><span class="arch-pill">13 skills (claude) · 11 (others)</span><span class="arch-arrow">·</span><span class="arch-pill">4 hooks</span><span class="arch-arrow">·</span><span class="arch-pill">3 rules</span><span class="arch-arrow">·</span><span class="arch-pill">11 templates</span></div>
     </div>
     <div class="arch-arrow-down">↓</div>
@@ -437,14 +437,14 @@ gk models opencode set --map <span class="field">opus</span>=<span class="str">a
       <table class="cmp-table" style="margin:0;font-size:0.74rem">
         <tr><th></th><th style="color:var(--sonnet)">Claude</th><th style="color:var(--cursor)">Cursor</th><th style="color:var(--opencode)">OpenCode</th><th style="color:var(--codex)">Codex</th><th style="color:var(--pi)">Pi</th></tr>
         <tr><td>Rules</td><td>.claude/rules/*.md</td><td>.cursor/rules/*.mdc</td><td>AGENTS.md</td><td>AGENTS.md rules section</td><td>AGENTS.md</td></tr>
-        <tr><td>Agents</td><td>.claude/agents/*.md</td><td>.cursor/agents/*.md</td><td>.opencode/agent/*.md</td><td>.codex/agents/*.toml</td><td>.pi/agents/ fragments</td></tr>
-        <tr><td>Skills</td><td>13 · .claude/skills/</td><td>11 · .cursor/skills/</td><td>11 · .opencode/skills/</td><td>11 · .codex/skills/</td><td>11 · .pi/skills/</td></tr>
-        <tr><td>Hooks</td><td>settings.json + *.cjs</td><td>hooks.json + *.cjs</td><td>TS plugin gk.ts</td><td>none — AGENTS.md rules</td><td>extension handlers</td></tr>
-        <tr><td>Execution</td><td>/gk:run + /gk:execute</td><td>/gk:execute</td><td>/gk:execute</td><td>/gk:execute</td><td>/gk:execute</td></tr>
+        <tr><td>Agents</td><td>.claude/agents/*.md</td><td>.cursor/agents/*.md</td><td>.opencode/agent/*.md</td><td>.codex/agents/*.toml</td><td>.omp/agents/ fragments</td></tr>
+        <tr><td>Skills</td><td>13 · .claude/skills/</td><td>11 · .cursor/skills/</td><td>11 · .opencode/skills/</td><td>11 · .codex/skills/</td><td>11 · .omp/skills/</td></tr>
+        <tr><td>Hooks</td><td>settings.json + *.cjs</td><td>hooks.json + *.cjs</td><td>TS plugin gk.ts</td><td>none — AGENTS.md rules</td><td>.omp extension handlers</td></tr>
+        <tr><td>Execution</td><td>/gk:run + /gk:execute</td><td>/gk:execute</td><td>/gk:execute</td><td>/gk:execute</td><td>/skill:gk-execute via OMP</td></tr>
       </table>
     </div>
   </div>
-  <p style="margin-top:1rem;max-width:none">Agent formats stay host-native: markdown frontmatter for Claude/Cursor/OpenCode; Codex TOML (<code>name</code>, <code>description</code>, <code>developer_instructions</code>, <code>model</code>, <code>sandbox_mode</code>); Pi prompt fragments. Dispatch paths: Claude Code / Cursor / OpenCode spawn Task-tool subagents wave by wave (parallel within a wave); Codex uses a spawn-prompt protocol against custom TOML agents — the wave barrier is instruction-enforced, not tool-enforced (documented limitation); Pi dispatches via the <code>gk_dispatch_agent</code> tool from its extension, running headless <code>pi -p</code> child processes (requires <code>pi</code> on your PATH). Skills <code>gk-compile</code>/<code>gk-run</code> ship only for Claude Code — 13 there, 11 on every other target.</p>
+  <p style="margin-top:1rem;max-width:none">Agent formats stay host-native: markdown frontmatter for Claude/Cursor/OpenCode; Codex TOML (<code>name</code>, <code>description</code>, <code>developer_instructions</code>, <code>model</code>, <code>sandbox_mode</code>); Pi prompt fragments installed under <code>.omp/</code> for OMP. Dispatch paths: Claude Code / Cursor / OpenCode spawn Task-tool subagents wave by wave (parallel within a wave); Codex uses a spawn-prompt protocol against custom TOML agents — the wave barrier is instruction-enforced, not tool-enforced (documented limitation); Pi dispatches through OMP via the <code>gk_dispatch_agent</code> extension, running headless <code>omp -p</code> child processes (requires <code>omp</code> on your PATH). Skills <code>gk-compile</code>/<code>gk-run</code> remain Claude-only; non-Claude targets execute <code>graph.yaml</code> directly through <code>gk-execute</code>.</p>
 
 <div class="section">
   <div class="section-label">Real Workflows Run In This Repo <span class="badge-new">0.2</span></div>

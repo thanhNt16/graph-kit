@@ -48,10 +48,10 @@ const TARGETS: Record<TargetId, TargetDescriptor> = {
   pi: {
     id: "pi",
     kitDirName: "pi",
-    installDir: ".pi",
+    installDir: ".omp",
     agents: { dir: "agents", format: "prompt-fragment" },
     skills: { dir: "skills" },
-    rulesStrategy: "instructions-md",
+    rulesStrategy: "agents-md-sections",
     hooksKind: "extension-ts",
     commandsKind: "prompt-template",
     execution: { workflowTool: false, subagentDispatch: "extension" },

@@ -22,7 +22,7 @@ export interface DispatchResult {
 }
 
 export function loadAgentPrompt(agent: string): string | null {
-  const p = join(process.cwd(), ".pi", "agents", `${agent}.md`);
+  const p = join(process.cwd(), ".omp", "agents", `${agent}.md`);
   return existsSync(p) ? readFileSync(p, "utf8") : null;
 }
 
@@ -45,7 +45,7 @@ export async function dispatch(args: DispatchArgs): Promise<DispatchResult> {
   const prompt = `${fragment}\n\n${buildPrompt(args)}`;
   const timeout = args.timeout_ms ?? 600_000;
   return new Promise((resolve) => {
-    execFile("pi", [...buildPiArgs(args), prompt], { timeout, maxBuffer: 10 * 1024 * 1024 }, (err, stdout) => {
+    execFile("omp", [...buildPiArgs(args), prompt], { timeout, maxBuffer: 10 * 1024 * 1024 }, (err, stdout) => {
       if (err) {
         resolve({
           ok: false,
@@ -92,9 +92,9 @@ export default async function gkSubagentExtension(pi: MinimalPiAPI): Promise<voi
     name: "gk_dispatch_agent",
     label: "Dispatch Agent",
     description:
-      "Dispatch an isolated subagent run: loads .pi/agents/<agent>.md as the role prompt, appends objective/context, and runs a headless `pi -p` child process. Returns { ok, output, exit_code }. Honor wave barriers from gk-execute: treat ok:false as graph-stopping.",
+      "Dispatch an isolated subagent run: loads .omp/agents/<agent>.md as the role prompt, appends objective/context, and runs a headless `omp -p` child process. Returns { ok, output, exit_code }. Honor wave barriers from gk-execute: treat ok:false as graph-stopping.",
     parameters: Type.Object({
-      agent: Type.String({ description: "Agent fragment name (file stem under .pi/agents/, e.g. data-engineer)" }),
+      agent: Type.String({ description: "Agent fragment name (file stem under .omp/agents/, e.g. data-engineer)" }),
       objective: Type.String({ description: "What the subagent must accomplish" }),
       context: Type.Optional(Type.String({ description: "Upstream results, refs, or extra background" })),
       constraints: Type.Optional(

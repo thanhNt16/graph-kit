@@ -66,26 +66,30 @@ describe("pi kit structure", () => {
     expect(offenders).toEqual([]);
   });
 
-  test("extension ships at .pi/extensions/gk-subagent.ts and exports pure functions", () => {
+  test("extension ships at extensions/gk-subagent.ts and exports pure functions", () => {
     const ext = join(KIT, "extensions", "gk-subagent.ts");
     expect(existsSync(ext)).toBe(true);
     const raw = readFileSync(ext, "utf8");
     expect(raw).toContain('"gk_dispatch_agent"');
     expect(raw).toContain("export default async function");
     expect(raw).toContain('await import("typebox")');
+    expect(raw).not.toContain('".pi"');
   });
 
   test("prompt template routes through gk-status", () => {
     const raw = readFileSync(join(KIT, "prompts", "gk.md"), "utf8");
-    expect(raw).toContain(".pi/skills/gk-status/SKILL.md");
+    expect(raw).toContain(".omp/skills/gk-status/SKILL.md");
     expect(raw).toContain("$ARGUMENTS");
   });
 
-  test("instructions.md carries graph-authority rules", () => {
-    const raw = readFileSync(join(KIT, "instructions.md"), "utf8");
+  test("rules-section.md carries graph-authority rules with AGENTS.md markers", () => {
+    const raw = readFileSync(join(KIT, "rules-section.md"), "utf8");
+    expect(raw.startsWith("<!-- graphkit:start -->")).toBe(true);
+    expect(raw.trimEnd().endsWith("<!-- graphkit:end -->")).toBe(true);
     expect(raw).toContain("graph-authority");
     expect(raw).toContain("agent-binding");
     expect(raw).toContain("topology-routing");
+    expect(raw).not.toContain(".pi/");
   });
 });
 

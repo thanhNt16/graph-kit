@@ -80,7 +80,7 @@ const BUILTIN_TOOLS_OPENCODE = [
 ];
 // Codex has no subagent tool — waves are driven by spawn-prompt instructions.
 const BUILTIN_TOOLS_CODEX = ["Read", "Write", "Edit", "Bash", "Glob", "Grep", "WebFetch", "WebSearch"];
-// pi registers gk_dispatch_agent via .pi/extensions/gk-subagent.ts.
+// pi registers gk_dispatch_agent via .omp/extensions/gk-subagent.ts.
 const BUILTIN_TOOLS_PI = [
   "Read",
   "Write",

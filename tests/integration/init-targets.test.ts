@@ -33,12 +33,24 @@ describe("init per target", () => {
     expect(existsSync(join(TMP, ".agents", "skills"))).toBe(true);
   });
 
-  test("pi tree", () => {
+  test("pi/omp tree", () => {
     initTmp("pi");
-    expect(existsSync(join(TMP, ".pi", "extensions", "gk-subagent.ts"))).toBe(true);
-    expect(existsSync(join(TMP, ".pi", "skills"))).toBe(true);
-    expect(existsSync(join(TMP, ".pi", "agents"))).toBe(true);
-    expect(existsSync(join(TMP, ".pi", "prompts", "gk.md"))).toBe(true);
+    expect(existsSync(join(TMP, ".omp", "extensions", "gk-subagent.ts"))).toBe(true);
+    expect(existsSync(join(TMP, ".omp", "skills", "gk-status", "SKILL.md"))).toBe(true);
+    expect(existsSync(join(TMP, ".omp", "agents"))).toBe(true);
+    expect(existsSync(join(TMP, ".omp", "prompts", "gk.md"))).toBe(true);
+    expect(existsSync(join(TMP, "AGENTS.md"))).toBe(true);
+  });
+
+  test.skipIf(process.env.GK_TEST_OMP !== "1")("pi kit is discovered by OMP", { timeout: 120_000 }, () => {
+    const output = execSync(
+      'omp --print --no-session --mode text "Read skill://gk-status and print its first heading only."',
+      {
+        cwd: TMP,
+        encoding: "utf8",
+      },
+    );
+    expect(output).toContain("# gk status");
   });
 
   test("invalid target exits 1 with BAD_TARGET", () => {

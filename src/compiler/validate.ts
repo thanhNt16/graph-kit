@@ -19,13 +19,22 @@ export function agentFileName(agent: string): string {
 export function validateGraph(graph: Graph, projectRoot: string): Finding[] {
   const findings: Finding[] = [];
 
-  // 1. Agent binding: node.agent must exist in claude/agents/
-  const agentDir = join(projectRoot, "claude", "agents");
-  const available = existsSync(agentDir) ? readdirSync(agentDir).map((f) => basename(f, ".md")) : [];
+  // 1. Agent binding: use the first installed host's agent directory.
+  const agentDir = [
+    ".omp/agents",
+    ".claude/agents",
+    ".cursor/agents",
+    ".opencode/agent",
+    ".codex/agents",
+    "claude/agents",
+  ]
+    .map((path) => join(projectRoot, path))
+    .find(existsSync);
+  const available = agentDir ? readdirSync(agentDir).map((f) => basename(f, ".md")) : [];
 
   for (const [id, node] of Object.entries(graph.nodes)) {
     const expected = agentFileName(node.agent).replace(/\.md$/, "");
-    if (existsSync(agentDir) && !available.includes(expected)) {
+    if (agentDir && !available.includes(expected)) {
       findings.push({
         check: "agent-binding",
         path: `nodes.${id}.agent`,

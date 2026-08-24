@@ -47,7 +47,7 @@ For each wave in the output:
 
 Then continue to the next wave — skip the action-wave steps below for curator waves.
 
-1. **Resolve each node's agent fragment** at `.pi/agents/<agent-name>.md` — `gk_dispatch_agent` loads it automatically; you only need it to check the agent exists and understand its deliverables.
+1. **Resolve each node's agent fragment** at `.omp/agents/<agent-name>.md` — `gk_dispatch_agent` loads it automatically; you only need it to check the agent exists and understand its deliverables.
 
 ## Dispatching a wave (pi)
 
@@ -58,7 +58,7 @@ A failed node (ok:false) stops the graph: report node name, objective, and error
 Pass node constraints: no_write → constraints.no_write=true; tools → constraints.tools_allowlist.
 
 Each dispatch gets:
-   - The node's `agent` (must match a `.pi/agents/<name>.md` fragment)
+   - The node's `agent` (must match a `.omp/agents/<name>.md` fragment)
    - The node's `objective` as the objective
    - Any upstream results from `depend_on` nodes (append to the objective or context)
    - The node's `refs` (mention these files in the context)
@@ -97,7 +97,7 @@ Wave 2: [synthesizer]                 → 1 agent (opus)
 
 ```
 gk_dispatch_agent({
-  agent: "<node.agent>",          // must match .pi/agents/<agent>.md
+  agent: "<node.agent>",          // must match .omp/agents/<agent>.md
   objective: "<node.objective>",
   context: "<upstream results, refs, acceptance recipe>",
   constraints: {                  // only when the node declares them

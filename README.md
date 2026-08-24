@@ -95,7 +95,7 @@ Then in a Claude Code session: `/gk:visualize` to see it, `/gk:execute` to run i
 GraphKit targets five hosts. Pass `--target <id>` to install the host-flavored kit instead of `.claude/`:
 
 ```bash
-gk init --target cursor      # also: opencode | codex | pi
+gk init --target cursor      # also: opencode | codex | pi (installs `.omp/`, runs under OMP)
 gk new --dir my-project --target opencode   # scaffold fresh
 ```
 
@@ -103,16 +103,16 @@ The `gk` CLI is identical across targets — `validate`, `graph new/ascii/svg/wa
 
 | | Claude Code (`claude`) | Cursor (`cursor`) | OpenCode (`opencode`) | Codex CLI (`codex`) | pi (`pi`) |
 |---|---|---|---|---|---|
-| Rules | `.claude/rules/*.md` | `.cursor/rules/*.mdc` (Cursor frontmatter) | `AGENTS.md` sections appended by init | `AGENTS.md` section (+ spawn protocol) | `.pi/instructions.md` |
-| Agents | `.claude/agents/*.md` | `.cursor/agents/*.md` (+ `readonly`, `is_background`) | `.opencode/agent/*.md` (frontmatter) | `.codex/agents/*.toml` | `.pi/agents/*.md` (prompt fragments) |
-| Skills | `.claude/skills/*/SKILL.md` | `.cursor/skills/*/SKILL.md` | `.opencode/skill/*/SKILL.md` | `.agents/skills/*/SKILL.md` (sibling dir, read natively by Codex) | `.pi/skills/*/SKILL.md` |
-| Hooks | `.claude/settings.json` + `hooks/*.cjs` | `.cursor/hooks.json` (lowercase events) + `hooks/*.cjs` | TS plugin at `.opencode/plugins/gk.ts` | none — guards folded into `AGENTS.md` + skill checklists | TS extension `.pi/extensions/gk-subagent.ts` |
-| Execution | `/gk:run` (Workflow tool) + `/gk:execute` | **`/gk:execute` only** (Task tool) | `/gk:execute` (Task-tool dispatch, wave barrier between waves) | `/gk:execute` (spawn-prompt driven; **wave barrier is instruction-enforced, not tool-enforced**) | `/skill:gk-execute` via the `gk_dispatch_agent` extension (**requires `pi` on PATH**) |
+| Rules | `.claude/rules/*.md` | `.cursor/rules/*.mdc` (Cursor frontmatter) | `AGENTS.md` sections appended by init | `AGENTS.md` section (+ spawn protocol) | `AGENTS.md` section |
+| Agents | `.claude/agents/*.md` | `.cursor/agents/*.md` (+ `readonly`, `is_background`) | `.opencode/agent/*.md` (frontmatter) | `.codex/agents/*.toml` | `.omp/agents/*.md` (prompt fragments) |
+| Skills | `.claude/skills/*/SKILL.md` | `.cursor/skills/*/SKILL.md` | `.opencode/skill/*/SKILL.md` | `.agents/skills/*/SKILL.md` (sibling dir, read natively by Codex) | `.omp/skills/*/SKILL.md` |
+| Hooks | `.claude/settings.json` + `hooks/*.cjs` | `.cursor/hooks.json` (lowercase events) + `hooks/*.cjs` | TS plugin at `.opencode/plugins/gk.ts` | none — guards folded into `AGENTS.md` + skill checklists | TS extension `.omp/extensions/gk-subagent.ts` |
+| Execution | `/gk:run` (Workflow tool) + `/gk:execute` | **`/gk:execute` only** (Task tool) | `/gk:execute` (Task-tool dispatch, wave barrier between waves) | `/gk:execute` (spawn-prompt driven; **wave barrier is instruction-enforced, not tool-enforced**) | `/skill:gk-execute` via the `gk_dispatch_agent` extension (**requires `omp` on PATH**) |
 
 Cursor has no Workflow tool, so the compile→run path is omitted there too — `/gk:execute` is the sole execution path on every non-Claude target. It reads `gk graph waves --json` and dispatches subagents wave by wave (parallel within a wave). Two host-specific caveats:
 
 - **Codex** spawns agents via prompt instructions rather than a subagent tool. The wave barrier ("wait for all results before continuing") is enforced by instruction, not by the host — a weaker guarantee than Task-tool hosts.
-- **pi** has no built-in subagents or hooks; both are provided by the installed `gk_dispatch_agent` extension, which shells out to `pi -p`. The `pi` binary must be on your `PATH`.
+- **pi** installs into `.omp/` and runs under [OMP (Oh My Pi)](https://github.com/can1357/oh-my-pi) — OMP is pi-based and loads `.omp/` natively. Subagents and hooks come from the installed `gk_dispatch_agent` extension, which shells out to `omp -p`. The `omp` binary must be on your `PATH`.
 
 `gk inventory --target <id>` reports installed agents/skills/hooks/commands for any target — names only, no credentials/tokens.
 
