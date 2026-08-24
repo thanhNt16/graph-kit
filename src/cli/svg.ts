@@ -60,9 +60,11 @@ export function renderSvg(graphFile: string): string {
   const width = (graphObj.width || 600) + 80;
   const height = (graphObj.height || 400) + 80;
 
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" style="background:#0a0e14">
+  const title = `${graph.metadata?.name || "graph"} (${graph.topology})`;
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" role="img" aria-label="${title}" style="background:#0a0e14">
+  <title>${title}</title>
   <rect width="100%" height="100%" fill="#0a0e14"/>
-  <text x="${width / 2}" y="25" text-anchor="middle" fill="#e6edf3" font-family="sans-serif" font-size="16" font-weight="bold">${graph.metadata?.name || "graph"} (${graph.topology})</text>
+  <text x="${width / 2}" y="25" text-anchor="middle" fill="#e6edf3" font-family="sans-serif" font-size="16" font-weight="bold">${title}</text>
   ${svgEdges}
   ${svgNodes}
 </svg>`;
