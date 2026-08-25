@@ -18,6 +18,11 @@
       "options": ["--json"]
     },
     {
+      "name": "gate",
+      "description": "Deterministic evidence gate: MERGE/BLOCK over required evidence keys",
+      "options": ["--json"]
+    },
+    {
       "name": "compile",
       "description": "Compile graph.yaml to a .workflow.js script",
       "options": ["--output <path>", "--json"]

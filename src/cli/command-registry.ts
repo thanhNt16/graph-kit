@@ -28,6 +28,11 @@ export const CLI_COMMANDS: { path: string; description: string; options: string[
   },
   { path: "validate", description: "Validate a graph.yaml", options: ["--json"] },
   {
+    path: "gate",
+    description: "Deterministic evidence gate: MERGE/BLOCK over required evidence keys",
+    options: ["--json"],
+  },
+  {
     path: "compile",
     description: "Compile graph.yaml to a .workflow.js script",
     options: ["--output <path>", "--json"],

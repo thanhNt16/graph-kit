@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { cac } from "cac";
+import { registerGateCommand } from "./cli/commands/gate.js";
 import { registerGraphCommands } from "./cli/commands/graph.js";
 import { registerInventoryCommands } from "./cli/commands/inventory.js";
 import { registerKitCommands } from "./cli/commands/kit.js";
@@ -10,6 +11,7 @@ import { APP_VERSION } from "./version.js";
 
 const cli = cac("gk").version(APP_VERSION);
 registerKitCommands(cli);
+registerGateCommand(cli);
 registerGraphCommands(cli);
 registerMemoryCommands(cli);
 registerModelsCommands(cli);
