@@ -1,9 +1,9 @@
 import { describe, expect, test } from "bun:test";
 import { join } from "node:path";
 import YAML from "yaml";
+import { createCustomWorkflow } from "../../kits/claude/templates/custom.workflow.js";
 import { compileGraph } from "../../src/compiler/emitter.js";
 import { GraphSchema } from "../../src/schemas/graph.schema.js";
-import { createCustomWorkflow } from "../../kits/claude/templates/custom.workflow.js";
 
 const TEMPLATES = join(import.meta.dir, "..", "..", "kits", "claude", "templates");
 
@@ -79,7 +79,10 @@ nodes:
   test("compiled workflow aborts on {ok:false} before downstream dispatch", async () => {
     const calls: string[] = [];
     const ctx = {
-      agent: async (p: string) => { calls.push(p); return { ok: false, output: "boom", exit_code: 1 }; },
+      agent: async (p: string) => {
+        calls.push(p);
+        return { ok: false, output: "boom", exit_code: 1 };
+      },
       parallel: async (ts: (() => Promise<unknown>)[]) => Promise.all(ts.map((t) => t())),
     };
     await expect(createCustomWorkflow(graphYaml({}))(ctx)).rejects.toThrow(
@@ -90,22 +93,42 @@ nodes:
 
   test("compiled workflow aborts on throwing agent before downstream dispatch", async () => {
     const calls: string[] = [];
-    const ctx = { agent: async (p: string) => { calls.push(p); if (p.includes("A")) throw new Error("agent boom"); return { ok: true }; }, parallel: async (ts: (() => Promise<unknown>)[]) => Promise.all(ts.map((t) => t())) };
-    await expect(createCustomWorkflow(graphYaml({}))(ctx)).rejects.toThrow("GK_WAVE_FAILED: node(s) a failed; later waves not dispatched");
+    const ctx = {
+      agent: async (p: string) => {
+        calls.push(p);
+        if (p.includes("A")) throw new Error("agent boom");
+        return { ok: true };
+      },
+      parallel: async (ts: (() => Promise<unknown>)[]) => Promise.all(ts.map((t) => t())),
+    };
+    await expect(createCustomWorkflow(graphYaml({}))(ctx)).rejects.toThrow(
+      "GK_WAVE_FAILED: node(s) a failed; later waves not dispatched",
+    );
     expect(calls.join(" ")).not.toContain("B");
   });
 
   test("compiled workflow aborts on falsy agent result before downstream dispatch", async () => {
     const calls: string[] = [];
-    const ctx = { agent: async (p: string) => { calls.push(p); return p.includes("A") ? null : { ok: true }; }, parallel: async (ts: (() => Promise<unknown>)[]) => Promise.all(ts.map((t) => t())) };
-    await expect(createCustomWorkflow(graphYaml({}))(ctx)).rejects.toThrow("GK_WAVE_FAILED: node(s) a failed; later waves not dispatched");
+    const ctx = {
+      agent: async (p: string) => {
+        calls.push(p);
+        return p.includes("A") ? null : { ok: true };
+      },
+      parallel: async (ts: (() => Promise<unknown>)[]) => Promise.all(ts.map((t) => t())),
+    };
+    await expect(createCustomWorkflow(graphYaml({}))(ctx)).rejects.toThrow(
+      "GK_WAVE_FAILED: node(s) a failed; later waves not dispatched",
+    );
     expect(calls.join(" ")).not.toContain("B");
   });
 
   test("compiled loop runs exactly max_rounds on plain-string results", async () => {
     let n = 0;
     const ctx = {
-      agent: async () => { n += 1; return "not done"; },
+      agent: async () => {
+        n += 1;
+        return "not done";
+      },
       parallel: async (ts: (() => Promise<unknown>)[]) => Promise.all(ts.map((t) => t())),
     };
     const graph = graphYaml({});
@@ -113,11 +136,14 @@ nodes:
     graph.nodes.a.loop = { enabled: true, max_rounds: 3, stop_when: "never matches" };
     await createCustomWorkflow(graph)(ctx);
     expect(n).toBe(3);
-    });
+  });
   test("loop fails fast on a failed round", async () => {
     const calls: string[] = [];
     const ctx = {
-      agent: async (p: string) => { calls.push(p); return calls.length === 1 ? { ok: false, error: "boom" } : { ok: true }; },
+      agent: async (p: string) => {
+        calls.push(p);
+        return calls.length === 1 ? { ok: false, error: "boom" } : { ok: true };
+      },
       parallel: async (ts: (() => Promise<unknown>)[]) => Promise.all(ts.map((t) => t())),
     };
     const graph = graphYaml({});
@@ -132,7 +158,10 @@ nodes:
     const graph = graphYaml({ outputs: { evidence_dir: ".graphkit/evidence/" } });
     graph.nodes.a.evidence = ["design"];
     const ctx = {
-      agent: async (p: string) => { prompts.push(p); return p === "A" ? "x".repeat(3000) : "ok"; },
+      agent: async (p: string) => {
+        prompts.push(p);
+        return p === "A" ? "x".repeat(3000) : "ok";
+      },
       parallel: async (ts: (() => Promise<unknown>)[]) => Promise.all(ts.map((t) => t())),
     };
     await createCustomWorkflow(graph)(ctx);

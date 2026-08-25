@@ -2,11 +2,11 @@ import { createHash } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { CAC } from "cac";
+import { validateGraph } from "../../compiler/validate.js";
 import { GraphKitError } from "../../errors.js";
 import { scoreWorkProduct } from "../../eval/rubrics.js";
 import { fail, ok } from "../output.js";
 import { loadGraph } from "./graph.js";
-import { validateGraph } from "../../compiler/validate.js";
 
 /**
  * Deterministic evidence gate: MERGE/BLOCK over required evidence keys.
@@ -73,7 +73,9 @@ export function registerGateCommand(cli: CAC) {
           console.log(JSON.stringify(ok({ verdict, scorecard, manifest })));
           return;
         }
-        console.log(JSON.stringify(fail("GATE_BLOCK", "evidence gate blocked merge", { missing, scorecard, manifest })));
+        console.log(
+          JSON.stringify(fail("GATE_BLOCK", "evidence gate blocked merge", { missing, scorecard, manifest })),
+        );
         process.exit(1);
       } catch (e) {
         console.log(

@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { createHash } from "node:crypto";
+import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { cac } from "cac";
@@ -22,7 +22,9 @@ function runCli(args: string[], cwd: string) {
   console.log = (...a: unknown[]) => logs.push(a.map(String).join(" "));
   let exitCode = 0;
   const origExit = process.exit;
-  process.exit = (c?: number) => { exitCode = c ?? 1; };
+  process.exit = (c?: number) => {
+    exitCode = c ?? 1;
+  };
   let error: Error | undefined;
   try {
     cli.parse(["node", "gk", ...args], { run: true });
@@ -68,9 +70,7 @@ describe("gateGraph", () => {
     const result = gateGraph(["design"], evDir);
     expect(result.verdict).toBe("MERGE");
     expect(result.manifest.design.bytes).toBe(Buffer.byteLength("approved\n"));
-    expect(result.manifest.design.sha256).toBe(
-      createHash("sha256").update("approved\n").digest("hex"),
-    );
+    expect(result.manifest.design.sha256).toBe(createHash("sha256").update("approved\n").digest("hex"));
   });
 
   test("missing key → BLOCK lists missing", () => {

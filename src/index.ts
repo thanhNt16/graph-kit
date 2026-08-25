@@ -1,14 +1,14 @@
 #!/usr/bin/env node
 import { cac } from "cac";
+import { registerExecuteCommand } from "./cli/commands/execute.js";
 import { registerGateCommand } from "./cli/commands/gate.js";
 import { registerGraphCommands } from "./cli/commands/graph.js";
 import { registerInventoryCommands } from "./cli/commands/inventory.js";
 import { registerKitCommands } from "./cli/commands/kit.js";
 import { registerMemoryCommands } from "./cli/commands/memory.js";
 import { registerModelsCommands } from "./cli/commands/models.js";
-import { registerTemplateCommands } from "./cli/commands/template.js";
 import { registerStatusCommand } from "./cli/commands/status.js";
-import { registerExecuteCommand } from "./cli/commands/execute.js";
+import { registerTemplateCommands } from "./cli/commands/template.js";
 import { registerVisualizeCommand } from "./cli/commands/visualize.js";
 import { APP_VERSION } from "./version.js";
 

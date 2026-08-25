@@ -58,7 +58,7 @@ export async function dispatch(args: DispatchArgs): Promise<DispatchResult> {
     "/bin/sh",
     ["-c", 'printf %s "$GK_PROMPT" | exec omp "$@"', "gk-dispatch", ...buildPiArgs(args)],
     { env: { ...process.env, GK_PROMPT: prompt }, timeout, maxBuffer: 10 * 1024 * 1024 },
-    (err, stdout, stderr) => {
+    (err, stdout, _stderr) => {
       if (err) {
         resolve({
           ok: false,

@@ -747,7 +747,14 @@ export function registerGraphCommands(cli: CAC) {
 
           if (completed.size < actionIds.length) {
             const unresolved = actionIds.filter((id) => !completed.has(id));
-            console.log(JSON.stringify(fail("WAVES_INCOMPLETE", `unresolved nodes after topological sort: ${unresolved.join(", ")}`, { unresolved, hint: "cycle or dependency on an excluded node" })));
+            console.log(
+              JSON.stringify(
+                fail("WAVES_INCOMPLETE", `unresolved nodes after topological sort: ${unresolved.join(", ")}`, {
+                  unresolved,
+                  hint: "cycle or dependency on an excluded node",
+                }),
+              ),
+            );
             process.exit(1);
             return;
           }
@@ -827,7 +834,11 @@ export function registerGraphCommands(cli: CAC) {
 
           console.log(JSON.stringify(ok(payload)));
         } catch (e) {
-          console.log(JSON.stringify(e instanceof GraphKitError ? fail(e.code, e.message, e.details) : fail("WAVES_ERROR", String(e))));
+          console.log(
+            JSON.stringify(
+              e instanceof GraphKitError ? fail(e.code, e.message, e.details) : fail("WAVES_ERROR", String(e)),
+            ),
+          );
           process.exit(1);
         }
       } else if (subcommand === "index") {

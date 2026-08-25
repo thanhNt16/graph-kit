@@ -2,9 +2,9 @@ import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { CAC } from "cac";
 import { GraphKitError } from "../../errors.js";
-import { gateGraph, type GateResult } from "./gate.js";
-import { loadGraph } from "./graph.js";
 import { fail, ok } from "../output.js";
+import { type GateResult, gateGraph } from "./gate.js";
+import { loadGraph } from "./graph.js";
 
 export function registerStatusCommand(cli: CAC) {
   cli

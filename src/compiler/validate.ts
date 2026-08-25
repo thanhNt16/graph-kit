@@ -32,13 +32,12 @@ export function validateGraph(graph: Graph, projectRoot: string): Finding[] {
     .find(existsSync);
   const available = agentDir ? readdirSync(agentDir).map((f) => basename(f, ".md")) : [];
 
-
   // 0. Non-custom topologies require at least one node
   if (graph.topology !== "custom" && Object.keys(graph.nodes).length === 0) {
     findings.push({
       check: "zero-nodes",
       path: "nodes",
-      message: "Graph with topology '" + graph.topology + "' must declare at least one node",
+      message: `Graph with topology "${graph.topology}" must declare at least one node`,
     });
   }
   for (const [id, node] of Object.entries(graph.nodes)) {

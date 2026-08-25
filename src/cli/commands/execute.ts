@@ -8,7 +8,9 @@ export function registerExecuteCommand(cli: CAC) {
     .option("--worktree", "Isolate write nodes in git worktrees")
     .action(() => {
       console.log(
-        JSON.stringify(fail("NOT_IMPLEMENTED", "gk execute is not implemented yet. Use /gk:execute skill or `gk compile` + run.")),
+        JSON.stringify(
+          fail("NOT_IMPLEMENTED", "gk execute is not implemented yet. Use /gk:execute skill or `gk compile` + run."),
+        ),
       );
       process.exit(1);
     });

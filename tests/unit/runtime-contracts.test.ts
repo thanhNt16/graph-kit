@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
+import { buildPiArgs } from "../../kits/pi/extensions/gk-subagent";
 import { compileGraph } from "../../src/compiler/emitter.js";
 import { validateGraph } from "../../src/compiler/validate.js";
-import { buildPiArgs } from "../../kits/pi/extensions/gk-subagent";
 import { GraphSchema } from "../../src/schemas/graph.schema.js";
 
 const templatesDir = `${import.meta.dir}/../../kits/claude/templates`;
@@ -20,7 +20,9 @@ function graph(overrides: Record<string, unknown> = {}) {
 describe("runtime contracts", () => {
   test("rejects unsupported loop exit_condition", () => {
     const findings = validateGraph(
-      graph({ nodes: { worker: { agent: "worker", objective: "work", loop: { enabled: true, exit_condition: "done" } } } }),
+      graph({
+        nodes: { worker: { agent: "worker", objective: "work", loop: { enabled: true, exit_condition: "done" } } },
+      }),
       "/tmp/no-agent-directory",
     );
     expect(findings).toContainEqual(
@@ -36,9 +38,7 @@ describe("runtime contracts", () => {
       "/tmp/no-agent-directory",
     );
     for (const key of ["max_workers", "max_iterations", "max_findings", "budget_tokens"]) {
-      expect(findings).toContainEqual(
-        expect.objectContaining({ check: "unsupported-field", path: `limits.${key}` }),
-      );
+      expect(findings).toContainEqual(expect.objectContaining({ check: "unsupported-field", path: `limits.${key}` }));
     }
   });
 
@@ -57,7 +57,11 @@ describe("runtime contracts", () => {
       "Read,Glob,Grep",
     ]);
     expect(
-      buildPiArgs({ agent: "a", objective: "x", constraints: { no_exec: true, no_write: true, tools_allowlist: ["Bash"] } }),
+      buildPiArgs({
+        agent: "a",
+        objective: "x",
+        constraints: { no_exec: true, no_write: true, tools_allowlist: ["Bash"] },
+      }),
     ).toEqual(["-p", "--tools", "Read,Glob,Grep"]);
   });
 
