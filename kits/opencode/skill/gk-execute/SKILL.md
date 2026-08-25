@@ -157,3 +157,16 @@ The gk plugin (`.opencode/plugins/gk.ts`) reads `.graphkit/runs/.active` and `.g
 - Writes under `.graphkit/evidence/` are auto-indexed to `.graphkit/evidence/.index` and distilled into `.graphkit/memory/`.
 
 Always create the markers at run start and remove `.active` at run end, or these guards misfire.
+
+## Evidence gate
+
+Before reporting completion, write one non-whitespace file per declared evidence key:
+`<graph.outputs.evidence_dir>/<key>.md`
+
+After all producer waves finish, run:
+
+```bash
+gk gate graph.yaml
+```
+
+The gate maps each required key `k` to `<evidence_dir>/<k>.md`. Missing or whitespace-only files produce `BLOCK` and exit 1; repair or redispatch only the producer for each missing/empty key, then rerun the gate. Only `MERGE` with exit 0 permits completion. The compiled workflow does not invoke the gate automatically.

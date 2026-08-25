@@ -213,3 +213,27 @@ nodes:
 ## Boundary
 
 gk is the compiler, not a runtime. It never invokes a model, spawns an agent, or reads an API key. Execution is delegated to the host: Claude Code's Workflow tool (`/gk:run`) or native subagent dispatch (`/gk:execute`, all targets).
+
+## Execution contracts
+
+Node constraints are enforced mechanically only on pi (via `gk_dispatch_agent`); on claude, cursor, codex, and opencode they are prompt-advisory — the skill passes them into each node's dispatch prompt, but the host does not filter tools.
+
+| Constraint | Enforcement | Shell | Honest label |
+|---|---|---|---|
+| `tools_allowlist` | mechanical, pi `gk_dispatch_agent` | per list | real |
+| `no_write` | mechanical tool filter, **Bash retained** | yes | best-effort (`echo >`, `git commit`, `curl \| sh` possible) |
+| `no_exec` | mechanical tool filter, shell removed | no | hard no-mutation |
+
+- `no_write` is best-effort: the tool filter keeps the shell in the allowlist, so a node can still mutate the filesystem through Bash. Treat it as a prompt-level guard, not a sandbox.
+- `no_exec` removes Bash and overrides any `tools_allowlist` (`no_exec` > `tools_allowlist` > `no_write` on pi); it is advisory on the other four hosts.
+- Loop semantics: `max_rounds` is the only mechanical loop bound; `stop_when` is advisory prompt text interpolated into each round, not an enforced exit condition.
+
+## Evidence gate
+
+Before reporting a graph run complete, produce one non-whitespace file per declared evidence key at `<graph.outputs.evidence_dir>/<key>.md`, then run:
+
+```bash
+gk gate graph.yaml
+```
+
+`gk gate` reads each required key `k` as `<evidence_dir>/<k>.md` and prints a deterministic MERGE/BLOCK verdict with a per-key scorecard and sha256 manifest. Exit 0 means `MERGE`; a missing or whitespace-only key yields `BLOCK` with exit 1 — repair or redispatch only the producer of that key, then rerun the gate. Compiled workflows do not invoke the gate automatically; it is the orchestrator's final step.

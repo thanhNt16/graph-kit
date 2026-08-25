@@ -149,3 +149,16 @@ Graph authority is unchanged in worktree mode — topology, `depend_on` ordering
 | Speed | Same (parallel within waves) | Same |
 | Scale | Good for <20 nodes | Better for 100+ nodes |
 | Adaptivity | Can adjust mid-run | Fixed script |
+
+## Evidence gate
+
+Before reporting completion, write one non-whitespace file per declared evidence key:
+`<graph.outputs.evidence_dir>/<key>.md`
+
+After all producer waves finish, run:
+
+```bash
+gk gate graph.yaml
+```
+
+The gate maps each required key `k` to `<evidence_dir>/<k>.md`. Missing or whitespace-only files produce `BLOCK` and exit 1; repair or redispatch only the producer for each missing/empty key, then rerun the gate. Only `MERGE` with exit 0 permits completion. The compiled workflow does not invoke the gate automatically.
