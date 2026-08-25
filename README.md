@@ -10,7 +10,7 @@ GraphKit is a graph engineering kit for AI coding agents (Claude Code, Cursor, O
 
 gk never invokes a model, spawns an agent, or reads an API key. It validates and compiles only.
 
-This is a **graph engineering kit** ([Simmons — *We Are Entering the Graph Engineering Phase*](https://www.drjoshcsimmons.com/writing/we-are-entering-the-graph-engineering-phase)): it compiles the coordination that LLM-choreographed alternatives delegate to a language model into a deterministic workflow file ([TURION — multi-agent orchestration infrastructure in production](https://turion.ai/blog/multi-agent-orchestration-infrastructure-production/)). Budgets are the safety story — `limits`, `constraints`, and loop `max_rounds` cap the blast radius where swarm-style setups have incurred runaway costs ([Edgeless Lab](https://edgelesslab.com/blog/swarm-tried-to-bankrupt-itself/)). Per-node binding replaces the state-schema tax competitors pay: every node carries its own model tier, tools, skills, and constraints instead of a shared typed state ([Orange ITS — LangGraph review](https://www.orange-its.ch/en/insights/langgraph-review), [Kalvium — LangGraph vs LangChain in production](https://www.kalviumlabs.ai/blog/langgraph-vs-langchain-production/)).
+This is a **graph engineering kit** ([Simmons — *We Are Entering the Graph Engineering Phase*](https://www.drjoshcsimmons.com/writing/we-are-entering-the-graph-engineering-phase)): it compiles the coordination that LLM-choreographed alternatives delegate to a language model into a deterministic workflow file ([TURION — multi-agent orchestration infrastructure in production](https://turion.ai/blog/multi-agent-orchestration-infrastructure-production/)). Budgets are the safety story — `constraints` and loop `max_rounds` cap the blast radius where swarm-style setups have incurred runaway costs ([Edgeless Lab](https://edgelesslab.com/blog/swarm-tried-to-bankrupt-itself/)). Per-node binding replaces the state-schema tax competitors pay: every node carries its own model tier, tools, skills, and constraints instead of a shared typed state ([Orange ITS — LangGraph review](https://www.orange-its.ch/en/insights/langgraph-review), [Kalvium — LangGraph vs LangChain in production](https://www.kalviumlabs.ai/blog/langgraph-vs-langchain-production/)).
 
 ## Viewer
 
@@ -144,8 +144,6 @@ nodes:
     agent: software-architect
     model: opus
     depend_on: [worker]
-limits:
-  max_workers: 3
 evidence:
   required_keys: [report]
 ```
