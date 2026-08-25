@@ -63,9 +63,11 @@ Then continue to the next wave — skip the action-wave steps below for curator 
    In **worktree mode** a wave is NOT done when agents return — it is done when
    merged and the gate is green (see Worktree merge protocol below).
 
-4. **Handle loops** — if a node has `loop.enabled` and its result doesn't meet the stop condition, re-spawn that node (up to `max_rounds`).
+4. **Handle loops** — if a node has `loop.enabled` and its result doesn't meet the stop condition (`stop_when` is advisory), re-dispatch that node (up to `max_rounds`).
 
-5. **Write evidence** — write each node's output to `.graphkit/evidence/<node-id>.md` with the declared evidence keys.
+
+5. **Write evidence** — write one non-whitespace file per declared evidence key: `<evidence_dir>/<key>.md`
+
 
 ### Step 3: After all waves complete
 
