@@ -87,12 +87,16 @@ describe("graph subcommand regression (new/ascii/svg/waves)", () => {
     writeFileSync(
       memGraph,
       `topology: memory-augmented
+apiVersion: graphkit.dev/v2
+kind: Graph
+metadata: { name: memory-test }
 topology_config:
+  inner: { template: custom }
   memory: { curator_node: curator, cadence: on_node_complete }
 nodes:
-  scouter: { agent: Software Architect, depend_on: [] }
-  worker: { agent: Code Reviewer, depend_on: [scouter] }
-  curator: { agent: Memory Curator, depend_on: [] }
+  scouter: { agent: Software Architect, objective: test, depend_on: [] }
+  worker: { agent: Code Reviewer, objective: test, depend_on: [scouter] }
+  curator: { agent: Memory Curator, objective: test, depend_on: [] }
 `,
     );
     const { stdout, code } = runCli(["graph", "waves", memGraph, "--json"], cwd);

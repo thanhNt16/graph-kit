@@ -36,7 +36,11 @@ const EVERY3 = join(tmpdir(), `gk-waves-mem-every3-${process.pid}-${Date.now()}.
 writeFileSync(
   ON_NODE,
   `topology: memory-augmented
+apiVersion: graphkit.dev/v2
+kind: Graph
+metadata: { name: memory-test }
 topology_config:
+  inner: { template: custom }
   memory:
     curator_node: curator
     cadence: on_node_complete
@@ -44,49 +48,61 @@ topology_config:
     expire_policy: manual
     null_intervention_allowed: false
 nodes:
-  scouter: { agent: Software Architect, depend_on: [] }
-  worker: { agent: Code Reviewer, depend_on: [scouter] }
-  synthesizer: { agent: Software Architect, depend_on: [worker] }
-  curator: { agent: Memory Curator, depend_on: [] }
+  scouter: { agent: Software Architect, objective: test, depend_on: [] }
+  worker: { agent: Code Reviewer, objective: test, depend_on: [scouter] }
+  synthesizer: { agent: Software Architect, objective: test, depend_on: [worker] }
+  curator: { agent: Memory Curator, objective: test, depend_on: [] }
 `,
 );
 
 writeFileSync(
   EVERY2,
   `topology: memory-augmented
+apiVersion: graphkit.dev/v2
+kind: Graph
+metadata: { name: memory-test }
 topology_config:
+  inner: { template: custom }
   memory: { curator_node: curator, cadence: every, every: 2 }
 nodes:
-  scouter: { agent: Software Architect, depend_on: [] }
-  worker: { agent: Code Reviewer, depend_on: [scouter] }
-  synthesizer: { agent: Software Architect, depend_on: [worker] }
-  curator: { agent: Memory Curator, depend_on: [] }
+  scouter: { agent: Software Architect, objective: test, depend_on: [] }
+  worker: { agent: Code Reviewer, objective: test, depend_on: [scouter] }
+  synthesizer: { agent: Software Architect, objective: test, depend_on: [worker] }
+  curator: { agent: Memory Curator, objective: test, depend_on: [] }
 `,
 );
 
 writeFileSync(
   EVERY3,
   `topology: memory-augmented
+apiVersion: graphkit.dev/v2
+kind: Graph
+metadata: { name: memory-test }
 topology_config:
+  inner: { template: custom }
   memory: { curator_node: curator, cadence: every, every: 3 }
 nodes:
-  scouter: { agent: Software Architect, depend_on: [] }
-  worker: { agent: Code Reviewer, depend_on: [scouter] }
-  w1: { agent: Code Reviewer, depend_on: [worker] }
-  w2: { agent: Code Reviewer, depend_on: [worker] }
-  synthesizer: { agent: Software Architect, depend_on: [w1, w2] }
-  curator: { agent: Memory Curator, depend_on: [] }
+  scouter: { agent: Software Architect, objective: test, depend_on: [] }
+  worker: { agent: Code Reviewer, objective: test, depend_on: [scouter] }
+  w1: { agent: Code Reviewer, objective: test, depend_on: [worker] }
+  w2: { agent: Code Reviewer, objective: test, depend_on: [worker] }
+  synthesizer: { agent: Software Architect, objective: test, depend_on: [w1, w2] }
+  curator: { agent: Memory Curator, objective: test, depend_on: [] }
 `,
 );
 
 writeFileSync(
   NO_CURATOR,
   `topology: memory-augmented
+apiVersion: graphkit.dev/v2
+kind: Graph
+metadata: { name: memory-test }
 topology_config:
+  inner: { template: custom }
   memory: { curator_node: curator, cadence: on_node_complete }
 nodes:
-  scouter: { agent: Software Architect, depend_on: [] }
-  synthesizer: { agent: Software Architect, depend_on: [scouter] }
+  scouter: { agent: Software Architect, objective: test, depend_on: [] }
+  synthesizer: { agent: Software Architect, objective: test, depend_on: [scouter] }
 `,
 );
 
@@ -132,11 +148,11 @@ describe("gk graph waves — memory-augmented curator interleave", () => {
     expect(curatorIdxs).toEqual([2, 4]);
   });
 
-  test("no interleave when curator node is absent (graceful)", () => {
-    const d = parsed(NO_CURATOR);
-    expect(d.memory).toBeUndefined();
-    expect(d.waves.some((w: { curator?: boolean }) => w.curator === true)).toBe(false);
-    expect(d.total_waves).toBe(2); // scouter → synthesizer
+  test("absent curator is rejected by validation", () => {
+    const result = runCli(["graph", "waves", NO_CURATOR, "--json"]);
+    expect(result.code).toBe(1);
+    expect(result.stdout).toContain("VALIDATION_FAILED");
+    expect(result.stdout).toContain("memory-curator-node");
   });
 
   test("envelope carries memory config", () => {
