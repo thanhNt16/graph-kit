@@ -3,8 +3,22 @@ import { join } from "node:path";
 import YAML from "yaml";
 import { compileGraph } from "../../src/compiler/emitter.js";
 import { GraphSchema } from "../../src/schemas/graph.schema.js";
+import { createCustomWorkflow } from "../../kits/claude/templates/custom.workflow.js";
 
 const TEMPLATES = join(import.meta.dir, "..", "..", "kits", "claude", "templates");
+
+const graphYaml = (extra: object) => {
+  const base = YAML.parse(`apiVersion: graphkit.dev/v2
+kind: Graph
+metadata: { name: t }
+topology: custom
+nodes:
+  a: { agent: code-reviewer, objective: A, depend_on: [] }
+  b: { agent: qa-engineer, objective: B, depend_on: [a] }
+evidence: { required_keys: [] }
+`);
+  return GraphSchema.parse(Object.assign(base, extra));
+};
 
 describe("custom topology", () => {
   test("compiles with createCustomWorkflow", () => {
@@ -60,5 +74,30 @@ nodes:
       const result = GraphSchema.safeParse(YAML.parse(yaml));
       expect(result.success).toBe(true);
     }
+  });
+
+  test("compiled workflow aborts on {ok:false} before downstream dispatch", async () => {
+    const calls: string[] = [];
+    const ctx = {
+      agent: async (p: string) => { calls.push(p); return { ok: false, output: "boom", exit_code: 1 }; },
+      parallel: async (ts: (() => Promise<unknown>)[]) => Promise.all(ts.map((t) => t())),
+    };
+    await expect(createCustomWorkflow(graphYaml({}))(ctx)).rejects.toThrow(
+      "GK_WAVE_FAILED: node(s) a failed; later waves not dispatched",
+    );
+    expect(calls.join(" ")).not.toContain("B");
+  });
+
+  test("compiled loop runs exactly max_rounds on plain-string results", async () => {
+    let n = 0;
+    const ctx = {
+      agent: async () => { n += 1; return "not done"; },
+      parallel: async (ts: (() => Promise<unknown>)[]) => Promise.all(ts.map((t) => t())),
+    };
+    const graph = graphYaml({});
+    delete (graph.nodes as Record<string, unknown>).b;
+    graph.nodes.a.loop = { enabled: true, max_rounds: 3, stop_when: "never matches" };
+    await createCustomWorkflow(graph)(ctx);
+    expect(n).toBe(3);
   });
 });

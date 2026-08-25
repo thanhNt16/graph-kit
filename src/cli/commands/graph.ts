@@ -707,8 +707,13 @@ export function registerGraphCommands(cli: CAC) {
         const file = Array.isArray(args) ? args[0] : args;
         try {
           const resolved = file ?? join(process.cwd(), "graph.yaml");
-          const raw = readFileSync(resolved, "utf-8");
-          const graph = YAML.parse(raw);
+          const graph = loadGraph(resolved);
+          const findings = validateGraph(graph, process.cwd());
+          if (findings.length > 0) {
+            console.log(JSON.stringify(fail("VALIDATION_FAILED", "graph has findings", { findings })));
+            process.exit(1);
+            return;
+          }
           const nodes = graph.nodes || {};
           const ids = Object.keys(nodes);
 
@@ -738,6 +743,13 @@ export function registerGraphCommands(cli: CAC) {
             ready.forEach((id) => {
               completed.add(id);
             });
+          }
+
+          if (completed.size < actionIds.length) {
+            const unresolved = actionIds.filter((id) => !completed.has(id));
+            console.log(JSON.stringify(fail("WAVES_INCOMPLETE", `unresolved nodes after topological sort: ${unresolved.join(", ")}`, { unresolved, hint: "cycle or dependency on an excluded node" })));
+            process.exit(1);
+            return;
           }
 
           // Interleave curator waves at cadence; always finish with one end-of-run curation.
@@ -815,7 +827,7 @@ export function registerGraphCommands(cli: CAC) {
 
           console.log(JSON.stringify(ok(payload)));
         } catch (e) {
-          console.log(JSON.stringify(fail("WAVES_ERROR", String(e))));
+          console.log(JSON.stringify(e instanceof GraphKitError ? fail(e.code, e.message, e.details) : fail("WAVES_ERROR", String(e))));
           process.exit(1);
         }
       } else if (subcommand === "index") {
