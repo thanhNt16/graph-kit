@@ -88,6 +88,20 @@ nodes:
     expect(calls.join(" ")).not.toContain("B");
   });
 
+  test("compiled workflow aborts on throwing agent before downstream dispatch", async () => {
+    const calls: string[] = [];
+    const ctx = { agent: async (p: string) => { calls.push(p); if (p.includes("A")) throw new Error("agent boom"); return { ok: true }; }, parallel: async (ts: (() => Promise<unknown>)[]) => Promise.all(ts.map((t) => t())) };
+    await expect(createCustomWorkflow(graphYaml({}))(ctx)).rejects.toThrow("GK_WAVE_FAILED: node(s) a failed; later waves not dispatched");
+    expect(calls.join(" ")).not.toContain("B");
+  });
+
+  test("compiled workflow aborts on falsy agent result before downstream dispatch", async () => {
+    const calls: string[] = [];
+    const ctx = { agent: async (p: string) => { calls.push(p); return p.includes("A") ? null : { ok: true }; }, parallel: async (ts: (() => Promise<unknown>)[]) => Promise.all(ts.map((t) => t())) };
+    await expect(createCustomWorkflow(graphYaml({}))(ctx)).rejects.toThrow("GK_WAVE_FAILED: node(s) a failed; later waves not dispatched");
+    expect(calls.join(" ")).not.toContain("B");
+  });
+
   test("compiled loop runs exactly max_rounds on plain-string results", async () => {
     let n = 0;
     const ctx = {
