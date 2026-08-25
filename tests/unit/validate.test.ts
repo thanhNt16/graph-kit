@@ -157,6 +157,31 @@ describe("validateGraph structural checks", () => {
     const findings = validateGraph(parsed, PROJECT_ROOT);
     expect(findings).toEqual([]);
   });
+
+  test("zero-nodes: non-custom topology with no nodes rejected", () => {
+    const g = GraphSchema.parse({
+      apiVersion: "graphkit.dev/v2",
+      kind: "Graph",
+      metadata: { name: "empty" },
+      topology: "diamond",
+      nodes: {},
+    });
+    expect(validateGraph(g, PROJECT_ROOT)).toContainEqual(
+      expect.objectContaining({ check: "zero-nodes", path: "nodes" }),
+    );
+  });
+
+  test("zero-nodes: custom topology with no nodes is allowed", () => {
+    const g = GraphSchema.parse({
+      apiVersion: "graphkit.dev/v2",
+      kind: "Graph",
+      metadata: { name: "empty-custom" },
+      topology: "custom",
+      nodes: {},
+    });
+    const findings = validateGraph(g, "/nonexistent-root");
+    expect(findings.some((f) => f.check === "zero-nodes")).toBe(false);
+  });
   for (const key of ["../report", "nested/report", "/tmp/report", "..\\report"]) {
     test(`rejects non-basename evidence key: ${key}`, () => {
       const g = GraphSchema.parse({ ...baseGraph, topology: "diamond", evidence: { required_keys: [key] } });

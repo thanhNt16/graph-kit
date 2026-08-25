@@ -126,4 +126,19 @@ nodes:
     await expect(createCustomWorkflow(graph)(ctx)).rejects.toThrow("GK_WAVE_FAILED: node(s) a failed");
     expect(calls).toHaveLength(1);
   });
+
+  test("passes evidence paths and only a 2KB upstream tail", async () => {
+    const prompts: string[] = [];
+    const graph = graphYaml({ outputs: { evidence_dir: ".graphkit/evidence/" } });
+    graph.nodes.a.evidence = ["design"];
+    const ctx = {
+      agent: async (p: string) => { prompts.push(p); return p === "A" ? "x".repeat(3000) : "ok"; },
+      parallel: async (ts: (() => Promise<unknown>)[]) => Promise.all(ts.map((t) => t())),
+    };
+    await createCustomWorkflow(graph)(ctx);
+    const downstream = prompts.find((p) => p.startsWith("B"))!;
+    expect(downstream).toContain(".graphkit/evidence/design.md");
+    expect(downstream).not.toContain("x".repeat(2049));
+    expect(downstream).toContain("x".repeat(2048));
+  });
 });

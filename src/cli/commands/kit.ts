@@ -104,6 +104,10 @@ export function installKit(
   }
 
   mkdirSync(destDir, { recursive: true });
+  // Runtime artifacts shared across hosts.
+  for (const dir of ["evidence", "reports", "memory", "runs"]) {
+    mkdirSync(join(targetDir, ".graphkit", dir), { recursive: true });
+  }
   // Kit-owned files always overwrite — re-running `gk init` after upgrading the
   // gk binary must refresh stale skills in existing projects. Only .gk.json
   // (user config) is preserved below; --force is the only path that removes

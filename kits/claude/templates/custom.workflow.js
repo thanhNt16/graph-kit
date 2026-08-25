@@ -29,6 +29,7 @@ export function createCustomWorkflow(config) {
 
   return async function custom(context) {
     const results = {};
+    const evidenceDir = (config.outputs && config.outputs.evidence_dir) || ".graphkit/evidence/";
 
     for (const layer of levels) {
       // Nodes within a layer are independent → run in parallel
@@ -36,11 +37,16 @@ export function createCustomWorkflow(config) {
         try {
           const node = nodes[id];
           const depResults = {};
-          for (const d of (node.depend_on || [])) depResults[d] = results[d];
+          for (const d of (node.depend_on || [])) {
+            const dep = nodes[d];
+            const keys = (dep.evidence || []).map(key => `${evidenceDir.replace(/\/+$/, "")}/${key}.md`);
+            const raw = results[d];
+            const text = typeof raw === "string" ? raw : JSON.stringify(raw);
+            depResults[d] = { evidence_paths: keys, result_tail: text.slice(-2048) };
+          }
 
           const basePrompt = node.objective +
-            (Object.keys(depResults).length > 0 ? `\n\nUpstream results: ${JSON.stringify(depResults)}` : "");
-
+            (Object.keys(depResults).length > 0 ? `\n\nUpstream results (evidence paths; bounded tails): ${JSON.stringify(depResults)}` : "");
           // Node-level loop support
           if (node.loop && node.loop.enabled) {
             const maxRounds = node.loop.max_rounds || 3;

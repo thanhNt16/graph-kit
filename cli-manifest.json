@@ -8,6 +8,21 @@
       "options": ["--json", "--force", "--target <target>"]
     },
     {
+      "name": "status",
+      "description": "Summarize active graph run and evidence coverage",
+      "options": ["--json"]
+    },
+    {
+      "name": "execute",
+      "description": "Execute a graph.yaml (not yet implemented)",
+      "options": ["--json", "--worktree"]
+    },
+    {
+      "name": "visualize",
+      "description": "Visualize a graph.yaml (not yet implemented)",
+      "options": ["--json"]
+    },
+    {
       "name": "new",
       "description": "Scaffold a new project with the GraphKit kit",
       "options": ["--dir <dir>", "--json", "--target <target>"]

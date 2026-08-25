@@ -1,0 +1,40 @@
+# Symbol-first context profile — runnable example (F8).
+# Docs: docs/context-profiles.md
+# Binding convention only — no new schema fields: tools + skills fix WHAT the
+# node reads and through which surface. The node FAILS explicitly when no
+# codebase-memory MCP server is reachable; it never falls back to unbounded
+# whole-file reads.
+apiVersion: graphkit.dev/v2
+kind: Graph
+metadata:
+  name: symbol-first-demo
+  description: >-
+    Symbol-first context profile demo: a mapper emits qualified_name +
+    file_path:start-end anchors via codebase-memory MCP instead of file bodies,
+    and fails fast (ok:false) when that surface is unavailable.
+topology: custom
+nodes:
+  symbol-mapper:
+    agent: software-architect
+    model: sonnet
+    objective: |
+      Context profile: symbol-first (see docs/context-profiles.md).
+      Map the requested subsystem to its load-bearing symbols using the
+      codebase-memory MCP tools (search_graph, trace_path, get_code_snippet).
+      For every symbol emit: qualified_name, file_path:start-end, one-line
+      purpose. Anchors ONLY — never inline file bodies or full functions.
+      Preflight: run `gk inventory` and confirm `codebase-memory` appears in
+      mcpServers. If the codebase-memory MCP server is not reachable (tools
+      absent, spawn failure, or CBM_UNAVAILABLE from the gk bridge), FAIL this
+      node immediately with that reason — do NOT fall back to reading whole
+      files with Grep/Read; a silent fallback defeats the profile.
+      Write the anchor map to .graphkit/evidence/symbol_map.md.
+    tools: [Read, Grep, Glob]
+    skills: [codebase-memory]
+    refs:
+      - path: docs/context-profiles.md
+        purpose: profile definition, value, and fail-closed degradation contract
+    depend_on: []
+    evidence: [symbol_map]
+evidence:
+  required_keys: [symbol_map]

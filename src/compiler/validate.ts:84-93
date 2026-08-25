@@ -1,0 +1,10 @@
+  // 4. Evidence keys must be portable basenames; gate maps them directly to files
+  for (const key of graph.evidence.required_keys) {
+    if (key.length === 0 || key === "." || key === ".." || /[\\/]/.test(key)) {
+      findings.push({
+        check: "evidence-key-path",
+        path: "evidence.required_keys",
+        message: `Evidence key "${key}" must be a non-empty basename without path separators`,
+      });
+    }
+  }

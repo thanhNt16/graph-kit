@@ -27,11 +27,10 @@ export const CLI_COMMANDS: { path: string; description: string; options: string[
     options: ["--dir <dir>", "--json", "--target <target>"],
   },
   { path: "validate", description: "Validate a graph.yaml", options: ["--json"] },
-  {
-    path: "gate",
-    description: "Deterministic evidence gate: MERGE/BLOCK over required evidence keys",
-    options: ["--json"],
-  },
+  { path: "status", description: "Summarize active graph run and evidence coverage", options: ["--json"] },
+  { path: "execute", description: "Execute a graph.yaml (not yet implemented)", options: ["--json", "--worktree"] },
+  { path: "visualize", description: "Visualize a graph.yaml (not yet implemented)", options: ["--json"] },
+  { path: "gate", description: "Deterministic evidence gate: MERGE/BLOCK over required evidence keys", options: ["--json"] },
   {
     path: "compile",
     description: "Compile graph.yaml to a .workflow.js script",

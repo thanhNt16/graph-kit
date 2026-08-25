@@ -17,15 +17,15 @@ import { validateGraph } from "../../compiler/validate.js";
  * the only deterministic, zero-parser mapping — no manifest or heading
  * parsing is trusted.
  */
-export function gateGraph(
-  requiredKeys: string[],
-  evidenceDir: string,
-): {
+
+export interface GateResult {
   verdict: "MERGE" | "BLOCK";
   scorecard: Record<string, "ok" | "missing" | "empty">;
   missing: string[];
   manifest: Record<string, { path: string; sha256: string; bytes: number }>;
-} {
+}
+
+export function gateGraph(requiredKeys: string[], evidenceDir: string): GateResult {
   const evidence: Record<string, string | undefined> = {};
   const manifest: Record<string, { path: string; sha256: string; bytes: number }> = {};
   for (const key of requiredKeys) {

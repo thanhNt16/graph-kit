@@ -24,6 +24,12 @@ describe("gk init/new", () => {
     }
   });
 
+  test("installKit creates .graphkit runtime directories", () => {
+    for (const dir of ["evidence", "reports", "memory", "runs"]) {
+      expect(existsSync(join(tmp, ".graphkit", dir))).toBe(true);
+    }
+  });
+
   test("installKit creates .gk.json if missing", () => {
     const gkJson = join(tmp, ".claude", ".gk.json");
     expect(existsSync(gkJson)).toBe(true);
