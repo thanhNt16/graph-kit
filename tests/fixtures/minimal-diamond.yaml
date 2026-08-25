@@ -27,7 +27,5 @@ nodes:
     objective: Merge findings into a report
     depend_on: [worker]
     evidence: [report]
-limits:
-  max_workers: 3
 evidence:
   required_keys: [report]

@@ -32,7 +32,5 @@ topology_config:
     template: adversarial-verification
     refuters: [QA Engineer, Code Reviewer]
     survive_threshold: 2
-limits:
-  max_workers: 3
 evidence:
   required_keys: [report]
