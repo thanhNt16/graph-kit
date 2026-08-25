@@ -53,12 +53,30 @@ export function validateGraph(graph: Graph, projectRoot: string): Finding[] {
       }
     }
 
-    // 3. Loop exit: enabled loops need a stop_when or exit_condition
-    if (node.loop?.enabled && !node.loop.stop_when && !node.loop.exit_condition) {
+    // 3. Loop exit: exit_condition is unsupported; enabled loops need stop_when
+    if (node.loop?.exit_condition !== undefined) {
+      findings.push({
+        check: "unsupported-field",
+        path: `nodes.${id}.loop.exit_condition`,
+        message: "loop.exit_condition is not supported by the runtime; only stop_when is honored",
+      });
+    }
+    if (node.loop?.enabled && !node.loop.stop_when) {
       findings.push({
         check: "loop-exit",
         path: `nodes.${id}.loop`,
-        message: "Loop enabled but no stop_when or exit_condition declared",
+        message: "Loop enabled but no stop_when declared",
+      });
+    }
+  }
+
+  // 3b. Unsupported limits fields: serialized but never consumed by any runtime
+  for (const key of ["max_workers", "max_iterations", "max_findings", "budget_tokens"] as const) {
+    if (graph.limits[key] !== undefined) {
+      findings.push({
+        check: "unsupported-field",
+        path: `limits.${key}`,
+        message: `limits.${key} is not supported by the runtime; remove it or it will be silently ignored`,
       });
     }
   }

@@ -52,7 +52,6 @@ export function compileGraph(graph: Graph, templatesDir: string): string {
   const config = {
     metadata: graph.metadata,
     nodes: graph.nodes,
-    limits: graph.limits,
     evidence: graph.evidence,
     topology_config: resolved,
     outputs: graph.outputs,
