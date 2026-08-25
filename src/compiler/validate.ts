@@ -81,7 +81,18 @@ export function validateGraph(graph: Graph, projectRoot: string): Finding[] {
     }
   }
 
-  // 4. Evidence coverage: every required key must be produced by some node
+  // 4. Evidence keys must be portable basenames; gate maps them directly to files
+  for (const key of graph.evidence.required_keys) {
+    if (key.length === 0 || key === "." || key === ".." || /[\\/]/.test(key)) {
+      findings.push({
+        check: "evidence-key-path",
+        path: "evidence.required_keys",
+        message: `Evidence key "${key}" must be a non-empty basename without path separators`,
+      });
+    }
+  }
+
+  // 5. Evidence coverage: every required key must be produced by some node
   const produced = new Set(Object.values(graph.nodes).flatMap((n) => n.evidence));
   for (const key of graph.evidence.required_keys) {
     if (!produced.has(key)) {
@@ -93,7 +104,7 @@ export function validateGraph(graph: Graph, projectRoot: string): Finding[] {
     }
   }
 
-  // 5. memory-augmented topology contract
+  // 6. memory-augmented topology contract
   if (graph.topology === "memory-augmented") {
     const tc = graph.topology_config as Record<string, any>;
     const inner = tc?.inner;
@@ -115,7 +126,7 @@ export function validateGraph(graph: Graph, projectRoot: string): Finding[] {
     }
   }
 
-  // 6. eval-gate node role contract
+  // 7. eval-gate node role contract
   for (const [id, node] of Object.entries(graph.nodes)) {
     if ((node as any).role === "eval-gate") {
       if (!(node as any).eval) {

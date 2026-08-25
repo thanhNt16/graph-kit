@@ -157,4 +157,10 @@ describe("validateGraph structural checks", () => {
     const findings = validateGraph(parsed, PROJECT_ROOT);
     expect(findings).toEqual([]);
   });
+  for (const key of ["../report", "nested/report", "/tmp/report", "..\\report"]) {
+    test(`rejects non-basename evidence key: ${key}`, () => {
+      const g = GraphSchema.parse({ ...baseGraph, topology: "diamond", evidence: { required_keys: [key] } });
+      expect(validateGraph(g, PROJECT_ROOT)).toContainEqual(expect.objectContaining({ check: "evidence-key-path" }));
+    });
+  }
 });

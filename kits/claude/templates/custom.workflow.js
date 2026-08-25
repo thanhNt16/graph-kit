@@ -50,6 +50,7 @@ export function createCustomWorkflow(config) {
                 basePrompt + `\n\n[Loop round ${round}/${maxRounds}. Stop when: ${node.loop.stop_when || "done"}]`,
                 nodeOpts(node)
               );
+              if (!loopResult || (typeof loopResult === "object" && loopResult.ok === false)) break;
             }
             results[id] = loopResult;
             return loopResult;

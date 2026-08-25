@@ -113,5 +113,17 @@ nodes:
     graph.nodes.a.loop = { enabled: true, max_rounds: 3, stop_when: "never matches" };
     await createCustomWorkflow(graph)(ctx);
     expect(n).toBe(3);
+    });
+  test("loop fails fast on a failed round", async () => {
+    const calls: string[] = [];
+    const ctx = {
+      agent: async (p: string) => { calls.push(p); return calls.length === 1 ? { ok: false, error: "boom" } : { ok: true }; },
+      parallel: async (ts: (() => Promise<unknown>)[]) => Promise.all(ts.map((t) => t())),
+    };
+    const graph = graphYaml({});
+    delete (graph.nodes as Record<string, unknown>).b;
+    graph.nodes.a.loop = { enabled: true, max_rounds: 2 };
+    await expect(createCustomWorkflow(graph)(ctx)).rejects.toThrow("GK_WAVE_FAILED: node(s) a failed");
+    expect(calls).toHaveLength(1);
   });
 });
