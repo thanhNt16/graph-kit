@@ -155,7 +155,7 @@ evidence:
 
 Inside a Claude Code or Cursor session (after `gk init`):
 
-- `/gk:init-graph --template diamond` — generate a graph.yaml (from a topology preset **or a packaged GraphTemplate**, with capability suggestions)
+- `/gk:init-graph --template diamond` — generate a **session graph** (from a topology preset **or a packaged GraphTemplate**, with capability suggestions); writes `.graphkit/graphs/<date>-<slug>.yaml` and sets the active pointer
 - `/gk:template` — package a validated graph.yaml as a reusable `GraphTemplate v1` (`gk template pack|list|show`)
 - `/gk:brainstorm` — refine nodes, model tiers, loops, constraints
 - `/gk:visualize` — interactive viewer (default) or `--ascii` / `--svg` / `--excalidraw`
@@ -168,7 +168,7 @@ Inside a Claude Code or Cursor session (after `gk init`):
 - `/gk:evidence` — report what the graph produced
 - `/gk:status` — current run state
 
-Templates live in `<project>/.graphkit/templates/` (overrides) and `~/.graphkit/templates/`; `gk inventory` reports installed agents/skills/tools/MCP servers for the active target — names only, no credentials/tokens. See [docs/templates-and-viewer.md](docs/templates-and-viewer.md) for template storage, parameter reference, the smart `/gk:init-graph` flow, and the interactive viewer's controls and troubleshooting.
+Templates resolve in order: `<project>/.graphkit/templates/` ⇒ `~/.graphkit/templates/` ⇒ the bundled gallery (`audit-pr`, `refactor-module`, `bench-eval`, `doc-sweep`); `gk template list` reports a `source` column (`project` | `global` | `builtin`) showing which store won. Materialize any of them into an immutable session graph with `gk template materialize <name> --params '{"task":"…"}' [--use]` (`--use` sets the active pointer), then browse sessions with `gk graph list|switch|show`. `gk inventory` reports installed agents/skills/tools/MCP servers for the active target — names only, no credentials/tokens. See [docs/templates-and-viewer.md](docs/templates-and-viewer.md) for template storage, parameter reference, the smart `/gk:init-graph` flow, and the interactive viewer's controls and troubleshooting.
 
 ## Eleven topologies
 
@@ -211,6 +211,20 @@ nodes:
 
 `depend_on` controls parallelism: empty = start immediately, shared = parallel, multiple = barrier.
 
+## Loop groups
+
+Beyond per-node `loop:`, graphs can repeat a **contiguous wave span** — e.g. implement → test cycles — via a top-level `loops:` array:
+
+```yaml
+loops:
+  - nodes: [implement, test]      # required; wave-contiguous span (validated)
+    max_rounds: 5                 # required; ≥ 1 hard cap
+    stop_when: "all tests pass"   # LLM-judged; required unless gate_evidence
+    gate_evidence: [test-report]  # optional deterministic machine gate
+```
+
+The hybrid stop ladder runs after each round: first the deterministic `gate_evidence` check (every listed `<evidence_dir>/<key>.md` exists and is non-whitespace), then the orchestrator-judged `stop_when` text; otherwise another round, capped hard at `max_rounds`. Exhaustion fails the run, recording rounds executed and the stop reason (`gate` / `judged` / `exhausted`). Validation enforces node existence, wave-span contiguity, non-overlapping groups, `max_rounds ≥ 1`, a stop condition being present, and every `gate_evidence` key declared on a node inside the span. Per-node `loop:` stays unchanged and orthogonal.
+
 ## Boundary
 
 ## CLI reference
@@ -225,36 +239,42 @@ $ gk --help
   Usage: gk <command> [options]
 
   Commands:
-    init          Install the GraphKit kit into the current project
-    status        Summarize active graph run and evidence coverage
-    execute       Execute a graph.yaml (not yet implemented)
-    visualize     Visualize a graph.yaml (not yet implemented)
-    new           Scaffold a new project with the GraphKit kit
-    validate      Validate a graph.yaml
-    gate          Deterministic evidence gate: MERGE / BLOCK
-    compile       Compile graph.yaml to a .workflow.js script
-    graph list    List canonical topologies
-    graph inspect Inspect a topology's config keys
-    graph new     Emit a graph.yaml template for a topology
-    graph ascii   Render an ASCII diagram
-    graph svg     Render an SVG export
-    graph waves   Output topological wave structure
-    graph index   Index memory into CBM
-    graph search  Search the CBM memory graph
-    graph ask     Ask a natural-language question (CBM)
-    graph trace   Trace calls / callees in the CBM graph
-    graph query   Run a Cypher query against the CBM graph
-    memory trace  ACT-R decay pass over .graphkit/memory/
-    memory touch  Reinforce a memory by bumping use_count
-    memory recall Query .graphkit/memory/ with keyword×salience
-    memory index  Index .graphkit/memory/ into CBM
-    template pack Package a graph.yaml as a reusable GraphTemplate
-    template list List packaged templates
-    template show Show a packaged template
-    inventory     Inventory agents, skills, tools, and MCP servers
-    models cursor Show the Cursor model mapping
-    models cursor set  Set a Cursor model override
-    models cursor reset Remove Cursor model overrides
+    init                 Install the GraphKit kit into the current project
+    status               Summarize active graph run and evidence coverage
+    execute              Execute a graph.yaml (not yet implemented)
+    visualize            Visualize a graph.yaml (not yet implemented)
+    new                  Scaffold a new project with the GraphKit kit
+    validate             Validate a graph.yaml
+    gate                 Deterministic evidence gate: MERGE / BLOCK
+    compile              Compile graph.yaml to a .workflow.js script
+    graph list           List session graphs (.graphkit/graphs; created + last-run columns, * marks active)
+    graph switch <id>    Set the active session graph (.graphkit/active)
+    graph show [id]      Show a session graph's YAML (default: active)
+    graph topologies     List bundled topologies
+    graph inspect        Inspect a topology's config keys
+    graph new            Emit a graph.yaml template for a topology
+    graph ascii          Render an ASCII diagram
+    graph svg            Render an SVG export
+    graph waves          Output topological wave structure
+    graph index          Index memory into CBM
+    graph search         Search the CBM memory graph
+    graph ask            Ask a natural-language question (CBM)
+    graph trace          Trace calls / callees in the CBM graph
+    graph query          Run a Cypher query against the CBM graph
+    memory trace         ACT-R decay pass over .graphkit/memory/
+    memory touch         Reinforce a memory by bumping use_count
+    memory recall        Query .graphkit/memory/ with keyword×salience
+    memory index         Index .graphkit/memory/ into CBM
+    template pack        Package a graph.yaml as a reusable GraphTemplate
+    template list        List packaged templates
+    template show        Show a packaged template
+    template materialize <name> [--params <json>] [--use]
+                         Materialize a template into a session graph
+                         (project ⇒ global ⇒ builtin gallery; --use sets active)
+    inventory            Inventory agents, skills, tools, and MCP servers
+    models cursor        Show the Cursor model mapping
+    models cursor set    Set a Cursor model override
+    models cursor reset  Remove Cursor model overrides
 ```
 
 Use `gk <command> --help` for per-command details.
@@ -295,7 +315,7 @@ Node constraints are enforced mechanically only on pi (via `gk_dispatch_agent`);
 
 - `no_write` is best-effort: the tool filter keeps the shell in the allowlist, so a node can still mutate the filesystem through Bash. Treat it as a prompt-level guard, not a sandbox.
 - `no_exec` removes Bash and overrides any `tools_allowlist` (`no_exec` > `tools_allowlist` > `no_write` on pi); it is advisory on the other four hosts.
-- Loop semantics: `max_rounds` is the only mechanical loop bound; `stop_when` is advisory prompt text interpolated into each round, not an enforced exit condition.
+- Loop semantics: for single nodes (`node.loop`), `max_rounds` is the only mechanical bound while `stop_when` is prompt-advisory; for multi-node groups (`loops:`), orchestrators follow the **hybrid stop ladder** (deterministic `gate_evidence` check first, then LLM-judged `stop_when`, hard capped at `max_rounds` with graph-failure on exhaustion).
 
 ## Evidence gate
 

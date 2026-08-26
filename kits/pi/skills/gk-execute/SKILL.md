@@ -53,7 +53,7 @@ Then continue to the next wave — skip the action-wave steps below for curator 
 
 Use the `gk_dispatch_agent` tool (provided by the gk-subagent extension) once per node in
 the current wave — issue all calls for the wave, collect every result, then proceed.
-Wave barrier: do NOT start wave N+1 until every node of wave N returned ok:true.
+Wave barrier: do NOT start wave N+1 until every node of wave N returned ok:true. The same barrier holds across loop rounds — do not start round N+1 until every node of a loop group's last wave returned.
 A failed node (ok:false) stops the graph: report node name, objective, and error output.
 Pass node constraints: no_write → constraints.no_write=true; tools → constraints.tools_allowlist.
 
@@ -70,8 +70,7 @@ Each dispatch gets:
    In **worktree mode** a wave is NOT done when agents return — it is done when
    merged and the gate is green (see Worktree merge protocol below).
 
-3. **Handle loops** — if a node has `loop.enabled` and its result doesn't meet the stop condition (`stop_when` is advisory), re-dispatch that node (up to `max_rounds`).
-
+3. **Handle loops** — per-node `loop.enabled`: if the result doesn't satisfy its `stop_when`, re-dispatch that node (up to `max_rounds`). Top-level `loops:` (multi-node groups): see [Loop groups](#loop-groups-multi-node-loops) below — the hybrid stop ladder replaces the advisory-only rule.
 
 4. **Write evidence** — write one non-whitespace file per declared evidence key: `<evidence_dir>/<key>.md`
 
@@ -125,6 +124,31 @@ After all agents in a wave finish (wait on notifications — never assume):
 Graph authority is unchanged in worktree mode — topology, `depend_on` ordering, and loops still come from graph.yaml; worktrees are transport-level isolation only.
 
 **Fallback (no worktree support):** same-tree mode with a strict per-node file ownership map; if files can't be partitioned, sequence the nodes via `depend_on` and re-validate.
+
+## Loop groups (multi-node loops)
+
+Top-level `loops:` repeats a **contiguous wave span** as a round trip (e.g. implement → test) until a stop condition. Semantics are authoritative in the design spec §4.3:
+
+```yaml
+loops:
+  - nodes: [implement, test]      # required; contiguous wave span (validator-enforced)
+    max_rounds: 5                 # required; ≥ 1 hard cap
+    stop_when: "all tests pass"   # LLM-judged; required unless gate_evidence
+    gate_evidence: [test-report]  # optional deterministic machine gate
+```
+
+**Execution:** waves are computed once from the DAG. Walk waves normally; when you reach a loop group's head wave, enter the loop:
+
+1. **Run a round** = one pass over the span's waves, dispatching normally. Round N outputs feed round N+1 node contexts.
+2. **Hybrid stop ladder** — after each round, check in order:
+   1. `gate_evidence` set and every listed `<evidence_dir>/<key>.md` exists and is non-whitespace → **stop: success** (deterministic, shell-testable).
+   2. Else `stop_when` present → judge the previous round's node outputs against the text yourself (same LLM-read pattern as curator `INJECTION:` parsing). Satisfied → **stop: success**.
+   3. Else dispatch the next round.
+3. **Evidence:** latest round wins — overwrite `<evidence_dir>/<key>.md` in place; never accumulate rounds.
+4. **Exhaustion:** `max_rounds` reached without satisfaction → the loop fails and, per graph-stop rules, the whole run stops. Report rounds executed, last-round outputs, and which condition was being checked.
+5. **Run report:** record rounds completed and stop reason per loop — `gate` | `judged` | `exhausted`.
+
+Per-node `loop:` keeps its existing behavior and is orthogonal — a node inside a group may still carry its own internal loop.
 
 ## Why this is effective
 
