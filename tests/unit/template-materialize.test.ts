@@ -4,11 +4,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import YAML from "yaml";
 import { CLI_COMMANDS } from "../../src/cli/command-registry.js";
-import {
-  materializeTemplate,
-  runTemplatePack,
-} from "../../src/cli/commands/template.js";
-import { getActiveGraphId } from "../../src/store/index.js";
+import { materializeTemplate, runTemplatePack } from "../../src/cli/commands/template.js";
+import { getActiveGraphId, setActiveGraphId } from "../../src/store/index.js";
 
 const MIN_GRAPH = `apiVersion: graphkit.dev/v2
 kind: Graph
@@ -40,6 +37,7 @@ function newEnv(label: string) {
   const root = join(tmpdir(), `gk-mat-${label}-${stamp}`);
   const cwd = join(root, "proj");
   const home = join(root, "home");
+  // `.graphkit` alone satisfies store init; graphs/ is created on save.
   mkdirSync(join(cwd, ".graphkit"), { recursive: true });
   mkdirSync(home, { recursive: true });
   return { root, cwd, home };
@@ -102,21 +100,7 @@ describe("template materialize resolution order", () => {
   });
 });
 
-describe("template materialize substitution", () => {
-  test("embedded string interpolation and sole-string passthrough", () => {
-    const { root, cwd, home } = newEnv("interp");
-    cleanup.push(() => rmSync(root, { recursive: true, force: true }));
-    const res = materializeTemplate("audit-pr", { task: "auth module" }, { cwd, home });
-    expect(res.graph.metadata.description).toBe("Adversarial security and quality audit of auth module");
-    const reviewer = (res.graph.nodes as Record<string, { objective: string }>).reviewer;
-    expect(reviewer.objective).toContain("auth module");
-  });
-
-  test("json round-trip substitution keeps structured values", () => {
-    const { root, cwd, home } = newEnv("json");
-    cleanup.push(() => rmSync(root, { recursive: true, force: true }));
-    mkdirSync(join(cwd, ".graphkit", "templates"), { recursive: true });
-    const tpl = `apiVersion: graphkit.dev/v1
+const JSON_PROBE_TPL = `apiVersion: graphkit.dev/v1
 kind: GraphTemplate
 metadata:
   name: json-probe
@@ -150,7 +134,24 @@ graph:
   evidence:
     required_keys: [filter-report]
 `;
-    writeFileSync(join(cwd, ".graphkit", "templates", "json-probe.gk.yaml"), tpl);
+
+describe("template materialize substitution", () => {
+  test("embedded string interpolation and sole-string passthrough", () => {
+    const { root, cwd, home } = newEnv("interp");
+    cleanup.push(() => rmSync(root, { recursive: true, force: true }));
+    const res = materializeTemplate("audit-pr", { task: "auth module" }, { cwd, home });
+    expect(res.graph.metadata.description).toBe(
+      "Adversarial security and quality audit of auth module",
+    );
+    const reviewer = (res.graph.nodes as Record<string, { objective: string }>).reviewer;
+    expect(reviewer.objective).toContain("auth module");
+  });
+
+  test("json round-trip substitution keeps structured values", () => {
+    const { root, cwd, home } = newEnv("json");
+    cleanup.push(() => rmSync(root, { recursive: true, force: true }));
+    mkdirSync(join(cwd, ".graphkit", "templates"), { recursive: true });
+    writeFileSync(join(cwd, ".graphkit", "templates", "json-probe.gk.yaml"), JSON_PROBE_TPL);
     const res = materializeTemplate(
       "json-probe",
       { filters: '{"severity":["high"],"paths":["src/auth/**"]}' },
@@ -160,6 +161,20 @@ graph:
       severity: ["high"],
       paths: ["src/auth/**"],
     });
+  });
+
+  test("--use omitted leaves the active pointer untouched", () => {
+    const { root, cwd, home } = newEnv("no-use");
+    cleanup.push(() => rmSync(root, { recursive: true, force: true }));
+    expect(getActiveGraphId(cwd)).toBeNull();
+    const res = materializeTemplate("audit-pr", { task: "silent" }, { cwd, home });
+    expect(res.active).toBeUndefined();
+    expect(getActiveGraphId(cwd)).toBeNull();
+
+    // A previously explicit pointer survives a plain materialize.
+    setActiveGraphId(res.id, cwd);
+    materializeTemplate("bench-eval", { workload: "qa" }, { cwd, home });
+    expect(getActiveGraphId(cwd)).toBe(res.id);
   });
 
   test("missing required parameter fails listing offending keys", () => {
@@ -173,10 +188,29 @@ graph:
     }
   });
 
+  test("non-object params fail with BAD_PARAMS, not TypeError", () => {
+    const { root, cwd, home } = newEnv("bad-params");
+    cleanup.push(() => rmSync(root, { recursive: true, force: true }));
+    for (const bad of [
+      null as unknown as Record<string, unknown>,
+      [1, 2] as unknown as Record<string, unknown>,
+    ]) {
+      try {
+        materializeTemplate("audit-pr", bad, { cwd, home });
+        expect.unreachable();
+      } catch (e) {
+        expect((e as Error).message).toContain("Params must be a JSON object");
+      }
+    }
+    expect(existsSync(join(cwd, ".graphkit", "graphs"))).toBe(false);
+  });
+
   test("invalid substituted graph surfaces validateGraph findings", () => {
     const { root, cwd, home } = newEnv("validation");
     cleanup.push(() => rmSync(root, { recursive: true, force: true }));
     mkdirSync(join(cwd, ".graphkit", "templates"), { recursive: true });
+    // Template loads cleanly but its substituted graph has an unproduced
+    // required evidence key -> validateGraph must reject before save.
     const tpl = `apiVersion: graphkit.dev/v1
 kind: GraphTemplate
 metadata:
@@ -218,7 +252,6 @@ graph:
     expect(res.active).toBe(res.id);
     expect(getActiveGraphId(cwd)).toBe(res.id);
   });
-
   test("gallery roster materializes end-to-end", () => {
     const { root, cwd, home } = newEnv("roster");
     cleanup.push(() => rmSync(root, { recursive: true, force: true }));

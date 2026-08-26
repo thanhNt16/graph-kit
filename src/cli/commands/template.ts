@@ -292,6 +292,9 @@ export function materializeTemplate(
 ): MaterializeSuccess {
   const cwd = opts.cwd ?? process.cwd();
   const home = opts.home ?? homedir();
+  if (params === null || typeof params !== "object" || Array.isArray(params)) {
+    throw new GraphKitError("BAD_PARAMS", "Params must be a JSON object", { params });
+  }
   if (!TEMPLATE_NAME_RE.test(name)) {
     throw new GraphKitError("BAD_TEMPLATE_NAME", `Template name must match ${TEMPLATE_NAME_RE.source}`, {
       name,
@@ -462,6 +465,11 @@ export function registerTemplateCommands(cli: CAC) {
           try {
             params = JSON.parse(opts.params as string) as TemplateValues;
           } catch {
+            console.log(JSON.stringify(fail("BAD_PARAMS", "--params must be a JSON object")));
+            process.exit(1);
+            return;
+          }
+          if (params === null || typeof params !== "object" || Array.isArray(params)) {
             console.log(JSON.stringify(fail("BAD_PARAMS", "--params must be a JSON object")));
             process.exit(1);
             return;

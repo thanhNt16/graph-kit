@@ -75,7 +75,8 @@ export function saveSessionGraph(
 
   const path = join(dir, `${id}${EXT}`);
   writeFileSync(path, YAML.stringify(graph), "utf-8");
-  writeFileSync(activeFile(baseDir), `${id}\n`, "utf-8");
+  // Save does NOT touch the active pointer; activation is the explicit
+  // setActiveGraphId opt-in so `gk template materialize` stays --use-gated.
   return { id, path };
 }
 
