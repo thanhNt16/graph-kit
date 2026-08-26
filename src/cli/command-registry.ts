@@ -43,6 +43,7 @@ export const CLI_COMMANDS: { path: string; description: string; options: string[
   { path: "graph list", description: "List session graphs", options: ["--json"] },
   { path: "graph switch", description: "Switch active session graph", options: ["--json"] },
   { path: "graph show", description: "Show a session graph (default active)", options: ["--json"] },
+  { path: "graph topologies", description: "List canonical topologies", options: ["--json"] },
   { path: "graph inspect", description: "Inspect a topology's config keys", options: ["--json"] },
   { path: "graph new", description: "Emit a graph.yaml template for a topology", options: ["--json"] },
   { path: "graph ascii", description: "Render an ASCII diagram", options: ["--json"] },

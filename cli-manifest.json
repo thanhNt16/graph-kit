@@ -58,6 +58,11 @@
       "options": ["--json"]
     },
     {
+      "name": "graph topologies",
+      "description": "List canonical topologies",
+      "options": ["--json"]
+    },
+    {
       "name": "graph inspect",
       "description": "Inspect a topology's config keys",
       "options": ["--json"]

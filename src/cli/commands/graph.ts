@@ -645,12 +645,38 @@ export function registerGraphCommands(cli: CAC) {
     .command("graph <subcommand> [args...]", `Graph lifecycle commands\nSubcommands: ${subcommandsFor("graph")}`)
     .option("--json", "JSON output")
     .action((subcommand: string, args: string | string[] | undefined, opts: { json?: boolean }) => {
-      if (subcommand === "list") {
-        // Session graphs (design §3.4). Canonical topologies stay discoverable via
-        // `graph inspect <name>` / `graph new <name>` (the inspect error lists all).
+      if (subcommand === "topologies") {
+        const topologies = TOPOLOGY_NAMES.map((name) => {
+          const template = graphTemplate(name);
+          const descMatch = template.match(/^ {2}description: (.+)$/m);
+          return {
+            name,
+            description: descMatch ? descMatch[1] : name,
+            config_keys: getTopologyConfigKeys(name),
+          };
+        });
+        if (opts.json) {
+          console.log(JSON.stringify(ok({ topologies })));
+        } else {
+          const nameW = Math.max("name".length, ...topologies.map((t) => t.name.length));
+          console.log(`${"name".padEnd(nameW)}  description`);
+          for (const t of topologies) {
+            console.log(`${t.name.padEnd(nameW)}  ${t.description}`);
+          }
+        }
+      } else if (subcommand === "list") {
         try {
           const sessions = listSessionGraphs();
           const active = getActiveGraphId();
+          if (active !== null && !sessions.some((s) => s.id === active)) {
+            // Dangling pointer (spec §6): fail fast when active names a missing file.
+            // Existence check only — schema validity stays out of a listing command.
+            throw new GraphKitError("ACTIVE_POINTER_DANGLING", `Active pointer "${active}" has no graph file`, {
+              id: active,
+              baseDir: process.cwd(),
+              available: sessions.map((s) => s.id),
+            });
+          }
           if (opts.json) {
             console.log(JSON.stringify(ok({ sessions, active })));
           } else if (sessions.length === 0) {
@@ -659,11 +685,13 @@ export function registerGraphCommands(cli: CAC) {
             const idW = Math.max("id".length, ...sessions.map((s) => s.id.length));
             const nameW = Math.max("name".length, ...sessions.map((s) => s.name.length));
             const taskW = Math.max("task".length, ...sessions.map((s) => (s.task ?? "").length));
-            console.log(`${"id".padEnd(idW)}  ${"name".padEnd(nameW)}  ${"task".padEnd(taskW)}  created`);
+            console.log(
+              `${"id".padEnd(idW)}  ${"name".padEnd(nameW)}  ${"task".padEnd(taskW)}  ${"created".padEnd(24)}  last-run`,
+            );
             for (const s of sessions) {
               const mark = s.id === active ? "*" : " ";
               console.log(
-                `${mark}${s.id.padEnd(idW - 1)}  ${s.name.padEnd(nameW)}  ${(s.task ?? "").padEnd(taskW)}  ${s.createdAt.toISOString()}`,
+                `${mark}${s.id.padEnd(idW - 1)}  ${s.name.padEnd(nameW)}  ${(s.task ?? "").padEnd(taskW)}  ${s.createdAt.toISOString().padEnd(24)}  -`,
               );
             }
           }

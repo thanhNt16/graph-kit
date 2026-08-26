@@ -52,16 +52,36 @@ describe("gk graph session commands", () => {
   beforeEach(() => {
     mkdirSync(graphsDir(), { recursive: true });
   });
+
   afterEach(() => {
-    process.exitCode = 0;
     rmSync(TEST_DIR, { recursive: true, force: true });
   });
 
-  it("registers list, switch, and show in the CLI registry", () => {
+  it("registers list, switch, show, and topologies in the CLI registry", () => {
     const subcommands = subcommandsFor("graph");
     expect(subcommands).toContain("list");
     expect(subcommands).toContain("switch");
     expect(subcommands).toContain("show");
+    expect(subcommands).toContain("topologies");
+  });
+
+  it("graph topologies outputs all 11 canonical topologies with descriptions", () => {
+    const { stdout, code } = runCli(["graph", "topologies", "--json"], TEST_DIR);
+    expect(code).toBe(0);
+    const parsed = JSON.parse(stdout);
+    expect(parsed.status).toBe("ok");
+    expect(parsed.data.topologies).toHaveLength(11);
+    const names = parsed.data.topologies.map((t: { name: string }) => t.name);
+    expect(names).toContain("diamond");
+    expect(names).toContain("tournament");
+    expect(names).toContain("classify-and-act");
+  });
+
+  it("graph topologies renders human table with name and description", () => {
+    const { stdout, code } = runCli(["graph", "topologies"], TEST_DIR);
+    expect(code).toBe(0);
+    expect(stdout).toContain("diamond");
+    expect(stdout).toContain("description");
   });
 
   it("graph list --json returns saved session ids and the active pointer", () => {
@@ -78,12 +98,26 @@ describe("gk graph session commands", () => {
     expect(parsed.data.active).toBe("2026-08-26-audit-pr");
   });
 
-  it("graph list renders a human table with ids", () => {
-    seedGraph("2026-08-26-audit-pr", "audit");
+  it("graph list renders a human table with ids, task, created, and last-run columns", () => {
+    seedGraph("2026-08-26-audit-pr", "audit", "audit auth module");
+    setActive("2026-08-26-audit-pr");
     const { stdout, code } = runCli(["graph", "list"], TEST_DIR);
     expect(code).toBe(0);
+    expect(stdout).toContain("last-run");
     expect(stdout).toContain("2026-08-26-audit-pr");
     expect(stdout).toContain("audit");
+    expect(stdout).toContain("audit auth module");
+    expect(stdout).toContain("-");
+  });
+
+  it("graph list fails with ACTIVE_POINTER_DANGLING when active names a missing file", () => {
+    seedGraph("2026-08-26-audit-pr", "audit");
+    setActive("2026-08-26-ghost");
+    const { stdout, code } = runCli(["graph", "list", "--json"], TEST_DIR);
+    expect(code).toBe(1);
+    const parsed = JSON.parse(stdout);
+    expect(parsed.status).toBe("fail");
+    expect(parsed.error.code).toBe("ACTIVE_POINTER_DANGLING");
   });
 
   it("graph switch flips .graphkit/active", async () => {
