@@ -140,9 +140,7 @@ describe("template materialize substitution", () => {
     const { root, cwd, home } = newEnv("interp");
     cleanup.push(() => rmSync(root, { recursive: true, force: true }));
     const res = materializeTemplate("audit-pr", { task: "auth module" }, { cwd, home });
-    expect(res.graph.metadata.description).toBe(
-      "Adversarial security and quality audit of auth module",
-    );
+    expect(res.graph.metadata.description).toBe("Adversarial security and quality audit of auth module");
     const reviewer = (res.graph.nodes as Record<string, { objective: string }>).reviewer;
     expect(reviewer.objective).toContain("auth module");
   });
@@ -191,10 +189,7 @@ describe("template materialize substitution", () => {
   test("non-object params fail with BAD_PARAMS, not TypeError", () => {
     const { root, cwd, home } = newEnv("bad-params");
     cleanup.push(() => rmSync(root, { recursive: true, force: true }));
-    for (const bad of [
-      null as unknown as Record<string, unknown>,
-      [1, 2] as unknown as Record<string, unknown>,
-    ]) {
+    for (const bad of [null as unknown as Record<string, unknown>, [1, 2] as unknown as Record<string, unknown>]) {
       try {
         materializeTemplate("audit-pr", bad, { cwd, home });
         expect.unreachable();

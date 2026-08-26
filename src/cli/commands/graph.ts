@@ -80,7 +80,6 @@ function resolveBareValidateGraph(): Graph {
   );
 }
 
-
 // Valid graph.yaml templates for each topology — emitted by `gk graph new <topology>`
 function graphTemplate(topology: TopologyName): string {
   const name = topology.replace(/[^a-z0-9]+/g, "-");
@@ -716,7 +715,7 @@ export function registerGraphCommands(cli: CAC) {
             console.warn(
               `warning: skipped ${skipped.length} unparseable session file(s): ${skipped.map((s) => s.file).join(", ")}`,
             );
-           }
+          }
         } catch (e) {
           console.log(
             JSON.stringify(

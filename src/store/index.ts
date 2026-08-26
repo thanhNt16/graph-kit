@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import YAML from "yaml";
 import type { Graph } from "../compiler/validate.js";
@@ -12,11 +12,7 @@ const activeFile = (baseDir: string) => join(baseDir, ".graphkit", "active");
 
 function assertInitialized(baseDir: string): void {
   if (!existsSync(join(baseDir, ".graphkit"))) {
-    throw new GraphKitError(
-      "GRAPHKIT_NOT_INITIALIZED",
-      "No .graphkit/ directory — run `gk init` first",
-      { baseDir },
-    );
+    throw new GraphKitError("GRAPHKIT_NOT_INITIALIZED", "No .graphkit/ directory — run `gk init` first", { baseDir });
   }
 }
 
@@ -51,11 +47,9 @@ const SESSION_ID_RE = /^\d{4}-\d{2}-\d{2}-[a-z0-9-]{1,40}(-\d+)?$/;
 
 function assertSessionId(id: string): void {
   if (!SESSION_ID_RE.test(id)) {
-    throw new GraphKitError(
-      "INVALID_SESSION_ID",
-      `Malformed session graph id "${id}" — expected YYYY-MM-DD-<slug>`,
-      { id },
-    );
+    throw new GraphKitError("INVALID_SESSION_ID", `Malformed session graph id "${id}" — expected YYYY-MM-DD-<slug>`, {
+      id,
+    });
   }
 }
 
@@ -84,11 +78,10 @@ export function setActiveGraphId(id: string, baseDir: string = process.cwd()): v
   assertSessionId(id);
   const path = join(graphsDir(baseDir), `${id}${EXT}`);
   if (!existsSync(path)) {
-    throw new GraphKitError(
-      "GRAPH_NOT_FOUND",
-      `No session graph with id "${id}"`,
-      { id, available: listSessionGraphs(baseDir).map((g) => g.id) },
-    );
+    throw new GraphKitError("GRAPH_NOT_FOUND", `No session graph with id "${id}"`, {
+      id,
+      available: listSessionGraphs(baseDir).map((g) => g.id),
+    });
   }
   writeFileSync(activeFile(baseDir), `${id}\n`, "utf-8");
 }
@@ -138,9 +131,7 @@ export function listSessionGraphs(
     .sort((a, b) => a.id.localeCompare(b.id));
 }
 
-export function loadActiveGraph(
-  baseDir: string = process.cwd(),
-): { id: string; graph: Graph; path: string } {
+export function loadActiveGraph(baseDir: string = process.cwd()): { id: string; graph: Graph; path: string } {
   const id = getActiveGraphId(baseDir);
   if (id === null) {
     throw new GraphKitError(
@@ -152,11 +143,11 @@ export function loadActiveGraph(
   assertSessionId(id);
   const path = join(graphsDir(baseDir), `${id}${EXT}`);
   if (!existsSync(path)) {
-    throw new GraphKitError(
-      "ACTIVE_POINTER_DANGLING",
-      `Active pointer "${id}" has no graph file`,
-      { id, path, available: listSessionGraphs(baseDir).map((g) => g.id) },
-    );
+    throw new GraphKitError("ACTIVE_POINTER_DANGLING", `Active pointer "${id}" has no graph file`, {
+      id,
+      path,
+      available: listSessionGraphs(baseDir).map((g) => g.id),
+    });
   }
 
   const parsed = GraphSchema.safeParse(YAML.parse(readFileSync(path, "utf-8")));

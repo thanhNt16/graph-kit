@@ -21,9 +21,7 @@ describe("Loop Group Validation", () => {
       loops: [{ nodes: ["a", "missing"], max_rounds: 3, stop_when: "ok" }],
     });
     const findings = validateGraph(g, ROOT);
-    expect(findings).toContainEqual(
-      expect.objectContaining({ check: "loop_node_exists", path: "loops[0].nodes" }),
-    );
+    expect(findings).toContainEqual(expect.objectContaining({ check: "loop_node_exists", path: "loops[0].nodes" }));
   });
 
   test("loop_no_overlap: rejects node in more than one loop group", () => {
@@ -38,9 +36,7 @@ describe("Loop Group Validation", () => {
       ],
     });
     const findings = validateGraph(g, ROOT);
-    expect(findings).toContainEqual(
-      expect.objectContaining({ check: "loop_no_overlap", path: "loops[1].nodes" }),
-    );
+    expect(findings).toContainEqual(expect.objectContaining({ check: "loop_no_overlap", path: "loops[1].nodes" }));
   });
 
   test("loop_gate_evidence_declared: rejects gate_evidence key not produced by any loop node", () => {
@@ -64,9 +60,7 @@ describe("Loop Group Validation", () => {
       loops: [{ nodes: ["a", "b"], max_rounds: 3, stop_when: "ok" }],
     });
     const findings = validateGraph(g, ROOT);
-    expect(findings).toContainEqual(
-      expect.objectContaining({ check: "loop_contiguous", path: "loops[0].nodes" }),
-    );
+    expect(findings).toContainEqual(expect.objectContaining({ check: "loop_contiguous", path: "loops[0].nodes" }));
   });
 
   test("valid loop group produces zero loop findings", () => {
@@ -99,8 +93,6 @@ describe("Loop Group Validation", () => {
       loops: [{ nodes: ["a", "b"], max_rounds: 3, stop_when: "ok" }],
     });
     const findings = validateGraph(g, ROOT);
-    expect(findings).toContainEqual(
-      expect.objectContaining({ check: "loop_contiguous", path: "loops[0].nodes" }),
-    );
+    expect(findings).toContainEqual(expect.objectContaining({ check: "loop_contiguous", path: "loops[0].nodes" }));
   });
 });

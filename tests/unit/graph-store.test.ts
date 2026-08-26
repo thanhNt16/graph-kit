@@ -41,7 +41,6 @@ describe("Session Graph Store", () => {
     expect(loaded.graph.metadata.name).toBe("my-task");
   });
 
-
   it("save does not touch the active pointer (activation is opt-in)", () => {
     const { id } = saveSessionGraph(sampleGraph, "quiet-task", TEST_DIR);
     expect(getActiveGraphId(TEST_DIR)).toBeNull();

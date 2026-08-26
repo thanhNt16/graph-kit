@@ -77,11 +77,9 @@ describe("LoopGroupSchema", () => {
     expect(parsed.success).toBe(false);
     if (!parsed.success) {
       const messages = parsed.error.issues.map((i) => i.message);
-      expect(
-        messages.some((msg) =>
-          msg.includes("At least one of stop_when or gate_evidence must be provided")
-        )
-      ).toBe(true);
+      expect(messages.some((msg) => msg.includes("At least one of stop_when or gate_evidence must be provided"))).toBe(
+        true,
+      );
     }
   });
 });

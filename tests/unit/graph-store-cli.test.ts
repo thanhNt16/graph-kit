@@ -247,7 +247,13 @@ describe("gk graph session commands", () => {
         metadata: { name: "audit" },
         topology: "diamond",
         nodes: {
-          a: { agent: "reviewer", objective: "test", refs: [{ path: "missing.md", purpose: "audit" }], depend_on: [], evidence: [] },
+          a: {
+            agent: "reviewer",
+            objective: "test",
+            refs: [{ path: "missing.md", purpose: "audit" }],
+            depend_on: [],
+            evidence: [],
+          },
         },
       };
       writeFileSync(join(graphsDir(), "2026-08-26-audit-pr.yaml"), YAML.stringify(doc), "utf-8");

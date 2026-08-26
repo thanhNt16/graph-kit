@@ -8,11 +8,11 @@ import { type Graph, validateGraph } from "../../compiler/validate.js";
 import { GraphKitError } from "../../errors.js";
 import { GraphSchema } from "../../schemas/graph.schema.js";
 import {
-  materializeTemplate as substituteTemplate,
   type GraphTemplate,
   GraphTemplateSchema,
-  type TemplateValues,
+  materializeTemplate as substituteTemplate,
   TEMPLATE_NAME_RE,
+  type TemplateValues,
 } from "../../schemas/template.schema.js";
 import { saveSessionGraph, setActiveGraphId } from "../../store/index.js";
 import { fail, ok } from "../output.js";
@@ -53,11 +53,7 @@ function galleryTemplatesDir(): string {
 }
 
 /** Resolve a template name against stores, project > global > bundled gallery. */
-function resolveTemplate(
-  cwd: string,
-  home: string,
-  name: string,
-): { path: string; origin: TemplateOrigin } | null {
+function resolveTemplate(cwd: string, home: string, name: string): { path: string; origin: TemplateOrigin } | null {
   const local = templatePath(localTemplatesDir(cwd), name);
   if (existsSync(local)) return { path: local, origin: "project" };
   const global = templatePath(globalTemplatesDir(home), name);
@@ -239,7 +235,6 @@ export function runTemplateList(opts: { cwd: string; home: string }): {
   return ok({ templates });
 }
 
-
 /** Levenshtein-ish close-match scoring for unknown-name suggestions. */
 function closeMatches(name: string, available: string[]): string[] {
   const scored = available
@@ -315,11 +310,7 @@ export function materializeTemplate(
     .filter(([_key, def]) => def.required && !(_key in params))
     .map(([key]) => key);
   if (missing.length > 0) {
-    throw new GraphKitError(
-      "MISSING_PARAMS",
-      `Missing required parameter(s): ${missing.join(", ")}`,
-      { missing },
-    );
+    throw new GraphKitError("MISSING_PARAMS", `Missing required parameter(s): ${missing.join(", ")}`, { missing });
   }
 
   let graph: Graph;
@@ -327,11 +318,7 @@ export function materializeTemplate(
     graph = substituteTemplate(t, params);
   } catch (e) {
     if (e instanceof GraphKitError) throw e;
-    throw new GraphKitError(
-      "PARAM_INVALID",
-      e instanceof Error ? e.message : String(e),
-      { name },
-    );
+    throw new GraphKitError("PARAM_INVALID", e instanceof Error ? e.message : String(e), { name });
   }
 
   const findings = validateGraph(graph, cwd);

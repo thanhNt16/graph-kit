@@ -22,15 +22,16 @@ const LoopConfig = z.object({
   exit_condition: z.string().optional(),
 });
 
-export const LoopGroupSchema = z.object({
-  nodes: z.array(z.string().min(1)).min(1),
-  max_rounds: z.number().int().min(1),
-  stop_when: z.string().min(1).optional(),
-  gate_evidence: z.array(z.string().min(1)).min(1).optional(),
-}).refine(
-  (data) => Boolean(data.stop_when || data.gate_evidence),
-  { message: "At least one of stop_when or gate_evidence must be provided" }
-);
+export const LoopGroupSchema = z
+  .object({
+    nodes: z.array(z.string().min(1)).min(1),
+    max_rounds: z.number().int().min(1),
+    stop_when: z.string().min(1).optional(),
+    gate_evidence: z.array(z.string().min(1)).min(1).optional(),
+  })
+  .refine((data) => Boolean(data.stop_when || data.gate_evidence), {
+    message: "At least one of stop_when or gate_evidence must be provided",
+  });
 
 export type LoopGroup = z.infer<typeof LoopGroupSchema>;
 
@@ -170,5 +171,5 @@ const GraphSchema = z
       }
     }
   });
-export { ConstraintValue, GraphSchema, LoopConfig, NodeDefSchema, RefSchema, TopologyName };
 
+export { ConstraintValue, GraphSchema, LoopConfig, NodeDefSchema, RefSchema, TopologyName };

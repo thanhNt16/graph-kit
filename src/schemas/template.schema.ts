@@ -161,10 +161,7 @@ export const GraphTemplateSchema = z
   });
 
 export type GraphTemplate = z.infer<typeof GraphTemplateSchema>;
-export type TemplateValues = Record<
-  string,
-  string | number | boolean | Array<unknown> | Record<string, unknown>
->;
+export type TemplateValues = Record<string, string | number | boolean | Array<unknown> | Record<string, unknown>>;
 
 function resolveValue(key: string, template: GraphTemplate, values: TemplateValues): unknown {
   const jsonForm = key.endsWith(".json");
