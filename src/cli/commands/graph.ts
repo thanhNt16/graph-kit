@@ -11,6 +11,7 @@ import { validateGraph } from "../../compiler/validate.js";
 import { GraphKitError } from "../../errors.js";
 import { GraphSchema } from "../../schemas/graph.schema.js";
 import { getTopologyConfigKeys, TOPOLOGY_NAMES, type TopologyName } from "../../schemas/topology/index.js";
+import { getActiveGraphId, listSessionGraphs, loadActiveGraph, setActiveGraphId } from "../../store/index.js";
 import { renderAscii } from "../ascii.js";
 import { subcommandsFor } from "../command-registry.js";
 import { fail, ok } from "../output.js";
@@ -643,9 +644,96 @@ export function registerGraphCommands(cli: CAC) {
   cli
     .command("graph <subcommand> [args...]", `Graph lifecycle commands\nSubcommands: ${subcommandsFor("graph")}`)
     .option("--json", "JSON output")
-    .action((subcommand: string, args: string | string[] | undefined) => {
+    .action((subcommand: string, args: string | string[] | undefined, opts: { json?: boolean }) => {
       if (subcommand === "list") {
-        console.log(JSON.stringify(ok({ topologies: TOPOLOGY_NAMES })));
+        // Session graphs (design §3.4). Canonical topologies stay discoverable via
+        // `graph inspect <name>` / `graph new <name>` (the inspect error lists all).
+        try {
+          const sessions = listSessionGraphs();
+          const active = getActiveGraphId();
+          if (opts.json) {
+            console.log(JSON.stringify(ok({ sessions, active })));
+          } else if (sessions.length === 0) {
+            console.log("no session graphs — run `gk init-graph` or `gk template materialize`");
+          } else {
+            const idW = Math.max("id".length, ...sessions.map((s) => s.id.length));
+            const nameW = Math.max("name".length, ...sessions.map((s) => s.name.length));
+            const taskW = Math.max("task".length, ...sessions.map((s) => (s.task ?? "").length));
+            console.log(`${"id".padEnd(idW)}  ${"name".padEnd(nameW)}  ${"task".padEnd(taskW)}  created`);
+            for (const s of sessions) {
+              const mark = s.id === active ? "*" : " ";
+              console.log(
+                `${mark}${s.id.padEnd(idW - 1)}  ${s.name.padEnd(nameW)}  ${(s.task ?? "").padEnd(taskW)}  ${s.createdAt.toISOString()}`,
+              );
+            }
+          }
+        } catch (e) {
+          console.log(
+            JSON.stringify(
+              e instanceof GraphKitError ? fail(e.code, e.message, e.details) : fail("LIST_ERROR", String(e)),
+            ),
+          );
+          process.exit(1);
+        }
+      } else if (subcommand === "switch") {
+        const id = Array.isArray(args) ? args[0] : args;
+        try {
+          if (!id) {
+            console.log(JSON.stringify(fail("MISSING_ARG", "graph switch requires a session graph id")));
+            process.exit(1);
+            return;
+          }
+          setActiveGraphId(id);
+          if (opts.json) {
+            console.log(JSON.stringify(ok({ active: id })));
+          } else {
+            console.log(`active -> ${id}`);
+          }
+        } catch (e) {
+          console.log(
+            JSON.stringify(
+              e instanceof GraphKitError ? fail(e.code, e.message, e.details) : fail("SWITCH_ERROR", String(e)),
+            ),
+          );
+          process.exit(1);
+        }
+      } else if (subcommand === "show") {
+        const id = Array.isArray(args) ? args[0] : args;
+        try {
+          // Explicit id resolves through listSessionGraphs so user input is never
+          // joined into a path — traversal ids simply never match an entry.
+          const entry = id ? listSessionGraphs().find((s) => s.id === id) : null;
+          let raw: string;
+          let resolvedId: string;
+          let resolvedPath: string;
+          if (entry) {
+            raw = readFileSync(entry.path, "utf-8");
+            resolvedId = entry.id;
+            resolvedPath = entry.path;
+          } else if (id) {
+            throw new GraphKitError("GRAPH_NOT_FOUND", `No session graph with id "${id}"`, {
+              id,
+              available: listSessionGraphs().map((s) => s.id),
+            });
+          } else {
+            const active = loadActiveGraph();
+            raw = readFileSync(active.path, "utf-8");
+            resolvedId = active.id;
+            resolvedPath = active.path;
+          }
+          if (opts.json) {
+            console.log(JSON.stringify(ok({ id: resolvedId, path: resolvedPath, graph: YAML.parse(raw) })));
+          } else {
+            console.log(raw.trimEnd());
+          }
+        } catch (e) {
+          console.log(
+            JSON.stringify(
+              e instanceof GraphKitError ? fail(e.code, e.message, e.details) : fail("SHOW_ERROR", String(e)),
+            ),
+          );
+          process.exit(1);
+        }
       } else if (subcommand === "inspect") {
         const topology = Array.isArray(args) ? args[0] : args;
         if (!topology || !TOPOLOGY_NAMES.includes(topology as TopologyName)) {

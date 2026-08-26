@@ -44,7 +44,17 @@
     },
     {
       "name": "graph list",
-      "description": "List canonical topologies",
+      "description": "List session graphs",
+      "options": ["--json"]
+    },
+    {
+      "name": "graph switch",
+      "description": "Switch active session graph",
+      "options": ["--json"]
+    },
+    {
+      "name": "graph show",
+      "description": "Show a session graph (default active)",
       "options": ["--json"]
     },
     {

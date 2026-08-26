@@ -27,6 +27,8 @@ function runCli(args: string[], _cwd?: string) {
   process.exit = (c?: number) => {
     exitCode = c ?? 1;
   };
+  const origCwd = process.cwd;
+  if (_cwd) process.cwd = () => _cwd;
   let error: Error | undefined;
   try {
     cli.parse(["node", "gk", ...args], { run: true });
@@ -36,6 +38,7 @@ function runCli(args: string[], _cwd?: string) {
     console.log = origLog;
     console.warn = origWarn;
     process.exit = origExit;
+    process.cwd = origCwd;
   }
   return { stdout: logs.join("\n"), code: exitCode, error };
 }
@@ -52,14 +55,14 @@ describe("gk graph commands", () => {
     rmSync(tmp, { recursive: true, force: true });
   });
 
-  test("graph list outputs all 11 topologies", () => {
-    const { stdout, code } = runCli(["graph", "list"]);
+  test("graph list reports session graphs in initialized cwd", () => {
+    mkdirSync(join(tmp, ".graphkit", "graphs"), { recursive: true });
+    const { stdout, code } = runCli(["graph", "list", "--json"], tmp);
     expect(code).toBe(0);
     const parsed = JSON.parse(stdout);
     expect(parsed.status).toBe("ok");
-    expect(parsed.data.topologies).toHaveLength(11);
-    expect(parsed.data.topologies).toContain("diamond");
-    expect(parsed.data.topologies).toContain("tournament");
+    expect(parsed.data.sessions).toEqual([]);
+    expect(parsed.data.active).toBeNull();
   });
   test("graph inspect diamond outputs config keys", () => {
     const { stdout, code } = runCli(["graph", "inspect", "diamond"]);
