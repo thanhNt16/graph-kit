@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.24] - 2026-08-26
+
+### Fixed
+- Fixed release notes extraction in `release.yml` so CHANGELOG entries match date-suffixed headers.
+
+## [0.2.23] - 2026-08-26
+
+### Added
+- **Changelog & Documentation Policy**: `CHANGELOG.md` covering all releases from `v0.2.0` onward.
+- **Release workflow integration**: `release.yml` extracts the current version's section from `CHANGELOG.md` to populate GitHub Release notes.
+- **CI sanity check**: `scripts/check-changelog.ts` ensures `CHANGELOG.md` exists and contains an `[Unreleased]` section (wired into `ci:local`).
+- **CLI Reference**: full 30-command reference in `README.md`.
+- **Command documentation**: `gk status`, `gk execute`, and `gk visualize` pointer stubs documented in `README.md`.
+- **Worktree merge protocol**: `docs/worktree-merge-protocol.md` with sequence diagram and multi-host support matrix.
+- **Pages integration**: `docs/worktree-merge-protocol.md` linked from GitHub Pages index.
+
+### Changed
+- `README.md` banner links directly to `CHANGELOG.md` and `docs/worktree-merge-protocol.md`.
+
 ## [0.2.22] - 2026-08-25
 
 ### Fixed
