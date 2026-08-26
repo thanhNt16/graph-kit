@@ -41,7 +41,7 @@ All three land in one release; schema changes are additive, so existing graphs s
 
 ### 3.2 Write path
 
-Both `gk init-graph` and `gk template materialize` always create a **new** timestamped file and then flip `.graphkit/active`. Neither ever rewrites an existing session graph. The interactive overwrite guard ("refuse to replace existing graph.yaml") is retained only for explicit-path writes.
+Both `gk init-graph` and `gk template materialize` always create a **new** timestamped file. `gk template materialize` flips `.graphkit/active` only when `--use` is passed (opt-in; sanctioned deviation from the original default-yes, finalized during final review), while `gk init-graph` sets it directly. Neither ever rewrites an existing session graph. The interactive overwrite guard ("refuse to replace existing graph.yaml") is retained only for explicit-path writes.
 
 ### 3.3 Read path
 
@@ -60,7 +60,7 @@ Dangling pointer (active names missing file): hard error listing available ids f
 gk graph list               # table: id | task line | created | last-run
 gk graph switch <id>        # flip active pointer
 gk graph show <id>          # print graph yaml
-gk graph history <id>       # joined runs ledger view (existing runs data)
+gk graph history <id>       # joined runs ledger view — deferred to runs-ledger / gk-execute milestone
 ```
 
 Root `graph.yaml`: untouched by gk going forward; reading it via explicit path still works. No migration step ships in this release.
@@ -118,7 +118,7 @@ gk template materialize <name> [--params '{"task":"..."}'] [--use]
 - Resolution order: project-local `.graphkit/templates/<name>.gk.yaml` → user-global `~/.graphkit/templates/<name>.gk.yaml` → bundled gallery.
 - Substitutes `{{param}}` placeholders exactly per the existing parameter contract (embedded placeholders resolve to text; sole-placeholder values may take scalar type).
 - Validates the substituted result (`gk validate` pipeline).
-- Writes `.graphkit/graphs/<ts>-<name>.yaml`, flips active pointer when `--use` passed (default: yes, matching init-graph behavior).
+- Writes `.graphkit/graphs/<ts>-<name>.yaml`; flips active pointer only when `--use` passed (opt-in; sanctioned deviation from the original default-yes, finalized during final review).
 - Errors before any write: unknown template, undeclared placeholder used, required param missing (error names them), type mismatch.
 
 ### 5.2 Gallery

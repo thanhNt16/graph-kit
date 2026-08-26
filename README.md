@@ -168,7 +168,7 @@ Inside a Claude Code or Cursor session (after `gk init`):
 - `/gk:evidence` — report what the graph produced
 - `/gk:status` — current run state
 
-Templates resolve in order: `<project>/.graphkit/templates/` ⇒ `~/.graphkit/templates/` ⇒ the bundled gallery (`audit-pr`, `refactor-module`, `bench-eval`, `doc-sweep`); `gk template list` reports a `source` column (`project` | `global` | `builtin`) showing which store won. Materialize any of them into an immutable session graph with `gk template materialize <name> --params '{"task":"…"}' [--use]` (`--use` sets the active pointer), then browse sessions with `gk graph list|switch|show`. `gk inventory` reports installed agents/skills/tools/MCP servers for the active target — names only, no credentials/tokens. See [docs/templates-and-viewer.md](docs/templates-and-viewer.md) for template storage, parameter reference, the smart `/gk:init-graph` flow, and the interactive viewer's controls and troubleshooting.
+Templates resolve in order: `<project>/.graphkit/templates/` ⇒ `~/.graphkit/templates/` ⇒ the bundled gallery (`audit-pr`, `refactor-module`, `bench-eval`, `doc-sweep`); `gk template list` reports an `origin` column (`project` | `global` | `gallery`) showing which store won. Materialize any of them into an immutable session graph with `gk template materialize <name> --params '{"task":"…"}' [--use]` (`--use` sets the active pointer), then browse sessions with `gk graph list|switch|show`. `gk inventory` reports installed agents/skills/tools/MCP servers for the active target — names only, no credentials/tokens. See [docs/templates-and-viewer.md](docs/templates-and-viewer.md) for template storage, parameter reference, the smart `/gk:init-graph` flow, and the interactive viewer.
 
 ## Eleven topologies
 

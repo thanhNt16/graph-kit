@@ -95,14 +95,22 @@ gk template pack graph.yaml --name security-audit           # project-local
 gk template pack graph.yaml --name security-audit --global   # user-global
 gk template pack graph.yaml --name security-audit --force    # overwrite existing
 
-# Inspect
+# Inspect templates (resolves project > global > gallery)
 gk template list                          # name, desc, version, origin, shadowed
 gk template list --json
-gk template show security-audit           # local-before-global; unknown names get close matches
+gk template show security-audit           # resolves project > global > gallery; unknown names get close matches
 gk template show security-audit --json
+
+# Materialize a template into an immutable session graph
+gk template materialize audit-pr --params '{"task":"audit auth flow"}'
+gk template materialize audit-pr --params '{"task":"audit auth flow"}' --use  # also flips .graphkit/active
 ```
 
-`pack` validates the source graph through the normal schema + validation pipeline, validates the `GraphTemplate v1` contract and every parameter reference, then writes **atomically** — it writes a sibling temp file and renames it, so a partial write never clobbers an existing template. It refuses to overwrite an existing destination unless `--force` is given. Output reports name, origin, path, parameter count, and recommendation count.
+Templates resolve across 3 stores in order: `<project>/.graphkit/templates/` (`project`) ⇒ `~/.graphkit/templates/` (`global`) ⇒ bundled gallery (`gallery`). `gk template list` reports an `origin` field (`project` | `global` | `gallery`) and flags `shadowed: true` when a higher-precedence template hides a broader one.
+
+`pack` validates the source graph through the schema + validation pipeline, verifies the `GraphTemplate v1` contract and all parameter references, then writes **atomically** (via sibling temp file + rename).
+
+`materialize` substitutes parameters into the template, runs schema validation, and saves an immutable session graph under `.graphkit/graphs/<YYYY-MM-DD>-<slug>.yaml` (same-date collisions append `-2`, `-3`). When `--use` is passed, it activates the new graph by writing its id to `.graphkit/active`. Session graphs can be inspected and switched with `gk graph list`, `gk graph switch <id>`, and `gk graph show [id]`.
 
 ### `/gk:template` walkthrough
 

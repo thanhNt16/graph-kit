@@ -79,7 +79,7 @@ Writes `graph.yaml` to project root. Refuses to overwrite an existing file witho
 - "custom", "freeform", "my own flow" → **custom**
 
 ## Available topologies
-Run `gk graph list` to see all topologies (7 canonical + custom + 3 flow presets). Run `gk graph inspect <topology>` to see its config keys.
+Run `gk graph topologies` to see all topologies (7 canonical + custom + 3 flow presets). Run `gk graph inspect <topology>` to see its config keys.
 
 ### Custom topology
 Use `topology: custom` to define any graph shape. The `depend_on` field controls execution order — nodes with no pending deps run in parallel. Node-level loops are supported via `loop: { enabled: true }`.
