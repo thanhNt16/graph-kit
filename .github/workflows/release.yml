@@ -83,6 +83,20 @@ jobs:
         run: |
           git tag "$NEXT" "$GITHUB_SHA"
           git push origin "$NEXT"
+      - name: Extract CHANGELOG entry
+        env:
+          NEXT: ${{ needs.bundle.outputs.next }}
+        run: |
+          version="${NEXT#v}"
+          awk -v version="$version" '
+            $0 == "## [" version "]" { found=1; print; next }
+            found && /^## \[/ { exit }
+            found { print }
+          ' CHANGELOG.md > release-notes.md
+          if [ ! -s release-notes.md ]; then
+            echo "No CHANGELOG entry for $NEXT; using generated notes"
+            rm -f release-notes.md
+          fi
       - uses: actions/download-artifact@v4
         with:
           pattern: graphkit-*
@@ -92,5 +106,6 @@ jobs:
         with:
           tag_name: ${{ needs.bundle.outputs.next }}
           name: ${{ needs.bundle.outputs.next }}
-          generate_release_notes: true
+          body_path: release-notes.md
+          generate_release_notes: ""
           files: gk-*.tar.gz

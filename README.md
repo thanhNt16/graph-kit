@@ -1,5 +1,8 @@
 # GraphKit
 
+> **Changelog**: [CHANGELOG.md](CHANGELOG.md) documents all feature releases.
+> **Worktree merge protocol**: [docs/worktree-merge-protocol.md](docs/worktree-merge-protocol.md) details conflict-safe concurrent agent editing.
+
 GraphKit is a graph engineering kit for AI coding agents (Claude Code, Cursor, OpenCode, Codex CLI, and pi). It installs agents, skills, hooks, and rules that let you define, validate, compile, and execute graph-structured agent workflows.
 
 ## What it is
@@ -209,6 +212,74 @@ nodes:
 `depend_on` controls parallelism: empty = start immediately, shared = parallel, multiple = barrier.
 
 ## Boundary
+
+## CLI reference
+
+```text
+$ gk --help
+
+  ┌─ GraphKit ────────────────────────────────────────────────────┐
+  │ gk — compile, validate, and manage graph-defined agent flows   │
+  └─────────────────────────────────────────────────────────────────┘
+
+  Usage: gk <command> [options]
+
+  Commands:
+    init          Install the GraphKit kit into the current project
+    status        Summarize active graph run and evidence coverage
+    execute       Execute a graph.yaml (not yet implemented)
+    visualize     Visualize a graph.yaml (not yet implemented)
+    new           Scaffold a new project with the GraphKit kit
+    validate      Validate a graph.yaml
+    gate          Deterministic evidence gate: MERGE / BLOCK
+    compile       Compile graph.yaml to a .workflow.js script
+    graph list    List canonical topologies
+    graph inspect Inspect a topology's config keys
+    graph new     Emit a graph.yaml template for a topology
+    graph ascii   Render an ASCII diagram
+    graph svg     Render an SVG export
+    graph waves   Output topological wave structure
+    graph index   Index memory into CBM
+    graph search  Search the CBM memory graph
+    graph ask     Ask a natural-language question (CBM)
+    graph trace   Trace calls / callees in the CBM graph
+    graph query   Run a Cypher query against the CBM graph
+    memory trace  ACT-R decay pass over .graphkit/memory/
+    memory touch  Reinforce a memory by bumping use_count
+    memory recall Query .graphkit/memory/ with keyword×salience
+    memory index  Index .graphkit/memory/ into CBM
+    template pack Package a graph.yaml as a reusable GraphTemplate
+    template list List packaged templates
+    template show Show a packaged template
+    inventory     Inventory agents, skills, tools, and MCP servers
+    models cursor Show the Cursor model mapping
+    models cursor set  Set a Cursor model override
+    models cursor reset Remove Cursor model overrides
+```
+
+Use `gk <command> --help` for per-command details.
+
+### `gk status`
+
+`gk status` summarizes the active graph run without touching state — it reads `.graphkit/runs/.active` (written by the dispatch skill on start) and reports the run's metadata, current round, and required vs. produced evidence keys:
+
+```bash
+$ gk status            # human-readable
+$ gk status --json     # machine-readable: run, round, coverage, verdict
+```
+
+No active run prints a stable "no run" summary and exits 0 — safe to call from scripts and CI.
+
+### `gk execute` / `gk visualize`
+
+Both are pointer stubs for tools that are implemented inside the kits (the `/gk:execute` and `/gk:visualize` skills), not in the CLI binary:
+
+```bash
+$ gk execute graph.yaml    # NOT_IMPLEMENTED — use /gk:execute skill or compile
+$ gk visualize graph.yaml  # NOT_IMPLEMENTED — use /gk:visualize skill
+```
+
+They exit 1 with `NOT_IMPLEMENTED` and a hint pointing at the skill that does the real work.
 
 gk is the compiler, not a runtime. It never invokes a model, spawns an agent, or reads an API key. Execution is delegated to the host: Claude Code's Workflow tool (`/gk:run`) or native subagent dispatch (`/gk:execute`, all targets).
 

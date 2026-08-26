@@ -15,7 +15,8 @@
     "eval": "bun run src/eval/replay-cli.ts",
     "cbm:parity": "bun run scripts/cbm-parity.ts",
     "prepack": "bun run build && bun run build:viewer",
-    "ci:local": "bun run typecheck && bun run lint && bun run build && bun run build:viewer && bun test && bun run cbm:parity",
+    "check-changelog": "bun run scripts/check-changelog.ts",
+    "ci:local": "bun run typecheck && bun run lint && bun run build && bun run build:viewer && bun test && bun run cbm:parity && bun run check-changelog",
     "eval:memory": "bun run scripts/memory-recall-eval.ts"
   },
   "files": [

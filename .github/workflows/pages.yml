@@ -33,7 +33,8 @@ jobs:
           <title>GraphKit</title></head><body>
           <a href="graphkit-v0.2-report.html">GraphKit v0.2 report</a> ·
           <a href="templates-and-viewer.md">Templates &amp; viewer docs</a> ·
-          <a href="context-profiles.md">Context profiles</a>
+          <a href="context-profiles.md">Context profiles</a> ·
+          <a href="worktree-merge-protocol.md">Worktree merge protocol</a>
           </body></html>
           HTML
       - uses: actions/configure-pages@v5
