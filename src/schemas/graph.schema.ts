@@ -22,6 +22,18 @@ const LoopConfig = z.object({
   exit_condition: z.string().optional(),
 });
 
+export const LoopGroupSchema = z.object({
+  nodes: z.array(z.string().min(1)).min(1),
+  max_rounds: z.number().int().min(1),
+  stop_when: z.string().min(1).optional(),
+  gate_evidence: z.array(z.string().min(1)).min(1).optional(),
+}).refine(
+  (data) => Boolean(data.stop_when || data.gate_evidence),
+  { message: "At least one of stop_when or gate_evidence must be provided" }
+);
+
+export type LoopGroup = z.infer<typeof LoopGroupSchema>;
+
 const NodeDefSchema = z.object({
   agent: z.string(),
   model: NodeRef.optional(),
@@ -119,6 +131,7 @@ const GraphSchema = z
       evidence_dir: ".graphkit/evidence/",
       report: ".graphkit/reports/{name}.md",
     })),
+    loops: z.array(LoopGroupSchema).optional(),
   })
   .superRefine((graph, ctx) => {
     const nodes = graph.nodes as Record<string, NodeDef>;
@@ -157,5 +170,5 @@ const GraphSchema = z
       }
     }
   });
-
 export { ConstraintValue, GraphSchema, LoopConfig, NodeDefSchema, RefSchema, TopologyName };
+
