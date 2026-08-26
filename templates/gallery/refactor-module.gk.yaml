@@ -1,0 +1,57 @@
+apiVersion: graphkit.dev/v1
+kind: GraphTemplate
+metadata:
+  name: refactor-module
+  description: Scoped refactoring of {{module}} with iterative verification
+  version: 1
+parameters:
+  module:
+    description: Path or package to refactor (e.g. "src/store")
+    required: true
+  notes:
+    description: Refactor constraints, goals, or architectural notes
+    required: false
+    default: "Preserve all external contracts and existing tests."
+recommendations:
+  agents:
+    - software-architect
+    - qa-engineer
+  skills:
+    - test-driven-development
+graph:
+  apiVersion: graphkit.dev/v2
+  kind: Graph
+  metadata:
+    name: refactor-module
+    description: Refactor {{module}}
+  topology: custom
+  inputs:
+    module:
+      type: string
+      required: true
+    notes:
+      type: string
+      required: false
+      default: "Preserve all external contracts and existing tests."
+  nodes:
+    planner:
+      agent: software-architect
+      objective: Design the step-by-step refactoring plan for {{module}}. Notes - {{notes}}
+      depend_on: []
+      evidence: [refactor-plan]
+    implementer:
+      agent: software-architect
+      objective: Execute the refactor plan for {{module}} preserving contracts.
+      depend_on: [planner]
+      evidence: [refactor-diff]
+    tester:
+      agent: qa-engineer
+      objective: Run unit/integration tests for {{module}} and surface any regressions.
+      depend_on: [implementer]
+      evidence: [test-results]
+  loops:
+    - nodes: [implementer, tester]
+      max_rounds: 3
+      gate_evidence: [test-results]
+  evidence:
+    required_keys: [refactor-plan, test-results]

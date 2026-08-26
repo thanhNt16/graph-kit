@@ -1,0 +1,49 @@
+apiVersion: graphkit.dev/v1
+kind: GraphTemplate
+metadata:
+  name: doc-sweep
+  description: Iterative documentation coverage sweep for {{topic}}
+  version: 1
+parameters:
+  topic:
+    description: Topic or subsystem to audit and document (e.g. "CLI commands")
+    required: true
+recommendations:
+  agents:
+    - document-generator
+    - software-architect
+  skills:
+    - doc-coauthoring
+graph:
+  apiVersion: graphkit.dev/v2
+  kind: Graph
+  metadata:
+    name: doc-sweep
+    description: Document {{topic}}
+  topology: loop-until-done
+  inputs:
+    topic:
+      type: string
+      required: true
+  nodes:
+    auditor:
+      agent: software-architect
+      objective: Inventory existing documentation for {{topic}} and identify gaps.
+      depend_on: []
+      evidence: [doc-gap-analysis]
+    writer:
+      agent: document-generator
+      objective: Draft documentation addressing identified gaps in {{topic}}.
+      depend_on: [auditor]
+      evidence: [doc-drafts]
+      loop:
+        enabled: true
+        stop_when: All documentation gaps in doc-gap-analysis have been closed and verified.
+        max_rounds: 3
+    publisher:
+      agent: software-architect
+      objective: Review and publish the finalized documentation for {{topic}}.
+      depend_on: [writer]
+      evidence: [doc-index]
+  evidence:
+    required_keys: [doc-gap-analysis, doc-index]

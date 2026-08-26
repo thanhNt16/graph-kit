@@ -148,6 +148,11 @@
       "options": ["--json"]
     },
     {
+      "name": "template materialize",
+      "description": "Materialize a template into a session graph",
+      "options": ["--params <json>", "--use", "--json"]
+    },
+    {
       "name": "inventory",
       "description": "Inventory installed agents, skills, tools, and MCP servers",
       "options": ["--target <target>", "--json"]

@@ -86,6 +86,11 @@ export const CLI_COMMANDS: { path: string; description: string; options: string[
   { path: "template list", description: "List packaged templates", options: ["--json"] },
   { path: "template show", description: "Show a packaged template", options: ["--json"] },
   {
+    path: "template materialize",
+    description: "Materialize a template into a session graph",
+    options: ["--params <json>", "--use", "--json"],
+  },
+  {
     path: "inventory",
     description: "Inventory installed agents, skills, tools, and MCP servers",
     options: ["--target <target>", "--json"],

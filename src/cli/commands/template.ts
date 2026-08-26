@@ -1,12 +1,20 @@
 import { existsSync, mkdirSync, renameSync as osRenameSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import type { CAC } from "cac";
 import YAML from "yaml";
-import { validateGraph } from "../../compiler/validate.js";
+import { type Graph, validateGraph } from "../../compiler/validate.js";
 import { GraphKitError } from "../../errors.js";
 import { GraphSchema } from "../../schemas/graph.schema.js";
-import { type GraphTemplate, GraphTemplateSchema, TEMPLATE_NAME_RE } from "../../schemas/template.schema.js";
+import {
+  materializeTemplate as substituteTemplate,
+  type GraphTemplate,
+  GraphTemplateSchema,
+  type TemplateValues,
+  TEMPLATE_NAME_RE,
+} from "../../schemas/template.schema.js";
+import { saveSessionGraph, setActiveGraphId } from "../../store/index.js";
 import { fail, ok } from "../output.js";
 
 // ponytail: DI seam mirroring graph.ts — lets tests simulate a rename failure
@@ -31,16 +39,31 @@ function templatePath(dir: string, name: string): string {
   return join(dir, `${name}.gk.yaml`);
 }
 
-/** Resolve a template name against stores, local before global. */
+type TemplateOrigin = "project" | "global" | "gallery";
+
+/** Bundled templates ship under `<package root>/templates/gallery/`. */
+function galleryTemplatesDir(): string {
+  const here = dirname(fileURLToPath(import.meta.url));
+  // Dev: src/cli/commands/template.ts -> package root. Bundled: dist/ -> package root.
+  for (const rel of ["../../../", "../"]) {
+    const dir = join(here, rel, "templates", "gallery");
+    if (existsSync(dir)) return dir;
+  }
+  return join(here, "..", "..", "..", "templates", "gallery");
+}
+
+/** Resolve a template name against stores, project > global > bundled gallery. */
 function resolveTemplate(
   cwd: string,
   home: string,
   name: string,
-): { path: string; origin: "project" | "global" } | null {
+): { path: string; origin: TemplateOrigin } | null {
   const local = templatePath(localTemplatesDir(cwd), name);
   if (existsSync(local)) return { path: local, origin: "project" };
   const global = templatePath(globalTemplatesDir(home), name);
   if (existsSync(global)) return { path: global, origin: "global" };
+  const builtin = templatePath(galleryTemplatesDir(), name);
+  if (existsSync(builtin)) return { path: builtin, origin: "gallery" };
   return null;
 }
 
@@ -164,13 +187,21 @@ export function runTemplatePack(opts: {
     return e instanceof GraphKitError ? fail(e.code, e.message, e.details) : fail("PACK_ERROR", String(e));
   }
 }
-
 export function runTemplateList(opts: { cwd: string; home: string }): {
   status: string;
   data: { templates: Array<Record<string, unknown>> };
 } {
-  const byName = new Map<string, { path: string; origin: "project" | "global" }>();
-  // Global first so project origins overwrite → project wins.
+  const byName = new Map<string, { path: string; origin: TemplateOrigin }>();
+  // Gallery first, then global, then project — later writes overwrite, so the
+  // most-specific store wins at the same priority the resolver uses.
+  const builtinDir = galleryTemplatesDir();
+  if (existsSync(builtinDir)) {
+    for (const entry of readDir(builtinDir)) {
+      if (!entry.endsWith(".gk.yaml")) continue;
+      const name = entry.slice(0, -".gk.yaml".length);
+      byName.set(name, { path: templatePath(builtinDir, name), origin: "gallery" });
+    }
+  }
   const globalDir = globalTemplatesDir(opts.home);
   if (existsSync(globalDir)) {
     for (const entry of readDir(globalDir)) {
@@ -196,12 +227,18 @@ export function runTemplateList(opts: { cwd: string; home: string }): {
       description: t.metadata.description,
       version: t.metadata.version,
       origin,
-      shadowed: origin === "project" && existsSync(templatePath(globalDir, name)),
+      shadowed:
+        origin === "project"
+          ? existsSync(templatePath(globalDir, name))
+          : origin === "gallery"
+            ? existsSync(templatePath(globalDir, name)) || existsSync(templatePath(localDir, name))
+            : false,
     });
   }
   templates.sort((a, b) => String(a.name).localeCompare(String(b.name)));
   return ok({ templates });
 }
+
 
 /** Levenshtein-ish close-match scoring for unknown-name suggestions. */
 function closeMatches(name: string, available: string[]): string[] {
@@ -234,6 +271,83 @@ function levenshtein(a: string, b: string): number {
 type ShowResult =
   | { status: string; data: Record<string, unknown>; error?: never }
   | { status: string; error: { code: string; message: string; details?: Record<string, unknown> }; data?: never };
+
+type MaterializeSuccess = {
+  id: string;
+  path: string;
+  origin: TemplateOrigin;
+  graph: Graph;
+  active?: string;
+};
+
+/**
+ * Materialize a resolved template into a session graph: substitute params,
+ * run validateGraph, save via the session store, optionally flip --use.
+ * Throws GraphKitError before any write on bad input.
+ */
+export function materializeTemplate(
+  name: string,
+  params: TemplateValues,
+  opts: { cwd?: string; home?: string; use?: boolean } = {},
+): MaterializeSuccess {
+  const cwd = opts.cwd ?? process.cwd();
+  const home = opts.home ?? homedir();
+  if (!TEMPLATE_NAME_RE.test(name)) {
+    throw new GraphKitError("BAD_TEMPLATE_NAME", `Template name must match ${TEMPLATE_NAME_RE.source}`, {
+      name,
+    });
+  }
+  const resolved = resolveTemplate(cwd, home, name);
+  if (!resolved) {
+    const list = runTemplateList({ cwd, home });
+    const available = list.data.templates.map((t) => String(t.name));
+    throw new GraphKitError("TEMPLATE_NOT_FOUND", `Unknown template "${name}"`, {
+      closeMatches: closeMatches(name, available),
+      available,
+    });
+  }
+  const t = readTemplate(resolved.path);
+
+  const missing = Object.entries(t.parameters)
+    .filter(([_key, def]) => def.required && !(_key in params))
+    .map(([key]) => key);
+  if (missing.length > 0) {
+    throw new GraphKitError(
+      "MISSING_PARAMS",
+      `Missing required parameter(s): ${missing.join(", ")}`,
+      { missing },
+    );
+  }
+
+  let graph: Graph;
+  try {
+    graph = substituteTemplate(t, params);
+  } catch (e) {
+    if (e instanceof GraphKitError) throw e;
+    throw new GraphKitError(
+      "PARAM_INVALID",
+      e instanceof Error ? e.message : String(e),
+      { name },
+    );
+  }
+
+  const findings = validateGraph(graph, cwd);
+  if (findings.length > 0) {
+    throw new GraphKitError(
+      "VALIDATION_FAILED",
+      `Materialized graph failed validation:\n${findings.map((f) => `- [${f.check}] ${f.path}: ${f.message}`).join("\n")}`,
+      { findings },
+    );
+  }
+
+  const saved = saveSessionGraph(graph, name, cwd);
+  const out: MaterializeSuccess = { id: saved.id, path: saved.path, origin: resolved.origin, graph };
+  if (opts.use) {
+    setActiveGraphId(saved.id, cwd);
+    out.active = saved.id;
+  }
+  return out;
+}
 
 export function runTemplateShow(opts: { cwd: string; home: string; name: string }): ShowResult {
   try {
@@ -283,11 +397,13 @@ export function registerTemplateCommands(cli: CAC) {
   // multi-word commands ("template pack") never dispatch. Use one `template`
   // command with action-based subcommand dispatch, mirroring `graph`.
   cli
-    .command("template <subcommand> [args...]", "Package, list, and inspect reusable GraphTemplates")
+    .command("template <subcommand> [args...]", "Package, list, inspect, and materialize reusable GraphTemplates")
     .option("--name <name>", "Template name (required for pack)")
     .option("--global", "Write to the user-global store")
     .option("--force", "Overwrite an existing template")
     .option("--input <file>", "Prepared complete GraphTemplate input file")
+    .option("--params <json>", "JSON object of template parameters (materialize)")
+    .option("--use", "Set the active session pointer after materializing")
     .option("--json", "JSON output (always emitted; flag accepted for parity)")
     .action((subcommand, args, opts) => {
       const argAt = (i: number): string | undefined =>
@@ -334,10 +450,42 @@ export function registerTemplateCommands(cli: CAC) {
         if (res.status === "fail") process.exit(1);
         return;
       }
+      if (subcommand === "materialize") {
+        const name = argAt(0);
+        if (!name) {
+          console.log(JSON.stringify(fail("MISSING_NAME", "template materialize requires a <name> argument")));
+          process.exit(1);
+          return;
+        }
+        let params: TemplateValues = {};
+        if (opts.params) {
+          try {
+            params = JSON.parse(opts.params as string) as TemplateValues;
+          } catch {
+            console.log(JSON.stringify(fail("BAD_PARAMS", "--params must be a JSON object")));
+            process.exit(1);
+            return;
+          }
+        }
+        try {
+          const res = materializeTemplate(name, params, { cwd: cwd(), home: home(), use: Boolean(opts.use) });
+          const payload: Record<string, unknown> = { id: res.id, path: res.path, origin: res.origin };
+          if (res.active !== undefined) payload.active = res.active;
+          console.log(JSON.stringify(ok(payload)));
+        } catch (e) {
+          console.log(
+            JSON.stringify(
+              e instanceof GraphKitError ? fail(e.code, e.message, e.details) : fail("MATERIALIZE_ERROR", String(e)),
+            ),
+          );
+          process.exit(1);
+        }
+        return;
+      }
       console.log(
         JSON.stringify(
           fail("UNKNOWN_TEMPLATE_SUBCOMMAND", `Unknown template subcommand "${subcommand}"`, {
-            available: ["pack", "list", "show"],
+            available: ["pack", "list", "show", "materialize"],
           }),
         ),
       );

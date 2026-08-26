@@ -123,8 +123,9 @@ describe("CLI end-to-end: template pack/list/show", () => {
     expect(code).toBe(0);
     const parsed = JSON.parse(stdout);
     expect(parsed.status).toBe("ok");
-    expect(parsed.data.templates).toHaveLength(1);
-    expect(parsed.data.templates[0].name).toBe("security-audit");
+    const found = parsed.data.templates.find((t: { name: string }) => t.name === "security-audit");
+    expect(found).toBeDefined();
+    expect(found.origin).toBe("project");
   });
 
   test("template show resolves the template", () => {

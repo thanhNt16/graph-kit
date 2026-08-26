@@ -120,22 +120,26 @@ export const GraphTemplateSchema = z
     const referenced = new Set<string>();
 
     for (const use of uses) {
-      referenced.add(use.param);
-      if (!isValidParamName(use.param)) {
+      // Trailing `.json` selects the raw value (JSON round-trip form) instead
+      // of the string form; validate against the base parameter name.
+      const jsonForm = use.param.endsWith(".json");
+      const base = jsonForm ? use.param.slice(0, -5) : use.param;
+      referenced.add(base);
+      if (!isValidParamName(base)) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
           path: [use.path],
           message: `Malformed placeholder "{{${use.param}}}"`,
         });
       }
-      if (!declared.has(use.param)) {
+      if (!declared.has(base)) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
           path: [use.path],
           message: `Placeholder "{{${use.param}}}" references undeclared parameter`,
         });
       }
-      const def = params[use.param]?.default;
+      const def = params[base]?.default;
       if (use.embedded && def !== undefined && typeof def !== "string") {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
@@ -157,20 +161,32 @@ export const GraphTemplateSchema = z
   });
 
 export type GraphTemplate = z.infer<typeof GraphTemplateSchema>;
-export type TemplateValues = Record<string, string | number | boolean>;
+export type TemplateValues = Record<
+  string,
+  string | number | boolean | Array<unknown> | Record<string, unknown>
+>;
 
-function resolveValue(key: string, template: GraphTemplate, values: TemplateValues): string | number | boolean {
-  if (key in values) return values[key];
-  const def = template.parameters[key]?.default;
-  if (def !== undefined) return def;
-  throw new Error(`Missing value for required parameter "${key}"`);
+function resolveValue(key: string, template: GraphTemplate, values: TemplateValues): unknown {
+  const jsonForm = key.endsWith(".json");
+  const base = jsonForm ? key.slice(0, -5) : key;
+  let value: unknown = base in values ? values[base] : template.parameters[base]?.default;
+  if (value === undefined) {
+    throw new Error(`Missing value for required parameter "${base}"`);
+  }
+  if (jsonForm && typeof value === "string") {
+    value = JSON.parse(value);
+  }
+  return value;
 }
 
 function substituteString(value: string, template: GraphTemplate, values: TemplateValues): unknown {
   const sole = SOLE_PLACEHOLDER_RE.exec(value.trim());
   if (sole) return resolveValue(sole[1], template, values);
   TOKEN_RE.lastIndex = 0;
-  return value.replace(TOKEN_RE, (_match, key: string) => String(resolveValue(key, template, values)));
+  return value.replace(TOKEN_RE, (_match, key: string) => {
+    const resolved = resolveValue(key, template, values);
+    return typeof resolved === "string" ? resolved : JSON.stringify(resolved);
+  });
 }
 
 function substitute(node: unknown, template: GraphTemplate, values: TemplateValues): unknown {

@@ -1,0 +1,58 @@
+apiVersion: graphkit.dev/v1
+kind: GraphTemplate
+metadata:
+  name: bench-eval
+  description: Model-tier tournament sweep for {{workload}}
+  version: 1
+parameters:
+  workload:
+    description: Task workload to benchmark (e.g. "summarization")
+    required: true
+recommendations:
+  agents:
+    - software-architect
+    - code-reviewer
+  tools:
+    - web_search
+graph:
+  apiVersion: graphkit.dev/v2
+  kind: Graph
+  metadata:
+    name: bench-eval
+    description: Evaluate {{workload}} across model tiers
+  topology: tournament
+  inputs:
+    workload:
+      type: string
+      required: true
+  nodes:
+    runner-opus:
+      agent: software-architect
+      model: opus
+      objective: Produce the strongest attempt for {{workload}}.
+      depend_on: []
+      evidence: [attempt-opus]
+    runner-sonnet:
+      agent: software-architect
+      model: sonnet
+      objective: Produce a balanced attempt for {{workload}}.
+      depend_on: []
+      evidence: [attempt-sonnet]
+    runner-haiku:
+      agent: software-architect
+      model: haiku
+      objective: Produce a fast, minimal attempt for {{workload}}.
+      depend_on: []
+      evidence: [attempt-haiku]
+    judge:
+      agent: code-reviewer
+      objective: Compare the three attempts for {{workload}}; score correctness, cost, and clarity.
+      depend_on: [runner-opus, runner-sonnet, runner-haiku]
+      evidence: [comparison-table]
+    champion:
+      agent: software-architect
+      objective: Declare the winning tier for {{workload}} and write the benchmark report.
+      depend_on: [judge]
+      evidence: [bench-report]
+  evidence:
+    required_keys: [bench-report]

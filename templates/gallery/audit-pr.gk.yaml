@@ -1,0 +1,45 @@
+apiVersion: graphkit.dev/v1
+kind: GraphTemplate
+metadata:
+  name: audit-pr
+  description: Adversarial security and quality audit of {{task}}
+  version: 1
+parameters:
+  task:
+    description: Focus area for the audit (e.g. "the auth module")
+    required: true
+recommendations:
+  agents:
+    - code-reviewer
+    - software-architect
+  skills:
+    - receiving-code-review
+graph:
+  apiVersion: graphkit.dev/v2
+  kind: Graph
+  metadata:
+    name: audit-pr
+    description: Adversarial security and quality audit of {{task}}
+  topology: diamond
+  inputs:
+    task:
+      type: string
+      required: true
+  nodes:
+    reviewer:
+      agent: code-reviewer
+      objective: Adversarially audit {{task}}; record every defect with file/line evidence.
+      depend_on: []
+      evidence: [audit-findings]
+    verifier:
+      agent: software-architect
+      objective: Verify each finding against {{task}} and classify severity and blast radius.
+      depend_on: [reviewer]
+      evidence: [verified-findings]
+    synthesizer:
+      agent: software-architect
+      objective: Merge verified findings into a prioritized remediation report.
+      depend_on: [verifier]
+      evidence: [audit-report]
+  evidence:
+    required_keys: [audit-report]
