@@ -154,5 +154,102 @@ export function validateGraph(graph: Graph, projectRoot: string): Finding[] {
     }
   }
 
+  // 8. Loop group rules
+  if (graph.loops && graph.loops.length > 0) {
+    const seenLoopNodes = new Set<string>();
+
+    for (let i = 0; i < graph.loops.length; i++) {
+      const loop = graph.loops[i];
+      const loopNodeSet = new Set<string>();
+
+      // Rule 1: loop_node_exists
+      let allNodesExist = true;
+      for (const nodeName of loop.nodes) {
+        if (!graph.nodes[nodeName]) {
+          allNodesExist = false;
+          findings.push({
+            check: "loop_node_exists",
+            path: `loops[${i}].nodes`,
+            message: `Loop node "${nodeName}" does not exist in graph.nodes`,
+          });
+        } else {
+          loopNodeSet.add(nodeName);
+        }
+      }
+
+      // Rule 2: loop_no_overlap
+      for (const nodeName of loop.nodes) {
+        if (seenLoopNodes.has(nodeName)) {
+          findings.push({
+            check: "loop_no_overlap",
+            path: `loops[${i}].nodes`,
+            message: `Node "${nodeName}" appears in more than one loop group`,
+          });
+        }
+        seenLoopNodes.add(nodeName);
+      }
+
+      // Rule 3: loop_gate_evidence_declared
+      if (loop.gate_evidence) {
+        const loopProducedEvidence = new Set<string>();
+        for (const nodeName of loop.nodes) {
+          const node = graph.nodes[nodeName];
+          if (node?.evidence) {
+            for (const key of node.evidence) {
+              loopProducedEvidence.add(key);
+            }
+          }
+        }
+        for (const key of loop.gate_evidence) {
+          if (!loopProducedEvidence.has(key)) {
+            findings.push({
+              check: "loop_gate_evidence_declared",
+              path: `loops[${i}].gate_evidence`,
+              message: `gate_evidence key "${key}" is not declared by any node in the loop group`,
+            });
+          }
+        }
+      }
+
+      // Rule 4: loop_contiguous (topological check)
+      // If any non-loop node lies on a dependency path between two nodes in this loop group, contiguity is violated.
+      if (allNodesExist && loop.nodes.length > 1) {
+        // For any node in loop, traverse its dependencies.
+        // Returns true if `from` can reach any target in `targets` via depend_on edges.
+        const canReachTargetInLoop = (start: string, targets: Set<string>, visited: Set<string>): boolean => {
+          if (visited.has(start)) return false;
+          visited.add(start);
+          const deps = graph.nodes[start]?.depend_on ?? [];
+          for (const dep of deps) {
+            if (targets.has(dep)) return true;
+            if (canReachTargetInLoop(dep, targets, visited)) return true;
+          }
+          return false;
+        };
+
+        let contiguous = true;
+        for (const loopNode of loop.nodes) {
+          const directDeps = graph.nodes[loopNode]?.depend_on ?? [];
+          for (const dep of directDeps) {
+            if (!loopNodeSet.has(dep)) {
+              // Non-loop node in dependency tree: check if it leads to any node in loopNodeSet
+              const reachesOtherLoopNode = canReachTargetInLoop(dep, loopNodeSet, new Set<string>());
+              if (reachesOtherLoopNode) {
+                contiguous = false;
+                findings.push({
+                  check: "loop_contiguous",
+                  path: `loops[${i}].nodes`,
+                  message: `Loop group is non-contiguous: dependency from "${loopNode}" to loop nodes passes through non-loop node "${dep}"`,
+                });
+                break;
+              }
+            }
+          }
+          if (!contiguous) break;
+        }
+      }
+    }
+  }
+
   return findings;
 }
