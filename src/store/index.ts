@@ -44,6 +44,21 @@ function slugify(input: string): string {
   return slug || "graph";
 }
 
+// Session ids are interpolated into filesystem paths — a pointer file or CLI arg
+// carrying "../" must never resolve outside .graphkit/graphs/. Validate against
+// the canonical id shape (<date>-<kebab-slug>[<-N>]) before any join.
+const SESSION_ID_RE = /^\d{4}-\d{2}-\d{2}-[a-z0-9-]{1,40}(-\d+)?$/;
+
+function assertSessionId(id: string): void {
+  if (!SESSION_ID_RE.test(id)) {
+    throw new GraphKitError(
+      "INVALID_SESSION_ID",
+      `Malformed session graph id "${id}" — expected YYYY-MM-DD-<slug>`,
+      { id },
+    );
+  }
+}
+
 export function saveSessionGraph(
   graph: Graph,
   slug: string,
@@ -65,7 +80,7 @@ export function saveSessionGraph(
 }
 
 export function setActiveGraphId(id: string, baseDir: string = process.cwd()): void {
-  ensureGraphsDir(baseDir);
+  assertSessionId(id);
   const path = join(graphsDir(baseDir), `${id}${EXT}`);
   if (!existsSync(path)) {
     throw new GraphKitError(
@@ -123,7 +138,7 @@ export function loadActiveGraph(
       { baseDir },
     );
   }
-
+  assertSessionId(id);
   const path = join(graphsDir(baseDir), `${id}${EXT}`);
   if (!existsSync(path)) {
     throw new GraphKitError(

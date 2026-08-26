@@ -103,6 +103,38 @@ describe("Session Graph Store", () => {
     }
   });
 
+  it("rejects ids escaping the graphs directory (path traversal)", () => {
+    // Trust boundary: a pointer/CLI id interpolates into a filesystem path.
+    // "../outside" must error as malformed, never resolve outside graphs/.
+    const escapes = ["../outside", "2026-08-26/../../etc", "..", "a/b", "2026-08-26-OK-upper"];
+    for (const bad of escapes) {
+      try {
+        setActiveGraphId(bad, TEST_DIR);
+        expect.unreachable(`setActiveGraphId(${bad}) must throw`);
+      } catch (e) {
+        if (e instanceof GraphKitError) {
+          expect(e.code).toBe("INVALID_SESSION_ID");
+        } else {
+          throw e;
+        }
+      }
+    }
+  });
+
+  it("loadActiveGraph rejects a crafted active pointer id", () => {
+    writeFileSync(join(TEST_DIR, ".graphkit", "active"), "../outside\n", "utf-8");
+    try {
+      loadActiveGraph(TEST_DIR);
+      expect.unreachable("loadActiveGraph must throw");
+    } catch (e) {
+      if (e instanceof GraphKitError) {
+        expect(e.code).toBe("INVALID_SESSION_ID");
+      } else {
+        throw e;
+      }
+    }
+  });
+
   it("setActiveGraphId refuses unknown ids", () => {
     try {
       setActiveGraphId("2026-08-26-ghost", TEST_DIR);
