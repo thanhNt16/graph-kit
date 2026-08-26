@@ -211,41 +211,52 @@ export function validateGraph(graph: Graph, projectRoot: string): Finding[] {
         }
       }
 
-      // Rule 4: loop_contiguous (topological check)
-      // If any non-loop node lies on a dependency path between two nodes in this loop group, contiguity is violated.
-      if (allNodesExist && loop.nodes.length > 1) {
-        // For any node in loop, traverse its dependencies.
-        // Returns true if `from` can reach any target in `targets` via depend_on edges.
-        const canReachTargetInLoop = (start: string, targets: Set<string>, visited: Set<string>): boolean => {
-          if (visited.has(start)) return false;
-          visited.add(start);
-          const deps = graph.nodes[start]?.depend_on ?? [];
+      // Rule 4: loop_contiguous (topological wave span closure)
+      // Every loop-node dependency must either be within the loop group or strictly upstream of its minimum wave.
+      if (allNodesExist && loop.nodes.length > 0) {
+        const memoWaves = new Map<string, number>();
+        const visiting = new Set<string>();
+        const computeWave = (nodeId: string): number => {
+          if (memoWaves.has(nodeId)) return memoWaves.get(nodeId)!;
+          if (visiting.has(nodeId)) return 0;
+          visiting.add(nodeId);
+          const deps = graph.nodes[nodeId]?.depend_on ?? [];
+          let maxDepWave = -1;
           for (const dep of deps) {
-            if (targets.has(dep)) return true;
-            if (canReachTargetInLoop(dep, targets, visited)) return true;
+            if (graph.nodes[dep]) {
+              maxDepWave = Math.max(maxDepWave, computeWave(dep));
+            }
           }
-          return false;
+          visiting.delete(nodeId);
+          const wave = maxDepWave + 1;
+          memoWaves.set(nodeId, wave);
+          return wave;
         };
 
-        let contiguous = true;
+        for (const id of Object.keys(graph.nodes)) {
+          computeWave(id);
+        }
+
+        let loopMinWave = Number.POSITIVE_INFINITY;
+        for (const nodeName of loop.nodes) {
+          const w = memoWaves.get(nodeName) ?? 0;
+          if (w < loopMinWave) loopMinWave = w;
+        }
+
         for (const loopNode of loop.nodes) {
           const directDeps = graph.nodes[loopNode]?.depend_on ?? [];
           for (const dep of directDeps) {
-            if (!loopNodeSet.has(dep)) {
-              // Non-loop node in dependency tree: check if it leads to any node in loopNodeSet
-              const reachesOtherLoopNode = canReachTargetInLoop(dep, loopNodeSet, new Set<string>());
-              if (reachesOtherLoopNode) {
-                contiguous = false;
+            if (!loopNodeSet.has(dep) && graph.nodes[dep]) {
+              const depWave = memoWaves.get(dep) ?? 0;
+              if (depWave >= loopMinWave) {
                 findings.push({
                   check: "loop_contiguous",
                   path: `loops[${i}].nodes`,
-                  message: `Loop group is non-contiguous: dependency from "${loopNode}" to loop nodes passes through non-loop node "${dep}"`,
+                  message: `Loop group is non-contiguous: dependency "${dep}" of loop node "${loopNode}" has wave ${depWave}, which is inside or past loop min wave ${loopMinWave}`,
                 });
-                break;
               }
             }
           }
-          if (!contiguous) break;
         }
       }
     }

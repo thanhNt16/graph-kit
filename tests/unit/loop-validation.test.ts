@@ -87,4 +87,20 @@ describe("Loop Group Validation", () => {
     const findings = validateGraph(g, ROOT);
     expect(findings.filter((f) => f.check.startsWith("loop_"))).toEqual([]);
   });
+
+  test("loop_contiguous: rejects non-loop sibling at wave 1 depended on by wave 2 loop node", () => {
+    const g = graph({
+      nodes: {
+        src: { agent: "coder", objective: "seed", depend_on: [] },
+        a: { agent: "coder", objective: "code", depend_on: ["src"] },
+        c: { agent: "coder", objective: "pipe", depend_on: ["src"] },
+        b: { agent: "tester", objective: "test", depend_on: ["c"] },
+      },
+      loops: [{ nodes: ["a", "b"], max_rounds: 3, stop_when: "ok" }],
+    });
+    const findings = validateGraph(g, ROOT);
+    expect(findings).toContainEqual(
+      expect.objectContaining({ check: "loop_contiguous", path: "loops[0].nodes" }),
+    );
+  });
 });
