@@ -32,7 +32,7 @@ graph:
     notes:
       type: string
       required: false
-      default: "Preserve all external contracts and existing tests."
+      default: "{{notes}}"
   nodes:
     planner:
       agent: software-architect
