@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
-import { mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { cac } from "cac";
 import YAML from "yaml";
@@ -215,5 +215,89 @@ describe("gk graph session commands", () => {
       expect(parsed.status).toBe("fail");
       expect(parsed.error.code).toBe("GRAPHKIT_NOT_INITIALIZED");
     }
+  });
+
+  describe("gk validate without a file argument", () => {
+    function seedRootGraph(name = "root-graph") {
+      const doc = {
+        apiVersion: "graphkit.dev/v2",
+        kind: "Graph",
+        metadata: { name },
+        topology: "diamond",
+        nodes: { a: { agent: "reviewer", objective: "test", depend_on: [], evidence: [] } },
+      };
+      writeFileSync(join(TEST_DIR, "graph.yaml"), YAML.stringify(doc), "utf-8");
+    }
+
+    it("reads the active session graph", () => {
+      seedGraph("2026-08-26-audit-pr", "audit");
+      setActive("2026-08-26-audit-pr");
+      seedRootGraph("root-graph");
+      const { stdout, code } = runCli(["validate", "--json"], TEST_DIR);
+      expect(code).toBe(0);
+      const parsed = JSON.parse(stdout);
+      expect(parsed.status).toBe("ok");
+      expect(parsed.data.valid).toBe(true);
+    });
+
+    it("surfaces findings from the active session graph over a valid root graph.yaml", () => {
+      const doc = {
+        apiVersion: "graphkit.dev/v2",
+        kind: "Graph",
+        metadata: { name: "audit" },
+        topology: "diamond",
+        nodes: {
+          a: { agent: "reviewer", objective: "test", refs: [{ path: "missing.md", purpose: "audit" }], depend_on: [], evidence: [] },
+        },
+      };
+      writeFileSync(join(graphsDir(), "2026-08-26-audit-pr.yaml"), YAML.stringify(doc), "utf-8");
+      setActive("2026-08-26-audit-pr");
+      seedRootGraph("root-graph");
+      const { stdout, code } = runCli(["validate", "--json"], TEST_DIR);
+      expect(code).toBe(1);
+      const parsed = JSON.parse(stdout);
+      expect(parsed.status).toBe("fail");
+      expect(parsed.error.code).toBe("VALIDATION_FAILED");
+      expect(parsed.error.details.findings.map((f: { check: string }) => f.check)).toContain("refs-exist");
+    });
+
+    it("fails with ACTIVE_POINTER_DANGLING when the pointer names a missing graph", () => {
+      seedGraph("2026-08-26-audit-pr", "audit");
+      setActive("2026-08-26-ghost");
+      const { stdout, code } = runCli(["validate", "--json"], TEST_DIR);
+      expect(code).toBe(1);
+      const parsed = JSON.parse(stdout);
+      expect(parsed.error.code).toBe("ACTIVE_POINTER_DANGLING");
+      expect(parsed.error.details.available).toContain("2026-08-26-audit-pr");
+    });
+
+    it("falls back to ./graph.yaml when initialized but no active pointer is set", () => {
+      seedRootGraph();
+      const { stdout, code } = runCli(["validate", "--json"], TEST_DIR);
+      expect(code).toBe(0);
+      const parsed = JSON.parse(stdout);
+      expect(parsed.status).toBe("ok");
+      expect(parsed.data.valid).toBe(true);
+    });
+
+    it("fails with NO_ACTIVE_GRAPH when initialized with neither pointer nor graph.yaml", () => {
+      const dir = join(TEST_DIR, "empty-init");
+      mkdirSync(join(dir, ".graphkit", "graphs"), { recursive: true });
+      const { stdout, code } = runCli(["validate", "--json"], dir);
+      expect(code).toBe(1);
+      const parsed = JSON.parse(stdout);
+      expect(parsed.error.code).toBe("NO_ACTIVE_GRAPH");
+    });
+
+    it("keeps legacy root-graph.yaml behavior when .graphkit is absent", () => {
+      seedRootGraph();
+      const dir = join(TEST_DIR, "legacy");
+      mkdirSync(dir, { recursive: true });
+      writeFileSync(join(dir, "graph.yaml"), readFileSync(join(TEST_DIR, "graph.yaml"), "utf-8"), "utf-8");
+      const { stdout, code } = runCli(["validate", "--json"], dir);
+      expect(code).toBe(0);
+      const parsed = JSON.parse(stdout);
+      expect(parsed.status).toBe("ok");
+    });
   });
 });

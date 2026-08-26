@@ -103,6 +103,7 @@ export function getActiveGraphId(baseDir: string = process.cwd()): string | null
 
 export function listSessionGraphs(
   baseDir: string = process.cwd(),
+  onSkipped?: (entry: { id: string; file: string }) => void,
 ): Array<{ id: string; path: string; name: string; task?: string; createdAt: Date }> {
   assertInitialized(baseDir);
   const dir = graphsDir(baseDir);
@@ -110,20 +111,29 @@ export function listSessionGraphs(
 
   return readdirSync(dir)
     .filter((file) => file.endsWith(EXT))
-    .map((file) => {
+    .flatMap((file) => {
       const id = file.slice(0, -EXT.length);
       const path = join(dir, file);
-      const raw = YAML.parse(readFileSync(path, "utf-8")) as {
-        metadata?: { name?: unknown; task?: unknown };
-      };
-      return {
-        id,
-        path,
-        name: typeof raw?.metadata?.name === "string" ? raw.metadata.name : id,
-        task: typeof raw?.metadata?.task === "string" ? raw.metadata.task : undefined,
-        // mtime is the reliable creation signal; id date prefix is coarse for -2/-3 collisions
-        createdAt: statSync(path).mtime,
-      };
+      try {
+        const raw = YAML.parse(readFileSync(path, "utf-8")) as {
+          metadata?: { name?: unknown; task?: unknown };
+        };
+        return [
+          {
+            id,
+            path,
+            name: typeof raw?.metadata?.name === "string" ? raw.metadata.name : id,
+            task: typeof raw?.metadata?.task === "string" ? raw.metadata.task : undefined,
+            // mtime is the reliable creation signal; id date prefix is coarse for -2/-3 collisions
+            createdAt: statSync(path).mtime,
+          },
+        ];
+      } catch {
+        // Malformed session graph: surface the entry so callers can warn instead of
+        // letting one corrupt file brick `gk graph list` (A3).
+        onSkipped?.({ id, file });
+        return [];
+      }
     })
     .sort((a, b) => a.id.localeCompare(b.id));
 }
@@ -134,8 +144,8 @@ export function loadActiveGraph(
   const id = getActiveGraphId(baseDir);
   if (id === null) {
     throw new GraphKitError(
-      "GRAPHKIT_NOT_INITIALIZED",
-      "No active graph — run `gk init` first",
+      "NO_ACTIVE_GRAPH",
+      "No active graph — run `gk template materialize --use` or `gk graph switch <id>`",
       { baseDir },
     );
   }

@@ -1,4 +1,4 @@
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import type { CAC } from "cac";
 import YAML from "yaml";
@@ -7,7 +7,7 @@ import type { QueryResult, SearchResult, TraceResult } from "../../cbm/contract.
 import { indexProject } from "../../cbm/index.js";
 import { routeAndRetrieve } from "../../cbm/route.js";
 import { compileGraph } from "../../compiler/emitter.js";
-import { validateGraph } from "../../compiler/validate.js";
+import { type Graph, validateGraph } from "../../compiler/validate.js";
 import { GraphKitError } from "../../errors.js";
 import { GraphSchema } from "../../schemas/graph.schema.js";
 import { getTopologyConfigKeys, TOPOLOGY_NAMES, type TopologyName } from "../../schemas/topology/index.js";
@@ -64,6 +64,22 @@ export function loadGraph(file: string) {
   }
   return parsed.data;
 }
+// Spec §3.3 — validate-only wiring: bare `gk validate` reads the active session
+// graph when the project is initialized with an active pointer, falling back to
+// root ./graph.yaml otherwise. compile/gate/ascii/waves stay explicit-path.
+function resolveBareValidateGraph(): Graph {
+  const baseDir = process.cwd();
+  if (!existsSync(join(baseDir, ".graphkit"))) return loadGraph(join(baseDir, "graph.yaml"));
+  const active = getActiveGraphId();
+  if (active !== null) return loadActiveGraph().graph; // dangling → ACTIVE_POINTER_DANGLING with available ids
+  if (existsSync(join(baseDir, "graph.yaml"))) return loadGraph(join(baseDir, "graph.yaml"));
+  throw new GraphKitError(
+    "NO_ACTIVE_GRAPH",
+    "No active graph and no graph.yaml — run `gk template materialize --use` or `gk init` first",
+    { baseDir },
+  );
+}
+
 
 // Valid graph.yaml templates for each topology — emitted by `gk graph new <topology>`
 function graphTemplate(topology: TopologyName): string {
@@ -593,7 +609,7 @@ export function registerGraphCommands(cli: CAC) {
     .option("--json", "JSON output")
     .action((file) => {
       try {
-        const graph = loadGraph(file ?? join(process.cwd(), "graph.yaml"));
+        const graph = file ? loadGraph(file) : resolveBareValidateGraph();
         const findings = validateGraph(graph, process.cwd());
         if (findings.length > 0) {
           console.log(JSON.stringify(fail("VALIDATION_FAILED", "graph has findings", { findings })));
@@ -666,7 +682,8 @@ export function registerGraphCommands(cli: CAC) {
         }
       } else if (subcommand === "list") {
         try {
-          const sessions = listSessionGraphs();
+          const skipped: Array<{ id: string; file: string }> = [];
+          const sessions = listSessionGraphs(process.cwd(), (entry) => skipped.push(entry));
           const active = getActiveGraphId();
           if (active !== null && !sessions.some((s) => s.id === active)) {
             // Dangling pointer (spec §6): fail fast when active names a missing file.
@@ -695,6 +712,11 @@ export function registerGraphCommands(cli: CAC) {
               );
             }
           }
+          if (skipped.length > 0) {
+            console.warn(
+              `warning: skipped ${skipped.length} unparseable session file(s): ${skipped.map((s) => s.file).join(", ")}`,
+            );
+           }
         } catch (e) {
           console.log(
             JSON.stringify(

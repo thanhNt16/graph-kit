@@ -154,4 +154,31 @@ describe("Session Graph Store", () => {
       }
     }
   });
+
+  it("throws NO_ACTIVE_GRAPH when .graphkit exists but active pointer is unset", () => {
+    try {
+      loadActiveGraph(TEST_DIR);
+      expect.unreachable("loadActiveGraph must throw");
+    } catch (e) {
+      if (e instanceof GraphKitError) {
+        expect(e.code).toBe("NO_ACTIVE_GRAPH");
+        expect(e.message).toContain("template materialize --use");
+      } else {
+        throw e;
+      }
+    }
+  });
+
+  it("listSessionGraphs skips corrupt YAML files and reports them via callback", () => {
+    saveSessionGraph(sampleGraph, "good-graph", TEST_DIR);
+    writeFileSync(join(TEST_DIR, ".graphkit", "graphs", "2026-08-27-corrupted.yaml"), "{ [invalid yaml: :", "utf-8");
+
+    const skipped: Array<{ id: string; file: string }> = [];
+    const list = listSessionGraphs(TEST_DIR, (entry) => skipped.push(entry));
+    expect(list.length).toBe(1);
+    expect(list[0]?.id).toContain("good-graph");
+    expect(skipped.length).toBe(1);
+    expect(skipped[0]?.id).toBe("2026-08-27-corrupted");
+    expect(skipped[0]?.file).toBe("2026-08-27-corrupted.yaml");
+  });
 });
