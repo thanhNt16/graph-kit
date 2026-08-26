@@ -54,6 +54,7 @@ describe("gk graph session commands", () => {
   });
 
   afterEach(() => {
+    process.exitCode = 0; // fail() sets process.exitCode=1 — reset so bun:test exits 0
     rmSync(TEST_DIR, { recursive: true, force: true });
   });
 
