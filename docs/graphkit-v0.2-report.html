@@ -204,7 +204,7 @@ npm link
 
 <span class="cmt"># Verify — should show GraphKit help:</span>
 gk --help
-gk graph list --json</div>
+gk graph topologies --json</div>
     </div>
     <div class="code-block">
       <div class="code-header"><div class="code-dot" style="background:#f85149"></div><div class="code-dot" style="background:#d29922"></div><div class="code-dot" style="background:#3fb950"></div> 2b. Or: standalone binary</div>
@@ -217,7 +217,7 @@ chmod +x /usr/local/bin/gk
 
 <span class="cmt"># Verify:</span>
 gk --help
-gk graph list --json</div>
+gk graph topologies --json</div>
     </div>
   </div>
 
@@ -235,13 +235,16 @@ gk init --target pi                      <span class="cmt"># → .omp/       (OM
 gk new --dir my-project
 gk new --dir my-project --target opencode
 
-<span class="cmt"># Define, validate, compile a graph:</span>
-gk validate graph.yaml --json
-gk compile graph.yaml --json             <span class="cmt"># → .claude/workflows/{name}.workflow.js</span>
-gk graph inspect diamond                 <span class="cmt"># → see topology config keys</span>
+<span class="cmt"># Graph lifecycle — sessions replace the single graph.yaml:</span>
+gk template materialize audit-pr --params '{"task":"the auth module"}' --use
+                                         <span class="cmt"># → .graphkit/graphs/2026-08-27-audit-pr.yaml, sets active</span>
+gk graph list                            <span class="cmt"># session table, * marks the active graph</span>
+gk graph switch 2026-08-27-audit-pr      <span class="cmt"># flip the active pointer</span>
+gk validate                              <span class="cmt"># validates the active session graph (agent binding checked)</span>
+gk compile .graphkit/graphs/&lt;id&gt;.yaml    <span class="cmt"># → .claude/workflows/{name}.workflow.js</span>
 
 <span class="cmt"># Inside a session, skills auto-discover from the active kit's skills directory:</span>
-<span class="cmt"># /gk-init-graph  /gk-validate  /gk-compile  /gk-run  /gk-execute</span></div>
+<span class="cmt"># /gk-init-graph  /gk-validate  /gk-template  /gk-execute</span></div>
   </div>
 </div>
 
@@ -449,7 +452,7 @@ gk models opencode set --map <span class="field">opus</span>=<span class="str">a
 <div class="section">
   <div class="section-label">Real Workflows Run In This Repo <span class="badge-new">0.2</span></div>
   <h2>Dogfooded, Not Mocked</h2>
-  <p>Every graph below actually executed in this repository via <code>/gk:execute</code> — the features shipped on this page (viewer interactivity, CLI hardening, this very report's positioning pass) were built by these graphs. Each card links its <code>graph.yaml</code> and the run report with the full wave ledger.</p>
+  <p>Every graph below actually executed in this repository via <code>/gk:execute</code> — the features shipped on this page (viewer interactivity, CLI hardening, this very report's positioning pass) were built by these graphs. Each card links its <code>graph.yaml</code>.</p>
   <div class="demo-grid">
 
     <div class="demo-card">
@@ -460,7 +463,7 @@ gk models opencode set --map <span class="field">opus</span>=<span class="str">a
       <div class="demo-meta mono">custom · 12 nodes · 6 waves · 2026-08-19</div>
       <p>Sonnet research fleet (Reddit/X/HN sweep, docs audit, product-gap probe, competitive scan) → fable consolidation + plan → 3 parallel sonnet executors → fable review (1 critical found) → fix loop → acceptance gate. Shipped the CLI fail-loudly contract and docs honesty batch.</p>
       <img src="demos/gk-social-improve.svg" alt="gk-social-improve graph" loading="lazy">
-      <div class="demo-links mono"><a href="https://github.com/thanhNt16/graph-kit/blob/main/docs/demos/gk-social-improve.yaml">graph.yaml</a> · <a href="https://github.com/thanhNt16/graph-kit/blob/main/.graphkit/reports/gk-social-improve.md">run report</a></div>
+      <div class="demo-links mono"><a href="https://github.com/thanhNt16/graph-kit/blob/main/docs/demos/gk-social-improve.yaml">graph.yaml</a></div>
     </div>
 
     <div class="demo-card">
@@ -471,7 +474,7 @@ gk models opencode set --map <span class="field">opus</span>=<span class="str">a
       <div class="demo-meta mono">custom · 10 nodes · 6 waves · 2026-08-18</div>
       <p>Built this viewer's interactive edges, drag re-routing, and a11y drawer. The review wave caught what every executor self-review missed: drag deltas compounding across mousemove events (~30× overshoot) — runtime-reproduced by the fable reviewer, fixed with regression tests.</p>
       <img src="demos/viewer-interactivity-upgrade.svg" alt="viewer-interactivity-upgrade graph" loading="lazy">
-      <div class="demo-links mono"><a href="https://github.com/thanhNt16/graph-kit/blob/main/docs/demos/viewer-interactivity-upgrade.yaml">graph.yaml</a> · <a href="https://github.com/thanhNt16/graph-kit/blob/main/.graphkit/reports/viewer-interactivity-upgrade.md">run report</a></div>
+      <div class="demo-links mono"><a href="https://github.com/thanhNt16/graph-kit/blob/main/docs/demos/viewer-interactivity-upgrade.yaml">graph.yaml</a></div>
     </div>
 
     <div class="demo-card">
@@ -482,7 +485,7 @@ gk models opencode set --map <span class="field">opus</span>=<span class="str">a
       <div class="demo-meta mono">tournament · 11 nodes · 3 waves · 2026-08-18</div>
       <p>Six sonnet fleet sweeps → four optimization-lens candidates → fable-judged pairwise elimination. Champion measured −29% tokens on the frozen benchmark; the judge also falsified one fleet proposal that regressed accuracy — adversarial checking working as designed.</p>
       <img src="demos/gk-improve-tournament.svg" alt="gk-improve-tournament graph" loading="lazy">
-      <div class="demo-links mono"><a href="https://github.com/thanhNt16/graph-kit/blob/main/docs/demos/gk-improve-tournament.yaml">graph.yaml</a> · <a href="https://github.com/thanhNt16/graph-kit/blob/main/.graphkit/reports/gk-improve-tournament.md">run report</a></div>
+      <div class="demo-links mono"><a href="https://github.com/thanhNt16/graph-kit/blob/main/docs/demos/gk-improve-tournament.yaml">graph.yaml</a></div>
     </div>
 
     <div class="demo-card">
@@ -493,7 +496,7 @@ gk models opencode set --map <span class="field">opus</span>=<span class="str">a
       <div class="demo-meta mono">custom · 11 nodes · 7 waves · 2026-08-15</div>
       <p>Self-improvement loop: parallel web research → plan → benchmark harness build → routing experiment. Three rounds took gk's code-graph recall from 124,414 → 59,309 tokens (−52.4%) with wrong-hits 12 → 5, measured on a frozen replay benchmark.</p>
       <img src="demos/gk-autoresearch.svg" alt="gk-autoresearch graph" loading="lazy">
-      <div class="demo-links mono"><a href="https://github.com/thanhNt16/graph-kit/blob/main/docs/demos/gk-autoresearch.yaml">graph.yaml</a> · <a href="https://github.com/thanhNt16/graph-kit/blob/main/.graphkit/reports/gk-autoresearch.md">run report</a></div>
+      <div class="demo-links mono"><a href="https://github.com/thanhNt16/graph-kit/blob/main/docs/demos/gk-autoresearch.yaml">graph.yaml</a></div>
     </div>
 
   </div>
@@ -650,6 +653,67 @@ gk models opencode set --map <span class="field">opus</span>=<span class="str">a
     <div class="stat-cell"><div class="stat-cell-num">4</div><div class="stat-cell-label">Gallery Templates</div></div>
     <div class="stat-cell"><div class="stat-cell-num">0</div><div class="stat-cell-label">New Deps</div></div>
     <div class="stat-cell"><div class="stat-cell-num">tsc ✓</div><div class="stat-cell-label">Typecheck</div></div>
+  </div>
+</div>
+
+<div class="section">
+  <div class="section-label">Interactive Test Flows <span class="badge-new">0.2.25</span></div>
+  <h2>Try the New Runtime Features</h2>
+  <p>Step-by-step verification flows for the three features shipped in <code>v0.2.25</code>:</p>
+
+  <div class="code-block">
+    <div class="code-header"><div class="code-dot" style="background:#f85149"></div><div class="code-dot" style="background:#d29922"></div><div class="code-dot" style="background:#3fb950"></div> Flow 1: Materialize Gallery Template &amp; Manage Session Graphs</div>
+    <div class="code-body"><span class="cmt"># 1. Initialize host kit in your workspace:</span>
+gk init --target pi                  <span class="cmt"># or claude / cursor / opencode / codex</span>
+
+<span class="cmt"># 2. List bundled gallery templates (audit-pr, refactor-module, bench-eval, doc-sweep):</span>
+gk template list
+
+<span class="cmt"># 3. Materialize a session graph with parameter substitution:</span>
+gk template materialize audit-pr --params '{"task":"auth module"}' --use
+<span class="cmt"># → creates .graphkit/graphs/YYYY-MM-DD-audit-pr.yaml and sets .graphkit/active</span>
+
+<span class="cmt"># 4. Manage graph sessions:</span>
+gk graph list                        <span class="cmt"># shows session IDs, timestamps, and active indicator</span>
+gk graph show                        <span class="cmt"># prints YAML of the active graph</span>
+gk validate                          <span class="cmt"># validates the active session graph</span>
+
+<span class="cmt"># 5. Collision safety — same-day runs auto-suffix:</span>
+gk template materialize audit-pr --params '{"task":"payments"}' --use
+<span class="cmt"># → auto-suffixes to YYYY-MM-DD-audit-pr-2.yaml</span>
+gk graph switch YYYY-MM-DD-audit-pr  <span class="cmt"># switch back anytime</span></div>
+  </div>
+
+  <div class="code-block" style="margin-top:1rem">
+    <div class="code-header"><div class="code-dot" style="background:#f85149"></div><div class="code-dot" style="background:#d29922"></div><div class="code-dot" style="background:#3fb950"></div> Flow 2: Multi-Node Loop Groups &amp; Contiguity Validation</div>
+    <div class="code-body"><span class="cmt"># Declare multi-node loops across contiguous waves with hybrid stop:</span>
+cat &lt;&lt; 'EOF' &gt; loop-demo.yaml
+apiVersion: graphkit.dev/v2
+kind: Graph
+metadata:
+  name: loop-demo
+topology: custom
+nodes:
+  scout:
+    agent: code-reviewer
+    objective: Scout anomalies.
+    depend_on: []
+    evidence: [findings]
+  fix:
+    agent: software-architect
+    objective: Fix found issues.
+    depend_on: [scout]
+    evidence: [patch]
+loops:
+  - id: review-fix-cycle
+    nodes: [scout, fix]
+    max_rounds: 3
+    gate_evidence: [findings]
+evidence:
+  required_keys: [patch]
+EOF
+
+gk validate loop-demo.yaml           <span class="cmt"># → passes (contiguous waves, declared evidence)</span></div>
   </div>
 </div>
 
