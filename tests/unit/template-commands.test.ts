@@ -6,6 +6,7 @@ import YAML from "yaml";
 import {
   _resetWriteSeam,
   _setWriteSeam,
+  galleryTemplatesDir,
   runTemplateList,
   runTemplatePack,
   runTemplateShow,
@@ -291,5 +292,18 @@ describe("gk template list / show", () => {
     expect(res.error.details.closeMatches).toContain("security-audit");
     expect(res.error.details.available).toContain("security-audit");
     expect(res.error.details.available).toContain("deploy-flow");
+  });
+
+  test("galleryTemplatesDir respects GK_GALLERY_DIR override", () => {
+    const custom = join(root, "custom-gallery");
+    mkdirSync(custom, { recursive: true });
+    const prev = process.env.GK_GALLERY_DIR;
+    try {
+      process.env.GK_GALLERY_DIR = custom;
+      expect(galleryTemplatesDir()).toBe(custom);
+    } finally {
+      if (prev === undefined) delete process.env.GK_GALLERY_DIR;
+      else process.env.GK_GALLERY_DIR = prev;
+    }
   });
 });

@@ -41,15 +41,31 @@ function templatePath(dir: string, name: string): string {
 
 type TemplateOrigin = "project" | "global" | "gallery";
 
-/** Bundled templates ship under `<package root>/templates/gallery/`. */
-function galleryTemplatesDir(): string {
+/**
+ * Bundled templates ship under `<package root>/templates/gallery/`.
+ * Same candidate ladder as kit.ts kitSourceDir(): dev tree, npm dist,
+ * standalone-binary share layout (~/.graphkit home install), env override last-resort-first.
+ */
+export function galleryTemplatesDir(): string {
+  if (process.env.GK_GALLERY_DIR && existsSync(process.env.GK_GALLERY_DIR)) return process.env.GK_GALLERY_DIR;
   const here = dirname(fileURLToPath(import.meta.url));
-  // Dev: src/cli/commands/template.ts -> package root. Bundled: dist/ -> package root.
-  for (const rel of ["../../../", "../"]) {
-    const dir = join(here, rel, "templates", "gallery");
-    if (existsSync(dir)) return dir;
-  }
-  return join(here, "..", "..", "..", "templates", "gallery");
+  const exe = dirname(process.execPath);
+  const candidates = [
+    // Dev: src/cli/commands/template.ts -> package root
+    join(here, "..", "..", "..", "templates", "gallery"),
+    // npm package / bun build: dist/index.js -> package root
+    join(here, "templates", "gallery"),
+    join(here, "..", "templates", "gallery"),
+    // Standalone binary: <bin>/../share/gk/templates/gallery (release tarball)
+    join(exe, "..", "share", "gk", "templates", "gallery"),
+    // Standalone binary extracted side-by-side
+    join(exe, "share", "gk", "templates", "gallery"),
+    // User home install
+    join(process.env.HOME ?? "", ".graphkit", "templates", "gallery"),
+    // cwd fallback (repo root)
+    join(process.cwd(), "templates", "gallery"),
+  ];
+  return candidates.find((c) => existsSync(c)) ?? join(here, "..", "..", "..", "templates", "gallery");
 }
 
 /** Resolve a template name against stores, project > global > bundled gallery. */

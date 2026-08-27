@@ -149,7 +149,7 @@
 <body>
 
 <div class="hero">
-  <div class="hero-badge">gk v0.2.9 · graph engineering kit</div>
+  <div class="hero-badge">gk v0.2.25 · graph engineering kit</div>
   <h1>GraphKit</h1>
   <p class="hero-tag">Define graph-structured agent workflows as YAML. Compile to host-native execution across five targets — Claude Code, Cursor, OpenCode, Codex and Pi — each with its own native dispatch path. Eleven topologies, five targets, one CLI. Per-node model tiering. Evidence-based gates. Zero custom runtime.</p>
   <div class="hero-stats">
@@ -157,7 +157,7 @@
     <div class="stat"><div class="stat-num">5</div><div class="stat-label">Targets</div></div>
     <div class="stat"><div class="stat-num">13</div><div class="stat-label">Skills (claude)</div></div>
     <div class="stat"><div class="stat-num">8</div><div class="stat-label">Agents</div></div>
-    <div class="stat"><div class="stat-num">461</div><div class="stat-label">Tests</div></div>
+    <div class="stat"><div class="stat-num">552</div><div class="stat-label">Tests</div></div>
   </div>
 </div>
 
@@ -190,7 +190,7 @@ bun install
 bun run build                <span class="cmt"># → dist/index.js (executable, with shebang)</span>
 
 <span class="cmt"># Run the full gate to verify</span>
-bun run ci:local             <span class="cmt"># → typecheck + lint + build + 461 tests + cbm:parity</span></div>
+bun run ci:local             <span class="cmt"># → typecheck + lint + build + 552 tests + cbm:parity</span></div>
   </div>
 
   <div class="install-grid">
@@ -634,6 +634,26 @@ gk models opencode set --map <span class="field">opus</span>=<span class="str">a
 </div>
 
 <div class="section">
+  <div class="section-label">2026-08-27 <span class="badge-new">0.2.25</span></div>
+  <h2>Graph Runtime Primitives — Session Store, Loop Groups, Template Gallery</h2>
+  <p>Three core runtime features landed to unlock multi-session workflows and iterative refinement without a custom runtime engine:</p>
+  <table class="ac-table">
+    <tr><th>Shipped</th><th>Detail</th></tr>
+    <tr><td>Session Graph Store</td><td>Immutable timestamped session graphs under <code>.graphkit/graphs/YYYY-MM-DD-&lt;slug&gt;.yaml</code> with collision suffixing (<code>-2</code>, <code>-3</code>) and an active pointer at <code>.graphkit/active</code>. Managed via <code>gk graph list|switch|show</code>. Root <code>graph.yaml</code> fallback preserved.</td></tr>
+    <tr><td>Loop Groups &amp; Hybrid Stop</td><td>Top-level <code>loops:</code> directive repeats contiguous wave spans. Hybrid stop hierarchy: deterministic <code>gate_evidence</code> check first, LLM-judged <code>stop_when</code> fallback, <code>max_rounds</code> hard bound. Enforced via schema + compiler wave-span closure.</td></tr>
+    <tr><td>Template Gallery &amp; Materialize</td><td><code>gk template materialize &lt;name&gt; [--params] [--use]</code> resolves project-local ⇒ user-global ⇒ bundled gallery. Ships 4 bundled templates (<code>audit-pr</code>, <code>refactor-module</code>, <code>bench-eval</code>, <code>doc-sweep</code>).</td></tr>
+  </table>
+  <div class="stats-banner">
+    <div class="stat-cell"><div class="stat-cell-num">552</div><div class="stat-cell-label">Tests Pass</div></div>
+    <div class="stat-cell"><div class="stat-cell-num">0</div><div class="stat-cell-label">Failures</div></div>
+    <div class="stat-cell"><div class="stat-cell-num">+91</div><div class="stat-cell-label">New Tests</div></div>
+    <div class="stat-cell"><div class="stat-cell-num">4</div><div class="stat-cell-label">Gallery Templates</div></div>
+    <div class="stat-cell"><div class="stat-cell-num">0</div><div class="stat-cell-label">New Deps</div></div>
+    <div class="stat-cell"><div class="stat-cell-num">tsc ✓</div><div class="stat-cell-label">Typecheck</div></div>
+  </div>
+</div>
+
+<div class="section">
   <div class="section-label">Positioning — graph-engineering compiler kit <span class="badge-new">2026-08-19</span></div>
   <h2>The Part of the Stack Every Other Tool Makes You Run Itself</h2>
   <p>gk is a <em>graph-engineering compiler kit</em>, not a "multi-agent framework." Where CrewAI/AutoGen/ADK ship a runtime that invokes models and owns the execution loop, gk declares the graph, gates it at validate, and compiles it to a deterministic <code>.workflow.js</code> the host already runs — with zero models orchestrating. gk never invokes a model; coordination is compiled from <code>graph.yaml</code>, not delegated to an LLM, which is where other stacks' empirically measured flakiness lives (<a href="https://github.com/crewAIInc/crewAI" style="color:var(--sonnet)">CrewAI</a>: a 34% non-deterministic failure rate over 3 weeks on identical inputs vs 4% under explicit orchestration — per 2025–26 dev-shop retrospectives). The term "graph engineering" is the field's own label for this rung (<a href="https://www.drjoshcsimmons.com/writing/we-are-entering-the-graph-engineering-phase" style="color:var(--sonnet)">Simmons, "We Are Entering the Graph Engineering Phase"</a>): the craft of what happens <em>between</em> context windows.</p>
@@ -669,7 +689,7 @@ gk models opencode set --map <span class="field">opus</span>=<span class="str">a
 
 <div class="footer">
   GraphKit 0.2 · graph engineering kit for Claude Code, Cursor, OpenCode, Codex &amp; Pi<br>
-  <span style="color:var(--memory)">8 agents</span> · <span style="color:var(--sonnet)">13 skills (claude) · 11 (others)</span> · <span style="color:var(--bridge)">11 topologies</span> · <span style="color:var(--fable)">5 targets</span> · <span style="color:var(--haiku)">461 tests</span><br>
+  <span style="color:var(--memory)">8 agents</span> · <span style="color:var(--sonnet)">13 skills (claude) · 11 (others)</span> · <span style="color:var(--bridge)">11 topologies</span> · <span style="color:var(--fable)">5 targets</span> · <span style="color:var(--haiku)">552 tests</span><br>
   gk never invokes a model · CBM is the graph authority · evidence-based gates
 </div>
 
