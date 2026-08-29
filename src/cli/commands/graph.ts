@@ -54,7 +54,18 @@ function cbmFailure(e: unknown): ReturnType<typeof fail> {
 }
 
 export function loadGraph(file: string) {
-  const raw = readFileSync(file, "utf-8");
+  let raw: string;
+  try {
+    raw = readFileSync(file, "utf-8");
+  } catch (e) {
+    if ((e as NodeJS.ErrnoException).code === "ENOENT") {
+      throw new GraphKitError("GRAPH_FILE_NOT_FOUND", `file not found: ${file}`, {
+        file,
+        hint: "run `gk graph new <topology>` to scaffold one, or check the path",
+      });
+    }
+    throw e;
+  }
   const doc = YAML.parse(raw);
   const parsed = GraphSchema.safeParse(doc);
   if (!parsed.success) {
@@ -81,7 +92,7 @@ function resolveBareValidateGraph(): Graph {
 }
 
 // Valid graph.yaml templates for each topology — emitted by `gk graph new <topology>`
-function graphTemplate(topology: TopologyName): string {
+export function graphTemplate(topology: TopologyName): string {
   const name = topology.replace(/[^a-z0-9]+/g, "-");
   const templates: Record<TopologyName, string> = {
     diamond: `apiVersion: graphkit.dev/v2
@@ -120,8 +131,6 @@ nodes:
       Resolve conflicts, prioritize recommendations.
     depend_on: [worker]
     evidence: [report]
-limits:
-  max_workers: 5
 evidence:
   required_keys: [report]
   format: markdown
@@ -247,8 +256,6 @@ topology_config:
   worker_batch: worker
   stop_rule: dry_rounds
   dry_threshold: 2
-limits:
-  max_iterations: 10
 evidence:
   required_keys: [results]
 `,
@@ -657,9 +664,16 @@ export function registerGraphCommands(cli: CAC) {
     });
 
   cli
-    .command("graph <subcommand> [args...]", `Graph lifecycle commands\nSubcommands: ${subcommandsFor("graph")}`)
+    .command("graph [subcommand] [args...]", `Graph lifecycle commands\nSubcommands: ${subcommandsFor("graph")}`)
     .option("--json", "JSON output")
-    .action((subcommand: string, args: string | string[] | undefined, opts: { json?: boolean }) => {
+    .action((subcommand: string | undefined, args: string | string[] | undefined, opts: { json?: boolean }) => {
+      if (!subcommand) {
+        // Bare `gk graph` prints usage and exits 0 — same surface as `gk memory`.
+        console.log(
+          `gk graph — graph lifecycle commands\n\nUsage:\n  gk graph <subcommand> [args...]\n\nSubcommands: ${subcommandsFor("graph")}\n\nOptions:\n  --json  JSON output`,
+        );
+        return;
+      }
       if (subcommand === "topologies") {
         const topologies = TOPOLOGY_NAMES.map((name) => {
           const template = graphTemplate(name);

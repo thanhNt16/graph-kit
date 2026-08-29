@@ -403,7 +403,7 @@ export function registerTemplateCommands(cli: CAC) {
   // multi-word commands ("template pack") never dispatch. Use one `template`
   // command with action-based subcommand dispatch, mirroring `graph`.
   cli
-    .command("template <subcommand> [args...]", "Package, list, inspect, and materialize reusable GraphTemplates")
+    .command("template [subcommand] [args...]", "Package, list, inspect, and materialize reusable GraphTemplates")
     .option("--name <name>", "Template name (required for pack)")
     .option("--global", "Write to the user-global store")
     .option("--force", "Overwrite an existing template")
@@ -411,95 +411,116 @@ export function registerTemplateCommands(cli: CAC) {
     .option("--params <json>", "JSON object of template parameters (materialize)")
     .option("--use", "Set the active session pointer after materializing")
     .option("--json", "JSON output (always emitted; flag accepted for parity)")
-    .action((subcommand, args, opts) => {
-      const argAt = (i: number): string | undefined =>
-        Array.isArray(args) ? args[i] : i === 0 ? (args as string) : undefined;
-      if (subcommand === "pack") {
-        const file = argAt(0);
-        if (!file) {
-          console.log(JSON.stringify(fail("MISSING_FILE", "template pack requires a <file> argument")));
-          process.exit(1);
-          return;
-        }
-        if (!opts.name) {
-          console.log(JSON.stringify(fail("MISSING_NAME", "--name is required")));
-          process.exit(1);
-          return;
-        }
-        const res = runTemplatePack({
-          cwd: cwd(),
-          home: home(),
-          file,
-          name: opts.name,
-          input: opts.input,
-          force: opts.force,
-          global: opts.global,
-        });
-        console.log(JSON.stringify(res));
-        if (res.status === "fail") process.exit(1);
-        return;
-      }
-      if (subcommand === "list") {
-        const res = runTemplateList({ cwd: cwd(), home: home() });
-        console.log(JSON.stringify(res));
-        return;
-      }
-      if (subcommand === "show") {
-        const name = argAt(0);
-        if (!name) {
-          console.log(JSON.stringify(fail("MISSING_NAME", "template show requires a <name> argument")));
-          process.exit(1);
-          return;
-        }
-        const res = runTemplateShow({ cwd: cwd(), home: home(), name });
-        console.log(JSON.stringify(res));
-        if (res.status === "fail") process.exit(1);
-        return;
-      }
-      if (subcommand === "materialize") {
-        const name = argAt(0);
-        if (!name) {
-          console.log(JSON.stringify(fail("MISSING_NAME", "template materialize requires a <name> argument")));
-          process.exit(1);
-          return;
-        }
-        let params: TemplateValues = {};
-        if (opts.params) {
-          try {
-            params = JSON.parse(opts.params as string) as TemplateValues;
-          } catch {
-            console.log(JSON.stringify(fail("BAD_PARAMS", "--params must be a JSON object")));
-            process.exit(1);
-            return;
-          }
-          if (params === null || typeof params !== "object" || Array.isArray(params)) {
-            console.log(JSON.stringify(fail("BAD_PARAMS", "--params must be a JSON object")));
-            process.exit(1);
-            return;
-          }
-        }
-        try {
-          const res = materializeTemplate(name, params, { cwd: cwd(), home: home(), use: Boolean(opts.use) });
-          const payload: Record<string, unknown> = { id: res.id, path: res.path, origin: res.origin };
-          if (res.active !== undefined) payload.active = res.active;
-          console.log(JSON.stringify(ok(payload)));
-        } catch (e) {
+    .action(
+      (
+        subcommand: string | undefined,
+        args: string | string[] | undefined,
+        opts: {
+          name?: string;
+          input?: string;
+          force?: boolean;
+          global?: boolean;
+          params?: string;
+          use?: boolean;
+          json?: boolean;
+        },
+      ) => {
+        const argAt = (i: number): string | undefined =>
+          Array.isArray(args) ? args[i] : i === 0 ? (args as string) : undefined;
+        if (!subcommand) {
+          // Bare `gk template` prints usage and exits 0 — same surface as `gk memory`.
           console.log(
-            JSON.stringify(
-              e instanceof GraphKitError ? fail(e.code, e.message, e.details) : fail("MATERIALIZE_ERROR", String(e)),
-            ),
+            `gk template — GraphTemplate commands\n\nUsage:\n  gk template <subcommand> [args...]\n\nSubcommands: list, show, pack, materialize, close\n\nOptions:\n  --name <name>   Template name (pack)\n  --params <json>  Parameters (materialize)\n  --use            Set active session pointer after materialize\n  --force          Overwrite existing template\n  --input <file>   Complete GraphTemplate input file\n  --global         User-global store\n  --json           JSON output (always emitted; flag accepted for parity)`,
           );
-          process.exit(1);
+          return;
         }
-        return;
-      }
-      console.log(
-        JSON.stringify(
-          fail("UNKNOWN_TEMPLATE_SUBCOMMAND", `Unknown template subcommand "${subcommand}"`, {
-            available: ["pack", "list", "show", "materialize"],
-          }),
-        ),
-      );
-      process.exit(1);
-    });
+        if (subcommand === "pack") {
+          const file = argAt(0);
+          if (!file) {
+            console.log(JSON.stringify(fail("MISSING_FILE", "template pack requires a <file> argument")));
+            process.exit(1);
+            return;
+          }
+          if (!opts.name) {
+            console.log(JSON.stringify(fail("MISSING_NAME", "--name is required")));
+            process.exit(1);
+            return;
+          }
+          const res = runTemplatePack({
+            cwd: cwd(),
+            home: home(),
+            file,
+            name: opts.name,
+            input: opts.input,
+            force: opts.force,
+            global: opts.global,
+          });
+          console.log(JSON.stringify(res));
+          if (res.status === "fail") process.exit(1);
+          return;
+        }
+        if (subcommand === "list") {
+          const res = runTemplateList({ cwd: cwd(), home: home() });
+          console.log(JSON.stringify(res));
+          return;
+        }
+        if (subcommand === "show") {
+          const name = argAt(0);
+          if (!name) {
+            console.log(JSON.stringify(fail("MISSING_NAME", "template show requires a <name> argument")));
+            process.exit(1);
+            return;
+          }
+          const res = runTemplateShow({ cwd: cwd(), home: home(), name });
+          console.log(JSON.stringify(res));
+          if (res.status === "fail") process.exit(1);
+          return;
+        }
+        if (subcommand === "materialize") {
+          const name = argAt(0);
+          if (!name) {
+            console.log(JSON.stringify(fail("MISSING_NAME", "template materialize requires a <name> argument")));
+            process.exit(1);
+            return;
+          }
+          let params: TemplateValues = {};
+          if (opts.params) {
+            try {
+              params = JSON.parse(opts.params as string) as TemplateValues;
+            } catch {
+              console.log(JSON.stringify(fail("BAD_PARAMS", "--params must be a JSON object")));
+              process.exit(1);
+              return;
+            }
+            if (params === null || typeof params !== "object" || Array.isArray(params)) {
+              console.log(JSON.stringify(fail("BAD_PARAMS", "--params must be a JSON object")));
+              process.exit(1);
+              return;
+            }
+          }
+          try {
+            const res = materializeTemplate(name, params, { cwd: cwd(), home: home(), use: Boolean(opts.use) });
+            const payload: Record<string, unknown> = { id: res.id, path: res.path, origin: res.origin };
+            if (res.active !== undefined) payload.active = res.active;
+            console.log(JSON.stringify(ok(payload)));
+          } catch (e) {
+            console.log(
+              JSON.stringify(
+                e instanceof GraphKitError ? fail(e.code, e.message, e.details) : fail("MATERIALIZE_ERROR", String(e)),
+              ),
+            );
+            process.exit(1);
+          }
+          return;
+        }
+        console.log(
+          JSON.stringify(
+            fail("UNKNOWN_TEMPLATE_SUBCOMMAND", `Unknown template subcommand "${subcommand}"`, {
+              available: ["pack", "list", "show", "materialize"],
+            }),
+          ),
+        );
+        process.exit(1);
+      },
+    );
 }

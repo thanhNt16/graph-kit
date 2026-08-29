@@ -35,10 +35,21 @@ export function registerModelsCommands(cli: CAC): void {
   // cac (6.x) matches a single leading token only; "models cursor" never
   // dispatches. Use one `models` command with subcommand dispatch (like memory).
   cli
-    .command("models <subcommand> [args...]", "Per-target model mapping commands")
+    .command("models [subcommand] [args...]", "Per-target model mapping commands")
     .option("--map <k=v,...>", "comma-separated model=override pairs")
     .option("--json", "JSON output")
-    .action((subcommand: string, args: string | string[] | undefined, opts: { map?: string }) => {
+    .action((subcommand: string | undefined, args: string | string[] | undefined, opts: { map?: string }) => {
+      if (!subcommand) {
+        // Bare `gk models` prints usage and exits 0 — same surface as `gk memory`.
+        console.log(
+          `gk models — per-target model mapping commands\n\nUsage:\n  gk models <target> [args...]\n\nTargets: ${listTargets()
+            .map((t) => t.id)
+            .join(
+              ", ",
+            )}\n\nOptions:\n  --map <k=v,...>  comma-separated model=override pairs\n  --json           JSON output`,
+        );
+        return;
+      }
       if (!isValidTarget(subcommand)) {
         console.log(
           JSON.stringify(
