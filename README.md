@@ -15,21 +15,20 @@ gk never invokes a model, spawns an agent, or reads an API key. It validates and
 
 This is a **graph engineering kit** ([Simmons — *We Are Entering the Graph Engineering Phase*](https://www.drjoshcsimmons.com/writing/we-are-entering-the-graph-engineering-phase)): it compiles the coordination that LLM-choreographed alternatives delegate to a language model into a deterministic workflow file ([TURION — multi-agent orchestration infrastructure in production](https://turion.ai/blog/multi-agent-orchestration-infrastructure-production/)). Budgets are the safety story — `constraints` and loop `max_rounds` cap the blast radius where swarm-style setups have incurred runaway costs ([Edgeless Lab](https://edgelesslab.com/blog/swarm-tried-to-bankrupt-itself/)). Per-node binding replaces the state-schema tax competitors pay: every node carries its own model tier, tools, skills, and constraints instead of a shared typed state ([Orange ITS — LangGraph review](https://www.orange-its.ch/en/insights/langgraph-review), [Kalvium — LangGraph vs LangChain in production](https://www.kalviumlabs.ai/blog/langgraph-vs-langchain-production/)).
 
-## Viewer
+## Diagrams
 
-`/gk:visualize` launches a private, read-only local viewer (127.0.0.1, cryptographically random access key, live updates over SSE):
+`/gk:visualize` renders graph.yaml as a self-contained HTML diagram via [archify](https://github.com/tt-a1i/archify) — pan/zoom, search, guided views, no server:
 
-- **Interactive graph** — drag nodes (edges re-route live), hover/select edges via wide hit-targets, Shift+click two nodes to trace a route, click a node for the detail sidebar (objective, model tier, depend_on, evidence, filters), arrow-key navigation, Esc to clear
-- **Pinned port** — binds `4800` by default; override with `GK_VIEWER_PORT`. Port busy → probes +1…+9, then falls back to ephemeral so it always starts
-- **Browser open is opt-in** — by default it just prints the keyed URL. Set `GK_VIEWER_OPEN=1` to open the default browser, or `GK_VIEWER_BROWSER=chrome` to target Chrome specifically
-- Up to 250 nodes; idle timeout shuts the server down
+- **Archify HTML** (default) — the skill reads `gk graph waves`, authors a typed archify IR (waves become columns, model tiers become lanes), validates it at showcase quality, and delivers `.graphkit/diagrams/{name}.html`. One file: shareable, attachable to a PR
+- **Install on first use** — the skill asks before running `npx -y skills add tt-a1i/archify -g`; decline or no network falls back to SVG
+- **Other modes** — `--ascii` (instant, in-session), `--svg` (fast export), `--excalidraw` (editable)
 
 ## Memory
 
 `gk memory` keeps cross-run project memory in `.graphkit/memory/` — salience-ranked recall with validity/supersede filters, ACT-R decay, and a full audit trail:
 
 ```bash
-gk memory recall "viewer port"   # top-k relevant memories (auto-touches)
+gk memory recall "diagram output"   # top-k relevant memories (auto-touches)
 gk memory touch <id>             # reinforce a memory
 gk memory trace                  # decay pass + consolidation audit log
 ```
@@ -158,7 +157,7 @@ Inside a Claude Code or Cursor session (after `gk init`):
 - `/gk:init-graph --template diamond` — generate a **session graph** (from a topology preset **or a packaged GraphTemplate**, with capability suggestions); writes `.graphkit/graphs/<date>-<slug>.yaml` and sets the active pointer
 - `/gk:template` — package a validated graph.yaml as a reusable `GraphTemplate v1` (`gk template pack|list|show`)
 - `/gk:brainstorm` — refine nodes, model tiers, loops, constraints
-- `/gk:visualize` — interactive viewer (default) or `--ascii` / `--svg` / `--excalidraw`
+- `/gk:visualize` — archify HTML diagram (default) or `--ascii` / `--svg` / `--excalidraw`
 - `/gk:validate` — gate-check before compile
 - `/gk:compile` — graph.yaml → .workflow.js (Claude Code only)
 - `/gk:run` — execute via Claude Code Workflows (Claude Code only)
@@ -168,7 +167,7 @@ Inside a Claude Code or Cursor session (after `gk init`):
 - `/gk:evidence` — report what the graph produced
 - `/gk:status` — current run state
 
-Templates resolve in order: `<project>/.graphkit/templates/` ⇒ `~/.graphkit/templates/` ⇒ the bundled gallery (`audit-pr`, `refactor-module`, `bench-eval`, `doc-sweep`); `gk template list` reports an `origin` column (`project` | `global` | `gallery`) showing which store won. Materialize any of them into an immutable session graph with `gk template materialize <name> --params '{"task":"…"}' [--use]` (`--use` sets the active pointer), then browse sessions with `gk graph list|switch|show`. `gk inventory` reports installed agents/skills/tools/MCP servers for the active target — names only, no credentials/tokens. See [docs/templates-and-viewer.md](docs/templates-and-viewer.md) for template storage, parameter reference, the smart `/gk:init-graph` flow, and the interactive viewer.
+Templates resolve in order: `<project>/.graphkit/templates/` ⇒ `~/.graphkit/templates/` ⇒ the bundled gallery (`audit-pr`, `refactor-module`, `bench-eval`, `doc-sweep`); `gk template list` reports an `origin` column (`project` | `global` | `gallery`) showing which store won. Materialize any of them into an immutable session graph with `gk template materialize <name> --params '{"task":"…"}' [--use]` (`--use` sets the active pointer), then browse sessions with `gk graph list|switch|show`. `gk inventory` reports installed agents/skills/tools/MCP servers for the active target — names only, no credentials/tokens. See [docs/templates-and-viewer.md](docs/templates-and-viewer.md) for template storage, parameter reference, the smart `/gk:init-graph` flow, and the archify diagram mode.
 
 ## Eleven topologies
 

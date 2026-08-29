@@ -24,7 +24,6 @@ describe("init per target", () => {
     expect(existsSync(join(TMP, ".opencode", "plugins", "gk.ts"))).toBe(true);
     expect(existsSync(join(TMP, ".opencode", "command"))).toBe(true);
     expect(existsSync(join(TMP, ".opencode", "metadata.json"))).toBe(true);
-    expect(existsSync(join(TMP, ".opencode", "viewer"))).toBe(true);
   });
 
   test.skipIf(!existsSync(join(KITS, "codex")))("codex tree — agents toml + skills land in .agents/skills", () => {

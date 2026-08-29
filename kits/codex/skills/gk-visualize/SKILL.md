@@ -1,6 +1,6 @@
 ---
 name: gk-visualize
-description: Visualize a graph.yaml. Three modes: ASCII (in-session), SVG (visual export, opens in browser), Excalidraw (editable). Trigger: "visualize graph", "show diagram", "draw the graph", "what does the graph look like".
+description: Visualize a graph.yaml. Four modes: archify HTML (default, shareable artifact), ASCII (in-session), SVG (fast export), Excalidraw (editable). Trigger: "visualize graph", "show diagram", "draw the graph", "what does the graph look like".
 when_to_use: User wants to see the graph structure visually — topology, nodes, model tiers, depend_on edges, fan-out/fan-in.
 user-invocable: true
 disable-model-invocation: false
@@ -11,34 +11,58 @@ disable-model-invocation: false
 ## Purpose
 Render a graph.yaml as a diagram. Modes:
 
-- **Interactive** (default) — launches a private local viewer (browser). Live-updating graph canvas with path highlighting, persistent node drawer, search, filters, and live updates over Server-Sent Events. No public `gk graph view` command; the bundled `viewer/server.mjs` launcher starts the read-only server and prints the complete keyed URL. The interactive bundled viewer is the default for `gk-visualize`.
+- **Archify HTML** (default) — you author a typed JSON IR from the graph, archify compiles it to a single self-contained HTML file with pan/zoom, search, and guided views. Shareable, attachable to a PR, opens with no server. Default for `gk-visualize`.
 - **ASCII** (in-session, instant) — pure CLI, no model, no rendering pipeline. Shows in terminal immediately. Explicit `gk-visualize --ascii` mode.
-- **SVG** (visual export, fast) — generates an SVG file, opens in browser. Explicit `gk-visualize --svg` mode.
+- **SVG** (visual export, fast) — generates an SVG file, opens in browser. Explicit `gk-visualize --svg` mode. Also the fallback when archify is unavailable.
 - **Excalidraw** (editable, slower) — generates an editable .excalidraw file. Only when user asks. Explicit `gk-visualize --excalidraw`.
 
 ## Process
 
-### Interactive (default)
-Launch the bundled private viewer launcher — not a public CLI:
+### Archify HTML (default)
+
+**Step 1 — locate archify.** Probe in order; first hit wins:
 
 ```bash
-bun claude/viewer/server.mjs graph.yaml
-# or cursor kit:
-bun cursor/viewer/server.mjs graph.yaml
+for d in ./node_modules/archify ~/.codex/skills/archify ~/.agents/skills/archify; do
+  [ -f "$d/bin/archify.mjs" ] && echo "$d" && break
+done
 ```
 
-The launcher:
-1. Starts a read-only server bound to `127.0.0.1` on port `4800` by default (env `GK_VIEWER_PORT` overrides; if that port is in use it falls back to the next free port, then to an ephemeral one) with a cryptographically random access key.
-2. Prints the complete keyed URL: `GraphKit viewer: http://127.0.0.1:PORT/?key=...`
-3. Does NOT auto-open a browser — surface the printed URL to the user and let them click. (Set `GK_VIEWER_OPEN=1` to restore auto-open; add `GK_VIEWER_BROWSER=chrome` to open in Chrome — `open -a "Google Chrome"` on macOS, `xdg-open` elsewhere.)
+Not found → **ask the user once** before installing: "archify isn't installed. Install it with `npx -y skills add tt-a1i/archify -g`?" On approval run that command, then re-probe. On decline, no network, or a failing `node <archify>/bin/archify.mjs doctor` → fall back to the SVG mode below and tell the user why.
 
-Lifecycle and safety:
-- Key required for page, asset, and SSE requests.
-- Live graph updates over Server-Sent Events; invalid saves show a stale-data banner and keep the last valid graph.
-- Supports up to 250 nodes; larger graphs error explicitly.
-- Idle timeout, explicit stop, or parent termination shuts the server down.
+**Step 2 — read the graph structure.**
 
-If startup fails, report the failure and fall back to the existing SVG mode (below).
+```bash
+gk graph waves graph.yaml
+```
+
+This emits the topological wave structure: each wave is a set of nodes that can run in parallel, with full node objects (`agent`, `model`, `objective`, `tools`, `depend_on`, `loop`, `evidence`). Wave index becomes the diagram column — do not recompute the ordering yourself.
+
+**Step 3 — pick the diagram type.**
+
+| Signal in graph.yaml | archify type |
+|---|---|
+| any node has `loop:` | `lifecycle` |
+| topology is `memory-augmented`, or subgraphs / composed templates present | `architecture` |
+| otherwise (plain DAG) | `workflow` |
+
+**Step 4 — author the IR.** Read `references/archify-ir.md` — it holds the mapping rules and a complete worked example. Edit that example rather than composing from nothing. Write the candidate to `.graphkit/diagrams/{name}.archify.json`.
+
+**Step 5 — validate after every edit.** Never skip this between edits.
+
+```bash
+node <archify>/bin/archify.mjs validate <type> .graphkit/diagrams/{name}.archify.json --quality showcase --json
+```
+
+Non-zero exit is never success. A showcase pass means all 9 artifact checks, 0 composition errors, 0 warnings; a 4-check receipt is basic validation only, not acceptance. Fix and re-validate. Cap at 5 cycles — if it still will not pass, deliver at default quality and report the remaining warnings rather than thrashing.
+
+**Step 6 — deliver once, when validation is clean.**
+
+```bash
+node <archify>/bin/archify.mjs deliver <type> .graphkit/diagrams/{name}.archify.json .graphkit/diagrams/{name}.html --quality showcase --json
+```
+
+Print the output path. Do not auto-open a browser — surface the path and let the user click.
 
 ### ASCII (in-session, instant — explicit mode)
 ```bash
@@ -55,7 +79,7 @@ gk graph svg graph.yaml
 ```
 → writes `.graphkit/diagrams/{name}.svg`, opens in browser
 
-Renders at 1.2ms. Color nodes by model tier. Perfect for sharing, screenshots, or quick visual review without Excalidraw overhead.
+Renders at 1.2ms. Color nodes by model tier. Perfect for a fast look or when archify is unavailable.
 
 ### Excalidraw (editable diagram — only if user asks)
 Only use the `excalidraw-diagram` skill when the user explicitly says "excalidraw" or "editable".
@@ -71,7 +95,7 @@ Only use the `excalidraw-diagram` skill when the user explicitly says "excalidra
 Note: Excalidraw mode requires `uv sync && uv run playwright install chromium` in the excalidraw-diagram skill's references dir. If unavailable, fall back to SVG or ASCII and tell the user.
 
 ## Output
-- **Interactive**: keyed local URL (printed, not auto-opened)
+- **Archify HTML**: `.graphkit/diagrams/{name}.html` (self-contained) + `.graphkit/diagrams/{name}.archify.json` (editable IR source)
 - **ASCII**: stdout (instant)
 - **SVG**: `.graphkit/diagrams/{name}.svg` — opens in browser
 - **Excalidraw**: `.graphkit/diagrams/{name}.excalidraw` — editable in Excalidraw app

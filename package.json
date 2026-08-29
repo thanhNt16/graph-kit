@@ -8,15 +8,14 @@
   "scripts": {
     "build": "bun build src/index.ts --target=node --outdir=dist && chmod +x dist/index.js",
     "build:bin": "bun build --compile src/index.ts --outfile=dist/gk",
-    "build:viewer": "bash scripts/build-viewer.sh",
     "typecheck": "tsc --noEmit",
     "lint": "biome check .",
     "test": "bun test",
     "eval": "bun run src/eval/replay-cli.ts",
     "cbm:parity": "bun run scripts/cbm-parity.ts",
-    "prepack": "bun run build && bun run build:viewer",
+    "prepack": "bun run build",
     "check-changelog": "bun run scripts/check-changelog.ts",
-    "ci:local": "bun run typecheck && bun run lint && bun run build && bun run build:viewer && bun test && bun run cbm:parity && bun run check-changelog",
+    "ci:local": "bun run typecheck && bun run lint && bun run build && bun test && bun run cbm:parity && bun run check-changelog",
     "eval:memory": "bun run scripts/memory-recall-eval.ts"
   },
   "files": [

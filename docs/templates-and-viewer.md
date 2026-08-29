@@ -1,11 +1,11 @@
-# Graph Templates and the Interactive Viewer
+# Graph Templates and Diagrams
 
 Two additive GraphKit capabilities built on the existing `gk` CLI:
 
 - **Reusable graph templates** (`GraphTemplate v1`) — package a validated `graph.yaml` and let `/gk:init-graph` re-materialize it with new parameters.
-- **Interactive viewer** — `/gk:visualize` opens a private, live-updating browser canvas with path highlighting and a persistent node-detail drawer. The ASCII, SVG, and Excalidraw modes remain unchanged and are one explicit flag away.
+- **Archify diagrams** — `/gk:visualize` renders the graph as a self-contained HTML artifact. The ASCII, SVG, and Excalidraw modes remain unchanged and are one explicit flag away.
 
-Everything below is grounded in the implemented CLI, skills, and viewer. The CLI stays deterministic — it validates and stores data. All interpretation, parameter extraction, and capability recommendation happens in the agent skill layer.
+Everything below is grounded in the implemented CLI and skills. The CLI stays deterministic — it validates and stores data. All interpretation, parameter extraction, and capability recommendation happens in the agent skill layer.
 
 ---
 
@@ -177,11 +177,11 @@ Sources: project-local kit agent/skill directories, user-global agent/skill dire
 
 ---
 
-## Part III — Interactive viewer
+## Part III — Archify diagrams
 
-### Invocation and legacy modes
+### Invocation and modes
 
-`/gk:visualize` **defaults to the interactive viewer.** Explicit legacy modes remain and are unchanged:
+`/gk:visualize` **defaults to an archify-rendered HTML diagram.** The other modes remain and are unchanged:
 
 ```text
 /gk:visualize --ascii        # in-session ASCII, instant
@@ -189,69 +189,52 @@ Sources: project-local kit agent/skill directories, user-global agent/skill dire
 /gk:visualize --excalidraw   # .graphkit/diagrams/{name}.excalidraw, editable
 ```
 
-There is no new public `gk graph view` command. `gk graph ascii` and `gk graph svg` remain. The interactive viewer is launched by a **bundled launcher**, not a new CLI command:
+There is no new `gk` subcommand. `gk graph ascii`, `gk graph svg`, and `gk graph waves` are unchanged; the default mode is entirely skill-layer work on top of them.
+
+### Dependency and fallback
+
+[archify](https://github.com/tt-a1i/archify) (MIT) is a Node diagram renderer with an agent-facing contract. The skill probes for `bin/archify.mjs` under `./node_modules/archify` and the host skill roots. If it isn't installed, the skill **asks once** before running:
 
 ```bash
-bun claude/viewer/server.mjs graph.yaml
-# cursor kit:
-bun cursor/viewer/server.mjs graph.yaml
+npx -y skills add tt-a1i/archify -g
 ```
 
-### Lifecycle and safety
+A declined install, no network, or a failing `archify doctor` falls back to the SVG mode and says why. archify is never a hard dependency of `gk`.
 
-The server:
+### How the diagram is authored
 
-- binds only to `127.0.0.1` on port `4800` by default (`GK_VIEWER_PORT` overrides; the next free port or an ephemeral one is used if it's taken),
-- generates a cryptographically random access key,
-- requires that key on **every** request — HTML, asset, and SSE alike,
-- prints the complete keyed URL `GraphKit viewer: http://127.0.0.1:PORT/?key=...` (still usable if browser launch fails),
-- watches only the selected graph file,
-- exits on parent/session termination, explicit stop, or four hours of inactivity,
-- serves bundled local assets only and makes no external requests.
+1. `gk graph waves graph.yaml` supplies the topological wave structure with full node objects. Wave index becomes the diagram column — the skill never recomputes ordering.
+2. The diagram type is routed from graph shape: any node with `loop:` → `lifecycle`; memory-augmented topology or composed subgraphs → `architecture`; otherwise `workflow`.
+3. Model tier becomes the lane (opus, sonnet, haiku, fable), node ID the label, agent the sublabel, `depend_on` the edges.
+4. `references/archify-ir.md` in the kit carries the mapping tables and a complete worked IR example; the model edits that example rather than composing from nothing.
 
-A strict Content Security Policy (self resources only), key-gating per request, text-escaped graph values, and file access restricted to the selected graph and bundled assets keep the viewer read-only and local-only. The browser cannot request arbitrary filesystem paths, and there is no graph-mutation endpoint.
+### Validate before deliver
 
-### Interactions — canvas + persistent drawer
+```bash
+archify validate <type> candidate.json --quality showcase --json
+archify deliver  <type> candidate.json output.html --quality showcase --json
+```
 
-- **Canvas**. Selecting nothing leaves the graph full-width. Selecting a node opens a persistent right drawer and contracts the canvas **without resetting zoom or pan**. Closing the drawer expands the canvas and preserves the viewport. On narrow screens the drawer becomes a full-width overlay.
-- **Hover / keyboard focus**. Emphasizes the node, its direct dependencies and dependents, and the connecting edges; dims unrelated nodes and edges. Does not open the drawer.
-- **Click / Enter**. Locks the same path emphasis, opens the drawer, and updates a selected-state marker for assistive technology. **Click the background or press Escape** to clear selection and close the drawer.
-- **Drawer links**. Dependency/dependent links inside the drawer select and center the referenced node.
+`validate` runs after **every** IR edit; a non-zero exit is never success. A showcase pass means all 9 artifact checks with 0 composition errors and 0 warnings — a 4-check receipt is basic validation, not acceptance. The loop is capped at 5 validate cycles; beyond that the skill delivers at default quality and reports the remaining warnings rather than thrashing.
 
-### Controls
+### Output
 
-Toolbar controls: fit graph, zoom in/out, pointer/wheel zoom, pointer pan, and **search** over node ID, agent, objective, skill, and tool strings. Filters by **model**, **agent**, and **loop-enabled** state, plus a reset-filters control. Search results stay visible while unrelated nodes dim. Filtering hides nonmatching nodes only when doing so doesn't make remaining edges misleading; otherwise it dims them (labeled as emphasis rather than filtering).
+- `.graphkit/diagrams/{name}.html` — self-contained artifact with pan/zoom, search, and guided views. No server, no key, no live updates; open it directly or attach it to a PR.
+- `.graphkit/diagrams/{name}.archify.json` — the IR source, kept so the diagram can be hand-tuned and re-delivered.
 
-### Drawer fields
-
-The drawer renders all applicable node data: node ID, agent, model, role, objective, dependencies and dependents, skills, opaque tool/MCP strings, refs and purposes, constraints, loop state (enabled, stop condition, max rounds, exit condition), evidence keys, and eval configuration. Unknown future fields are ignored rather than rendered; all graph strings are inserted as text — never `innerHTML`.
-
-### Accessibility
-
-Nodes are keyboard-focusable in deterministic topological order, then node-ID order. Enter selects, Escape clears. Focus indicators meet WCAG 2.2 AA. The drawer is an accessible region that doesn't trap focus. Controls have accessible names independent of icons. Model color is never the only model indicator. `prefers-reduced-motion` disables transitions. Light and dark themes derive from complete token sets.
-
-### Invalid graphs
-
-- **Initial invalid graph** — the server still starts, shows a structured error screen (message, path, and line/column when available), and keeps watching for a correction.
-- **Invalid save after a valid load** — the last valid graph stays visible behind a prominent **stale-data banner**; the validation findings go out over SSE, and the banner clears automatically on the next valid save.
-
-### Scale ceiling
-
-The first version supports up to **250 nodes**. Larger graphs receive an explicit error explaining the ceiling — the viewer never silently truncates. (Viewport virtualization or clustering is a future `ponytail` upgrade, only after real-world graphs exceed this.)
+The path is printed rather than auto-opened.
 
 ### Troubleshooting
 
-- **Browser won't open** — the launcher prints the complete keyed URL; open it manually in any browser. The server keeps running regardless.
-- **Graph not updating** — the server watches the one graph file with a debounce and falls back to mtime polling, so in-place saves are caught. Check that you saved the file the viewer was launched against.
-- **Invalid graph** — an initial bad file shows the error screen; a bad save after a valid load shows the stale-data banner. Fix the file and save to recover; the banner clears itself.
-- **Queue graphs > 250 nodes** — split into subgraphs or reduce node count; the viewer errors explicitly rather than truncating.
+- **archify not found** — approve the `npx -y skills add tt-a1i/archify -g` prompt, or install it yourself and re-run. Declining is fine; you get SVG.
+- **Validation won't reach showcase** — the JSON output names the failing check. Common causes are overlapping columns (trust `gk graph waves`), lanes with no nodes, and edges referencing IDs that aren't in `nodes`.
+- **Diagram is too dense** — large graphs read better as `architecture` with subgraph groups, or split into per-subgraph diagrams.
 - **Excalidraw dependency missing** — Excalidraw mode needs `uv sync && uv run playwright install chromium` in the excalidraw-diagram skill's references dir; if unavailable, fall back to SVG or ASCII.
 
 ---
 
-## Claude Code / Cursor parity
+## Cross-host parity
 
 - The `gk` CLI is identical across targets — `template pack|list|show`, `inventory`, and `validate/graph` behave the same.
-- Both kits bundle the **same viewer runtime**; the `claude/viewer/` and `cursor/viewer/` assets are byte-identical, and both launch identically (`bun claude/viewer/server.mjs` vs `bun cursor/viewer/server.mjs`).
-- `gk-template`, `gk-init-graph`, and `gk-visualize` skills exist in both kits.
-- **Execution parity differs only as before**: Claude Code runs the compile→run path (`/gk:run`) plus `/gk:execute`; Cursor has no Workflow tool, so `/gk:execute` is its sole execution path. Templates and the viewer behave the same in both hosts.
+- `gk-template`, `gk-init-graph`, and `gk-visualize` skills exist in all five kits, and the `gk-visualize` bodies differ only in skill name and invocation prefix.
+- **Execution parity differs only as before**: Claude Code runs the compile→run path (`/gk:run`) plus `/gk:execute`; other hosts have no Workflow tool, so `/gk:execute` is their sole execution path. Templates and diagrams behave the same everywhere.

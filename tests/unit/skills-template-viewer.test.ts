@@ -89,32 +89,38 @@ describe("gk-visualize skill", () => {
   const claude = readSkill("claude", "gk-visualize");
   const cursor = readSkill("cursor", "gk-visualize");
 
-  test("interactive viewer default + explicit modes preserved", () => {
-    expect(claude).toContain("interactive bundled viewer");
+  test("archify HTML default + explicit modes preserved", () => {
+    expect(claude).toContain("Archify HTML");
     expect(claude).toContain("/gk:visualize --ascii");
     expect(claude).toContain("/gk:visualize --svg");
     expect(claude).toContain("/gk:visualize --excalidraw");
   });
 
-  test("keyed URL + browser launch + SVG fallback", () => {
-    expect(claude).toContain("127.0.0.1");
-    expect(claude).toContain("cryptographically random access key");
-    expect(claude).toContain("keyed URL");
-    expect(claude).toContain("fall back to the existing SVG mode");
+  test("install consent + doctor check + SVG fallback", () => {
+    expect(claude).toContain("npx -y skills add tt-a1i/archify -g");
+    expect(claude).toContain("ask the user once");
+    expect(claude).toContain("doctor");
+    expect(claude).toContain("fall back to the SVG mode");
   });
 
-  test("SSE + stale-data banner + 250-node ceiling", () => {
-    expect(claude).toContain("Server-Sent Events");
-    expect(claude).toContain("stale-data banner");
-    expect(claude).toContain("250 nodes");
+  test("validate-before-deliver loop with showcase gate", () => {
+    expect(claude).toContain("--quality showcase --json");
+    expect(claude).toContain("Non-zero exit is never success");
+    expect(claude).toContain("9 artifact checks");
+    expect(claude).toContain("Cap at 5 cycles");
+  });
+
+  test("no interactive viewer remnants", () => {
+    expect(claude).not.toContain("127.0.0.1");
+    expect(claude).not.toContain("Server-Sent Events");
+    expect(cursor).not.toContain("127.0.0.1");
   });
 
   test("claude/cursor parity", () => {
-    expect(claude).toContain("interactive bundled viewer");
-    expect(cursor).toContain("interactive bundled viewer");
-    expect(claude).toContain("127.0.0.1");
-    expect(cursor).toContain("127.0.0.1");
-    expect(claude).toContain("/gk:visualize --svg");
-    expect(cursor).toContain("/gk:visualize --svg");
+    expect(claude).toContain("Archify HTML");
+    expect(cursor).toContain("Archify HTML");
+    expect(claude).toContain("archify-ir.md");
+    expect(cursor).toContain("archify-ir.md");
+    expect(cursor).toContain("gk-visualize --svg");
   });
 });

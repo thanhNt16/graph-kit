@@ -6,9 +6,8 @@ const ROOT = join(import.meta.dir, "..", "..");
 
 /**
  * Packaging gate: `npm pack --dry-run` lists exactly what would ship in the
- * published tarball. Both kits must ship their viewer assets, server launcher,
- * skills, agents, and the built bin entry. This guards against `files` in
- * package.json dropping a kit or a viewer asset.
+ * published tarball. Both kits must ship their skills, agents, and the built
+ * bin entry. This guards against `files` in package.json dropping a kit asset.
  */
 describe("npm package tarball contents", () => {
   const result = spawnSync("npm", ["pack", "--dry-run"], { cwd: ROOT, encoding: "utf-8" });
@@ -18,11 +17,11 @@ describe("npm package tarball contents", () => {
     expect(result.status, `npm pack failed:\n${listing}`).toBe(0);
   });
 
-  test("both kits ship viewer assets (claude + cursor)", () => {
+  test("both kits ship the gk-visualize skill with archify IR reference", () => {
     for (const kit of ["claude", "cursor"]) {
-      for (const asset of ["app.js", "dagre.js", "index.html", "server.mjs", "styles.css"]) {
-        expect(listing, `kits/${kit}/viewer/${asset} missing from tarball`).toContain(`kits/${kit}/viewer/${asset}`);
-      }
+      expect(listing).toContain(`kits/${kit}/skills/gk-visualize/SKILL.md`);
+      expect(listing).toContain(`kits/${kit}/skills/gk-visualize/references/archify-ir.md`);
+      expect(listing).toContain(`kits/${kit}/skills/gk-visualize/references/graph-palette.md`);
     }
   });
 
