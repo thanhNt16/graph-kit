@@ -56,7 +56,6 @@ jobs:
           next: ${{ steps.version.outputs.next }}
       - run: bun install --frozen-lockfile
       - run: bun run build
-      - run: bun run build:viewer
       - run: bun run build:bin
       - name: Build release archives
         run: |
