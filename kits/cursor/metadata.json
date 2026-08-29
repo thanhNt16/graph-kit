@@ -2,6 +2,6 @@
   "name": "graphkit",
   "version": "0.2.0",
   "apiVersion": "graphkit.dev/v2",
-  "deletions": ["viewer"],
-  "target": "opencode"
+  "target": "cursor",
+  "deletions": ["viewer"]
 }

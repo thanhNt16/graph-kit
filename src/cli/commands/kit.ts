@@ -1,5 +1,5 @@
 import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { basename, dirname, join } from "node:path";
+import { basename, dirname, isAbsolute, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { CAC } from "cac";
 import { GraphKitError } from "../../errors.js";
@@ -26,10 +26,13 @@ function kitSourceDir(targetId: TargetId = "claude"): string {
     // 3. npm package: dist/index.js → package-root/kits/<kit>/ (npm link, npm install -g)
     join(here, "..", "kits", kitName),
     join(here, "kits", kitName),
-    // 4. Standalone binary layout: <bin>/../share/gk/kits/<kit>/
-    join(dirname(process.execPath), "..", "share", "gk", "kits", kitName),
-    // 5. Standalone binary layout: <bin>/share/gk/kits/<kit>/ (extracted side-by-side)
+    // 4. Standalone binary layout: <bin>/share/gk/kits/<kit>/ (extracted
+    // side-by-side with the binary — wins over #5 because it can only come
+    // from the same tarball as this binary, while ../share may be a stale
+    // kit left by an earlier install under a different prefix)
     join(dirname(process.execPath), "share", "gk", "kits", kitName),
+    // 5. Standalone binary layout: <bin>/../share/gk/kits/<kit>/
+    join(dirname(process.execPath), "..", "share", "gk", "kits", kitName),
     // 6. User home install: ~/.graphkit/kits/<kit>/
     join(process.env.HOME ?? "", ".graphkit", "kits", kitName),
     // 7. cwd fallbacks (works from repo root)
@@ -45,6 +48,43 @@ function kitSourceDir(targetId: TargetId = "claude"): string {
     });
   }
   return found;
+}
+
+// Retired kit assets, listed in the kit's metadata.json as relative paths.
+// Pruned from the destination on every install so upgrades drop files the kit
+// no longer ships (cpSync overlays, it never deletes). Entries drive rmSync,
+// so anything absolute or escaping the kit dir is refused rather than trusted.
+function kitDeletions(source: string): string[] {
+  const metaPath = join(source, "metadata.json");
+  if (!existsSync(metaPath)) return [];
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(readFileSync(metaPath, "utf8"));
+  } catch (cause) {
+    throw new GraphKitError("KIT_METADATA_INVALID", `Malformed ${metaPath}`, {
+      hint: "The kit's metadata.json is not valid JSON; reinstall gk or fix the file.",
+      cause: String(cause),
+    });
+  }
+  const raw = (parsed as { deletions?: unknown } | null)?.deletions;
+  if (raw === undefined) return [];
+  if (!Array.isArray(raw) || raw.some((e) => typeof e !== "string")) {
+    throw new GraphKitError("KIT_METADATA_INVALID", `${metaPath}: "deletions" must be an array of strings`, {
+      hint: 'Example: "deletions": ["viewer", "skills/gk-old"]',
+    });
+  }
+  for (const rel of raw as string[]) {
+    const unsafe =
+      rel === "" ||
+      isAbsolute(rel) ||
+      rel.split(/[\\/]/).some((seg) => seg === ".." || seg === "." || seg === ".gk.json");
+    if (unsafe) {
+      throw new GraphKitError("KIT_METADATA_INVALID", `${metaPath}: unsafe deletion path ${JSON.stringify(rel)}`, {
+        hint: "Deletions must be relative paths inside the kit and may not traverse upward or remove .gk.json.",
+      });
+    }
+  }
+  return raw as string[];
 }
 
 // Re-exported so graph.ts can resolve the templates dir the same way.
@@ -111,13 +151,20 @@ export function installKit(
   // Kit-owned files always overwrite — re-running `gk init` after upgrading the
   // gk binary must refresh stale skills in existing projects. Only .gk.json
   // (user config) is preserved below; --force is the only path that removes
-  // files the kit no longer ships.
+  // files the kit no longer ships — except metadata.json `deletions`, which
+  // prunes named paths on every install so upgrades drop retired kit assets.
   cpSync(source, destDir, {
     recursive: true,
     force: true,
     // user config survives upgrades; created below if missing
     filter: (s) => basename(s) !== ".gk.json",
   });
+  for (const rel of kitDeletions(source)) {
+    rmSync(join(destDir, rel), { recursive: true, force: true });
+    if (t.id === "codex" && rel.startsWith("skills/")) {
+      rmSync(join(targetDir, ".agents", rel), { recursive: true, force: true });
+    }
+  }
 
   // codex special case: skills also install into sibling .agents/skills/
   if (t.id === "codex") {
