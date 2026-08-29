@@ -51,15 +51,27 @@ gk can bridge to the codebase-memory-mcp (CBM) MCP server for indexing and code-
 
 Each build on `main` publishes a new patch release (e.g. `v0.2.9`) with binaries and auto-generated changelogs. Install the latest for your platform:
 
-**macOS Apple Silicon:**
+**macOS Apple Silicon** (no sudo — installs into your home dir):
+
+```bash
+mkdir -p ~/.local/bin && rm -rf ~/.local/bin/gk ~/.local/bin/share
+curl -fsSL https://github.com/thanhNt16/graph-kit/releases/latest/download/gk-darwin-arm64.tar.gz \
+  | tar -xz -C ~/.local/bin
+```
+
+> The tarball holds `gk` plus a `share/gk/kits/` tree; `gk` finds its kits beside itself, so any writable dir on `PATH` works. Ensure `~/.local/bin` is on `PATH` (`echo $PATH | tr : '\n' | grep .local/bin`) — add `export PATH="$HOME/.local/bin:$PATH"` to your shell rc if missing.
+> Clearing the two paths first matters: `tar -xz` overlays and never removes files a newer release dropped.
+
+System-wide instead (needs sudo, and every upgrade needs it again):
 
 ```bash
 curl -fsSL https://github.com/thanhNt16/graph-kit/releases/latest/download/gk-darwin-arm64.tar.gz \
   | sudo tar -xz -C /usr/local/bin
 ```
 
-> `releases/latest` always resolves to the newest version tag. `/usr/local/bin` is on `PATH` and is not SIP-protected, so no extra setup is needed.
+> `releases/latest` always resolves to the newest version tag. `/usr/local/bin` is on `PATH` and is not SIP-protected.
 > ⚠️ Do **not** install to `/usr/bin` — it is SIP-protected on macOS; extraction fails with `Operation not permitted` even with `sudo`.
+> ⚠️ If you install to both, whichever dir comes first on `PATH` wins. `which -a gk` shows every copy; stale ones are silently shadowed, not upgraded.
 
 Verify:
 
