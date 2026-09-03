@@ -1,0 +1,72 @@
+# templates/gallery/dream.gk.yaml
+apiVersion: graphkit.dev/v1
+kind: GraphTemplate
+metadata:
+  name: dream
+  description: Consolidate project memory — propose merges, new links, and retiments as a reviewable diff
+  version: 1
+parameters:
+  focus:
+    description: Optional theme to dream about (e.g. "release workflow"); empty = whole store
+    required: false
+    default: ""
+  since:
+    description: Optional ISO date; only consider runs/patterns after it; empty = no cutoff
+    required: false
+    default: ""
+recommendations:
+  agents:
+    - memory-curator
+    - agents-orchestrator
+    - qa-engineer
+graph:
+  apiVersion: graphkit.dev/v2
+  kind: Graph
+  metadata:
+    name: dream
+    description: Consolidate project memory into a reviewable proposal
+  topology: diamond
+  inputs:
+    focus:
+      type: string
+      required: false
+    since:
+      type: string
+      required: false
+  nodes:
+    harvest:
+      agent: agents-orchestrator
+      objective: >
+        Read .graphkit/runs/index.jsonl, .graphkit/memory/patterns/, and
+        .graphkit/memory/suggestions/. Summarize: run count by graph, top
+        patterns by salience. Focus theme: {{focus}}. Cutoff: {{since}}.
+        Output a compact digest only — no writes.
+      constraints:
+        - no_write: true
+      depend_on: []
+      evidence: [dream-harvest]
+    dream:
+      agent: memory-curator
+      objective: >
+        Using the harvest digest, propose memory consolidations: mergeable or
+        duplicate patterns, missing [[wikilinks]] between related entries,
+        entries to retire (expire), and any new suggestion worth raising.
+        WRITE SCOPE (hard contract): you may create files ONLY under
+        .graphkit/inbox/<ISO-timestamp>-dream/ — a proposal.md plus a unified
+        diff (diff.patch) a human applies with `git apply`. You must NEVER
+        edit .graphkit/memory/ directly in this node.
+      depend_on: [harvest]
+      evidence: [dream-proposal]
+    challenge:
+      agent: qa-engineer
+      objective: >
+        Read the dream node's proposal under .graphkit/inbox/. Challenge every
+        proposed change: is each merge justified by the pattern data? does any
+        change lose information? is the diff applicable? Verdict line must be
+        exactly "VERDICT: propose" or "VERDICT: reject" with reasons. No writes.
+      constraints:
+        - no_write: true
+      depend_on: [dream]
+      evidence: [dream-verdict]
+  evidence:
+    required_keys: [dream-proposal, dream-verdict]

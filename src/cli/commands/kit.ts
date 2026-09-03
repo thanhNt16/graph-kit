@@ -145,7 +145,7 @@ export function installKit(
 
   mkdirSync(destDir, { recursive: true });
   // Runtime artifacts shared across hosts.
-  for (const dir of ["evidence", "reports", "memory", "runs"]) {
+  for (const dir of ["evidence", "reports", "memory", "runs", "inbox"]) {
     mkdirSync(join(targetDir, ".graphkit", dir), { recursive: true });
   }
   // Kit-owned files always overwrite — re-running `gk init` after upgrading the

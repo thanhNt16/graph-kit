@@ -25,7 +25,7 @@ describe("gk init/new", () => {
   });
 
   test("installKit creates .graphkit runtime directories", () => {
-    for (const dir of ["evidence", "reports", "memory", "runs"]) {
+    for (const dir of ["evidence", "reports", "memory", "runs", "inbox"]) {
       expect(existsSync(join(tmp, ".graphkit", dir))).toBe(true);
     }
   });
