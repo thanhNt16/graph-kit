@@ -25,6 +25,7 @@ function runCli(args: string[], cwd: string) {
     console.log = origLog;
     process.exit = origExit;
     process.chdir(origCwd);
+    process.exitCode = 0; // fail() sets process.exitCode=1 — reset so bun:test exits 0
   }
   return { stdout: logs.join("\n"), code: exitCode };
 }
@@ -35,8 +36,7 @@ describe("gk run CLI", () => {
     registerRunCommands(cli);
     expect(cli.commands.map((c) => c.name)).toContain("run");
   });
-
-  test("command registry lists all three run subcommands", () => {
+  test("command registry lists all run subcommands", () => {
     const paths = CLI_COMMANDS.map((c) => c.path);
     expect(paths).toContain("run start");
     expect(paths).toContain("run node");
