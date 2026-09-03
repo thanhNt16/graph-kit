@@ -116,7 +116,7 @@ export function extractPatterns(
     out.push(toPattern("evidence-cooccurrence", members, members.join(" + "), acc, now));
   }
   for (const [key, acc] of failures) {
-    if (acc.count < FAILURE_MIN) continue;
+    if (acc.runs.size < FAILURE_MIN) continue;
     out.push(toPattern("failure-recurrence", [key], key, acc, now));
   }
   for (const [key, acc] of reuse) {

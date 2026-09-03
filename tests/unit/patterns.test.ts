@@ -43,6 +43,17 @@ describe("pattern extraction", () => {
     expect(pats[0]?.count).toBe(2);
   });
 
+  test("two failures in one run is not a recurrence; across two runs is", () => {
+    const one = ["r1"].map((id) => run(id, "g", `sha-${id}`, []));
+    const retry = [node("flaky", "fail"), node("flaky", "fail")];
+    expect(extractPatterns(one, new Map([["r1", retry]]), NOW).filter((p) => p.kind === "failure-recurrence")).toHaveLength(0);
+    const two = ["r1", "r2"].map((id) => run(id, "g", `sha-${id}`, []));
+    const traces = new Map(two.map((r) => [r.id, [node("flaky", "fail")]]));
+    const pats = extractPatterns(two, traces, NOW).filter((p) => p.kind === "failure-recurrence");
+    expect(pats[0]?.label).toBe("flaky");
+    expect(pats[0]?.runs).toEqual(["r1", "r2"]);
+  });
+
   test("same graph sha run 3 times is graph-reuse", () => {
     const runs = ["r1", "r2", "r3"].map((id) => run(id, "audit-pr", "same-sha", []));
     const pats = extractPatterns(runs, new Map(), NOW).filter((p) => p.kind === "graph-reuse");
