@@ -40,7 +40,7 @@ This outputs the topological wave structure — which nodes run in parallel, whi
 ### Step 1b: Start the run ledger
 
 ```bash
-gk run start graph.yaml --json
+gk run start --graph graph.yaml --json
 ```
 
 Before dispatching wave 1, start the ledger. If it fails with `RUN_ACTIVE`, a previous
