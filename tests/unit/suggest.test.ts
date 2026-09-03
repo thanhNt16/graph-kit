@@ -120,6 +120,17 @@ describe("gk suggest CLI", () => {
     expect(readFileSync(join(memDir, "suggestions", "suggestion-target.md"), "utf-8")).toMatch(/^status: dismissed$/m);
   });
 
+  test("--dismiss tolerates a malformed sibling file and dismisses the valid target", () => {
+    writeFileSync(join(memDir, "suggestions", "aa-broken.md"), "---\n: [unclosed\n---\nbody\n");
+    suggestion(memDir, "suggestion-target", 2.0);
+    const { stdout, code } = runCli(["--dismiss", "suggestion-target"], join(memDir, "..", ".."));
+    expect(code).toBe(0);
+    expect(JSON.parse(stdout)).toEqual({ status: "ok", data: { dismissed: "suggestion-target" } });
+    expect(readFileSync(join(memDir, "suggestions", "suggestion-target.md"), "utf-8")).toMatch(/^status: dismissed$/m);
+    // malformed sibling left untouched for consolidate to prune
+    expect(readFileSync(join(memDir, "suggestions", "aa-broken.md"), "utf-8")).toBe("---\n: [unclosed\n---\nbody\n");
+  });
+
   test("--dismiss unknown id emits fail envelope with exit code 1", () => {
     const { stdout, code } = runCli(["--dismiss", "suggestion-nope"], join(memDir, "..", ".."));
     expect(code).toBe(1);

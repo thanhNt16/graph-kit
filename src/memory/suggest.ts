@@ -54,12 +54,16 @@ export function dismissSuggestion(memDir: string, id: string, now = new Date().t
     const raw = readFileSync(path, "utf-8");
     const m = raw.match(/^---\n([\s\S]*?)\n---/);
     if (!m) continue;
-    const fm = (YAML.parse(m[1]) ?? {}) as Record<string, unknown>;
-    if (String(fm.id ?? "") !== id && f.replace(/\.md$/, "") !== id) continue;
-    fm.status = "dismissed";
-    fm.dismissed_at = now;
-    writeFileSync(path, `---\n${YAML.stringify(fm)}---\n${raw.slice(m[0].length)}`);
-    return true;
+    try {
+      const fm = (YAML.parse(m[1]) ?? {}) as Record<string, unknown>;
+      if (String(fm.id ?? "") !== id && f.replace(/\.md$/, "") !== id) continue;
+      fm.status = "dismissed";
+      fm.dismissed_at = now;
+      writeFileSync(path, `---\n${YAML.stringify(fm)}---\n${raw.slice(m[0].length)}`);
+      return true;
+    } catch {
+      // unparseable frontmatter: skip, consolidate will prune it next pass
+    }
   }
   return false;
 }
