@@ -9,6 +9,7 @@ import YAML from "yaml";
 import { listRunIds, readRunIndex, readTrace, type TraceLine } from "./ledger.js";
 import { buildLinks, writeLinks } from "./links.js";
 import { extractPatterns, type Pattern } from "./patterns.js";
+import { PatternFileSchema, SuggestionFileSchema } from "../schemas/memory.schema.js";
 
 export interface ConsolidateResult {
   runs: number;
@@ -100,30 +101,32 @@ export function consolidate(cwd: string, now = new Date().toISOString()): Consol
   for (const p of patterns) {
     const file = `${p.signature}.md`;
     keptPatterns.add(file);
-    writeEntry(
-      patternsDir,
-      file,
-      {
-        id: `pattern-${p.signature}`,
-        type: "pattern",
-        kind: p.kind,
-        label: p.label,
-        members: p.members,
-        runs: p.runs,
-        count: p.count,
-        last_seen: p.last_seen,
-        signature: p.signature,
-        created_at: now,
-        valid_from: now,
-        salience: Number(p.salience.toFixed(4)),
-        expired: false,
-        tags: [p.kind],
-        generated: { by: GENERATOR, at: now },
-        recorded_at: now,
-        status: "stable",
-      },
-      `${p.label}\n\nObserved in ${p.runs.length} run(s): ${p.runs.join(", ")}.\n`,
-    );
+    const frontmatter = {
+      id: `pattern-${p.signature}`,
+      type: "pattern",
+      kind: p.kind,
+      label: p.label,
+      members: p.members,
+      runs: p.runs,
+      count: p.count,
+      last_seen: p.last_seen,
+      signature: p.signature,
+      created_at: now,
+      valid_from: now,
+      salience: Number(p.salience.toFixed(4)),
+      expired: false,
+      tags: [p.kind],
+      generated: { by: GENERATOR, at: now },
+      recorded_at: now,
+      status: "stable",
+    };
+    // Invariant guard: generated entries must satisfy the published schemas (fail loud on drift).
+    const parsed = PatternFileSchema.safeParse(frontmatter);
+    if (!parsed.success)
+      throw new Error(
+        `consolidate: ${file} violates PatternFileSchema: ${parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; ")}`,
+      );
+    writeEntry(patternsDir, file, frontmatter, `${p.label}\n\nObserved in ${p.runs.length} run(s): ${p.runs.join(", ")}.\n`);
   }
 
   const drafts = suggestionsFor(patterns);
@@ -139,26 +142,28 @@ export function consolidate(cwd: string, now = new Date().toISOString()): Consol
       const prior = readFileSync(existingPath, "utf-8").match(/^status:\s*(\w+)$/m)?.[1];
       if (prior === "dismissed" || prior === "accepted") status = prior;
     }
-    writeEntry(
-      suggestionsDir,
-      file,
-      {
-        id: s.id,
-        type: "suggestion",
-        action: s.action,
-        rationale: s.rationale,
-        based_on: s.based_on,
-        status,
-        created_at: now,
-        valid_from: now,
-        salience: Number(s.salience.toFixed(4)),
-        expired: false,
-        tags: [s.action],
-        generated: { by: GENERATOR, at: now },
-        recorded_at: now,
-      },
-      `${s.rationale}\n`,
-    );
+    const frontmatter = {
+      id: s.id,
+      type: "suggestion",
+      action: s.action,
+      rationale: s.rationale,
+      based_on: s.based_on,
+      status,
+      created_at: now,
+      valid_from: now,
+      salience: Number(s.salience.toFixed(4)),
+      expired: false,
+      tags: [s.action],
+      generated: { by: GENERATOR, at: now },
+      recorded_at: now,
+    };
+    // Invariant guard: generated entries must satisfy the published schemas (fail loud on drift).
+    const parsed = SuggestionFileSchema.safeParse(frontmatter);
+    if (!parsed.success)
+      throw new Error(
+        `consolidate: ${file} violates SuggestionFileSchema: ${parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; ")}`,
+      );
+    writeEntry(suggestionsDir, file, frontmatter, `${s.rationale}\n`);
   }
 
   const pruned = prune(patternsDir, keptPatterns) + prune(suggestionsDir, keptSuggestions);

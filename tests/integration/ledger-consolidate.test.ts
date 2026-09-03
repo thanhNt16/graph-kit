@@ -5,6 +5,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { consolidate } from "../../src/memory/consolidate.js";
 import { appendNode, endRun, startRun } from "../../src/memory/ledger.js";
+import { PatternFileSchema, SuggestionFileSchema } from "../../src/schemas/memory.schema.js";
+import YAML from "yaml";
 
 const GRAPH = "metadata:\n  name: demo\ntopology: diamond\n";
 
@@ -80,6 +82,22 @@ describe("ledger → consolidate", () => {
     const second = consolidate(cwd, "2026-09-03T12:00:00.000Z");
     expect(second.patterns).toBe(first.patterns);
     expect(readdirSync(join(cwd, ".graphkit", "memory", "patterns")).length).toBe(first.patterns);
+  });
+
+  test("written pattern and suggestion files re-parse through their schemas", () => {
+    fakeRun(1);
+    fakeRun(2);
+    fakeRun(3);
+    consolidate(cwd, "2026-09-03T12:00:00.000Z");
+    const memDir = join(cwd, ".graphkit", "memory");
+    for (const file of readdirSync(join(memDir, "patterns"))) {
+      const fm = YAML.parse(readFileSync(join(memDir, "patterns", file), "utf-8").match(/^---\n([\s\S]*?)\n---/)![1]);
+      expect(PatternFileSchema.safeParse(fm).success).toBe(true);
+    }
+    for (const file of readdirSync(join(memDir, "suggestions"))) {
+      const fm = YAML.parse(readFileSync(join(memDir, "suggestions", file), "utf-8").match(/^---\n([\s\S]*?)\n---/)![1]);
+      expect(SuggestionFileSchema.safeParse(fm).success).toBe(true);
+    }
   });
 
   test("zero runs is a clean no-op", () => {
