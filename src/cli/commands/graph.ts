@@ -942,6 +942,10 @@ export function registerGraphCommands(cli: CAC) {
             plan.push({ kind: "curator" });
           }
 
+          // HookRef commands ride the payload so /gk:execute can run them without
+          // re-reading graph.yaml. on_fanout_dispatch stays declared-but-unused:
+          // no consumer exists, and inventing one would be speculative.
+          const nodeHooks = graph.hooks?.on_node_complete ?? [];
           const nodeObj = (id: string) => ({
             id,
             agent: nodes[id]?.agent,
@@ -953,6 +957,7 @@ export function registerGraphCommands(cli: CAC) {
             depend_on: nodes[id]?.depend_on || [],
             loop: nodes[id]?.loop || null,
             evidence: nodes[id]?.evidence || [],
+            hooks: nodeHooks,
           });
 
           // Materialize waves; curator waves carry `curator: true` + the recall skill.
@@ -971,6 +976,7 @@ export function registerGraphCommands(cli: CAC) {
             total_nodes: ids.length,
             waves: waveData,
             evidence_required: graph.evidence?.required_keys || [],
+            on_graph_complete: graph.hooks?.on_graph_complete ?? [],
           };
           if (hasCurator) {
             payload.memory = {
