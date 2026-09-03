@@ -3,7 +3,7 @@ apiVersion: graphkit.dev/v1
 kind: GraphTemplate
 metadata:
   name: dream
-  description: Consolidate project memory — propose merges, new links, and retiments as a reviewable diff
+  description: Consolidate project memory — propose merges, new links, and retirements as a reviewable diff
   version: 1
 parameters:
   focus:
