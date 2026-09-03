@@ -36,8 +36,13 @@ export function activeRun(cwd: string): string | null {
   const f = activeFile(cwd);
   if (!existsSync(f)) return null;
   const dir = readFileSync(f, "utf-8").trim();
-  return dir || null;
+  return dir && existsSync(dir) ? dir : null;
 }
+
+function safeGraphName(name: string): string {
+  return name.replace(/\.\./g, "-").replace(/[\\/]/g, "-");
+}
+
 
 function graphName(graphPath: string): string {
   try {
@@ -62,9 +67,15 @@ export function startRun(cwd: string, graphPath: string, now = new Date().toISOS
   if (!existsSync(graphPath)) throw new Error(`GRAPH_NOT_FOUND: ${graphPath}`);
 
   const raw = readFileSync(graphPath, "utf-8");
-  const name = graphName(graphPath);
-  const id = runId(now, name);
-  const dir = join(runsDir(cwd), id);
+  const name = safeGraphName(graphName(graphPath));
+  const baseId = runId(now, name);
+  let id = baseId;
+  let dir = join(runsDir(cwd), id);
+  let suffix = 2;
+  while (existsSync(dir)) {
+    id = `${baseId}-${suffix++}`;
+    dir = join(runsDir(cwd), id);
+  }
   mkdirSync(dir, { recursive: true });
 
   writeFileSync(join(dir, "trace.jsonl"), "");

@@ -31,6 +31,30 @@ describe("run ledger", () => {
     expect(() => appendNode(cwd, { node: "audit", wave: 0, agent: "code-reviewer", model: "sonnet", status: "ok", evidence: ["audit"], duration_ms: 1200, notes: null })).toThrow(/NO_ACTIVE_RUN/);
   });
 
+  test("same timestamp gets a unique id and preserves both traces", () => {
+    const timestamp = "2026-09-03T10:00:00.000Z";
+    const first = startRun(cwd, join(cwd, "graph.yaml"), timestamp);
+    endRun(cwd, "merged", timestamp);
+    const second = startRun(cwd, join(cwd, "graph.yaml"), timestamp);
+    expect(second.id).toBe(`${first.id}-2`);
+    expect(existsSync(join(first.dir, "trace.jsonl"))).toBe(true);
+    expect(existsSync(join(second.dir, "trace.jsonl"))).toBe(true);
+  });
+
+  test("vanished active directory is treated as no active run", () => {
+    const { dir } = startRun(cwd, join(cwd, "graph.yaml"), "2026-09-03T10:00:00.000Z");
+    rmSync(dir, { recursive: true, force: true });
+    expect(activeRun(cwd)).toBeNull();
+    expect(() => appendNode(cwd, { node: "x", wave: 0, agent: null, model: null, status: "ok", evidence: [], duration_ms: null, notes: null })).toThrow(/NO_ACTIVE_RUN/);
+  });
+
+  test("sanitizes graph names before creating run directories", () => {
+    writeFileSync(join(cwd, "graph.yaml"), "metadata:\n  name: ../escaped\ntopology: diamond\n");
+    const { id, dir } = startRun(cwd, join(cwd, "graph.yaml"), "2026-09-03T10:00:00.000Z");
+    expect(id).not.toContain("../");
+    expect(dir.startsWith(join(cwd, ".graphkit", "runs"))).toBe(true);
+  });
+
   test("start → node ×2 → end produces one index line and a readable trace", () => {
     const { id, dir } = startRun(cwd, join(cwd, "graph.yaml"), "2026-09-03T10:00:00.000Z");
     appendNode(cwd, { node: "a", wave: 0, agent: "x", model: "sonnet", status: "ok", evidence: ["k1"], duration_ms: 10, notes: null }, "2026-09-03T10:00:01.000Z");
