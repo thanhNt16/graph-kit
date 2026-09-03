@@ -12,6 +12,8 @@ Interactively refine a graph.yaml file through conversation.
 ## Process
 
 1. Read the existing `graph.yaml`.
+   Run `gk suggest --json` and fold relevant suggestions into the proposal: recurring
+   chains suggest sub-graphs, graph-reuse suggests starting from a template.
 2. Run `gk validate graph.yaml --json` to check current state. If there are findings, surface them as the first thing to fix.
 3. Ask focused questions, one at a time:
    - "Which agents should handle which nodes?" → suggest based on topology

@@ -27,6 +27,14 @@ as File/Module shells with no searchable content; measured 2026-08-15, see
 3. Read each returned `file` under `.graphkit/memory/` for full content. Surface a `stale: true` flag if the memory's source evidence predates the current node's `depend_on` ancestors. Report the `malformed` count alongside results when nonzero.
 4. Return each memory with: `id`, `type`, one-line summary, full `content`, `as_of` validity window.
 
+## Store layout
+
+`gk memory recall` searches the memory root AND its subfolders (`patterns/`,
+`suggestions/`), then joins `.links.json` neighbors below direct hits. Patterns carry
+`label`/`members` in their body — recall them by the node names they contain
+(e.g. `gk memory recall "plan build verify"`). Hits are reinforced automatically
+(`use_count` bump); dismissed suggestions stay recallable but `gk suggest` hides them.
+
 Reference implementation of the filters: `src/eval/memory-recall.ts` (unit-tested; the memory-recall eval holds it to `hit_rate ≥ 0.8` and zero validity violations).
 
 ## Degradation

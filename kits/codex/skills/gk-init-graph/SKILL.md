@@ -32,6 +32,8 @@ gk-init-graph [--template <name>] [--task "<description>"]
      ```
    - `--template <name>` names a canonical topology or flow preset: retain existing `gk graph new <name>` behavior.
    - Without `--template`: compare the task to packaged template descriptions and the topology routing rules, then offer the best two candidates when ambiguous.
+   Run `gk suggest --json` and fold relevant suggestions into the proposal: recurring
+   chains suggest sub-graphs, graph-reuse suggests starting from a template.
 
 2. **Inventory installed capabilities** for the active target:
    ```bash

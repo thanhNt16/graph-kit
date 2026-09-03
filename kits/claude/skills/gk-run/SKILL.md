@@ -17,10 +17,13 @@ disable-model-invocation: false
    ```json
    { "name": "<graph name>", "started_at": "<ISO>", "constraints": { "<nodeId>": { "assigned_only": true } } }
    ```
-   Create `.graphkit/runs/.active` marker file (touched, empty).
+   Start the run ledger instead of a bare marker: `gk run start --json` — it creates the
+   `.active` pointer AND the run directory the ledger owns. Keep writing `current.json`
+   as before (the lease-enforce hook reads it).
 4. Invoke Claude Code's Workflow tool with the script path: `Workflow({ scriptPath: ".claude/workflows/{name}.workflow.js" })`.
    - The workflow script is self-contained: it defines `meta` + a default export that takes the runtime `context` (which provides `agent()`, `parallel()`, `pipeline()`, and `inputs`).
-5. When the Workflow tool returns, remove `.graphkit/runs/.active`.
+5. When the Workflow tool returns: `gk run end --status merged|failed` (removes `.active`,
+   appends to `index.jsonl`), then `gk memory consolidate --json`.
 6. Write the final result to `.graphkit/runs/{name}-result.json`.
 7. Report to the user: verdict (passed/failed/partial), which nodes ran, and suggest `/gk:evidence`.
 

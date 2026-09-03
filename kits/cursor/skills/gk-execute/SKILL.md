@@ -37,6 +37,36 @@ gk graph waves graph.yaml --json
 
 This outputs the topological wave structure — which nodes run in parallel, which wait for dependencies. Parse the JSON to understand execution order.
 
+### Step 1b: Start the run ledger
+
+```bash
+gk run start graph.yaml --json
+```
+
+Before dispatching wave 1, start the ledger. If it fails with `RUN_ACTIVE`, a previous
+run never ended — ask the user, or run `gk run status` to inspect, before proceeding.
+
+### Recording nodes
+
+After EVERY node dispatch returns (ok or fail), append a trace line:
+
+```bash
+gk run node <node-id> --status ok|fail --wave <wave-index> --agent <agent> --evidence <comma,keys> --duration-ms <ms>
+```
+
+A failed dispatch (ok:false) MUST be recorded with `--status fail` BEFORE stopping the
+graph — the failure pattern is exactly what `gk memory consolidate` later surfaces.
+
+If the waves payload carries `hooks: [...]` on a node, run those command strings
+verbatim instead of hand-writing the equivalent `gk run node` call; `{node}` in the
+string substitutes the node id.
+
+### Ending
+
+After the final wave (and the evidence gate): `gk run end --status merged|blocked|failed`,
+then `gk memory consolidate --json`. If the payload has `on_graph_complete`, run those
+commands verbatim — `gk run end` + `gk memory consolidate` are what they normally contain.
+
 ### Step 2: Execute wave by wave
 
 For each wave in the output:
