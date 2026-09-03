@@ -185,7 +185,16 @@
     {
       "name": "run node",
       "description": "Append a node trace line to the active run",
-      "options": ["--status <status>", "--wave <n>", "--agent <agent>", "--model <model>", "--evidence <keys>", "--duration-ms <n>", "--notes <text>", "--json"]
+      "options": [
+        "--status <status>",
+        "--wave <n>",
+        "--agent <agent>",
+        "--model <model>",
+        "--evidence <keys>",
+        "--duration-ms <n>",
+        "--notes <text>",
+        "--json"
+      ]
     },
     {
       "name": "run end",
@@ -196,6 +205,11 @@
       "name": "run status",
       "description": "Show the active run directory",
       "options": ["--json"]
+    },
+    {
+      "name": "suggest",
+      "description": "Show ranked workflow suggestions from memory",
+      "options": ["--dismiss <id>", "--all", "--json"]
     }
   ]
 }

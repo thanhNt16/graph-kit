@@ -124,6 +124,11 @@ export const CLI_COMMANDS: { path: string; description: string; options: string[
     options: ["--status <status>", "--json"],
   },
   { path: "run status", description: "Show the active run directory", options: ["--json"] },
+  {
+    path: "suggest",
+    description: "Show ranked workflow suggestions from memory",
+    options: ["--dismiss <id>", "--all", "--json"],
+  },
 ];
 
 /** Return the manifest object (mirrors cli-manifest.json). */

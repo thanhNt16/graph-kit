@@ -9,6 +9,7 @@ import { registerMemoryCommands } from "./cli/commands/memory.js";
 import { registerModelsCommands } from "./cli/commands/models.js";
 import { registerRunCommands } from "./cli/commands/run.js";
 import { registerStatusCommand } from "./cli/commands/status.js";
+import { registerSuggestCommands } from "./cli/commands/suggest.js";
 import { registerTemplateCommands } from "./cli/commands/template.js";
 import { registerVisualizeCommand } from "./cli/commands/visualize.js";
 import { APP_VERSION } from "./version.js";
@@ -25,6 +26,7 @@ registerStatusCommand(cli);
 registerExecuteCommand(cli);
 registerVisualizeCommand(cli);
 registerRunCommands(cli);
+registerSuggestCommands(cli);
 cli.help();
 cli.parse();
 
