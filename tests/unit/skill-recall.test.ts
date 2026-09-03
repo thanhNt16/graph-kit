@@ -49,6 +49,6 @@ describe("gk-recall public CLI behavior", () => {
     expect(out.code).toBe(0);
     expect(out.payload.status).toBe("ok");
     expect(out.payload.data.results.map((r: { id: string }) => r.id)).toEqual(["live"]);
-    expect(out.payload.data).toHaveProperty("malformed", 0);
+    expect(out.payload.data).toHaveProperty("linked", 0);
   });
 });

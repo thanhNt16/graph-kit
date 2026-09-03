@@ -5,7 +5,7 @@ import YAML from "yaml";
 import { CBM_UNAVAILABLE_MSG, type CbmClient, createCbmClient } from "../../cbm/client.js";
 import { indexProject } from "../../cbm/index.js";
 import { actRScore, shouldExpire } from "../../eval/forgetting.js";
-import { recallWithStats } from "../../eval/memory-recall.js";
+import { expandedRecall } from "../../memory/recall-expanded.js";
 import { consolidate } from "../../memory/consolidate.js";
 import { MemoryConfig, MemoryFileSchema } from "../../schemas/memory.schema.js";
 import { subcommandsFor } from "../command-registry.js";
@@ -186,8 +186,18 @@ export function touchMemory(
 ): { id: string; file: string; use_count: number; last_used_at: string } | null {
   const memDir = join(cwd, ".graphkit", "memory");
   if (!existsSync(memDir)) return null;
-  for (const file of readdirSync(memDir).filter((f) => f.endsWith(".md"))) {
-    const path = join(memDir, file);
+  // Root plus one sublevel (patterns/, suggestions/) — subfolder entries must
+  // get use_count reinforcement too, or decay eventually evicts every pattern.
+  const candidates: Array<{ file: string; path: string }> = [];
+  for (const de of readdirSync(memDir, { withFileTypes: true })) {
+    if (de.isFile() && de.name.endsWith(".md")) candidates.push({ file: de.name, path: join(memDir, de.name) });
+    else if (de.isDirectory() && !de.name.startsWith(".")) {
+      for (const f of readdirSync(join(memDir, de.name), { withFileTypes: true })) {
+        if (f.isFile() && f.name.endsWith(".md")) candidates.push({ file: f.name, path: join(memDir, de.name, f.name) });
+      }
+    }
+  }
+  for (const { file, path } of candidates) {
     const raw = readFileSync(path, "utf-8");
     const m = raw.match(/^---\n([\s\S]*?)\n---/);
     if (!m) continue;
@@ -257,7 +267,6 @@ Subcommands: ${subcommandsFor("memory")}\n\nOptions:\n  --project <project>  CBM
         const memDir = join(process.cwd(), ".graphkit", "memory");
         // Configured recall_topk takes precedence (graph.yaml topology_config.memory).
         let topk = 5;
-        let malformed = 0;
         try {
           const graph = YAML.parse(readFileSync(join(process.cwd(), "graph.yaml"), "utf-8"));
           const memCfg = MemoryConfig.safeParse(graph?.topology_config?.memory);
@@ -265,11 +274,12 @@ Subcommands: ${subcommandsFor("memory")}\n\nOptions:\n  --project <project>  CBM
         } catch {
           /* no graph.yaml — default topk */
         }
-        let results: Array<{ id: string; file: string; salience: number }> = [];
+        let results: Array<{ id: string; file: string; salience: number; linked: boolean }> = [];
+        let linked = 0;
         try {
-          const stats = recallWithStats(memDir, query, topk);
+          const stats = expandedRecall(memDir, query, topk);
           results = stats.results;
-          malformed = stats.malformed;
+          linked = stats.linked;
         } catch (e) {
           console.log(
             JSON.stringify(
@@ -280,7 +290,7 @@ Subcommands: ${subcommandsFor("memory")}\n\nOptions:\n  --project <project>  CBM
           return;
         }
         for (const h of results) touchMemory(process.cwd(), h.id);
-        console.log(JSON.stringify(ok({ query, top_k: results.length, results, malformed, recall_topk: topk })));
+        console.log(JSON.stringify(ok({ query, top_k: results.length, results, linked, recall_topk: topk })));
         return;
       }
       if (subcommand !== "index") {
