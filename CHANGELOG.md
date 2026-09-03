@@ -23,6 +23,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Retired kit assets surviving upgrades**: `gk init` overlays the kit with `cpSync`, which never deletes, so files a newer kit stopped shipping lingered in existing projects. Each kit's `metadata.json` `deletions` list is now honored on every install; the claude, cursor, and opencode kits declare the removed `viewer` directory.
 - **Sudo-free install documented**: the README's primary install is now `tar -xz -C ~/.local/bin` — the binary resolves its kits from the adjacent `share/gk/` tree, so any writable dir on `PATH` works. The `sudo` variant remains as the system-wide option, with notes on overlay-only upgrades and shadowed stale copies.
 
+## [0.3.0] - 2026-09-04
+
+### Added
+
+- Run ledger: `gk run start|node|end|status` records every execution to `.graphkit/runs/`.
+- Pattern compiler: `gk memory consolidate` derives node sequences, evidence co-occurrence,
+  failure recurrence, and graph reuse into `.graphkit/memory/patterns/` + `suggestions/`.
+- Suggestions: `gk suggest` ranks them; `--dismiss` retains the file but hides it.
+- Recall widened: searches subfolders, joins `.links.json` neighbors below direct hits.
+- Dream graph template: proposes memory consolidations as reviewable diffs (`.graphkit/inbox/`).
+- Waves payload carries `hooks` (on_node_complete) and `on_graph_complete` commands.
+
 ## [0.2.25] - 2026-08-27
 
 ### Added

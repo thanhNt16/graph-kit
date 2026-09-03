@@ -23,7 +23,7 @@ This is a **graph engineering kit** ([Simmons — *We Are Entering the Graph Eng
 - **Install on first use** — the skill asks before running `npx -y skills add tt-a1i/archify -g`; decline or no network falls back to SVG
 - **Other modes** — `--ascii` (instant, in-session), `--svg` (fast export), `--excalidraw` (editable)
 
-## Memory
+## Project memory
 
 `gk memory` keeps cross-run project memory in `.graphkit/memory/` — salience-ranked recall with validity/supersede filters, ACT-R decay, and a full audit trail:
 
@@ -337,3 +337,24 @@ gk gate graph.yaml
 ```
 
 `gk gate` reads each required key `k` as `<evidence_dir>/<k>.md` and prints a deterministic MERGE/BLOCK verdict with a per-key scorecard and sha256 manifest. Exit 0 means `MERGE`; a missing or whitespace-only key yields `BLOCK` with exit 1 — repair or redispatch only the producer of that key, then rerun the gate. Compiled workflows do not invoke the gate automatically; it is the orchestrator's final step.
+
+## Memory
+
+gk remembers every run and improves suggestions over time — all deterministic, no model calls.
+
+```bash
+gk run start --graph graph.yaml # begin a run (fails if one is active)
+gk run node <id> --status ok --wave 0 --agent <agent>
+gk run end --status merged  # append to .graphkit/runs/index.jsonl
+gk memory consolidate       # derive patterns, suggestions, .links.json, index.md
+gk suggest                  # ranked suggestions (--json, --dismiss <id>)
+gk memory recall <query>    # searches root + patterns/ + suggestions/, joins links
+```
+
+Runs append episodic traces under `.graphkit/runs/<id>/` (`trace.jsonl`, `run.md`).
+Consolidation counts repeated node sequences, evidence co-occurrence, recurring
+failures, and graph reuse (salience = count with a 14-day half-life), writes
+`.graphkit/memory/patterns/*.md` and `suggestions/*.md`, and rebuilds the derived
+link graph. The bundled `dream` template (`gk template list`) dispatches agents to
+propose deeper consolidations as a unified diff into `.graphkit/inbox/` — applied
+only by a human via `git apply`.
