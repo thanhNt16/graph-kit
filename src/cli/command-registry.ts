@@ -98,6 +98,10 @@ export const CLI_COMMANDS: { path: string; description: string; options: string[
   { path: "models cursor", description: "Show the Cursor model mapping", options: ["--json"] },
   { path: "models cursor set", description: "Set a Cursor model override", options: ["--map <k=v,...>", "--json"] },
   { path: "models cursor reset", description: "Remove Cursor model overrides", options: ["--json"] },
+  { path: "run start", description: "Start a run and write the ledger entry", options: ["--graph <path>", "--json"] },
+  { path: "run node", description: "Append a node trace line to the active run", options: ["--status <status>", "--wave <n>", "--agent <agent>", "--model <model>", "--evidence <keys>", "--duration-ms <n>", "--notes <text>", "--json"] },
+  { path: "run end", description: "Finalize the active run and append to index.jsonl", options: ["--status <status>", "--json"] },
+  { path: "run status", description: "Show the active run directory", options: ["--json"] },
 ];
 
 /** Return the manifest object (mirrors cli-manifest.json). */

@@ -7,6 +7,7 @@ import { registerInventoryCommands } from "./cli/commands/inventory.js";
 import { registerKitCommands } from "./cli/commands/kit.js";
 import { registerMemoryCommands } from "./cli/commands/memory.js";
 import { registerModelsCommands } from "./cli/commands/models.js";
+import { registerRunCommands } from "./cli/commands/run.js";
 import { registerStatusCommand } from "./cli/commands/status.js";
 import { registerTemplateCommands } from "./cli/commands/template.js";
 import { registerVisualizeCommand } from "./cli/commands/visualize.js";
@@ -23,6 +24,7 @@ registerInventoryCommands(cli);
 registerStatusCommand(cli);
 registerExecuteCommand(cli);
 registerVisualizeCommand(cli);
+registerRunCommands(cli);
 cli.help();
 cli.parse();
 
