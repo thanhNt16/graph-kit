@@ -21,6 +21,30 @@ export const MemoryFileSchema = z
   })
   .passthrough();
 
+export const PATTERN_KINDS = ["node-sequence", "evidence-cooccurrence", "failure-recurrence", "graph-reuse"] as const;
+export const SUGGESTION_ACTIONS = ["materialize-template", "capture-skill", "review-failure"] as const;
+
+/** Derived pattern entries under .graphkit/memory/patterns/. */
+export const PatternFileSchema = MemoryFileSchema.extend({
+  type: z.literal("pattern"),
+  kind: z.enum(PATTERN_KINDS),
+  label: z.string().min(1),
+  members: z.array(z.string()),
+  runs: z.array(z.string()),
+  count: z.number().int().min(1),
+  last_seen: MemoryDate,
+  signature: z.string().min(4),
+});
+
+/** Actionable suggestions under .graphkit/memory/suggestions/. */
+export const SuggestionFileSchema = MemoryFileSchema.extend({
+  type: z.literal("suggestion"),
+  action: z.enum(SUGGESTION_ACTIONS),
+  rationale: z.string().min(1),
+  based_on: z.array(z.string()),
+  status: z.enum(["proposed", "accepted", "dismissed"]).default("proposed"),
+});
+
 export const MemoryConfig = z
   .object({
     project: z.string().default("graph-kit-memory"),
