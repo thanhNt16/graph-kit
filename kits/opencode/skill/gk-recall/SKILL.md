@@ -21,10 +21,10 @@ as File/Module shells with no searchable content; measured 2026-08-15, see
    - drops expired / not-yet-valid / past-valid entries,
    - resolves `superseded_by` chains to the newest member,
    - returns top `recall_topk` — resolved from the graph's `memory.recall_topk` (default 5),
-   - reports entries dropped for malformed validity dates in a `malformed` count (they are excluded and counted, not silently kept),
+   - reports link-neighbor expansion hits in a `linked` count (memories pulled in via `.links.json` edges below direct keyword hits),
    - fails with `MEMORY_DIR_UNREADABLE` (exit 1) when the store exists but cannot be read — only a missing store returns empty results,
    - and reinforces every survivor (`gk memory touch`: `use_count` + `last_used_at` bump) so ACT-R decay keeps what recall actually uses.
-3. Read each returned `file` under `.graphkit/memory/` for full content. Surface a `stale: true` flag if the memory's source evidence predates the current node's `depend_on` ancestors. Report the `malformed` count alongside results when nonzero.
+3. Read each returned `file` under `.graphkit/memory/` for full content. Surface a `stale: true` flag if the memory's source evidence predates the current node's `depend_on` ancestors. Report the `linked` count alongside results when nonzero.
 4. Return each memory with: `id`, `type`, one-line summary, full `content`, `as_of` validity window.
 
 Reference implementation of the filters: `src/eval/memory-recall.ts` (unit-tested; the memory-recall eval holds it to `hit_rate ≥ 0.8` and zero validity violations).
