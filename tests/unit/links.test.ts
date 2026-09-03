@@ -38,6 +38,16 @@ describe("link graph", () => {
     expect(neighborsOf(buildLinks(memDir, "2026-09-03T00:00:00.000Z"), "a")).toEqual([]);
   });
 
+  test("keys and neighbor arrays are sorted for byte-deterministic .links.json", () => {
+    // Created out of alphabetical order: insertion order must not leak into output.
+    mem(memDir, "z.md", { id: "z", type: "knowledge" }, "see [[a]]\n");
+    mem(memDir, "m.md", { id: "m", type: "knowledge" }, "solo\n");
+    mem(memDir, "a.md", { id: "a", type: "knowledge" }, "solo\n");
+    const g = buildLinks(memDir, "2026-09-03T00:00:00.000Z");
+    expect(Object.keys(g.links)).toEqual(["a", "m", "z"]);
+    for (const ns of Object.values(g.links)) expect(ns).toEqual([...ns].sort());
+  });
+
   test("subfolder entries participate in the graph", () => {
     mem(memDir, "a.md", { id: "a", type: "knowledge" }, "links to [[p1]]\n");
     mem(join(memDir, "patterns"), "p1.md", { id: "p1", type: "pattern" }, "seq\n");

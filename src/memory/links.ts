@@ -87,7 +87,11 @@ export function buildLinks(memDir: string, now = new Date().toISOString()): Link
 
   return {
     generated_at: now,
-    links: Object.fromEntries(Object.entries(links).map(([k, v]) => [k, Array.from(v).sort()])),
+    links: Object.fromEntries(
+      Object.entries(links)
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([k, v]) => [k, Array.from(v).sort()]),
+    ),
   };
 }
 
