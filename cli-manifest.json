@@ -8,6 +8,16 @@
       "options": ["--json", "--force", "--target <target>"]
     },
     {
+      "name": "new",
+      "description": "Scaffold a new project with the GraphKit kit",
+      "options": ["--dir <dir>", "--json", "--target <target>"]
+    },
+    {
+      "name": "validate",
+      "description": "Validate a graph.yaml",
+      "options": ["--json"]
+    },
+    {
       "name": "status",
       "description": "Summarize active graph run and evidence coverage",
       "options": ["--json"]
@@ -20,16 +30,6 @@
     {
       "name": "visualize",
       "description": "Visualize a graph.yaml (not yet implemented)",
-      "options": ["--json"]
-    },
-    {
-      "name": "new",
-      "description": "Scaffold a new project with the GraphKit kit",
-      "options": ["--dir <dir>", "--json", "--target <target>"]
-    },
-    {
-      "name": "validate",
-      "description": "Validate a graph.yaml",
       "options": ["--json"]
     },
     {
@@ -113,6 +113,11 @@
       "options": ["--json"]
     },
     {
+      "name": "memory index",
+      "description": "Index .graphkit/memory/ into the CBM memory project",
+      "options": ["--project <project>", "--json"]
+    },
+    {
       "name": "memory trace",
       "description": "ACT-R score + expire .graphkit/memory/ entries (decay pass)",
       "options": ["--json"]
@@ -124,13 +129,13 @@
     },
     {
       "name": "memory recall",
-      "description": "Query .graphkit/memory (keyword\u00d7salience + validity filters); reinforces survivors",
+      "description": "Query .graphkit/memory (keyword×salience + validity filters); reinforces survivors",
       "options": ["--json"]
     },
     {
-      "name": "memory index",
-      "description": "Index .graphkit/memory/ into the CBM memory project",
-      "options": ["--project <project>", "--json"]
+      "name": "memory consolidate",
+      "description": "Derive patterns, suggestions, and links from the run ledger",
+      "options": ["--json"]
     },
     {
       "name": "template pack",

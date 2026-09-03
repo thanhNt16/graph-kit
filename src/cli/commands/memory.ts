@@ -6,6 +6,7 @@ import { CBM_UNAVAILABLE_MSG, type CbmClient, createCbmClient } from "../../cbm/
 import { indexProject } from "../../cbm/index.js";
 import { actRScore, shouldExpire } from "../../eval/forgetting.js";
 import { recallWithStats } from "../../eval/memory-recall.js";
+import { consolidate } from "../../memory/consolidate.js";
 import { MemoryConfig, MemoryFileSchema } from "../../schemas/memory.schema.js";
 import { subcommandsFor } from "../command-registry.js";
 import { fail, ok } from "../output.js";
@@ -221,6 +222,10 @@ export function registerMemoryCommands(cli: CAC) {
           `gk memory — memory lifecycle commands\n\nUsage:\n  gk memory <subcommand> [args...]\n
 Subcommands: ${subcommandsFor("memory")}\n\nOptions:\n  --project <project>  CBM project name\n  --json               JSON output`,
         );
+        return;
+      }
+      if (subcommand === "consolidate") {
+        console.log(JSON.stringify(ok(consolidate(process.cwd()))));
         return;
       }
       if (subcommand === "trace") {
