@@ -28,7 +28,18 @@ describe("run ledger", () => {
   });
 
   test("node append without active run fails", () => {
-    expect(() => appendNode(cwd, { node: "audit", wave: 0, agent: "code-reviewer", model: "sonnet", status: "ok", evidence: ["audit"], duration_ms: 1200, notes: null })).toThrow(/NO_ACTIVE_RUN/);
+    expect(() =>
+      appendNode(cwd, {
+        node: "audit",
+        wave: 0,
+        agent: "code-reviewer",
+        model: "sonnet",
+        status: "ok",
+        evidence: ["audit"],
+        duration_ms: 1200,
+        notes: null,
+      }),
+    ).toThrow(/NO_ACTIVE_RUN/);
   });
 
   test("same timestamp gets a unique id and preserves both traces", () => {
@@ -45,7 +56,18 @@ describe("run ledger", () => {
     const { dir } = startRun(cwd, join(cwd, "graph.yaml"), "2026-09-03T10:00:00.000Z");
     rmSync(dir, { recursive: true, force: true });
     expect(activeRun(cwd)).toBeNull();
-    expect(() => appendNode(cwd, { node: "x", wave: 0, agent: null, model: null, status: "ok", evidence: [], duration_ms: null, notes: null })).toThrow(/NO_ACTIVE_RUN/);
+    expect(() =>
+      appendNode(cwd, {
+        node: "x",
+        wave: 0,
+        agent: null,
+        model: null,
+        status: "ok",
+        evidence: [],
+        duration_ms: null,
+        notes: null,
+      }),
+    ).toThrow(/NO_ACTIVE_RUN/);
   });
 
   test("sanitizes graph names before creating run directories", () => {
@@ -57,8 +79,16 @@ describe("run ledger", () => {
 
   test("start → node ×2 → end produces one index line and a readable trace", () => {
     const { id, dir } = startRun(cwd, join(cwd, "graph.yaml"), "2026-09-03T10:00:00.000Z");
-    appendNode(cwd, { node: "a", wave: 0, agent: "x", model: "sonnet", status: "ok", evidence: ["k1"], duration_ms: 10, notes: null }, "2026-09-03T10:00:01.000Z");
-    appendNode(cwd, { node: "b", wave: 1, agent: "y", model: "opus", status: "fail", evidence: [], duration_ms: 20, notes: "boom" }, "2026-09-03T10:00:02.000Z");
+    appendNode(
+      cwd,
+      { node: "a", wave: 0, agent: "x", model: "sonnet", status: "ok", evidence: ["k1"], duration_ms: 10, notes: null },
+      "2026-09-03T10:00:01.000Z",
+    );
+    appendNode(
+      cwd,
+      { node: "b", wave: 1, agent: "y", model: "opus", status: "fail", evidence: [], duration_ms: 20, notes: "boom" },
+      "2026-09-03T10:00:02.000Z",
+    );
     const summary = endRun(cwd, "blocked", "2026-09-03T10:05:00.000Z");
     expect(summary.id).toBe(id);
     expect(summary.node_count).toBe(2);

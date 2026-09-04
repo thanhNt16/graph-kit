@@ -18,7 +18,8 @@ describe("dream template", () => {
   });
 
   test("harvest and challenge are write-free; dream writes only to the inbox", () => {
-    const flat = (arr: unknown[]) => arr.flatMap((c) => (typeof c === "object" && c ? Object.entries(c as Record<string, unknown>) : []));
+    const flat = (arr: unknown[]) =>
+      arr.flatMap((c) => (typeof c === "object" && c ? Object.entries(c as Record<string, unknown>) : []));
     expect(flat(tpl.graph.nodes.harvest.constraints)).toContainEqual(["no_write", true]);
     expect(flat(tpl.graph.nodes.challenge.constraints)).toContainEqual(["no_write", true]);
     expect(flat(tpl.graph.nodes.dream.constraints ?? [])).toEqual([]);

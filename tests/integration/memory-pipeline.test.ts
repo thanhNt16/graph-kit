@@ -1,10 +1,10 @@
 // tests/integration/memory-pipeline.test.ts
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { appendNode, endRun, startRun } from "../../src/memory/ledger.js";
 import { consolidate } from "../../src/memory/consolidate.js";
+import { appendNode, endRun, startRun } from "../../src/memory/ledger.js";
 import { expandedRecall } from "../../src/memory/recall-expanded.js";
 import { dismissSuggestion, rankSuggestions, readSuggestions } from "../../src/memory/suggest.js";
 
@@ -21,9 +21,48 @@ describe("memory pipeline", () => {
     for (const day of [1, 2, 3]) {
       const at = `2026-09-0${day}T09:00:00.000Z`;
       startRun(cwd, join(cwd, "graph.yaml"), at);
-      appendNode(cwd, { node: "plan", wave: 0, agent: "software-architect", model: "opus", status: "ok", evidence: ["plan"], duration_ms: 3, notes: null }, at);
-      appendNode(cwd, { node: "build", wave: 1, agent: "data-engineer", model: "sonnet", status: "ok", evidence: ["build"], duration_ms: 3, notes: null }, at);
-      appendNode(cwd, { node: "verify", wave: 2, agent: "qa-engineer", model: "sonnet", status: "ok", evidence: ["verify"], duration_ms: 3, notes: null }, at);
+      appendNode(
+        cwd,
+        {
+          node: "plan",
+          wave: 0,
+          agent: "software-architect",
+          model: "opus",
+          status: "ok",
+          evidence: ["plan"],
+          duration_ms: 3,
+          notes: null,
+        },
+        at,
+      );
+      appendNode(
+        cwd,
+        {
+          node: "build",
+          wave: 1,
+          agent: "data-engineer",
+          model: "sonnet",
+          status: "ok",
+          evidence: ["build"],
+          duration_ms: 3,
+          notes: null,
+        },
+        at,
+      );
+      appendNode(
+        cwd,
+        {
+          node: "verify",
+          wave: 2,
+          agent: "qa-engineer",
+          model: "sonnet",
+          status: "ok",
+          evidence: ["verify"],
+          duration_ms: 3,
+          notes: null,
+        },
+        at,
+      );
       endRun(cwd, "merged", at);
     }
 
@@ -39,8 +78,12 @@ describe("memory pipeline", () => {
     expect(suggestions.some((s) => s.action === "capture-skill")).toBe(true);
     expect(suggestions.some((s) => s.action === "materialize-template")).toBe(true);
 
-    expect(dismissSuggestion(join(cwd, ".graphkit", "memory"), suggestions[0].id, "2026-09-03T12:01:00.000Z")).toBe(true);
-    const afterDismiss = rankSuggestions(readSuggestions(join(cwd, ".graphkit", "memory"))).filter((s) => s.status === "proposed");
+    expect(dismissSuggestion(join(cwd, ".graphkit", "memory"), suggestions[0].id, "2026-09-03T12:01:00.000Z")).toBe(
+      true,
+    );
+    const afterDismiss = rankSuggestions(readSuggestions(join(cwd, ".graphkit", "memory"))).filter(
+      (s) => s.status === "proposed",
+    );
     expect(afterDismiss.map((s) => s.id)).not.toContain(suggestions[0].id);
     expect(existsSync(join(cwd, ".graphkit", "memory", "suggestions", `${suggestions[0].id}.md`))).toBe(true);
 

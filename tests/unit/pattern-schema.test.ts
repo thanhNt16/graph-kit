@@ -27,8 +27,15 @@ describe("pattern and suggestion frontmatter", () => {
   test("rejects an unknown pattern kind", () => {
     const parsed = PatternFileSchema.safeParse({
       ...BASE,
-      id: "p", type: "pattern", kind: "vibes", label: "x",
-      members: [], runs: [], count: 1, last_seen: BASE.created_at, signature: "abcd1234",
+      id: "p",
+      type: "pattern",
+      kind: "vibes",
+      label: "x",
+      members: [],
+      runs: [],
+      count: 1,
+      last_seen: BASE.created_at,
+      signature: "abcd1234",
     });
     expect(parsed.success).toBe(false);
   });
@@ -48,7 +55,12 @@ describe("pattern and suggestion frontmatter", () => {
 
   test("rejects an unknown suggestion action", () => {
     const parsed = SuggestionFileSchema.safeParse({
-      ...BASE, id: "s", type: "suggestion", action: "do-magic", rationale: "x", based_on: [],
+      ...BASE,
+      id: "s",
+      type: "suggestion",
+      action: "do-magic",
+      rationale: "x",
+      based_on: [],
     });
     expect(parsed.success).toBe(false);
   });

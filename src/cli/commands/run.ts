@@ -51,7 +51,12 @@ export function registerRunCommands(cli: CAC) {
             agent: opts.agent ?? null,
             model: opts.model ?? null,
             status: opts.status,
-            evidence: opts.evidence ? String(opts.evidence).split(",").map((s) => s.trim()).filter(Boolean) : [],
+            evidence: opts.evidence
+              ? String(opts.evidence)
+                  .split(",")
+                  .map((s) => s.trim())
+                  .filter(Boolean)
+              : [],
             duration_ms: opts.durationMs == null ? null : Number(opts.durationMs),
             notes: opts.notes ?? null,
           });

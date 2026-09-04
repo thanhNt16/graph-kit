@@ -7,9 +7,9 @@ import { join } from "node:path";
 import {
   applyRecallFilters,
   loadMemories,
-  rankByOverlap,
   type MemoryDoc,
   type RecallHit,
+  rankByOverlap,
 } from "../eval/memory-recall.js";
 import { readLinks } from "./links.js";
 
@@ -46,7 +46,9 @@ export function expandedRecall(memDir: string, query: string, k = 5, now = new D
   }
 
   const direct = applyRecallFilters(rankByOverlap(query, docs), now) as MemoryDoc[];
-  const hits: ExpandedHit[] = direct.slice(0, k).map((d) => ({ id: d.id, file: where.get(d.id) ?? d.file, salience: d.salience, linked: false }));
+  const hits: ExpandedHit[] = direct
+    .slice(0, k)
+    .map((d) => ({ id: d.id, file: where.get(d.id) ?? d.file, salience: d.salience, linked: false }));
 
   // Link expansion: neighbors of direct hits fill leftover slots, penalized.
   const graph = readLinks(memDir);

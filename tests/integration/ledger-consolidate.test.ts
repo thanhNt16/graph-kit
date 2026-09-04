@@ -3,10 +3,10 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import YAML from "yaml";
 import { consolidate } from "../../src/memory/consolidate.js";
 import { appendNode, endRun, startRun } from "../../src/memory/ledger.js";
 import { PatternFileSchema, SuggestionFileSchema } from "../../src/schemas/memory.schema.js";
-import YAML from "yaml";
 
 const GRAPH = "metadata:\n  name: demo\ntopology: diamond\n";
 
@@ -95,7 +95,9 @@ describe("ledger → consolidate", () => {
       expect(PatternFileSchema.safeParse(fm).success).toBe(true);
     }
     for (const file of readdirSync(join(memDir, "suggestions"))) {
-      const fm = YAML.parse(readFileSync(join(memDir, "suggestions", file), "utf-8").match(/^---\n([\s\S]*?)\n---/)![1]);
+      const fm = YAML.parse(
+        readFileSync(join(memDir, "suggestions", file), "utf-8").match(/^---\n([\s\S]*?)\n---/)![1],
+      );
       expect(SuggestionFileSchema.safeParse(fm).success).toBe(true);
     }
   });

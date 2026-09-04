@@ -243,56 +243,41 @@ The hybrid stop ladder runs after each round: first the deterministic `gate_evid
 ```text
 $ gk --help
 
-  ┌─ GraphKit ────────────────────────────────────────────────────┐
-  │ gk — compile, validate, and manage graph-defined agent flows   │
-  └─────────────────────────────────────────────────────────────────┘
+  gk/0.3.0
 
-  Usage: gk <command> [options]
+  Usage:
+    $ gk <command> [options]
 
   Commands:
-    init                 Install the GraphKit kit into the current project
-    status               Summarize active graph run and evidence coverage
-    execute              Execute a graph.yaml (not yet implemented)
-    visualize            Visualize a graph.yaml (not yet implemented)
-    new                  Scaffold a new project with the GraphKit kit
-    validate             Validate a graph.yaml
-    gate                 Deterministic evidence gate: MERGE / BLOCK
-    compile              Compile graph.yaml to a .workflow.js script
-    graph list           List session graphs (.graphkit/graphs; created + last-run columns, * marks active)
-    graph switch <id>    Set the active session graph (.graphkit/active)
-    graph show [id]      Show a session graph's YAML (default: active)
-    graph topologies     List bundled topologies
-    graph inspect        Inspect a topology's config keys
-    graph new            Emit a graph.yaml template for a topology
-    graph ascii          Render an ASCII diagram
-    graph svg            Render an SVG export
-    graph waves          Output topological wave structure
-    graph index          Index memory into CBM
-    graph search         Search the CBM memory graph
-    graph ask            Ask a natural-language question (CBM)
-    graph trace          Trace calls / callees in the CBM graph
-    graph query          Run a Cypher query against the CBM graph
-    memory trace         ACT-R decay pass over .graphkit/memory/
-    memory touch         Reinforce a memory by bumping use_count
-    memory recall        Query .graphkit/memory/ with keyword×salience
-    memory index         Index .graphkit/memory/ into CBM
-    template pack        Package a graph.yaml as a reusable GraphTemplate
-    template list        List packaged templates
-    template show        Show a packaged template
-    template materialize <name> [--params <json>] [--use]
-                         Materialize a template into a session graph
-                         (project ⇒ global ⇒ builtin gallery; --use sets active)
-    inventory            Inventory agents, skills, tools, and MCP servers
-    models cursor        Show the Cursor model mapping
-    models cursor set    Set a Cursor model override
-    models cursor reset  Remove Cursor model overrides
+    init                             Install the GraphKit kit into the current project
+    new                              Scaffold a new project with the GraphKit kit
+    gate [file]                      Deterministic evidence gate: MERGE/BLOCK over required evidence keys
+    validate [file]                  Validate a graph.yaml
+    compile [file]                   Compile graph.yaml to a .workflow.js script
+    graph [subcommand] [args...]     Graph lifecycle commands
+                                     Subcommands: list switch show topologies inspect new ascii svg waves index search ask trace query
+    memory [subcommand] [args...]    Memory commands
+                                     Subcommands: index trace touch recall consolidate
+    models [subcommand] [args...]    Per-target model mapping commands
+    template [subcommand] [args...]  Package, list, inspect, and materialize reusable GraphTemplates
+    inventory                        Inventory installed agents, skills, tools, and MCP servers
+    status                           Summarize active graph run and evidence coverage
+    execute [file]                   Execute a graph.yaml (not yet implemented)
+    visualize [file]                 Visualize a graph.yaml (not yet implemented)
+    run [subcommand] [args...]       Run ledger commands
+                                     Subcommands: start node end status
+    suggest                          Show ranked workflow suggestions from memory
+
+  Options:
+    -v, --version  Display version number
+    -h, --help     Display this message
 ```
 
 Use `gk <command> --help` for per-command details.
 
 ### `gk status`
 
-`gk status` summarizes the active graph run without touching state — it reads `.graphkit/runs/.active` (written by the dispatch skill on start) and reports the run's metadata, current round, and required vs. produced evidence keys:
+`gk status` summarizes the active graph run without touching state — it reads `.graphkit/runs/.active` (written by `gk run start`) and reports the run's metadata, current round, and required vs. produced evidence keys:
 
 ```bash
 $ gk status            # human-readable

@@ -1,7 +1,7 @@
 // Derived connection graph. Disposable by contract: always rebuildable from the
 // memory files, never hand-edited. Authored [[wikilinks]] are canonical; shared
 // entity mentions (paths, evidence keys, graph/node ids) add the rest — no model.
-import { existsSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 export interface LinkGraph {
@@ -66,8 +66,10 @@ export function buildLinks(memDir: string, now = new Date().toISOString()): Link
   const links: Record<string, Set<string>> = {};
   const add = (a: string, b: string) => {
     if (a === b) return;
-    (links[a] ??= new Set()).add(b);
-    (links[b] ??= new Set()).add(a);
+    if (!links[a]) links[a] = new Set();
+    if (!links[b]) links[b] = new Set();
+    links[a].add(b);
+    links[b].add(a);
   };
 
   for (const e of entries) {

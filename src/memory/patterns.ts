@@ -36,7 +36,10 @@ export function patternSalience(count: number, lastSeen: string, now: string): n
 }
 
 function signatureOf(kind: PatternKind, members: string[]): string {
-  return createHash("sha1").update(`${kind}::${members.join("\u0000")}`).digest("hex").slice(0, 8);
+  return createHash("sha1")
+    .update(`${kind}::${members.join("\u0000")}`)
+    .digest("hex")
+    .slice(0, 8);
 }
 
 /** Accumulator: which runs contributed, how many hits, and the newest timestamp. */

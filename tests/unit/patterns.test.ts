@@ -1,14 +1,29 @@
 // tests/unit/patterns.test.ts
 import { describe, expect, test } from "bun:test";
-import { extractPatterns, patternSalience } from "../../src/memory/patterns.js";
 import type { RunIndexLine, TraceLine } from "../../src/memory/ledger.js";
+import { extractPatterns, patternSalience } from "../../src/memory/patterns.js";
 
 const NOW = "2026-09-03T00:00:00.000Z";
 
 function run(id: string, graph: string, sha: string, keys: string[], at = "2026-09-01T00:00:00.000Z"): RunIndexLine {
-  return { id, graph, graph_sha256: sha, started_at: at, ended_at: at, status: "merged", node_count: 0, failures: 0, evidence_keys: keys };
+  return {
+    id,
+    graph,
+    graph_sha256: sha,
+    started_at: at,
+    ended_at: at,
+    status: "merged",
+    node_count: 0,
+    failures: 0,
+    evidence_keys: keys,
+  };
 }
-function node(n: string, status: "ok" | "fail" = "ok", evidence: string[] = [], at = "2026-09-01T00:00:00.000Z"): TraceLine {
+function node(
+  n: string,
+  status: "ok" | "fail" = "ok",
+  evidence: string[] = [],
+  at = "2026-09-01T00:00:00.000Z",
+): TraceLine {
   return { at, node: n, wave: 0, agent: "a", model: "sonnet", status, evidence, duration_ms: 1, notes: null };
 }
 
@@ -46,7 +61,9 @@ describe("pattern extraction", () => {
   test("two failures in one run is not a recurrence; across two runs is", () => {
     const one = ["r1"].map((id) => run(id, "g", `sha-${id}`, []));
     const retry = [node("flaky", "fail"), node("flaky", "fail")];
-    expect(extractPatterns(one, new Map([["r1", retry]]), NOW).filter((p) => p.kind === "failure-recurrence")).toHaveLength(0);
+    expect(
+      extractPatterns(one, new Map([["r1", retry]]), NOW).filter((p) => p.kind === "failure-recurrence"),
+    ).toHaveLength(0);
     const two = ["r1", "r2"].map((id) => run(id, "g", `sha-${id}`, []));
     const traces = new Map(two.map((r) => [r.id, [node("flaky", "fail")]]));
     const pats = extractPatterns(two, traces, NOW).filter((p) => p.kind === "failure-recurrence");

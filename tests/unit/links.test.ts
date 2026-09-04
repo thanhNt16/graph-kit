@@ -5,7 +5,9 @@ import { join } from "node:path";
 import { buildLinks, neighborsOf, readLinks, writeLinks } from "../../src/memory/links.js";
 
 function mem(dir: string, file: string, fm: Record<string, string>, body: string) {
-  const head = Object.entries(fm).map(([k, v]) => `${k}: ${v}`).join("\n");
+  const head = Object.entries(fm)
+    .map(([k, v]) => `${k}: ${v}`)
+    .join("\n");
   writeFileSync(join(dir, file), `---\n${head}\n---\n${body}`);
 }
 

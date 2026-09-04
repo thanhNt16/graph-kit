@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { appendFileSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import YAML from "yaml";
 
@@ -43,7 +43,6 @@ function safeGraphName(name: string): string {
   return name.replace(/\.\./g, "-").replace(/[\\/]/g, "-");
 }
 
-
 function graphName(graphPath: string): string {
   try {
     const parsed = YAML.parse(readFileSync(graphPath, "utf-8"));
@@ -86,7 +85,18 @@ export function startRun(cwd: string, graphPath: string, now = new Date().toISOS
   // GBrain layout: compiled truth above the rule, append-only timeline below.
   writeFileSync(
     join(dir, "run.md"),
-    [`# Run ${id}`, "", `- graph: ${name}`, `- started_at: ${now}`, "- status: running", "", "---", "", "## Timeline", ""].join("\n"),
+    [
+      `# Run ${id}`,
+      "",
+      `- graph: ${name}`,
+      `- started_at: ${now}`,
+      "- status: running",
+      "",
+      "---",
+      "",
+      "## Timeline",
+      "",
+    ].join("\n"),
   );
   writeFileSync(activeFile(cwd), dir);
   return { id, dir };
@@ -98,7 +108,9 @@ export function appendNode(cwd: string, line: Omit<TraceLine, "at">, now = new D
   if (!dir) throw new Error("NO_ACTIVE_RUN: start a run with `gk run start` before recording nodes");
   const entry: TraceLine = { at: now, ...line };
   appendFileSync(join(dir, "trace.jsonl"), `${JSON.stringify(entry)}\n`);
-  const detail = [line.agent, line.duration_ms == null ? null : `${line.duration_ms}ms`, line.notes].filter(Boolean).join(" · ");
+  const detail = [line.agent, line.duration_ms == null ? null : `${line.duration_ms}ms`, line.notes]
+    .filter(Boolean)
+    .join(" · ");
   appendFileSync(join(dir, "run.md"), `- \`${line.node}\` ${line.status}${detail ? ` — ${detail}` : ""}\n`);
   return { run: basename(dir), node: line.node };
 }
@@ -155,7 +167,12 @@ export function endRun(cwd: string, status: RunIndexLine["status"], now = new Da
   appendFileSync(indexFile(cwd), `${JSON.stringify(summary)}\n`);
   const md = readFileSync(join(dir, "run.md"), "utf-8").replace(
     "- status: running",
-    [`- status: ${status}`, `- ended_at: ${now}`, `- nodes: ${summary.node_count}`, `- failures: ${summary.failures}`].join("\n"),
+    [
+      `- status: ${status}`,
+      `- ended_at: ${now}`,
+      `- nodes: ${summary.node_count}`,
+      `- failures: ${summary.failures}`,
+    ].join("\n"),
   );
   writeFileSync(join(dir, "run.md"), md);
   rmSync(activeFile(cwd), { force: true });

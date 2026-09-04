@@ -5,8 +5,8 @@ import YAML from "yaml";
 import { CBM_UNAVAILABLE_MSG, type CbmClient, createCbmClient } from "../../cbm/client.js";
 import { indexProject } from "../../cbm/index.js";
 import { actRScore, shouldExpire } from "../../eval/forgetting.js";
-import { expandedRecall } from "../../memory/recall-expanded.js";
 import { consolidate } from "../../memory/consolidate.js";
+import { expandedRecall } from "../../memory/recall-expanded.js";
 import { MemoryConfig, MemoryFileSchema } from "../../schemas/memory.schema.js";
 import { subcommandsFor } from "../command-registry.js";
 import { fail, ok } from "../output.js";
@@ -193,7 +193,8 @@ export function touchMemory(
     if (de.isFile() && de.name.endsWith(".md")) candidates.push({ file: de.name, path: join(memDir, de.name) });
     else if (de.isDirectory() && !de.name.startsWith(".")) {
       for (const f of readdirSync(join(memDir, de.name), { withFileTypes: true })) {
-        if (f.isFile() && f.name.endsWith(".md")) candidates.push({ file: f.name, path: join(memDir, de.name, f.name) });
+        if (f.isFile() && f.name.endsWith(".md"))
+          candidates.push({ file: f.name, path: join(memDir, de.name, f.name) });
       }
     }
   }

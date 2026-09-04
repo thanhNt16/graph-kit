@@ -6,10 +6,10 @@ import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import YAML from "yaml";
+import { PatternFileSchema, SuggestionFileSchema } from "../schemas/memory.schema.js";
 import { listRunIds, readRunIndex, readTrace, type TraceLine } from "./ledger.js";
 import { buildLinks, writeLinks } from "./links.js";
 import { extractPatterns, type Pattern } from "./patterns.js";
-import { PatternFileSchema, SuggestionFileSchema } from "../schemas/memory.schema.js";
 
 export interface ConsolidateResult {
   runs: number;
@@ -126,7 +126,12 @@ export function consolidate(cwd: string, now = new Date().toISOString()): Consol
       throw new Error(
         `consolidate: ${file} violates PatternFileSchema: ${parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; ")}`,
       );
-    writeEntry(patternsDir, file, frontmatter, `${p.label}\n\nObserved in ${p.runs.length} run(s): ${p.runs.join(", ")}.\n`);
+    writeEntry(
+      patternsDir,
+      file,
+      frontmatter,
+      `${p.label}\n\nObserved in ${p.runs.length} run(s): ${p.runs.join(", ")}.\n`,
+    );
   }
 
   const drafts = suggestionsFor(patterns);
