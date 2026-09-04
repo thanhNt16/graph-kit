@@ -125,6 +125,11 @@ export const CLI_COMMANDS: { path: string; description: string; options: string[
   },
   { path: "run status", description: "Show the active run directory", options: ["--json"] },
   {
+    path: "run resume",
+    description: "Derive a pending-only session graph from a failed/interrupted run and start a child run",
+    options: ["--from-node <id>", "--dry-run", "--force", "--json"],
+  },
+  {
     path: "suggest",
     description: "Show ranked workflow suggestions from memory",
     options: ["--dismiss <id>", "--all", "--json"],

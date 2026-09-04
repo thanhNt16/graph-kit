@@ -15,6 +15,7 @@ import {
 import { GraphSchema } from "../../schemas/graph.schema.js";
 import { subcommandsFor } from "../command-registry.js";
 import { fail, ok } from "../output.js";
+import { resumeRun } from "../../memory/resume.js";
 
 function errCode(e: unknown): { code: string; message: string } {
   const message = String((e as Error)?.message ?? e);
@@ -35,7 +36,9 @@ export function registerRunCommands(cli: CAC) {
     .option("--evidence <keys>", "comma-separated evidence keys")
     .option("--duration-ms <n>", "node duration in ms")
     .option("--notes <text>", "free-text note")
-    .option("--json", "JSON output")
+    .option("--from-node <id>", "resume: redo this node + dependents")
+    .option("--dry-run", "resume: preview without writing")
+    .option("--force", "resume: override graph drift guard")
     .action((subcommand, args, opts) => {
       const cwd = process.cwd();
       if (!subcommand) {
@@ -123,6 +126,22 @@ export function registerRunCommands(cli: CAC) {
           console.log(JSON.stringify(ok(endRun(cwd, status))));
           return;
         }
+        if (subcommand === "resume") {
+          const target = Array.isArray(args) ? args[0] : args;
+          if (!target) {
+            process.exitCode = 1;
+            console.log(JSON.stringify(fail("MISSING_ARG", "resume requires a run id")));
+            return;
+          }
+          try {
+            console.log(JSON.stringify(ok(resumeRun(cwd, String(target), { fromNode: opts.fromNode, dryRun: opts.dryRun, force: opts.force }))));
+          } catch (e) {
+            process.exitCode = 1;
+            const { code, message } = errCode(e);
+            console.log(JSON.stringify(fail(code, message)));
+          }
+          return;
+        }
         if (subcommand === "status") {
           const dir = activeRun(cwd);
           const advisor_events = dir ? readAdvisorEvents(cwd, basename(dir)).length : 0;
@@ -132,7 +151,11 @@ export function registerRunCommands(cli: CAC) {
           while (cursor && !guard.has(cursor)) {
             guard.add(cursor);
             chain.push(cursor);
-            try { cursor = readRunMeta(cwd, cursor).resumes ?? null; } catch { cursor = null; }
+            try {
+              cursor = readRunMeta(cwd, cursor).resumes ?? null;
+            } catch {
+              cursor = null;
+            }
           }
           console.log(JSON.stringify(ok({ active: dir, advisor_events, resumes_chain: chain })));
           return;
