@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { cac } from "cac";
 import { CLI_COMMANDS } from "../../src/cli/command-registry.js";
 import { registerRunCommands } from "../../src/cli/commands/run.js";
+import { readAdvisorEvents } from "../../src/memory/ledger.js";
 
 function runCli(args: string[], cwd: string) {
   const cli = cac("gk");
@@ -50,7 +51,7 @@ describe("gk run CLI", () => {
     try {
       // 1. Initial status -> inactive
       const initialStatus = JSON.parse(runCli(["run", "status"], cwd).stdout);
-      expect(initialStatus).toEqual({ status: "ok", data: { active: null } });
+      expect(initialStatus).toEqual({ status: "ok", data: { active: null, advisor_events: 0 } });
 
       // 2. Start run without graph file fails with GRAPH_NOT_FOUND
       const startFail = JSON.parse(runCli(["run", "start"], cwd).stdout);
@@ -121,7 +122,7 @@ describe("gk run CLI", () => {
 
       // 10. Status returns null after end
       const finalStatus = JSON.parse(runCli(["run", "status"], cwd).stdout);
-      expect(finalStatus).toEqual({ status: "ok", data: { active: null } });
+      expect(finalStatus).toEqual({ status: "ok", data: { active: null, advisor_events: 0 } });
     } finally {
       rmSync(cwd, { recursive: true, force: true });
     }
@@ -146,6 +147,98 @@ describe("gk run CLI", () => {
       const res = runCli(["run"], cwd);
       expect(res.stdout).toContain("gk run — run ledger commands");
       expect(res.stdout).toContain("Subcommands: start node end status");
+    } finally {
+      rmSync(cwd, { recursive: true, force: true });
+    }
+  });
+
+  test("run node --advisor-fired records event with tier from graph", () => {
+    const cwd = join(tmpdir(), `gk-run-advisor-${process.pid}-${Date.now()}`);
+    mkdirSync(cwd, { recursive: true });
+    try {
+      writeFileSync(
+        join(cwd, "graph.yaml"),
+        [
+          "apiVersion: graphkit.dev/v2",
+          "kind: Graph",
+          "metadata:",
+          "  name: advisor-graph",
+          "topology: diamond",
+          "nodes:",
+          "  exec:",
+          "    agent: haiku",
+          "    objective: do the thing",
+          "    loop: { enabled: true }",
+          "    advisor: { model: opus }",
+        ].join("\n"),
+      );
+      const start = JSON.parse(runCli(["run", "start"], cwd).stdout);
+      expect(start.status).toBe("ok");
+      const fired = JSON.parse(runCli(["run", "node", "exec", "--advisor-fired", "2", "--streak", "2"], cwd).stdout);
+      expect(fired.status).toBe("ok");
+      expect(fired.data.event).toEqual({ at: expect.any(String), node: "exec", round: 2, tier: "opus", streak: 2 });
+      expect(readAdvisorEvents(cwd, start.data.id)).toEqual([
+        { at: expect.any(String), node: "exec", round: 2, tier: "opus", streak: 2 },
+      ]);
+    } finally {
+      rmSync(cwd, { recursive: true, force: true });
+    }
+  });
+
+  test("run node --advisor-fired on node without advisor fails BAD_ADVISOR", () => {
+    const cwd = join(tmpdir(), `gk-run-noadv-${process.pid}-${Date.now()}`);
+    mkdirSync(cwd, { recursive: true });
+    try {
+      writeFileSync(
+        join(cwd, "graph.yaml"),
+        [
+          "apiVersion: graphkit.dev/v2",
+          "kind: Graph",
+          "metadata:",
+          "  name: plain-graph",
+          "topology: diamond",
+          "nodes:",
+          "  plain:",
+          "    agent: haiku",
+          "    objective: do the thing",
+        ].join("\n"),
+      );
+      JSON.parse(runCli(["run", "start"], cwd).stdout);
+      const fired = JSON.parse(runCli(["run", "node", "plain", "--advisor-fired", "1"], cwd).stdout);
+      expect(fired.status).toBe("fail");
+      expect(fired.error.code).toBe("BAD_ADVISOR");
+    } finally {
+      rmSync(cwd, { recursive: true, force: true });
+    }
+  });
+
+  test("run status includes advisor_events count", () => {
+    const cwd = join(tmpdir(), `gk-run-status-${process.pid}-${Date.now()}`);
+    mkdirSync(cwd, { recursive: true });
+    try {
+      writeFileSync(
+        join(cwd, "graph.yaml"),
+        [
+          "apiVersion: graphkit.dev/v2",
+          "kind: Graph",
+          "metadata:",
+          "  name: count-graph",
+          "topology: diamond",
+          "nodes:",
+          "  exec:",
+          "    agent: haiku",
+          "    objective: do the thing",
+          "    loop: { enabled: true }",
+          "    advisor: { model: opus }",
+        ].join("\n"),
+      );
+      JSON.parse(runCli(["run", "start"], cwd).stdout);
+      const before = JSON.parse(runCli(["run", "status"], cwd).stdout);
+      expect(before).toEqual({ status: "ok", data: { active: expect.any(String), advisor_events: 0 } });
+      runCli(["run", "node", "exec", "--advisor-fired", "1"], cwd);
+      const after = JSON.parse(runCli(["run", "status"], cwd).stdout);
+      expect(after.status).toBe("ok");
+      expect(after.data.advisor_events).toBe(1);
     } finally {
       rmSync(cwd, { recursive: true, force: true });
     }

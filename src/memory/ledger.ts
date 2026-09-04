@@ -115,6 +115,33 @@ export function appendNode(cwd: string, line: Omit<TraceLine, "at">, now = new D
   return { run: basename(dir), node: line.node };
 }
 
+export interface AdvisorEvent {
+  at: string;
+  node: string;
+  round: number;
+  tier: string;
+  streak: number | null;
+}
+
+export function appendAdvisor(
+  cwd: string,
+  ev: Omit<AdvisorEvent, "at">,
+  now = new Date().toISOString(),
+): { event: AdvisorEvent; run: string } {
+  const dir = activeRun(cwd);
+  // Same strictness as appendNode: an advisor event with no live run is a bug, not noise.
+  if (!dir) throw new Error("NO_ACTIVE_RUN: start a run with `gk run start` before recording advisor events");
+  const event: AdvisorEvent = { at: now, ...ev };
+  appendFileSync(join(dir, "advisor.jsonl"), `${JSON.stringify(event)}\n`);
+  return { event, run: basename(dir) };
+}
+
+export function readAdvisorEvents(cwd: string, id: string): AdvisorEvent[] {
+  const f = join(runsDir(cwd), id, "advisor.jsonl");
+  if (!existsSync(f)) return [];
+  return readFileSync(f, "utf-8").split("\n").filter(Boolean).map((l) => JSON.parse(l) as AdvisorEvent);
+}
+
 export function readTrace(cwd: string, id: string): TraceLine[] {
   const f = join(runsDir(cwd), id, "trace.jsonl");
   if (!existsSync(f)) return [];

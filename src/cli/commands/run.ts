@@ -1,6 +1,9 @@
-import { join } from "node:path";
+import { readFileSync } from "node:fs";
+import { basename, join } from "node:path";
+import YAML from "yaml";
 import type { CAC } from "cac";
-import { activeRun, appendNode, endRun, startRun } from "../../memory/ledger.js";
+import { activeRun, appendAdvisor, appendNode, endRun, readAdvisorEvents, startRun } from "../../memory/ledger.js";
+import { GraphSchema } from "../../schemas/graph.schema.js";
 import { subcommandsFor } from "../command-registry.js";
 import { fail, ok } from "../output.js";
 
@@ -15,6 +18,8 @@ export function registerRunCommands(cli: CAC) {
     .command("run [subcommand] [args...]", `Run ledger commands\nSubcommands: ${subcommandsFor("run")}`)
     .option("--graph <path>", "graph.yaml path (default: ./graph.yaml)")
     .option("--status <status>", "node: ok|fail — end: merged|blocked|failed")
+    .option("--advisor-fired <round>", "record advisor firing for a node")
+    .option("--streak <n>", "advisor failure streak")
     .option("--wave <n>", "wave index")
     .option("--agent <agent>", "agent id")
     .option("--model <model>", "model tier")
@@ -39,6 +44,35 @@ export function registerRunCommands(cli: CAC) {
           const node = Array.isArray(args) ? args[0] : args;
           if (!node) {
             console.log(JSON.stringify(fail("MISSING_ARG", "node requires a node id")));
+            return;
+          }
+          // Advisor-fired mode needs no --status: the firing itself is the trace line.
+          if (opts.advisorFired != null) {
+            const round = Number(opts.advisorFired);
+            if (!Number.isInteger(round) || round < 1) {
+              console.log(JSON.stringify(fail("BAD_ADVISOR", "--advisor-fired requires an integer round >= 1")));
+              return;
+            }
+            // tier is derived from the graph's node.advisor.model (spec §5)
+            const graphPath = opts.graph ?? join(cwd, "graph.yaml");
+            const parsed = GraphSchema.safeParse(YAML.parse(readFileSync(graphPath, "utf-8")));
+            const advisor = parsed.success ? parsed.data.nodes[String(node)]?.advisor : undefined;
+            if (!advisor) {
+              console.log(JSON.stringify(fail("BAD_ADVISOR", `node "${node}" has no advisor config in ${graphPath}`)));
+              return;
+            }
+            console.log(
+              JSON.stringify(
+                ok(
+                  appendAdvisor(cwd, {
+                    node: String(node),
+                    round,
+                    tier: advisor.model,
+                    streak: opts.streak == null ? null : Number(opts.streak),
+                  }),
+                ),
+              ),
+            );
             return;
           }
           if (opts.status !== "ok" && opts.status !== "fail") {
@@ -73,7 +107,9 @@ export function registerRunCommands(cli: CAC) {
           return;
         }
         if (subcommand === "status") {
-          console.log(JSON.stringify(ok({ active: activeRun(cwd) })));
+          const dir = activeRun(cwd);
+          const advisor_events = dir ? readAdvisorEvents(cwd, basename(dir)).length : 0;
+          console.log(JSON.stringify(ok({ active: dir, advisor_events })));
           return;
         }
         console.log(

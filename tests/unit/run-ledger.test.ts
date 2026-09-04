@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { activeRun, appendNode, endRun, readRunIndex, readTrace, startRun } from "../../src/memory/ledger.js";
+import { activeRun, appendAdvisor, appendNode, endRun, readAdvisorEvents, readRunIndex, readTrace, startRun } from "../../src/memory/ledger.js";
 
 describe("run ledger", () => {
   let cwd: string;
@@ -98,5 +98,22 @@ describe("run ledger", () => {
     expect(readRunIndex(cwd)).toHaveLength(1);
     expect(readTrace(cwd, id).map((t) => t.node)).toEqual(["a", "b"]);
     expect(readFileSync(join(dir, "run.md"), "utf-8")).toContain("- `b` fail");
+  });
+
+  test("appendAdvisor writes advisor.jsonl and round-trips", () => {
+    const { id } = startRun(cwd, join(cwd, "graph.yaml"), "2026-09-03T10:00:00.000Z");
+    const result = appendAdvisor(cwd, { node: "exec", round: 2, tier: "fable", streak: 2 }, "2026-09-03T10:05:00.000Z");
+    expect(result.run).toBe(id);
+    expect(readAdvisorEvents(cwd, id)).toEqual([
+      { at: "2026-09-03T10:05:00.000Z", node: "exec", round: 2, tier: "fable", streak: 2 },
+    ]);
+  });
+
+  test("appendAdvisor without active run fails", () => {
+    expect(() => appendAdvisor(cwd, { node: "x", round: 1, tier: "fable", streak: 1 })).toThrow(/NO_ACTIVE_RUN/);
+  });
+
+  test("readAdvisorEvents returns [] when missing", () => {
+    expect(readAdvisorEvents(cwd, "nonexistent")).toEqual([]);
   });
 });
