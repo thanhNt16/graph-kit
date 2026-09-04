@@ -20,3 +20,4 @@ kits/cursor/viewer/*.mjs
 raw/
 AGENTS.md
 updates.html
+.worktrees/
