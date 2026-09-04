@@ -1,8 +1,16 @@
 import { readFileSync } from "node:fs";
 import { basename, join } from "node:path";
-import YAML from "yaml";
 import type { CAC } from "cac";
-import { activeRun, activeRunGraph, appendAdvisor, appendNode, endRun, readAdvisorEvents, startRun } from "../../memory/ledger.js";
+import YAML from "yaml";
+import {
+  activeRun,
+  activeRunGraph,
+  appendAdvisor,
+  appendNode,
+  endRun,
+  readAdvisorEvents,
+  startRun,
+} from "../../memory/ledger.js";
 import { GraphSchema } from "../../schemas/graph.schema.js";
 import { subcommandsFor } from "../command-registry.js";
 import { fail, ok } from "../output.js";
