@@ -2,11 +2,10 @@ import { createHash } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import YAML from "yaml";
-import { readRunMeta, readTrace, type TraceLine } from "./ledger.js";
-import { GraphSchema } from "../schemas/graph.schema.js";
+import { readRunMeta, readTrace, startRun, type TraceLine, activeRun } from "./ledger.js";
+import { GraphSchema, type LoopGroup } from "../schemas/graph.schema.js";
 import type { Graph } from "../compiler/validate.js";
 import { saveSessionGraph, setActiveGraphId } from "../store/index.js";
-import { startRun } from "./ledger.js";
 
 export interface ResumeResult {
   resumed: boolean;
@@ -24,9 +23,12 @@ export function resumeRun(
   opts: { fromNode?: string; dryRun?: boolean; force?: boolean } = {},
 ): ResumeResult {
   const rec = reconcileRun(cwd, runId, opts);
+  const active = activeRun(cwd);
+  if (active) throw new Error(`RUN_ACTIVE: run already active at ${active}; run \`gk run end\` first`);
   if (rec.pending.length === 0) return { resumed: false, reason: "NOTHING_TO_RESUME", pending: [], satisfied: rec.satisfied, skipped: rec.skipped };
   if (opts.dryRun) return { resumed: false, reason: "DRY_RUN", pending: rec.pending, satisfied: rec.satisfied, skipped: rec.skipped };
   const derived = deriveResumeGraph(rec, runId);
+  validateDerivedGraph(derived);
   const session = saveSessionGraph(derived, derived.metadata.name, cwd);
   setActiveGraphId(session.id, cwd);
   const run = startRun(cwd, session.path, new Date().toISOString(), runId);
@@ -64,6 +66,31 @@ export function reconcileRun(cwd: string, runId: string, opts: { fromNode?: stri
   return { cwd, runId, graphPath: meta.graph_path, graph, evidenceDir, satisfied: [...satisfied].filter((n) => !pending.includes(n)).sort(), pending: pending.sort(), skipped };
 }
 
+/**
+ * Gate applied to a derived resume graph before anything is written: schema
+ * parse plus the loop-ref rules of compiler/validate.ts (loop_node_exists,
+ * loop_gate_evidence_declared). Throws RESUME_DERIVED_INVALID with the issue
+ * list; deliberately not full validateGraph, whose disk-state rules
+ * (evidence coverage, refs) legitimately don't hold for pending-only graphs.
+ */
+export function validateDerivedGraph(derived: Graph): void {
+  const parsed = GraphSchema.safeParse(derived);
+  if (!parsed.success) {
+    const issues = parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; ");
+    throw new Error(`RESUME_DERIVED_INVALID: derived graph failed schema: ${issues}`);
+  }
+  for (const [i, group] of (derived.loops ?? []).entries()) {
+    const produced = new Set<string>();
+    for (const node of group.nodes) {
+      if (!derived.nodes[node]) throw new Error(`RESUME_DERIVED_INVALID: derived graph failed loop validation: loops[${i}] — loop node "${node}" does not exist in graph.nodes`);
+      for (const key of derived.nodes[node]!.evidence) produced.add(key);
+    }
+    for (const key of group.gate_evidence ?? []) {
+      if (!produced.has(key)) throw new Error(`RESUME_DERIVED_INVALID: derived graph failed loop validation: loops[${i}].gate_evidence — gate_evidence key "${key}" is not declared by any node in the loop group`);
+    }
+  }
+}
+
 /** Evidence replay: satisfied upstream deps become refs (paths, ADR-002 layout). */
 export function deriveResumeGraph(rec: Reconciliation, parentRunId: string): Graph {
   const pending = new Set(rec.pending);
@@ -84,12 +111,39 @@ export function deriveResumeGraph(rec: Reconciliation, parentRunId: string): Gra
           purpose: `resumed evidence from node ${d} (run ${parentRunId})`,
         })),
       );
-    nodes[name] = { ...node, depend_on: carriedDeps, refs: [...node.refs, ...upstreamRefs] };
+    // fan_out.briefs_from naming a dropped (satisfied) node would dangle — its
+    // evidence was already replayed as refs above, so drop the fan_out config.
+    const { fan_out: fanOut, ...nodeRest } = node;
+    nodes[name] = {
+      ...nodeRest,
+      depend_on: carriedDeps,
+      ...(fanOut && pending.has(fanOut.briefs_from) ? { fan_out: fanOut } : {}),
+      refs: [...node.refs, ...upstreamRefs],
+    };
   }
 
-  return {
+  // Loop groups whose members split across the pending/satisfied boundary must
+  // not reference dropped nodes (validateGraph: loop_node_exists /
+  // loop_gate_evidence_declared). Prune gate_evidence keys no longer declared
+  // by kept members; a group that loses both exit conditions is dropped.
+  const loops = rec.graph.loops?.flatMap((group: LoopGroup): LoopGroup[] => {
+    const kept = group.nodes.filter((n) => pending.has(n));
+    if (kept.length === 0) return [];
+    const declared = new Set(kept.flatMap((n) => nodes[n]?.evidence ?? []));
+    const gate = group.gate_evidence?.filter((k) => declared.has(k));
+    if (!group.stop_when && (!gate || gate.length === 0)) return [];
+    const next: LoopGroup = { ...group, nodes: kept };
+    if (gate && gate.length > 0) next.gate_evidence = gate;
+    else delete next.gate_evidence;
+    return [next];
+  });
+
+  const derived: Graph = {
     ...rec.graph,
     metadata: { ...rec.graph.metadata, name: `${rec.graph.metadata.name}-resume` },
     nodes,
   };
+  if (loops && loops.length > 0) derived.loops = loops;
+  else delete derived.loops;
+  return derived;
 }

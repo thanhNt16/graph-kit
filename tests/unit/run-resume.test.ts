@@ -1,9 +1,9 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { appendNode, endRun, startRun } from "../../src/memory/ledger.js";
-import { deriveResumeGraph, reconcileRun } from "../../src/memory/resume.js";
+import { deriveResumeGraph, reconcileRun, resumeRun, validateDerivedGraph } from "../../src/memory/resume.js";
 import { GraphSchema } from "../../src/schemas/graph.schema.js";
 
 const GRAPH = `apiVersion: graphkit.dev/v2
@@ -74,5 +74,75 @@ describe("deriveResumeGraph", () => {
     const { id } = startRun(cwd, join(cwd, "graph.yaml"), "2026-09-04T10:00:00.000Z");
     traceFail(cwd, "a"); endRun(cwd, "failed", "2026-09-04T10:05:00.000Z");
     expect(GraphSchema.safeParse(deriveResumeGraph(reconcileRun(cwd, id), id)).success).toBe(true);
+  });
+  test("fan_out.briefs_from → satisfied target: fan_out dropped, derived schema-valid", () => {
+    const graph = GRAPH.replace("    depend_on: [a]\n", "    depend_on: [a]\n    fan_out: { briefs_from: a }\n");
+    writeFileSync(join(cwd, "graph.yaml"), graph);
+    const { id } = startRun(cwd, join(cwd, "graph.yaml"), "2026-09-04T10:00:00.000Z");
+    writeEvidence(cwd, "a-out");
+    traceOk(cwd, "a", ["a-out"]);
+    traceFail(cwd, "b");
+    endRun(cwd, "failed", "2026-09-04T10:05:00.000Z");
+    const derived = deriveResumeGraph(reconcileRun(cwd, id), id);
+    expect(derived.nodes.b!.fan_out).toBeUndefined();
+    expect("fan_out" in derived.nodes.b!).toBe(false);
+    expect(GraphSchema.safeParse(derived).success).toBe(true);
+  });
+  test("fan_out.briefs_from → pending target: fan_out preserved verbatim", () => {
+    const graph = GRAPH.replace("    depend_on: [a]\n", "    depend_on: [a]\n    fan_out: { briefs_from: a }\n");
+    writeFileSync(join(cwd, "graph.yaml"), graph);
+    const { id } = startRun(cwd, join(cwd, "graph.yaml"), "2026-09-04T10:00:00.000Z");
+    traceFail(cwd, "a");
+    traceFail(cwd, "b");
+    endRun(cwd, "failed", "2026-09-04T10:05:00.000Z");
+    const derived = deriveResumeGraph(reconcileRun(cwd, id), id);
+    expect(derived.nodes.b!.fan_out).toEqual({ briefs_from: "a", template: "{brief.body}" });
+  });
+  test("loops group split across boundary: nodes filtered to pending, gate_evidence pruned, emptied groups dropped", () => {
+    const graph =
+      GRAPH +
+      "  d:\n    agent: scout\n    objective: Do D\n    evidence: [d-out]\n" +
+      "loops:\n  - nodes: [a, b]\n    max_rounds: 3\n    gate_evidence: [a-out, b-out]\n  - nodes: [d]\n    max_rounds: 2\n    gate_evidence: [d-out]\n  - nodes: [c]\n    max_rounds: 2\n    stop_when: \"no blockers\"\n    gate_evidence: [c-ghost]\n";
+    writeFileSync(join(cwd, "graph.yaml"), graph);
+    const { id } = startRun(cwd, join(cwd, "graph.yaml"), "2026-09-04T10:00:00.000Z");
+    writeEvidence(cwd, "a-out");
+    writeEvidence(cwd, "d-out");
+    traceOk(cwd, "a", ["a-out"]);
+    traceFail(cwd, "b");
+    traceOk(cwd, "d", ["d-out"]);
+    endRun(cwd, "failed", "2026-09-04T10:05:00.000Z");
+    const derived = deriveResumeGraph(reconcileRun(cwd, id), id);
+    // group 1 [a,b]: a dropped → [b], a-out pruned; group 2 [d]: emptied → dropped;
+    // group 3 [c]: c-ghost undeclared by kept member → gate_evidence field dropped, stop_when keeps group
+    expect(derived.loops).toEqual([
+      { nodes: ["b"], max_rounds: 3, gate_evidence: ["b-out"] },
+      { nodes: ["c"], max_rounds: 2, stop_when: "no blockers" },
+    ]);
+    expect(GraphSchema.safeParse(derived).success).toBe(true);
+  });
+});
+
+describe("resumeRun derived-graph gate", () => {
+  test("dangling loop node → RESUME_DERIVED_INVALID", () => {
+    const base = GraphSchema.parse({ apiVersion: "graphkit.dev/v2", kind: "Graph", metadata: { name: "demo" }, topology: "custom", nodes: { b: { agent: "task", objective: "B" } } });
+    const bad = { ...base, loops: [{ nodes: ["a", "b"], max_rounds: 2, stop_when: "done" }] };
+    expect(() => validateDerivedGraph(bad)).toThrow(/RESUME_DERIVED_INVALID.*loop node "a" does not exist/);
+    expect(() => validateDerivedGraph(base)).not.toThrow();
+  });
+  test("gate_evidence key undeclared by loop members → RESUME_DERIVED_INVALID", () => {
+    const base = GraphSchema.parse({ apiVersion: "graphkit.dev/v2", kind: "Graph", metadata: { name: "demo" }, topology: "custom", nodes: { b: { agent: "task", objective: "B", evidence: ["b-out"] } } });
+    const bad = { ...base, loops: [{ nodes: ["b"], max_rounds: 2, gate_evidence: ["b-out", "ghost"] }] };
+    expect(() => validateDerivedGraph(bad)).toThrow(/RESUME_DERIVED_INVALID.*"ghost" is not declared/);
+  });
+  test("active run → RUN_ACTIVE before any write", () => {
+    const { id } = startRun(cwd, join(cwd, "graph.yaml"), "2026-09-04T10:00:00.000Z");
+    traceFail(cwd, "a"); // run stays active (no endRun)
+    expect(() => resumeRun(cwd, id)).toThrow(/RUN_ACTIVE/);
+    expect(existsSync(join(cwd, ".graphkit", "graphs"))).toBe(false);
+    expect(existsSync(join(cwd, ".graphkit", "active"))).toBe(false);
+  });
+  test("run-not-found resolves before RUN_ACTIVE", () => {
+    startRun(cwd, join(cwd, "graph.yaml"), "2026-09-04T10:00:00.000Z");
+    expect(() => resumeRun(cwd, "20990101-000000-demo")).toThrow(/RESUME_RUN_NOT_FOUND/);
   });
 });
