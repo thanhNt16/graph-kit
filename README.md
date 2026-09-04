@@ -313,6 +313,26 @@ Node constraints are enforced mechanically only on pi (via `gk_dispatch_agent`);
 - `no_exec` removes Bash and overrides any `tools_allowlist` (`no_exec` > `tools_allowlist` > `no_write` on pi); it is advisory on the other four hosts.
 - Loop semantics: for single nodes (`node.loop`), `max_rounds` is the only mechanical bound while `stop_when` is prompt-advisory; for multi-node groups (`loops:`), orchestrators follow the **hybrid stop ladder** (deterministic `gate_evidence` check first, then LLM-judged `stop_when`, hard capped at `max_rounds` with graph-failure on exhaustion).
 
+### Advisor escalation
+
+A looping node may declare `advisor: {model, after_failed_rounds, max_calls}`. When a node's
+failed-round streak reaches `after_failed_rounds` and `max_calls` hasn't been exhausted, the
+host's execute-skill dispatches a read-only advisor subagent at `advisor.model` (default
+`fable`), appends its guidance to the node's objective (`## Advisor guidance`), and re-dispatches
+the node at its original tier. Escalations are recorded via `gk run node <id> --advisor-fired
+<round>` into the run's `advisor.jsonl`; `gk run status` reports the count; `gk memory
+consolidate` surfaces `advisor-repeat` patterns ("raise tier or loosen stop_when").
+
+### Fan-out execution
+
+A node may declare `fan_out: {briefs_from, template}`. The referenced upstream node writes
+`briefs.json` (array of `{id, title, body}`) into its evidence; the fan-out node dispatches one
+parallel host subagent per brief at the node's own tier (`template` rendered per brief, default
+`{brief.body}`), barriers on all briefs, and consolidates their outputs. Briefs are data, never
+edges — the wave topology stays static. `briefs_from` must be a reachable predecessor
+(`depend_on` closure). A missing or malformed `briefs.json` counts as a failed round; an empty
+array is ok ("no briefs").
+
 ## Evidence gate
 
 Before reporting a graph run complete, produce one non-whitespace file per declared evidence key at `<graph.outputs.evidence_dir>/<key>.md`, then run:
@@ -330,6 +350,7 @@ gk remembers every run and improves suggestions over time — all deterministic,
 ```bash
 gk run start --graph graph.yaml # begin a run (fails if one is active)
 gk run node <id> --status ok --wave 0 --agent <agent>
+gk run node <id> --advisor-fired <round> [--streak <n>]  # record advisor escalation
 gk run end --status merged  # append to .graphkit/runs/index.jsonl
 gk memory consolidate       # derive patterns, suggestions, .links.json, index.md
 gk suggest                  # ranked suggestions (--json, --dismiss <id>)
