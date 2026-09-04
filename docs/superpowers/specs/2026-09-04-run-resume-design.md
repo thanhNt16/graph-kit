@@ -43,12 +43,12 @@ Pure function over the run's ledger + graph:
 1. Load `events` (run.md / trace) → per-node terminal status + evidence manifest.
 2. Satisfied check per the rule above.
 3. Compute pending closure over `depend_on`.
-4. Graph digest: ordered (node name, objective, agent, depend_on) digest recorded at `run start` (added by this feature); compared against the run's **recorded graph path**. Recorded file missing → `RESUME_GRAPH_DRIFT` (graph gone = drift). The active graph is never consulted. Mismatch → `RESUME_GRAPH_DRIFT` naming the diverged nodes.
+4. Graph drift: `meta.json` already records `graph_path` + `graph_sha256` at `run start` (since 0.3.0 — no new recording needed). Resume hashes the file at the recorded path and compares; mismatch or missing file → `RESUME_GRAPH_DRIFT`. The active graph is never consulted.
 
 ## §3 Derived artifacts
 
 - **Graph**: `.graphkit/graphs/YYYY-MM-DD-<slug>-resume.yaml` — pending nodes only; each node's satisfied upstream deps become `refs` entries (evidence paths + keys). Collision suffix `-2`, `-3` per session-store convention. `--use` semantics: resume always sets it active (the point is immediate continuation).
-- **Run**: new run dir; `run start` event carries `resumes: <parent-run-id>`; `gk run status` prints the parent chain. Advisor/fan-out/loop config copied verbatim from source nodes.
+- **Run**: new run dir; `meta.json` carries `resumes: <parent-run-id>` (and `run.md` shows `- resumes:`); `gk run status` prints the parent chain as `resumes_chain`. Advisor/fan-out/loop config copied verbatim into derived nodes.
 
 ## §4 Error handling
 
