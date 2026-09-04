@@ -51,7 +51,7 @@ describe("gk run CLI", () => {
     try {
       // 1. Initial status -> inactive
       const initialStatus = JSON.parse(runCli(["run", "status"], cwd).stdout);
-      expect(initialStatus).toEqual({ status: "ok", data: { active: null, advisor_events: 0 } });
+      expect(initialStatus).toEqual({ status: "ok", data: { active: null, advisor_events: 0, resumes_chain: [] } });
 
       // 2. Start run without graph file fails with GRAPH_NOT_FOUND
       const startFail = JSON.parse(runCli(["run", "start"], cwd).stdout);
@@ -122,7 +122,7 @@ describe("gk run CLI", () => {
 
       // 10. Status returns null after end
       const finalStatus = JSON.parse(runCli(["run", "status"], cwd).stdout);
-      expect(finalStatus).toEqual({ status: "ok", data: { active: null, advisor_events: 0 } });
+      expect(finalStatus).toEqual({ status: "ok", data: { active: null, advisor_events: 0, resumes_chain: [] } });
     } finally {
       rmSync(cwd, { recursive: true, force: true });
     }
@@ -234,7 +234,7 @@ describe("gk run CLI", () => {
       );
       JSON.parse(runCli(["run", "start"], cwd).stdout);
       const before = JSON.parse(runCli(["run", "status"], cwd).stdout);
-      expect(before).toEqual({ status: "ok", data: { active: expect.any(String), advisor_events: 0 } });
+      expect(before).toEqual({ status: "ok", data: { active: expect.any(String), advisor_events: 0, resumes_chain: [expect.any(String)] } });
       runCli(["run", "node", "exec", "--advisor-fired", "1"], cwd);
       const after = JSON.parse(runCli(["run", "status"], cwd).stdout);
       expect(after.status).toBe("ok");
