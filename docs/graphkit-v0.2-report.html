@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>GraphKit 0.2 — Graph Engineering Kit for Claude Code, Cursor, OpenCode, Codex &amp; Pi</title>
+<title>GraphKit 0.3 — Graph Engineering Kit for Claude Code, Cursor, OpenCode, Codex &amp; Pi</title>
 <style>
   :root {
     --bg: #0a0e14; --bg-elev: #0d1117; --surface: #131822;
@@ -149,15 +149,15 @@
 <body>
 
 <div class="hero">
-  <div class="hero-badge">gk v0.2.25 · graph engineering kit</div>
+  <div class="hero-badge">gk v0.3.2 · graph engineering kit</div>
   <h1>GraphKit</h1>
-  <p class="hero-tag">Define graph-structured agent workflows as YAML. Compile to host-native execution across five targets — Claude Code, Cursor, OpenCode, Codex and Pi — each with its own native dispatch path. Eleven topologies, five targets, one CLI. Per-node model tiering. Evidence-based gates. Zero custom runtime.</p>
+  <p class="hero-tag">Define graph-structured agent workflows as YAML. Compile to host-native execution across five targets — Claude Code, Cursor, OpenCode, Codex and Pi — each with its own native dispatch path. Eleven topologies, five targets, one CLI. Per-node model tiering. Evidence-based gates. Zero custom runtime. Now with a run ledger, project memory patterns, advisor escalation, and dynamic fan-out.</p>
   <div class="hero-stats">
     <div class="stat"><div class="stat-num">11</div><div class="stat-label">Topologies</div></div>
     <div class="stat"><div class="stat-num">5</div><div class="stat-label">Targets</div></div>
     <div class="stat"><div class="stat-num">13</div><div class="stat-label">Skills (claude)</div></div>
     <div class="stat"><div class="stat-num">8</div><div class="stat-label">Agents</div></div>
-    <div class="stat"><div class="stat-num">552</div><div class="stat-label">Tests</div></div>
+    <div class="stat"><div class="stat-num">542</div><div class="stat-label">Tests</div></div>
   </div>
 </div>
 
@@ -190,7 +190,7 @@ bun install
 bun run build                <span class="cmt"># → dist/index.js (executable, with shebang)</span>
 
 <span class="cmt"># Run the full gate to verify</span>
-bun run ci:local             <span class="cmt"># → typecheck + lint + build + 552 tests + cbm:parity</span></div>
+bun run ci:local             <span class="cmt"># → typecheck + lint + build + 542 tests + cbm:parity</span></div>
   </div>
 
   <div class="install-grid">
@@ -288,6 +288,117 @@ gk compile .graphkit/graphs/&lt;id&gt;.yaml    <span class="cmt"># → .claude/w
     <tr><td>Best for</td><td>100+ node graphs</td><td>&lt;20 node graphs</td></tr>
     <tr><td>Speed</td><td colspan="2" style="text-align:center;color:var(--text-muted)">Same — parallel within waves</td></tr>
   </table>
+</div>
+
+<div class="section">
+  <div class="section-label">Run Ledger &amp; Project Memory <span class="badge-new">0.3</span></div>
+  <h2>Every Run Recorded, Every Failure Mined</h2>
+  <p>Two persistent subsystems turn execution history into an asset. The <strong style="color:var(--text)">run ledger</strong> records every dispatch to <code>.graphkit/runs/&lt;run-id&gt;/</code> — per-node status, rounds, evidence, advisor events. The <strong style="color:var(--text)">pattern compiler</strong> mines those ledgers plus project memory into reusable patterns and ranked suggestions. No daemon, no database: plain files written by the host's execute skill and read by the CLI.</p>
+  <div class="lifecycle">
+    <div class="lc-step new"><div class="name">gk run start</div><div class="desc">run id → .graphkit/runs/&lt;run-id&gt;/</div></div>
+    <div class="lc-step new"><div class="name">gk run node</div><div class="desc">per-node status + evidence + round</div></div>
+    <div class="lc-step new"><div class="name">gk run end</div><div class="desc">terminal verdict — all nodes terminal</div></div>
+    <div class="lc-step new"><div class="name">gk memory consolidate</div><div class="desc">ledgers + memory → patterns</div></div>
+    <div class="lc-step new"><div class="name">gk suggest</div><div class="desc">ranked suggestions · --dismiss</div></div>
+  </div>
+  <div class="code-block">
+    <div class="code-header"><div class="code-dot" style="background:#f85149"></div><div class="code-dot" style="background:#d29922"></div><div class="code-dot" style="background:#3fb950"></div> ledger lifecycle</div>
+    <div class="code-body"><span class="cmt"># Start a run from the active graph:</span>
+gk run start                              <span class="cmt"># → run id + .graphkit/runs/&lt;run-id&gt;/</span>
+
+<span class="cmt"># The host's execute skill records each dispatch:</span>
+gk run node &lt;run-id&gt; scouter --status passed --evidence <span class="str">'{"attack_surface":"..."}'</span>
+gk run node &lt;run-id&gt; fixer --status failed --round 2
+
+gk run status &lt;run-id&gt;                    <span class="cmt"># per-node table, counts, advisor_events</span>
+gk run end &lt;run-id&gt; --status failed        <span class="cmt"># terminal verdict</span>
+
+<span class="cmt"># Mine history into patterns + suggestions:</span>
+gk memory consolidate --runs 20           <span class="cmt"># → .graphkit/memory/patterns/ + suggestions/</span>
+gk suggest                                <span class="cmt"># ranked, with rationale</span>
+gk suggest --dismiss &lt;id&gt;                 <span class="cmt"># keep the file, hide from ranking</span></div>
+  </div>
+  <div class="bridge-grid">
+    <div class="subsys" style="margin:0;border-color:var(--memory)">
+      <div class="subsys-tag" style="background:rgba(46,160,67,0.15);color:var(--memory)">PATTERN FAMILIES</div>
+      <p style="font-size:0.82rem;color:var(--text-dim)">Consolidation derives five families from real runs: <code>node-sequence</code> (which nodes follow which), <code>evidence-cooccurrence</code> (which evidence keys travel together), <code>failure-recurrence</code> (which nodes fail repeatedly), <code>graph-reuse</code> (which graphs get re-run), and <code>advisor-repeat</code> (0.3.2 — repeated escalations → "raise tier / loosen stop_when" suggestion).</p>
+    </div>
+    <div class="subsys" style="margin:0;border-color:var(--bridge)">
+      <div class="subsys-tag" style="background:rgba(57,208,216,0.15);color:var(--bridge)">COMPOUNDS</div>
+      <p style="font-size:0.82rem;color:var(--text-dim)">Recall widened to subfolders with <code>.links.json</code> neighbors below direct hits. The <strong style="color:var(--text)">dream graph</strong> template proposes memory consolidations as reviewable diffs in <code>.graphkit/inbox/</code>. The waves payload now carries <code>hooks</code> (<code>on_node_complete</code>) and <code>on_graph_complete</code> commands verbatim to every host.</p>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <div class="section-label">Advisor Escalation &amp; Fan-Out <span class="badge-new">0.3.2</span></div>
+  <h2>Failing Nodes Ask for Help; Briefs Size the Fleet</h2>
+  <p>Two per-node primitives close the biggest gaps in pure-wave execution. <strong style="color:var(--text)">Advisor escalation</strong>: a looping node on a failed-round streak calls a read-only advisor at a stronger tier, gets its guidance appended to the objective, and retries at its original tier — capped and audited, never adding rounds. <strong style="color:var(--text)">Fan-out</strong>: fleet size is decided at runtime by data, not by the author — an upstream node emits briefs, the fan-out node dispatches one parallel subagent per brief behind an in-node barrier.</p>
+  <div class="bridge-flow">
+    <span class="flow-node">failed round</span><span class="flow-arrow">→</span>
+    <span class="flow-node">streak ≥ after_failed_rounds</span><span class="flow-arrow">→</span>
+    <span class="flow-node" style="border-color:var(--fable);color:var(--fable)">read-only advisor (fable)</span><span class="flow-arrow">→</span>
+    <span class="flow-node" style="border-color:var(--opus);color:var(--opus)">## Advisor guidance</span><span class="flow-arrow">→</span>
+    <span class="flow-node" style="border-color:var(--memory);color:var(--memory)">re-dispatch at original tier</span>
+  </div>
+  <div class="install-grid">
+    <div class="code-block">
+      <div class="code-header"><div class="code-dot" style="background:#f85149"></div><div class="code-dot" style="background:#d29922"></div><div class="code-dot" style="background:#3fb950"></div> graph.yaml</div>
+      <div class="code-body"><span class="kw">nodes:</span>
+  <span class="field">fixer:</span>
+    <span class="field">agent:</span> <span class="str">code-reviewer</span>
+    <span class="field">model:</span> <span class="str">haiku</span>
+    <span class="field">objective:</span> <span class="str">Fix the failing tests.</span>
+    <span class="field">loop:</span>
+      <span class="field">enabled:</span> <span class="num">true</span>
+      <span class="field">stop_when:</span> <span class="str">evidence found</span>
+      <span class="field">max_rounds:</span> <span class="num">4</span>
+    <span class="field">advisor:</span>              <span class="cmt"># fires on a failed-round streak</span>
+      <span class="field">model:</span> <span class="str">fable</span>
+      <span class="field">after_failed_rounds:</span> <span class="num">1</span>
+      <span class="field">max_calls:</span> <span class="num">2</span>
+  <span class="field">research:</span>
+    <span class="field">agent:</span> <span class="str">Software Architect</span>
+    <span class="field">model:</span> <span class="str">sonnet</span>
+    <span class="field">fan_out:</span>             <span class="cmt"># fleet size from upstream evidence</span>
+      <span class="field">briefs_from:</span> <span class="str">briefs</span>
+      <span class="field">template:</span> <span class="str">"Investigate: {brief.title} — {brief.body}"</span></div>
+    </div>
+    <div class="code-block">
+      <div class="code-header"><div class="code-dot" style="background:#f85149"></div><div class="code-dot" style="background:#d29922"></div><div class="code-dot" style="background:#3fb950"></div> audit trail</div>
+      <div class="code-body"><span class="cmt"># Agents simulate escalation while iterating on graphs:</span>
+gk run node &lt;run-id&gt; fixer --status failed --round 2 \
+  --advisor-fired 2 --streak 2        <span class="cmt"># → advisor.jsonl</span>
+
+gk run status &lt;run-id&gt;
+<span class="cmt"># → { nodes: {...}, advisor_events: 1 }</span>
+
+<span class="cmt"># Consolidation surfaces repeated escalations:</span>
+gk memory consolidate
+<span class="cmt"># → advisor-repeat pattern → suggestion:</span>
+<span class="cmt">#   "raise model tier / loosen stop_when"</span>
+<span class="cmt">#   (action: review-failure)</span>
+
+<span class="cmt"># Fan-out contract:</span>
+<span class="cmt"># upstream evidence briefs = [{id,title,body}]</span>
+<span class="cmt"># [] → zero briefs, round passes</span>
+<span class="cmt"># missing/malformed → failed round (advisor-eligible)</span></div>
+    </div>
+  </div>
+  <div class="stats-banner">
+    <div class="stat-cell"><div class="stat-cell-num">542</div><div class="stat-cell-label">Tests Pass</div></div>
+    <div class="stat-cell"><div class="stat-cell-num">0</div><div class="stat-cell-label">Failures</div></div>
+    <div class="stat-cell"><div class="stat-cell-num">+24</div><div class="stat-cell-label">New Tests</div></div>
+    <div class="stat-cell"><div class="stat-cell-num">5/5</div><div class="stat-cell-label">Kits Dispatch Advisors</div></div>
+    <div class="stat-cell"><div class="stat-cell-num">0</div><div class="stat-cell-label">New Deps</div></div>
+    <div class="stat-cell"><div class="stat-cell-num">tsc ✓</div><div class="stat-cell-label">Typecheck</div></div>
+  </div>
+</div>
+
+<div class="section">
+  <div class="section-label">Visualization <span class="badge-new">0.3.2</span></div>
+  <h2>archify Replaces the Local Viewer</h2>
+  <p><code>/gk:visualize</code> now authors a typed <a href="https://github.com/tt-a1i/archify" style="color:var(--sonnet)">archify</a> IR — wave index → column, model tier → lane — validates it at showcase quality with a 5-cycle cap, and delivers a self-contained <code>.graphkit/diagrams/{name}.html</code> plus its <code>.archify.json</code> source. archify is skill-layer only: probed per host, installed once with consent, SVG fallback when unavailable. The local interactive viewer is deleted (see the historical section below); ASCII, SVG, and Excalidraw modes unchanged.</p>
 </div>
 
 <div class="section">
@@ -419,7 +530,7 @@ CBM direct  63.2ms   ·   CBM-via-MCP  525.6ms   ·   <span class="str">gk CLI  
 <div class="section">
   <div class="section-label">Five Hosts, One CLI <span class="badge-new">0.2</span></div>
   <h2>Same CLI, Five Targets</h2>
-  <p>Pass <code>--target &lt;id&gt;</code> to install the host-flavored kit — the same eight agents in each host's native format. The <code>gk</code> CLI is identical across targets — <code>validate</code>, <code>graph new/ascii/svg/waves</code>, viewer, memory all work the same (pure CLI). The kit differs per host.</p>
+  <p>Pass <code>--target &lt;id&gt;</code> to install the host-flavored kit — the same eight agents in each host's native format. The <code>gk</code> CLI is identical across targets — <code>validate</code>, <code>graph new/ascii/svg/waves</code>, memory, run ledger all work the same (pure CLI). The kit differs per host.</p>
   <div class="install-grid" style="margin-bottom:0">
     <div class="code-block">
       <div class="code-header"><div class="code-dot" style="background:#f85149"></div><div class="code-dot" style="background:#d29922"></div><div class="code-dot" style="background:#3fb950"></div> install for any host</div>
@@ -615,6 +726,7 @@ gk models opencode set --map <span class="field">opus</span>=<span class="str">a
   <div class="section-label">2026-08-19</div>
   <h2>The Kit Ran Its Own Flow — Viewer Interactivity Upgrade</h2>
   <p>The superpowers preset was extended with a research fan-out and executed via <code>/gk:execute</code>: 3 parallel sonnet researchers → fable consolidation + plan (function-ownership map keeps parallel executors collision-free) → 3 sonnet executors with self-review loops → fable final review → sonnet fix loop → fable acceptance gate with a live smoke test. 10 nodes, 6 waves, one hotfix, zero commits until the gate passed.</p>
+  <p style="font-size:0.78rem;color:var(--text-muted);margin-top:0.6rem">Historical note — the local interactive viewer this section documents was removed in v0.3.2 in favor of archify-rendered diagrams; see Visualization above.</p>
   <table class="ac-table">
     <tr><th>Shipped</th><th>Detail</th></tr>
     <tr><td>Edges are first-class</td><td>invisible wide hit-target paths make edges hoverable/selectable; dragging a node re-routes incident edges live (incremental deltas, no dagre re-run); Shift+click traces a route (BFS <code>routeIds</code>)</td></tr>
@@ -731,30 +843,46 @@ gk validate loop-demo.yaml           <span class="cmt"># → passes (contiguous 
   <p><strong style="color:var(--text)">Host-native = subscription-safe.</strong> gk rides each host's supported first-party harness — Claude Code Workflow / native subagents, Cursor, OpenCode, Codex, or Pi — instead of a third-party orchestration layer — the exact harnesses Anthropic keeps first-class in the subscription, unlike third-party bridges now billed extra (<a href="https://www.theverge.com/ai-artificial-intelligence/907074/anthropic-openclaw-claude-subscription-ban" style="color:var(--sonnet)">The Verge</a>; <a href="https://techcrunch.com/2026/04/04/anthropic-says-claude-code-subscribers-will-need-to-pay-extra-for-openclaw-support/" style="color:var(--sonnet)">TechCrunch</a>). No runtime tax: gk ships no Python/TS runtime, no dependency graph.</p>
 
   <h2 style="margin-top:1.5rem">Roadmap — Next Up</h2>
-  <p>Three ranked candidates, each grounded in the competitive scan. Deferred from this run by design — half-built is worse than none.</p>
+  <p>Six consolidated candidates, cross-validated by four parallel research passes (competitive scan, user-pain mining, repo-internal deferrals, adjacent-standards bridges). Ranked by value × fit with the compiler thesis ÷ effort. The 0.3 run ledger already shipped the S1 prerequisite — resume is the payoff.</p>
   <div class="bridge-grid">
     <div class="subsys">
-      <div class="subsys-tag" style="background:rgba(240,171,252,0.15);color:var(--memory)">COMPETITIVE S1</div>
-      <div class="subsys-title" style="font-family:'IBM Plex Mono',monospace;font-size:0.8rem;color:var(--sonnet);margin-bottom:0.3rem">gk run --resume — run ledger</div>
-      <p style="font-size:0.85rem;color:var(--text-dim)">Persist an executed-waves ledger + per-node evidence manifest in <code>.graphkit/runs/&lt;run-id&gt;/</code>. Resume skips satisfied waves and re-dispatches only the pending — de-facto time-travel, no runtime.</p>
+      <div class="subsys-tag" style="background:rgba(240,171,252,0.15);color:var(--memory)">S1 · 3/4 SOURCES</div>
+      <div class="subsys-title" style="font-family:'IBM Plex Mono',monospace;font-size:0.8rem;color:var(--sonnet);margin-bottom:0.3rem">gk run --resume — checkpoint replay</div>
+      <p style="font-size:0.85rem;color:var(--text-dim)">Reconcile <code>.graphkit/runs/&lt;id&gt;/</code> against the graph, emit a waves payload for pending nodes only. Every rival ships checkpoint/resume (LangGraph checkpointer, Agents SDK <code>RunState</code>, Temporal replay); the runtime design spec deferred it pending the ledger — which 0.3 shipped.</p>
     </div>
     <div class="subsys">
-      <div class="subsys-tag" style="background:rgba(240,171,252,0.15);color:var(--memory)">COMPETITIVE S3</div>
+      <div class="subsys-tag" style="background:rgba(240,171,252,0.15);color:var(--memory)">S2 · TABLE-STAKES</div>
       <div class="subsys-title" style="font-family:'IBM Plex Mono',monospace;font-size:0.8rem;color:var(--sonnet);margin-bottom:0.3rem">Human-approval wave gate</div>
-      <p style="font-size:0.85rem;color:var(--text-dim)"><code>human_approval: true</code> pauses dispatch before write-capable waves — the production make-or-break primitive, implementable wholly in the compiler + host.</p>
+      <p style="font-size:0.85rem;color:var(--text-dim)"><code>approval: wave</code> pauses dispatch before write-capable waves via host-native permission hooks — the production make-or-break primitive (OpenAI <code>needs_approval</code>, Mastra <code>suspend()</code>, Flowise human-input node). Implementable wholly in compiler + host skills.</p>
     </div>
     <div class="subsys">
-      <div class="subsys-tag" style="background:rgba(240,171,252,0.15);color:var(--memory)">COMPETITIVE M1</div>
-      <div class="subsys-title" style="font-family:'IBM Plex Mono',monospace;font-size:0.8rem;color:var(--sonnet);margin-bottom:0.3rem">Model-tier bench sweep — gk bench</div>
-      <p style="font-size:0.85rem;color:var(--text-dim)">Deterministic "which per-node model tier passes the evidence gate at what cost" matrix — the reliability story competitors can't match.</p>
+      <div class="subsys-tag" style="background:rgba(57,208,216,0.15);color:var(--bridge)">S3 · BRIDGE</div>
+      <div class="subsys-title" style="font-family:'IBM Plex Mono',monospace;font-size:0.8rem;color:var(--sonnet);margin-bottom:0.3rem">OTel export — gk run export --otlp</div>
+      <p style="font-size:0.85rem;color:var(--text-dim)">Serialize run ledgers into OpenTelemetry GenAI-convention spans — waves, nodes, advisor events, durations — ingestible by Datadog/Jaeger/Langfuse. Fills the admitted "no runtime telemetry" gap with a pure compiler-side bridge, zero daemon (the CBM play, repeated).</p>
+    </div>
+    <div class="subsys">
+      <div class="subsys-tag" style="background:rgba(240,171,252,0.15);color:var(--memory)">M1 · RELIABILITY STORY</div>
+      <div class="subsys-title" style="font-family:'IBM Plex Mono',monospace;font-size:0.8rem;color:var(--sonnet);margin-bottom:0.3rem">gk bench — golden-run harness</div>
+      <p style="font-size:0.85rem;color:var(--text-dim)">N runs of a graph; evidence-gate pass-rate and cost matrix per per-node model tier, diffed against a golden baseline run. The deterministic "which tier passes at what cost" answer competitors' eval harnesses approximate with LLM judges.</p>
+    </div>
+    <div class="subsys">
+      <div class="subsys-tag" style="background:rgba(240,171,252,0.15);color:var(--memory)">M2 · OWN BACKLOG</div>
+      <div class="subsys-title" style="font-family:'IBM Plex Mono',monospace;font-size:0.8rem;color:var(--sonnet);margin-bottom:0.3rem">CBM retrieval routing + shaping</div>
+      <p style="font-size:0.85rem;color:var(--text-dim)">Route intents to <code>search_graph</code>/<code>trace_path</code>/<code>query_graph</code>, thread result limits, unify the four bespoke subcommand bodies — idea-backlog calls it the "largest single lever"; program.md scores retrieval accuracy as 96.5% of the remaining gap.</p>
+    </div>
+    <div class="subsys">
+      <div class="subsys-tag" style="background:rgba(240,171,252,0.15);color:var(--memory)">M3 · SAFETY STORY</div>
+      <div class="subsys-title" style="font-family:'IBM Plex Mono',monospace;font-size:0.8rem;color:var(--sonnet);margin-bottom:0.3rem">gk lint — static cost estimation</div>
+      <p style="font-size:0.85rem;color:var(--text-dim)">Compile-time estimate: nodes × loop rounds × fan-out breadth × tier pricing, calibrated by ledger <code>duration_ms</code>; warnings for unbounded patterns. Budgets-as-blast-radius made checkable before anything runs.</p>
     </div>
   </div>
+  <p style="font-size:0.78rem;color:var(--text-muted)">Parking lot from the same consolidation: typed seam contracts on edges (JSON-Schema evidence validation), worktree snapshots for atomic replay, advisor tier-swap escalation (spec'd non-goal), <code>gk graph history</code> ledger join, deterministic predicate routing, MCP-registry tool resolution.</p>
 </div>
 
 <div class="footer">
-  GraphKit 0.2 · graph engineering kit for Claude Code, Cursor, OpenCode, Codex &amp; Pi<br>
-  <span style="color:var(--memory)">8 agents</span> · <span style="color:var(--sonnet)">13 skills (claude) · 11 (others)</span> · <span style="color:var(--bridge)">11 topologies</span> · <span style="color:var(--fable)">5 targets</span> · <span style="color:var(--haiku)">552 tests</span><br>
-  gk never invokes a model · CBM is the graph authority · evidence-based gates
+  GraphKit 0.3 · graph engineering kit for Claude Code, Cursor, OpenCode, Codex &amp; Pi<br>
+  <span style="color:var(--memory)">8 agents</span> · <span style="color:var(--sonnet)">13 skills (claude) · 11 (others)</span> · <span style="color:var(--bridge)">11 topologies</span> · <span style="color:var(--fable)">5 targets</span> · <span style="color:var(--haiku)">542 tests</span><br>
+  run ledger · memory patterns · advisor escalation · fan-out · CBM bridge · gk never invokes a model · evidence-based gates
 </div>
 
 </body>
