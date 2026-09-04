@@ -303,7 +303,13 @@ describe("gk run CLI", () => {
       expect(start.status).toBe("ok");
       const fired = JSON.parse(runCli(["run", "node", "exec", "--advisor-fired", "1"], cwd).stdout);
       expect(fired.status).toBe("ok");
-      expect(fired.data.event).toEqual({ at: expect.any(String), node: "exec", round: 1, tier: "sonnet", streak: null });
+      expect(fired.data.event).toEqual({
+        at: expect.any(String),
+        node: "exec",
+        round: 1,
+        tier: "sonnet",
+        streak: null,
+      });
     } finally {
       rmSync(cwd, { recursive: true, force: true });
     }

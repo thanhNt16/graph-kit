@@ -4,7 +4,12 @@
 import { createHash } from "node:crypto";
 import type { AdvisorEvent, RunIndexLine, TraceLine } from "./ledger.js";
 
-export type PatternKind = "node-sequence" | "evidence-cooccurrence" | "failure-recurrence" | "graph-reuse" | "advisor-repeat";
+export type PatternKind =
+  | "node-sequence"
+  | "evidence-cooccurrence"
+  | "failure-recurrence"
+  | "graph-reuse"
+  | "advisor-repeat";
 
 export interface Pattern {
   signature: string;

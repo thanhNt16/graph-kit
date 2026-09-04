@@ -45,26 +45,32 @@ export const LoopGroupSchema = z
 
 export type LoopGroup = z.infer<typeof LoopGroupSchema>;
 
-const NodeDefSchema = z.object({
-  agent: z.string(),
-  model: NodeRef.optional(),
-  objective: z.string(),
-  tools: z.array(z.string()).default([]),
-  skills: z.array(z.string()).default([]),
-  refs: z.array(RefSchema).default([]),
-  depend_on: z.array(z.string()).default([]),
-  loop: LoopConfig.optional().default(() => ({ enabled: false, max_rounds: 3 })),
-  constraints: z.array(ConstraintValue).default([]),
-  evidence: z.array(z.string()).default([]),
-  role: z.string().optional(),
-  eval: EvalConfig.optional(),
-  advisor: AdvisorConfig.optional(),
-  fan_out: FanOutConfig.optional(),
-}).superRefine((n, ctx) => {
-  if (n.advisor && !(n.loop?.enabled)) {
-    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["advisor"], message: "advisor requires loop.enabled: true on the same node" });
-  }
-});
+const NodeDefSchema = z
+  .object({
+    agent: z.string(),
+    model: NodeRef.optional(),
+    objective: z.string(),
+    tools: z.array(z.string()).default([]),
+    skills: z.array(z.string()).default([]),
+    refs: z.array(RefSchema).default([]),
+    depend_on: z.array(z.string()).default([]),
+    loop: LoopConfig.optional().default(() => ({ enabled: false, max_rounds: 3 })),
+    constraints: z.array(ConstraintValue).default([]),
+    evidence: z.array(z.string()).default([]),
+    role: z.string().optional(),
+    eval: EvalConfig.optional(),
+    advisor: AdvisorConfig.optional(),
+    fan_out: FanOutConfig.optional(),
+  })
+  .superRefine((n, ctx) => {
+    if (n.advisor && !n.loop?.enabled) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["advisor"],
+        message: "advisor requires loop.enabled: true on the same node",
+      });
+    }
+  });
 
 const LimitsSchema = z.object({
   max_workers: z.number().int().positive().optional(),
@@ -179,9 +185,17 @@ const GraphSchema = z
       const upstream = upstreamOf(id);
       const target = node.fan_out.briefs_from;
       if (!names.has(target)) {
-        ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["nodes", id, "fan_out", "briefs_from"], message: `fan_out.briefs_from references unknown node "${target}"` });
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["nodes", id, "fan_out", "briefs_from"],
+          message: `fan_out.briefs_from references unknown node "${target}"`,
+        });
       } else if (!upstream.has(target)) {
-        ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["nodes", id, "fan_out", "briefs_from"], message: `fan_out.briefs_from "${target}" is not an upstream node of "${id}" — add it to depend_on` });
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["nodes", id, "fan_out", "briefs_from"],
+          message: `fan_out.briefs_from "${target}" is not an upstream node of "${id}" — add it to depend_on`,
+        });
       }
     }
     // Cycle detection: DFS with colors (0=white, 1=gray, 2=black)

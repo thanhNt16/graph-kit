@@ -79,7 +79,10 @@ describe("pattern extraction", () => {
   });
 
   test("advisor-repeat: node with advisor events in 2 runs becomes a pattern", () => {
-    const runs = [run("r1", "demo", "a", [], "2026-09-01T00:00:00.000Z"), run("r2", "demo", "a", [], "2026-09-02T00:00:00.000Z")];
+    const runs = [
+      run("r1", "demo", "a", [], "2026-09-01T00:00:00.000Z"),
+      run("r2", "demo", "a", [], "2026-09-02T00:00:00.000Z"),
+    ];
     const advisors = new Map([
       ["r1", [{ at: "2026-09-01T00:30:00.000Z", node: "exec", round: 2, tier: "fable", streak: 2 }]],
       ["r2", [{ at: "2026-09-02T00:30:00.000Z", node: "exec", round: 3, tier: "fable", streak: 3 }]],
@@ -93,7 +96,9 @@ describe("pattern extraction", () => {
 
   test("single-run advisor event does not pattern", () => {
     const runs = [run("r1", "demo", "a", [])];
-    const advisors = new Map([["r1", [{ at: "2026-09-01T00:30:00.000Z", node: "exec", round: 2, tier: "fable", streak: 2 }]]]);
+    const advisors = new Map([
+      ["r1", [{ at: "2026-09-01T00:30:00.000Z", node: "exec", round: 2, tier: "fable", streak: 2 }]],
+    ]);
     expect(extractPatterns(runs, new Map(), advisors, NOW).filter((p) => p.kind === "advisor-repeat")).toHaveLength(0);
   });
 

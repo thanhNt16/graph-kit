@@ -2,7 +2,16 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { activeRun, appendAdvisor, appendNode, endRun, readAdvisorEvents, readRunIndex, readTrace, startRun } from "../../src/memory/ledger.js";
+import {
+  activeRun,
+  appendAdvisor,
+  appendNode,
+  endRun,
+  readAdvisorEvents,
+  readRunIndex,
+  readTrace,
+  startRun,
+} from "../../src/memory/ledger.js";
 
 describe("run ledger", () => {
   let cwd: string;

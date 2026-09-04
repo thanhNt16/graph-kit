@@ -1,6 +1,6 @@
 // tests/acceptance/advisor-fanout.e2e.test.ts
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import YAML from "yaml";
@@ -52,7 +52,8 @@ describe("advisor + fan-out e2e smoke over real CLI", () => {
     mkdirSync(agentDir, { recursive: true });
     for (const name of ["software-architect.md", "code-reviewer.md"]) {
       const src = join(REPO_ROOT, ".omp", "agents", name);
-      if (!existsSync(src)) throw new Error(`e2e fixture missing: ${src} — the agent-binding check needs real repo agents`);
+      if (!existsSync(src))
+        throw new Error(`e2e fixture missing: ${src} — the agent-binding check needs real repo agents`);
       writeFileSync(join(agentDir, name), readFileSync(src, "utf-8"));
     }
     writeFileSync(join(tmpCwd, "graph.yaml"), GRAPH_YAML);
@@ -80,7 +81,9 @@ describe("advisor + fan-out e2e smoke over real CLI", () => {
     expect(parsed.status).toBe("ok");
     expect(parsed.data.graph).toBe("orch-smoke");
 
-    const allNodes = parsed.data.waves.flatMap((w: { nodes: Array<{ id: string; advisor: unknown; fan_out: unknown }> }) => w.nodes);
+    const allNodes = parsed.data.waves.flatMap(
+      (w: { nodes: Array<{ id: string; advisor: unknown; fan_out: unknown }> }) => w.nodes,
+    );
     const execNode = allNodes.find((n: { id: string }) => n.id === "exec");
     expect(execNode).toBeDefined();
     expect(execNode.advisor).toEqual({
@@ -183,9 +186,7 @@ describe("advisor + fan-out e2e smoke over real CLI", () => {
     const suggestionFiles = readdirSync(join(memDir, "suggestions")).filter((f) => f.endsWith(".md"));
     expect(suggestionFiles.length).toBeGreaterThanOrEqual(1);
     const suggestionBodies = suggestionFiles.map((f) => readFileSync(join(memDir, "suggestions", f), "utf-8"));
-    const match = suggestionBodies.some((body) =>
-      body.includes("raise exec model tier or loosen its stop_when"),
-    );
+    const match = suggestionBodies.some((body) => body.includes("raise exec model tier or loosen its stop_when"));
     expect(match).toBe(true);
   });
 });
