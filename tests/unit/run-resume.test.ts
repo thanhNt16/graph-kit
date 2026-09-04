@@ -120,6 +120,85 @@ describe("deriveResumeGraph", () => {
     ]);
     expect(GraphSchema.safeParse(derived).success).toBe(true);
   });
+  test("evidence.required_keys pruned to keys produced by pending nodes (satisfied keys exist on disk)", () => {
+    const graph = GRAPH + "evidence:\n  required_keys: [a-out, b-out]\n";
+    writeFileSync(join(cwd, "graph.yaml"), graph);
+    const { id } = startRun(cwd, join(cwd, "graph.yaml"), "2026-09-04T10:00:00.000Z");
+    writeEvidence(cwd, "a-out");
+    traceOk(cwd, "a", ["a-out"]);
+    traceFail(cwd, "b");
+    endRun(cwd, "failed", "2026-09-04T10:05:00.000Z");
+    const derived = deriveResumeGraph(reconcileRun(cwd, id), id);
+    expect(derived.evidence.required_keys).toEqual(["b-out"]);
+    expect(GraphSchema.safeParse(derived).success).toBe(true);
+  });
+  test("repro C: eval-gate keeps a pending producer → resume succeeds, derived graph passes compile rules", () => {
+    const graph =
+      "apiVersion: graphkit.dev/v2\nkind: Graph\nmetadata:\n  name: gate\n" +
+      "topology: custom\nevidence:\n  required_keys: [impl-out]\n" +
+      "nodes:\n  impl:\n    agent: task\n    objective: Implement\n    evidence: [impl-out]\n" +
+      "  gate:\n    agent: reviewer\n    objective: Evaluate\n    role: eval-gate\n    eval: {}\n    depend_on: [impl, research]\n" +
+      "  research:\n    agent: scout\n    objective: Research\n";
+    writeFileSync(join(cwd, "graph.yaml"), graph);
+    const { id } = startRun(cwd, join(cwd, "graph.yaml"), "2026-09-04T10:00:00.000Z");
+    writeEvidence(cwd, "impl-out");
+    traceOk(cwd, "impl", ["impl-out"]);
+    traceFail(cwd, "gate");
+    endRun(cwd, "failed", "2026-09-04T10:05:00.000Z");
+    const res = resumeRun(cwd, id);
+    expect(res.resumed).toBe(true);
+    expect(res.pending).toEqual(["gate", "research"]);
+    const derived = deriveResumeGraph(reconcileRun(cwd, id), id);
+    expect(derived.evidence.required_keys).toEqual([]); // impl-out replayed from disk, not re-produced
+    expect(derived.nodes.gate!.depend_on).toEqual(["research"]); // eval-gate keeps a producer
+    expect(() => validateDerivedGraph(derived)).not.toThrow();
+  });
+  test("repro C: eval-gate whose producers are all satisfied → RESUME_DERIVED_INVALID, nothing written", () => {
+    const graph =
+      "apiVersion: graphkit.dev/v2\nkind: Graph\nmetadata:\n  name: gate2\n" +
+      "topology: custom\nevidence:\n  required_keys: [impl-out]\n" +
+      "nodes:\n  impl:\n    agent: task\n    objective: Implement\n    evidence: [impl-out]\n" +
+      "  gate:\n    agent: reviewer\n    objective: Evaluate\n    role: eval-gate\n    eval: {}\n    depend_on: [impl]\n";
+    writeFileSync(join(cwd, "graph.yaml"), graph);
+    const { id } = startRun(cwd, join(cwd, "graph.yaml"), "2026-09-04T10:00:00.000Z");
+    writeEvidence(cwd, "impl-out");
+    traceOk(cwd, "impl", ["impl-out"]);
+    traceFail(cwd, "gate");
+    endRun(cwd, "failed", "2026-09-04T10:05:00.000Z");
+    expect(() => resumeRun(cwd, id)).toThrow(/RESUME_DERIVED_INVALID/);
+    expect(existsSync(join(cwd, ".graphkit", "graphs"))).toBe(false);
+    expect(existsSync(join(cwd, ".graphkit", "active"))).toBe(false);
+  });
+});
+
+describe("validateDerivedGraph compile-rule mirror", () => {
+  const base = GraphSchema.parse({
+    apiVersion: "graphkit.dev/v2", kind: "Graph", metadata: { name: "demo" }, topology: "custom",
+    nodes: { b: { agent: "task", objective: "B", evidence: ["b-out"] } },
+  });
+  test("required key produced by no node → evidence-keys", () => {
+    const bad = GraphSchema.parse({ ...base, evidence: { required_keys: ["b-out", "ghost"] } });
+    expect(() => validateDerivedGraph(bad)).toThrow(/RESUME_DERIVED_INVALID.*evidence-keys — Required evidence key "ghost" is not produced by any node/);
+    expect(() => validateDerivedGraph(GraphSchema.parse({ ...base, evidence: { required_keys: ["b-out"] } }))).not.toThrow();
+  });
+  test("eval-gate with empty depend_on → eval-gate-depend_on; non-empty passes", () => {
+    const empty = GraphSchema.parse({
+      ...base,
+      nodes: { b: { agent: "task", objective: "B", evidence: ["b-out"], role: "eval-gate", eval: {}, depend_on: [] } },
+    });
+    expect(() => validateDerivedGraph(empty)).toThrow(/RESUME_DERIVED_INVALID.*eval-gate-depend_on/);
+    const kept = GraphSchema.parse({
+      ...base,
+      nodes: { impl: { agent: "task", objective: "I", evidence: ["impl-out"] }, gate: { agent: "reviewer", objective: "G", role: "eval-gate", eval: {}, depend_on: ["impl"] } },
+    });
+    expect(() => validateDerivedGraph(kept)).not.toThrow();
+  });
+  test("memory-augmented with curator node dropped → memory-curator-node", () => {
+    const bad = GraphSchema.parse({ ...base, topology: "memory-augmented", topology_config: { memory: { curator_node: "curator" } } });
+    expect(() => validateDerivedGraph(bad)).toThrow(/RESUME_DERIVED_INVALID.*memory-curator-node/);
+    const good = GraphSchema.parse({ ...base, topology: "memory-augmented", topology_config: { memory: { curator_node: "curator" } }, nodes: { curator: { agent: "task", objective: "C" } } });
+    expect(() => validateDerivedGraph(good)).not.toThrow();
+  });
 });
 
 describe("resumeRun derived-graph gate", () => {

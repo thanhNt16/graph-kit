@@ -68,10 +68,12 @@ export function reconcileRun(cwd: string, runId: string, opts: { fromNode?: stri
 
 /**
  * Gate applied to a derived resume graph before anything is written: schema
- * parse plus the loop-ref rules of compiler/validate.ts (loop_node_exists,
- * loop_gate_evidence_declared). Throws RESUME_DERIVED_INVALID with the issue
- * list; deliberately not full validateGraph, whose disk-state rules
- * (evidence coverage, refs) legitimately don't hold for pending-only graphs.
+ * parse plus every structural compiler rule that a pending-only derived graph
+ * can still violate (loop_node_exists, loop_gate_evidence_declared,
+ * evidence-keys coverage, eval-gate-depend_on, memory-curator-node). Throws
+ * RESUME_DERIVED_INVALID with the issue list. Deliberately not full
+ * validateGraph: its disk-state rules (agent binding, refs-exist) check
+ * machine state, not graph shape, and hold for derived graphs by construction.
  */
 export function validateDerivedGraph(derived: Graph): void {
   const parsed = GraphSchema.safeParse(derived);
@@ -87,6 +89,28 @@ export function validateDerivedGraph(derived: Graph): void {
     }
     for (const key of group.gate_evidence ?? []) {
       if (!produced.has(key)) throw new Error(`RESUME_DERIVED_INVALID: derived graph failed loop validation: loops[${i}].gate_evidence — gate_evidence key "${key}" is not declared by any node in the loop group`);
+    }
+  }
+  // Compiler rule 5 (validate.ts): every required evidence key must be produced
+  // by a node the derived graph still declares.
+  const declared = new Set(Object.values(derived.nodes).flatMap((n) => n.evidence));
+  for (const key of derived.evidence.required_keys) {
+    if (!declared.has(key)) {
+      throw new Error(`RESUME_DERIVED_INVALID: derived graph failed validation: evidence-keys — Required evidence key "${key}" is not produced by any node`);
+    }
+  }
+  // Compiler rule 6: memory-augmented graphs must keep their curator node.
+  if (derived.topology === "memory-augmented") {
+    const tc = derived.topology_config as Record<string, any>;
+    const curatorNode = tc?.memory?.curator_node ?? "curator";
+    if (!derived.nodes[curatorNode]) {
+      throw new Error(`RESUME_DERIVED_INVALID: derived graph failed validation: memory-curator-node — memory-augmented memory.curator_node "${curatorNode}" is not defined in nodes`);
+    }
+  }
+  // Compiler rule 7: eval-gate nodes must keep at least one producer dep.
+  for (const [id, node] of Object.entries(derived.nodes)) {
+    if (node.role === "eval-gate" && node.depend_on.length === 0) {
+      throw new Error(`RESUME_DERIVED_INVALID: derived graph failed validation: eval-gate-depend_on — nodes.${id}.depend_on — eval-gate node must depend_on at least one producer node`);
     }
   }
 }
@@ -138,10 +162,15 @@ export function deriveResumeGraph(rec: Reconciliation, parentRunId: string): Gra
     return [next];
   });
 
+  // Evidence keys produced by satisfied nodes exist on disk (satisfied rule) —
+  // they are replayed as refs, so required_keys must shrink to keys the
+  // pending nodes still produce or compile's evidence-coverage check fails.
+  const declared = new Set(Object.values(nodes).flatMap((n) => n.evidence));
   const derived: Graph = {
     ...rec.graph,
     metadata: { ...rec.graph.metadata, name: `${rec.graph.metadata.name}-resume` },
     nodes,
+    evidence: { ...rec.graph.evidence, required_keys: rec.graph.evidence.required_keys.filter((k) => declared.has(k)) },
   };
   if (loops && loops.length > 0) derived.loops = loops;
   else delete derived.loops;
