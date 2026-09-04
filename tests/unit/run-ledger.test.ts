@@ -137,4 +137,13 @@ describe("run ledger", () => {
       { at: "2026-09-03T10:06:00.000Z", node: "exec", round: 2, tier: "fable", streak: 2 },
     ]);
   });
+
+  test("startRun with resumes records provenance in meta.json and run.md", () => {
+    const first = startRun(cwd, join(cwd, "graph.yaml"), "2026-09-04T10:00:00.000Z");
+    endRun(cwd, "failed", "2026-09-04T10:05:00.000Z");
+    const second = startRun(cwd, join(cwd, "graph.yaml"), "2026-09-04T11:00:00.000Z", first.id);
+    const meta = JSON.parse(readFileSync(join(second.dir, "meta.json"), "utf-8"));
+    expect(meta.resumes).toBe(first.id);
+    expect(readFileSync(join(second.dir, "run.md"), "utf-8")).toContain(`- resumes: ${first.id}`);
+  });
 });
