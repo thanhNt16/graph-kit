@@ -5,6 +5,33 @@ import YAML from "yaml";
 import { readRunMeta, readTrace, type TraceLine } from "./ledger.js";
 import { GraphSchema } from "../schemas/graph.schema.js";
 import type { Graph } from "../compiler/validate.js";
+import { saveSessionGraph, setActiveGraphId } from "../store/index.js";
+import { startRun } from "./ledger.js";
+
+export interface ResumeResult {
+  resumed: boolean;
+  reason?: string;
+  session?: { id: string; path: string };
+  run?: { id: string; dir: string };
+  pending: string[];
+  satisfied: string[];
+  skipped: Array<{ node: string; reason: string }>;
+}
+
+export function resumeRun(
+  cwd: string,
+  runId: string,
+  opts: { fromNode?: string; dryRun?: boolean; force?: boolean } = {},
+): ResumeResult {
+  const rec = reconcileRun(cwd, runId, opts);
+  if (rec.pending.length === 0) return { resumed: false, reason: "NOTHING_TO_RESUME", pending: [], satisfied: rec.satisfied, skipped: rec.skipped };
+  if (opts.dryRun) return { resumed: false, reason: "DRY_RUN", pending: rec.pending, satisfied: rec.satisfied, skipped: rec.skipped };
+  const derived = deriveResumeGraph(rec, runId);
+  const session = saveSessionGraph(derived, derived.metadata.name, cwd);
+  setActiveGraphId(session.id, cwd);
+  const run = startRun(cwd, session.path, new Date().toISOString(), runId);
+  return { resumed: true, session, run, pending: rec.pending, satisfied: rec.satisfied, skipped: rec.skipped };
+}
 
 export interface Reconciliation {
   cwd: string; runId: string; graphPath: string; graph: Graph; evidenceDir: string;
