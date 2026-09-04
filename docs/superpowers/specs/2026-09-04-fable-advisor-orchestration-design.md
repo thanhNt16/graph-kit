@@ -96,7 +96,7 @@ Enforcement is asymmetric today and stays asymmetric: prompt-advisory on claude/
 
 **Run ledger.**
 
-- `gk run node --advisor-fired <round>` appends `{type:"advisor", node, round, tier, streak}` to `trace.jsonl`. Called by the execute-skill at dispatch time.
+- `gk run node --advisor-fired <round>` appends `{type:"advisor", node, round, tier, streak}` to `trace.jsonl`. Called by the execute-skill at dispatch time. `tier` derives from the node's `advisor.model` in the run's graph.yaml; `streak` from the round counter.
 - `gk run status` counts advisor events and prints an escalation summary.
 
 **Memory (`src/memory`, consolidate command).**
