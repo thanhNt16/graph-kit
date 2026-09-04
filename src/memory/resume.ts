@@ -36,3 +36,33 @@ export function reconcileRun(cwd: string, runId: string, opts: { fromNode?: stri
   const skipped = names.filter((n) => satisfied.has(n) && !pending.includes(n)).map((node) => ({ node, reason: "passed with evidence on disk" }));
   return { cwd, runId, graphPath: meta.graph_path, graph, evidenceDir, satisfied: [...satisfied].filter((n) => !pending.includes(n)).sort(), pending: pending.sort(), skipped };
 }
+
+/** Evidence replay: satisfied upstream deps become refs (paths, ADR-002 layout). */
+export function deriveResumeGraph(rec: Reconciliation, parentRunId: string): Graph {
+  const pending = new Set(rec.pending);
+  const satisfied = new Set(rec.satisfied);
+  const trace = readTrace(rec.cwd, rec.runId);
+  const lastOk = new Map<string, TraceLine>();
+  for (const line of trace) if (line.status === "ok") lastOk.set(line.node, line);
+
+  const nodes: Graph["nodes"] = {};
+  for (const [name, node] of Object.entries(rec.graph.nodes)) {
+    if (!pending.has(name)) continue;
+    const carriedDeps = node.depend_on.filter((d) => pending.has(d));
+    const upstreamRefs = node.depend_on
+      .filter((d) => satisfied.has(d))
+      .flatMap((d) =>
+        (lastOk.get(d)?.evidence ?? []).map((k) => ({
+          path: join(rec.evidenceDir, `${k}.md`),
+          purpose: `resumed evidence from node ${d} (run ${parentRunId})`,
+        })),
+      );
+    nodes[name] = { ...node, depend_on: carriedDeps, refs: [...node.refs, ...upstreamRefs] };
+  }
+
+  return {
+    ...rec.graph,
+    metadata: { ...rec.graph.metadata, name: `${rec.graph.metadata.name}-resume` },
+    nodes,
+  };
+}
