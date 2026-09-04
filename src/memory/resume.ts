@@ -20,6 +20,7 @@ function evidenceOnDisk(cwd: string, evidenceDir: string, keys: string[]): boole
 }
 export function reconcileRun(cwd: string, runId: string, opts: { fromNode?: string; force?: boolean } = {}): Reconciliation {
   const meta = readRunMeta(cwd, runId);
+  if (typeof meta.graph_path !== "string" || typeof meta.graph_sha256 !== "string") throw new Error(`RESUME_RUN_NOT_FOUND: run ${runId} predates graph tracking (no graph_path/graph_sha256 in meta.json)`);
   if (!opts.force) {
     if (!existsSync(meta.graph_path)) throw new Error(`RESUME_GRAPH_DRIFT: recorded graph ${meta.graph_path} no longer exists (re-run gk init/graph, or --force)`);
     const sha = createHash("sha256").update(readFileSync(meta.graph_path, "utf-8")).digest("hex");
@@ -32,6 +33,6 @@ export function reconcileRun(cwd: string, runId: string, opts: { fromNode?: stri
   for (const name of names) { const line = last.get(name); if (line?.status === "ok" && evidenceOnDisk(cwd, evidenceDir, line.evidence)) satisfied.add(name); }
   let pending = opts.fromNode != null ? [opts.fromNode] : names.filter((n) => !satisfied.has(n));
   for (let grew = true; grew;) { grew = false; for (const [name, node] of Object.entries(graph.nodes)) if (!pending.includes(name) && node.depend_on.some((d) => pending.includes(d))) { pending.push(name); grew = true; } }
-  const skipped = names.filter((n) => satisfied.has(n)).map((node) => ({ node, reason: "passed with evidence on disk" }));
+  const skipped = names.filter((n) => satisfied.has(n) && !pending.includes(n)).map((node) => ({ node, reason: "passed with evidence on disk" }));
   return { cwd, runId, graphPath: meta.graph_path, graph, evidenceDir, satisfied: [...satisfied].filter((n) => !pending.includes(n)).sort(), pending: pending.sort(), skipped };
 }
