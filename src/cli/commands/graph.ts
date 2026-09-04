@@ -957,6 +957,8 @@ export function registerGraphCommands(cli: CAC) {
             depend_on: nodes[id]?.depend_on || [],
             loop: nodes[id]?.loop || null,
             evidence: nodes[id]?.evidence || [],
+            advisor: nodes[id]?.advisor ?? null,
+            fan_out: nodes[id]?.fan_out ?? null,
             hooks: nodeHooks,
           });
 
