@@ -9,6 +9,7 @@ import {
   appendNode,
   endRun,
   readAdvisorEvents,
+  readRunMeta,
   startRun,
 } from "../../memory/ledger.js";
 import { GraphSchema } from "../../schemas/graph.schema.js";
@@ -125,7 +126,15 @@ export function registerRunCommands(cli: CAC) {
         if (subcommand === "status") {
           const dir = activeRun(cwd);
           const advisor_events = dir ? readAdvisorEvents(cwd, basename(dir)).length : 0;
-          console.log(JSON.stringify(ok({ active: dir, advisor_events })));
+          const chain: string[] = [];
+          let cursor: string | null = dir ? basename(dir) : null;
+          const guard = new Set<string>();
+          while (cursor && !guard.has(cursor)) {
+            guard.add(cursor);
+            chain.push(cursor);
+            try { cursor = readRunMeta(cwd, cursor).resumes ?? null; } catch { cursor = null; }
+          }
+          console.log(JSON.stringify(ok({ active: dir, advisor_events, resumes_chain: chain })));
           return;
         }
         console.log(

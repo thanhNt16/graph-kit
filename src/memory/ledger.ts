@@ -72,7 +72,7 @@ function runId(now: string, name: string): string {
   return `${stamp}-${name}`;
 }
 
-export function startRun(cwd: string, graphPath: string, now = new Date().toISOString()): { id: string; dir: string } {
+export function startRun(cwd: string, graphPath: string, now = new Date().toISOString(), resumes?: string): { id: string; dir: string } {
   const existing = activeRun(cwd);
   if (existing) throw new Error(`RUN_ACTIVE: run already active at ${existing}; run \`gk run end\` first`);
   const resolved = isAbsolute(graphPath) ? graphPath : resolve(cwd, graphPath);
@@ -92,10 +92,9 @@ export function startRun(cwd: string, graphPath: string, now = new Date().toISOS
   mkdirSync(dir, { recursive: true });
 
   writeFileSync(join(dir, "trace.jsonl"), "");
-  writeFileSync(
-    join(dir, "meta.json"),
-    `${JSON.stringify({ id, graph: name, graph_path: resolved, graph_sha256: createHash("sha256").update(raw).digest("hex"), started_at: now }, null, 2)}\n`,
-  );
+  const meta: Record<string, unknown> = { id, graph: name, graph_path: resolved, graph_sha256: createHash("sha256").update(raw).digest("hex"), started_at: now };
+  if (resumes) meta.resumes = resumes;
+  writeFileSync(join(dir, "meta.json"), `${JSON.stringify(meta, null, 2)}\n`);
   // GBrain layout: compiled truth above the rule, append-only timeline below.
   writeFileSync(
     join(dir, "run.md"),
@@ -104,6 +103,7 @@ export function startRun(cwd: string, graphPath: string, now = new Date().toISOS
       "",
       `- graph: ${name}`,
       `- started_at: ${now}`,
+      ...(resumes ? [`- resumes: ${resumes}`] : []),
       "- status: running",
       "",
       "---",
