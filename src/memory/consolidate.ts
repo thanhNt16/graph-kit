@@ -64,7 +64,7 @@ export function suggestionsFor(patterns: Pattern[]): SuggestionDraft[] {
       out.push({
         id,
         action: "review-failure",
-        rationale: `raise ${p.members[0]} model tier or loosen its stop_when — it needed advisor help in ${p.count} runs`,
+        rationale: `raise ${p.members[0]} model tier or loosen its stop_when — it needed advisor help in ${p.runs.length} runs`,
         based_on: based,
         salience: p.salience,
       });

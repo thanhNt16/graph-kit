@@ -106,7 +106,7 @@ Then continue to the next wave — skip the action-wave steps below for curator 
 4. **Handle loops** — if a node has `loop.enabled` and its result doesn't meet the stop condition (`stop_when` is advisory), re-dispatch that node (up to `max_rounds`).
 
 
-## Advisor escalation
+### Advisor escalation
 
 When a node's payload carries `advisor`:
 
@@ -119,7 +119,7 @@ When a node's payload carries `advisor`:
 4. Append the advice to the node's objective under an `## Advisor guidance` heading and re-dispatch the NODE at its original model tier.
 5. If `max_calls` is reached or `max_rounds` is exhausted, take the existing failure path.
 
-## Fan-out execution
+### Fan-out execution
 
 When a node's payload carries `fan_out`:
 

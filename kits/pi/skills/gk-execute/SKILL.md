@@ -102,7 +102,7 @@ Each dispatch gets:
 
 3. **Handle loops** — per-node `loop.enabled`: if the result doesn't satisfy its `stop_when`, re-dispatch that node (up to `max_rounds`). Top-level `loops:` (multi-node groups): see [Loop groups](#loop-groups-multi-node-loops) below — the hybrid stop ladder replaces the advisory-only rule.
 
-## Advisor escalation
+### Advisor escalation
 
 When a node's payload carries `advisor`:
 
@@ -115,7 +115,7 @@ When a node's payload carries `advisor`:
 4. Append the advice to the node's objective under an `## Advisor guidance` heading and re-dispatch the NODE at its original model tier.
 5. If `max_calls` is reached or `max_rounds` is exhausted, take the existing failure path.
 
-## Fan-out execution
+### Fan-out execution
 
 When a node's payload carries `fan_out`:
 

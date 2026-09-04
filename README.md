@@ -316,12 +316,12 @@ Node constraints are enforced mechanically only on pi (via `gk_dispatch_agent`);
 ### Advisor escalation
 
 A looping node may declare `advisor: {model, after_failed_rounds, max_calls}`. When a node's
-failed-round streak reaches `after_failed_rounds` and `max_calls` hasn't been exhausted, the
-host's execute-skill dispatches a read-only advisor subagent at `advisor.model` (default
-`fable`), appends its guidance to the node's objective (`## Advisor guidance`), and re-dispatches
-the node at its original tier. Escalations are recorded via `gk run node <id> --advisor-fired
-<round>` into the run's `advisor.jsonl`; `gk run status` reports the count; `gk memory
-consolidate` surfaces `advisor-repeat` patterns ("raise tier or loosen stop_when").
+failed-round streak reaches `after_failed_rounds` and `max_calls` hasn't been exhausted (within
+`loop.max_rounds`), the host's execute-skill dispatches a read-only advisor subagent at
+`advisor.model` (default `fable`), appends its guidance to the node's objective (`## Advisor guidance`),
+and re-dispatches the node at its original tier. Escalations are recorded via `gk run node <id>
+--advisor-fired <round>` into the run's `advisor.jsonl`; `gk run status` reports the count;
+`gk memory consolidate` surfaces `advisor-repeat` patterns ("raise tier or loosen stop_when").
 
 ### Fan-out execution
 
