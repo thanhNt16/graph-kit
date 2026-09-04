@@ -243,4 +243,69 @@ describe("gk run CLI", () => {
       rmSync(cwd, { recursive: true, force: true });
     }
   });
+
+  test("run node --advisor-fired rejects non-integer and non-positive --streak", () => {
+    const cwd = join(tmpdir(), `gk-run-streak-${process.pid}-${Date.now()}`);
+    mkdirSync(cwd, { recursive: true });
+    try {
+      writeFileSync(
+        join(cwd, "graph.yaml"),
+        [
+          "apiVersion: graphkit.dev/v2",
+          "kind: Graph",
+          "metadata:",
+          "  name: streak-graph",
+          "topology: diamond",
+          "nodes:",
+          "  exec:",
+          "    agent: haiku",
+          "    objective: do the thing",
+          "    loop: { enabled: true }",
+          "    advisor: { model: opus }",
+        ].join("\n"),
+      );
+      JSON.parse(runCli(["run", "start"], cwd).stdout);
+      for (const bad of ["abc", "0", "1.5"]) {
+        const res = JSON.parse(runCli(["run", "node", "exec", "--advisor-fired", "1", "--streak", bad], cwd).stdout);
+        expect(res.status).toBe("fail");
+        expect(res.error.code).toBe("BAD_ADVISOR");
+        expect(res.error.message).toContain("--streak requires an integer >= 1");
+      }
+    } finally {
+      rmSync(cwd, { recursive: true, force: true });
+    }
+  });
+
+  test("run node --advisor-fired derives tier from the active run's recorded graph", () => {
+    const cwd = join(tmpdir(), `gk-run-recorded-${process.pid}-${Date.now()}`);
+    mkdirSync(cwd, { recursive: true });
+    try {
+      // cwd/graph.yaml carries a DIFFERENT tier: if the CLI read it instead of the
+      // run's recorded alt.yaml, the assertion on tier: "sonnet" would fail.
+      writeFileSync(join(cwd, "graph.yaml"), "metadata:\n  name: main-graph\ntopology: diamond\n");
+      writeFileSync(
+        join(cwd, "alt.yaml"),
+        [
+          "apiVersion: graphkit.dev/v2",
+          "kind: Graph",
+          "metadata:",
+          "  name: alt-graph",
+          "topology: diamond",
+          "nodes:",
+          "  exec:",
+          "    agent: haiku",
+          "    objective: do the thing",
+          "    loop: { enabled: true }",
+          "    advisor: { model: sonnet }",
+        ].join("\n"),
+      );
+      const start = JSON.parse(runCli(["run", "start", "--graph", "alt.yaml"], cwd).stdout);
+      expect(start.status).toBe("ok");
+      const fired = JSON.parse(runCli(["run", "node", "exec", "--advisor-fired", "1"], cwd).stdout);
+      expect(fired.status).toBe("ok");
+      expect(fired.data.event).toEqual({ at: expect.any(String), node: "exec", round: 1, tier: "sonnet", streak: null });
+    } finally {
+      rmSync(cwd, { recursive: true, force: true });
+    }
+  });
 });

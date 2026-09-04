@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { basename, join } from "node:path";
+import { basename, isAbsolute, join, resolve } from "node:path";
 import YAML from "yaml";
 
 export interface TraceLine {
@@ -39,6 +39,18 @@ export function activeRun(cwd: string): string | null {
   return dir && existsSync(dir) ? dir : null;
 }
 
+/** Graph path recorded by startRun on the active run, or null (no run / legacy meta). */
+export function activeRunGraph(cwd: string): string | null {
+  const dir = activeRun(cwd);
+  if (!dir) return null;
+  try {
+    const meta = JSON.parse(readFileSync(join(dir, "meta.json"), "utf-8")) as { graph_path?: string };
+    return typeof meta.graph_path === "string" && meta.graph_path ? meta.graph_path : null;
+  } catch {
+    return null; // unreadable meta falls back to the caller's default graph
+  }
+}
+
 function safeGraphName(name: string): string {
   return name.replace(/\.\./g, "-").replace(/[\\/]/g, "-");
 }
@@ -63,10 +75,12 @@ function runId(now: string, name: string): string {
 export function startRun(cwd: string, graphPath: string, now = new Date().toISOString()): { id: string; dir: string } {
   const existing = activeRun(cwd);
   if (existing) throw new Error(`RUN_ACTIVE: run already active at ${existing}; run \`gk run end\` first`);
-  if (!existsSync(graphPath)) throw new Error(`GRAPH_NOT_FOUND: ${graphPath}`);
+  const resolved = isAbsolute(graphPath) ? graphPath : resolve(cwd, graphPath);
+  if (!existsSync(resolved)) throw new Error(`GRAPH_NOT_FOUND: ${graphPath}`);
 
-  const raw = readFileSync(graphPath, "utf-8");
-  const name = safeGraphName(graphName(graphPath));
+  const raw = readFileSync(resolved, "utf-8");
+  const name = safeGraphName(graphName(resolved));
+
   const baseId = runId(now, name);
   let id = baseId;
   let dir = join(runsDir(cwd), id);
@@ -80,7 +94,7 @@ export function startRun(cwd: string, graphPath: string, now = new Date().toISOS
   writeFileSync(join(dir, "trace.jsonl"), "");
   writeFileSync(
     join(dir, "meta.json"),
-    `${JSON.stringify({ id, graph: name, graph_sha256: createHash("sha256").update(raw).digest("hex"), started_at: now }, null, 2)}\n`,
+    `${JSON.stringify({ id, graph: name, graph_path: resolved, graph_sha256: createHash("sha256").update(raw).digest("hex"), started_at: now }, null, 2)}\n`,
   );
   // GBrain layout: compiled truth above the rule, append-only timeline below.
   writeFileSync(

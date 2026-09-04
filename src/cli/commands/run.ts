@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import YAML from "yaml";
 import type { CAC } from "cac";
-import { activeRun, appendAdvisor, appendNode, endRun, readAdvisorEvents, startRun } from "../../memory/ledger.js";
+import { activeRun, activeRunGraph, appendAdvisor, appendNode, endRun, readAdvisorEvents, startRun } from "../../memory/ledger.js";
 import { GraphSchema } from "../../schemas/graph.schema.js";
 import { subcommandsFor } from "../command-registry.js";
 import { fail, ok } from "../output.js";
@@ -49,12 +49,20 @@ export function registerRunCommands(cli: CAC) {
           // Advisor-fired mode needs no --status: the firing itself is the trace line.
           if (opts.advisorFired != null) {
             const round = Number(opts.advisorFired);
+            // tier is derived from the graph's node.advisor.model (spec §5)
             if (!Number.isInteger(round) || round < 1) {
               console.log(JSON.stringify(fail("BAD_ADVISOR", "--advisor-fired requires an integer round >= 1")));
               return;
             }
-            // tier is derived from the graph's node.advisor.model (spec §5)
-            const graphPath = opts.graph ?? join(cwd, "graph.yaml");
+            const streak = opts.streak == null ? null : Number(opts.streak);
+            if (streak !== null && (!Number.isInteger(streak) || streak < 1)) {
+              console.log(JSON.stringify(fail("BAD_ADVISOR", "--streak requires an integer >= 1")));
+              return;
+            }
+            // Tier source: the ACTIVE RUN's recorded graph (what the run actually executes) so a
+            // run started with `--graph sub/x.yaml` needs no repeated flag; explicit --graph wins,
+            // falling back to cwd/graph.yaml for legacy runs without a recorded path.
+            const graphPath = opts.graph ?? activeRunGraph(cwd) ?? join(cwd, "graph.yaml");
             const parsed = GraphSchema.safeParse(YAML.parse(readFileSync(graphPath, "utf-8")));
             const advisor = parsed.success ? parsed.data.nodes[String(node)]?.advisor : undefined;
             if (!advisor) {
@@ -68,7 +76,7 @@ export function registerRunCommands(cli: CAC) {
                     node: String(node),
                     round,
                     tier: advisor.model,
-                    streak: opts.streak == null ? null : Number(opts.streak),
+                    streak,
                   }),
                 ),
               ),
