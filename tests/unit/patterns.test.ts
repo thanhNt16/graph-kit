@@ -31,7 +31,7 @@ describe("pattern extraction", () => {
   test("node-sequence needs 3 runs of the same adjacent pair", () => {
     const runs = ["r1", "r2", "r3"].map((id) => run(id, "g", "sha", []));
     const traces = new Map(runs.map((r) => [r.id, [node("plan"), node("build"), node("verify")]]));
-    const pats = extractPatterns(runs, traces, NOW).filter((p) => p.kind === "node-sequence");
+    const pats = extractPatterns(runs, traces, new Map(), NOW).filter((p) => p.kind === "node-sequence");
     const labels = pats.map((p) => p.label);
     expect(labels).toContain("plan → build");
     expect(labels).toContain("plan → build → verify");
@@ -40,20 +40,20 @@ describe("pattern extraction", () => {
   test("a pair seen in only 2 runs is not a pattern", () => {
     const runs = ["r1", "r2"].map((id) => run(id, "g", "sha", []));
     const traces = new Map(runs.map((r) => [r.id, [node("plan"), node("build")]]));
-    expect(extractPatterns(runs, traces, NOW).filter((p) => p.kind === "node-sequence")).toHaveLength(0);
+    expect(extractPatterns(runs, traces, new Map(), NOW).filter((p) => p.kind === "node-sequence")).toHaveLength(0);
   });
 
   test("evidence keys co-produced in 3 runs become a cooccurrence pattern", () => {
     const runs = ["r1", "r2", "r3"].map((id) => run(id, "g", `sha-${id}`, ["audit", "risk"]));
     const traces = new Map(runs.map((r) => [r.id, [node("a", "ok", ["audit"]), node("b", "ok", ["risk"])]]));
-    const pats = extractPatterns(runs, traces, NOW).filter((p) => p.kind === "evidence-cooccurrence");
+    const pats = extractPatterns(runs, traces, new Map(), NOW).filter((p) => p.kind === "evidence-cooccurrence");
     expect(pats.map((p) => p.label)).toEqual(["audit + risk"]);
   });
 
   test("same node failing twice is a failure-recurrence pattern", () => {
     const runs = ["r1", "r2"].map((id) => run(id, "g", `sha-${id}`, []));
     const traces = new Map(runs.map((r) => [r.id, [node("flaky", "fail")]]));
-    const pats = extractPatterns(runs, traces, NOW).filter((p) => p.kind === "failure-recurrence");
+    const pats = extractPatterns(runs, traces, new Map(), NOW).filter((p) => p.kind === "failure-recurrence");
     expect(pats[0]?.label).toBe("flaky");
     expect(pats[0]?.count).toBe(2);
   });
@@ -62,27 +62,46 @@ describe("pattern extraction", () => {
     const one = ["r1"].map((id) => run(id, "g", `sha-${id}`, []));
     const retry = [node("flaky", "fail"), node("flaky", "fail")];
     expect(
-      extractPatterns(one, new Map([["r1", retry]]), NOW).filter((p) => p.kind === "failure-recurrence"),
+      extractPatterns(one, new Map([["r1", retry]]), new Map(), NOW).filter((p) => p.kind === "failure-recurrence"),
     ).toHaveLength(0);
     const two = ["r1", "r2"].map((id) => run(id, "g", `sha-${id}`, []));
     const traces = new Map(two.map((r) => [r.id, [node("flaky", "fail")]]));
-    const pats = extractPatterns(two, traces, NOW).filter((p) => p.kind === "failure-recurrence");
+    const pats = extractPatterns(two, traces, new Map(), NOW).filter((p) => p.kind === "failure-recurrence");
     expect(pats[0]?.label).toBe("flaky");
     expect(pats[0]?.runs).toEqual(["r1", "r2"]);
   });
 
   test("same graph sha run 3 times is graph-reuse", () => {
     const runs = ["r1", "r2", "r3"].map((id) => run(id, "audit-pr", "same-sha", []));
-    const pats = extractPatterns(runs, new Map(), NOW).filter((p) => p.kind === "graph-reuse");
+    const pats = extractPatterns(runs, new Map(), new Map(), NOW).filter((p) => p.kind === "graph-reuse");
     expect(pats[0]?.label).toBe("audit-pr");
     expect(pats[0]?.count).toBe(3);
+  });
+
+  test("advisor-repeat: node with advisor events in 2 runs becomes a pattern", () => {
+    const runs = [run("r1", "demo", "a", [], "2026-09-01T00:00:00.000Z"), run("r2", "demo", "a", [], "2026-09-02T00:00:00.000Z")];
+    const advisors = new Map([
+      ["r1", [{ at: "2026-09-01T00:30:00.000Z", node: "exec", round: 2, tier: "fable", streak: 2 }]],
+      ["r2", [{ at: "2026-09-02T00:30:00.000Z", node: "exec", round: 3, tier: "fable", streak: 3 }]],
+    ]);
+    const pats = extractPatterns(runs, new Map(), advisors, "2026-09-02T02:00:00.000Z");
+    const p = pats.find((p) => p.kind === "advisor-repeat");
+    expect(p?.members).toEqual(["exec"]);
+    expect(p?.runs).toEqual(["r1", "r2"]);
+    expect(p?.label).toBe("exec needed advisor help");
+  });
+
+  test("single-run advisor event does not pattern", () => {
+    const runs = [run("r1", "demo", "a", [])];
+    const advisors = new Map([["r1", [{ at: "2026-09-01T00:30:00.000Z", node: "exec", round: 2, tier: "fable", streak: 2 }]]]);
+    expect(extractPatterns(runs, new Map(), advisors, NOW).filter((p) => p.kind === "advisor-repeat")).toHaveLength(0);
   });
 
   test("signatures are stable across runs of the extractor", () => {
     const runs = ["r1", "r2", "r3"].map((id) => run(id, "g", "sha", []));
     const traces = new Map(runs.map((r) => [r.id, [node("plan"), node("build")]]));
-    const a = extractPatterns(runs, traces, NOW).map((p) => p.signature);
-    const b = extractPatterns(runs, traces, NOW).map((p) => p.signature);
+    const a = extractPatterns(runs, traces, new Map(), NOW).map((p) => p.signature);
+    const b = extractPatterns(runs, traces, new Map(), NOW).map((p) => p.signature);
     expect(a).toEqual(b);
   });
 

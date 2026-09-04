@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import YAML from "yaml";
 import { consolidate } from "../../src/memory/consolidate.js";
-import { appendNode, endRun, startRun } from "../../src/memory/ledger.js";
+import { appendAdvisor, appendNode, endRun, startRun } from "../../src/memory/ledger.js";
 import { PatternFileSchema, SuggestionFileSchema } from "../../src/schemas/memory.schema.js";
 
 const GRAPH = "metadata:\n  name: demo\ntopology: diamond\n";
@@ -120,5 +120,25 @@ describe("ledger → consolidate", () => {
     const result = consolidate(cwd, "2026-09-03T12:00:00.000Z");
     expect(result.pruned).toBe(1);
     expect(existsSync(join(patternsDir, "deadbeef.md"))).toBe(false);
+  });
+
+  test("advisor-repeat: two runs with advisor events produce pattern + suggestion", () => {
+    for (const hour of [1, 2]) {
+      const at = `2026-09-0${hour}T10:00:00.000Z`;
+      startRun(cwd, join(cwd, "graph.yaml"), at);
+      appendAdvisor(cwd, { node: "exec", round: hour + 1, tier: "fable", streak: hour + 1 }, at);
+      endRun(cwd, "merged", at);
+    }
+    consolidate(cwd, "2026-09-03T12:00:00.000Z");
+    const memDir = join(cwd, ".graphkit", "memory");
+    const advisorPattern = readdirSync(join(memDir, "patterns")).some((f) => {
+      const fm = YAML.parse(readFileSync(join(memDir, "patterns", f), "utf-8").match(/^---\n([\s\S]*?)\n---/)![1]);
+      return fm.kind === "advisor-repeat" && fm.members[0] === "exec";
+    });
+    expect(advisorPattern).toBe(true);
+    const rationales = readdirSync(join(memDir, "suggestions")).map((f) =>
+      readFileSync(join(memDir, "suggestions", f), "utf-8"),
+    );
+    expect(rationales.some((raw) => raw.includes("raise exec model tier or loosen its stop_when"))).toBe(true);
   });
 });

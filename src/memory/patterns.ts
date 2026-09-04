@@ -2,9 +2,9 @@
 // Deterministic pattern extraction over the run ledger. Zero model calls:
 // everything here is counting, and counting is free.
 import { createHash } from "node:crypto";
-import type { RunIndexLine, TraceLine } from "./ledger.js";
+import type { AdvisorEvent, RunIndexLine, TraceLine } from "./ledger.js";
 
-export type PatternKind = "node-sequence" | "evidence-cooccurrence" | "failure-recurrence" | "graph-reuse";
+export type PatternKind = "node-sequence" | "evidence-cooccurrence" | "failure-recurrence" | "graph-reuse" | "advisor-repeat";
 
 export interface Pattern {
   signature: string;
@@ -23,6 +23,7 @@ const SEQ_MAX_LEN = 4;
 const COOCCUR_MIN_RUNS = 3;
 const FAILURE_MIN = 2;
 const REUSE_MIN_RUNS = 3;
+const ADVISOR_MIN = 2;
 const HALF_LIFE_DAYS = 14; // same constant as src/eval/forgetting.ts
 const DAY_MS = 86_400_000;
 
@@ -73,11 +74,13 @@ function toPattern(kind: PatternKind, members: string[], label: string, acc: Acc
 export function extractPatterns(
   runs: RunIndexLine[],
   traces: Map<string, TraceLine[]>,
+  advisors: Map<string, AdvisorEvent[]> = new Map(),
   now = new Date().toISOString(),
 ): Pattern[] {
   const sequences = new Map<string, Acc>();
   const cooccur = new Map<string, Acc>();
   const failures = new Map<string, Acc>();
+  const advisorAcc = new Map<string, Acc>();
   const reuse = new Map<string, Acc>();
 
   for (const run of runs) {
@@ -103,6 +106,9 @@ export function extractPatterns(
     // failure-recurrence: a node id that failed
     for (const t of trace) if (t.status === "fail") bump(failures, t.node, run.id, t.at || at);
 
+    // advisor-repeat: a node consumed advisor help
+    for (const ev of advisors.get(run.id) ?? []) bump(advisorAcc, ev.node, run.id, ev.at || at);
+
     // graph-reuse: identical graph content run repeatedly
     bump(reuse, `${run.graph}\u0000${run.graph_sha256}`, run.id, at);
   }
@@ -121,6 +127,10 @@ export function extractPatterns(
   for (const [key, acc] of failures) {
     if (acc.runs.size < FAILURE_MIN) continue;
     out.push(toPattern("failure-recurrence", [key], key, acc, now));
+  }
+  for (const [key, acc] of advisorAcc) {
+    if (acc.runs.size < ADVISOR_MIN) continue;
+    out.push(toPattern("advisor-repeat", [key], `${key} needed advisor help`, acc, now));
   }
   for (const [key, acc] of reuse) {
     if (acc.runs.size < REUSE_MIN_RUNS) continue;

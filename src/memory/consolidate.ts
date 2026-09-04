@@ -7,7 +7,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync
 import { join } from "node:path";
 import YAML from "yaml";
 import { PatternFileSchema, SuggestionFileSchema } from "../schemas/memory.schema.js";
-import { listRunIds, readRunIndex, readTrace, type TraceLine } from "./ledger.js";
+import { listRunIds, readAdvisorEvents, readRunIndex, readTrace, type AdvisorEvent, type TraceLine } from "./ledger.js";
 import { buildLinks, writeLinks } from "./links.js";
 import { extractPatterns, type Pattern } from "./patterns.js";
 
@@ -60,6 +60,14 @@ export function suggestionsFor(patterns: Pattern[]): SuggestionDraft[] {
         based_on: based,
         salience: p.salience,
       });
+    } else if (p.kind === "advisor-repeat") {
+      out.push({
+        id,
+        action: "review-failure",
+        rationale: `raise ${p.members[0]} model tier or loosen its stop_when — it needed advisor help in ${p.count} runs`,
+        based_on: based,
+        salience: p.salience,
+      });
     }
   }
   return out;
@@ -93,9 +101,13 @@ export function consolidate(cwd: string, now = new Date().toISOString()): Consol
   if (runs.length === 0) return { runs: 0, patterns: 0, suggestions: 0, links: 0, pruned: 0 };
 
   const traces = new Map<string, TraceLine[]>();
-  for (const id of listRunIds(cwd)) traces.set(id, readTrace(cwd, id));
+  const advisors = new Map<string, AdvisorEvent[]>();
+  for (const id of listRunIds(cwd)) {
+    traces.set(id, readTrace(cwd, id));
+    advisors.set(id, readAdvisorEvents(cwd, id));
+  }
 
-  const patterns = extractPatterns(runs, traces, now);
+  const patterns = extractPatterns(runs, traces, advisors, now);
   const patternsDir = join(memDir, "patterns");
   const keptPatterns = new Set<string>();
   for (const p of patterns) {
