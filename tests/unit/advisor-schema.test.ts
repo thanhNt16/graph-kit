@@ -24,7 +24,7 @@ describe("advisor schema", () => {
       nodes: { work: { agent: "builder", objective: "build", advisor: {} } },
     });
     expect(r.success).toBe(false);
-    expect(r.error!.issues.some((i) => i.message.includes("advisor requires loop.enabled")));
+    expect(r.error!.issues.some((i) => i.message.includes("advisor requires loop.enabled"))).toBe(true);
   });
 
   test("rejects bad tier and zero thresholds", () => {
@@ -40,7 +40,9 @@ describe("advisor schema", () => {
       ...base,
       nodes: { w: { agent: "b", objective: "o", loop: { enabled: true }, advisor: { after_failed_rounds: 0 } } },
     });
-    expect(bad1.success && bad2.success && bad3.success).toBe(false);
+    expect(bad1.success).toBe(false);
+    expect(bad2.success).toBe(false);
+    expect(bad3.success).toBe(false);
   });
 });
 
@@ -75,7 +77,7 @@ describe("fan_out schema", () => {
       },
     });
     expect(r.success).toBe(false);
-    expect(r.error!.issues.some((i) => i.message.includes("upstream")));
+    expect(r.error!.issues.some((i) => i.message.includes("upstream"))).toBe(true);
   });
 
   test("rejects empty template", () => {
