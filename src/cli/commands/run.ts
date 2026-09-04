@@ -36,6 +36,7 @@ export function registerRunCommands(cli: CAC) {
     .option("--evidence <keys>", "comma-separated evidence keys")
     .option("--duration-ms <n>", "node duration in ms")
     .option("--notes <text>", "free-text note")
+    .option("--json", "JSON output")
     .option("--from-node <id>", "resume: redo this node + dependents")
     .option("--dry-run", "resume: preview without writing")
     .option("--force", "resume: override graph drift guard")

@@ -316,6 +316,21 @@ describe("gk run CLI", () => {
       rmSync(cwd, { recursive: true, force: true });
     }
   });
+
+  test("run status reports the resumes chain", () => {
+    const cwd = join(tmpdir(), `gk-run-resume-status-${process.pid}-${Date.now()}`);
+    mkdirSync(cwd, { recursive: true });
+    try {
+      writeFileSync(join(cwd, "graph.yaml"), "metadata:\n  name: demo\ntopology: diamond\n");
+      const r1 = JSON.parse(runCli(["run", "start"], cwd).stdout).data;
+      runCli(["run", "end", "--status", "failed"], cwd);
+      const { startRun } = require("../../src/memory/ledger.js");
+      startRun(cwd, join(cwd, "graph.yaml"), "2026-09-04T11:00:00.000Z", r1.id);
+      const parsed = JSON.parse(runCli(["run", "status", "--json"], cwd).stdout);
+      expect(parsed.status).toBe("ok");
+      expect(parsed.data.resumes_chain).toEqual(["20260904-110000-demo", r1.id]);
+    } finally { rmSync(cwd, { recursive: true, force: true }); }
+  });
 });
 
 describe("run resume CLI", () => {
