@@ -139,7 +139,16 @@ export function appendAdvisor(
 export function readAdvisorEvents(cwd: string, id: string): AdvisorEvent[] {
   const f = join(runsDir(cwd), id, "advisor.jsonl");
   if (!existsSync(f)) return [];
-  return readFileSync(f, "utf-8").split("\n").filter(Boolean).map((l) => JSON.parse(l) as AdvisorEvent);
+  return readFileSync(f, "utf-8")
+    .split("\n")
+    .filter((l) => l.trim())
+    .flatMap((l) => {
+      try {
+        return [JSON.parse(l) as AdvisorEvent];
+      } catch {
+        return []; // skip a torn line rather than abort the whole scan
+      }
+    });
 }
 
 export function readTrace(cwd: string, id: string): TraceLine[] {

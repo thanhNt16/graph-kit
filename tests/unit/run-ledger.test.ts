@@ -116,4 +116,16 @@ describe("run ledger", () => {
   test("readAdvisorEvents returns [] when missing", () => {
     expect(readAdvisorEvents(cwd, "nonexistent")).toEqual([]);
   });
+
+  test("readAdvisorEvents ignores corrupt JSONL lines and returns valid events", () => {
+    const { id, dir } = startRun(cwd, join(cwd, "graph.yaml"), "2026-09-03T10:00:00.000Z");
+    writeFileSync(
+      join(dir, "advisor.jsonl"),
+      '{"at":"2026-09-03T10:05:00.000Z","node":"exec","round":1,"tier":"fable","streak":1}\n{corrupted line\n{"at":"2026-09-03T10:06:00.000Z","node":"exec","round":2,"tier":"fable","streak":2}\n',
+    );
+    expect(readAdvisorEvents(cwd, id)).toEqual([
+      { at: "2026-09-03T10:05:00.000Z", node: "exec", round: 1, tier: "fable", streak: 1 },
+      { at: "2026-09-03T10:06:00.000Z", node: "exec", round: 2, tier: "fable", streak: 2 },
+    ]);
+  });
 });
