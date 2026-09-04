@@ -27,6 +27,19 @@ disable-model-invocation: false
 6. Write the final result to `.graphkit/runs/{name}-result.json`.
 7. Report to the user: verdict (passed/failed/partial), which nodes ran, and suggest `/gk:evidence`.
 
+## gk run resume
+
+Resume a failed or interrupted run:
+
+```bash
+gk run resume <run-id>              # derive pending-only graph + start child run
+gk run resume <run-id> --dry-run    # preview reconciliation, write nothing
+gk run resume <run-id> --from-node <id>  # redo one node + its dependents
+gk run resume <run-id> --force      # override the graph-drift guard
+```
+
+A node is **satisfied** only if its last trace line is `ok` and every recorded evidence key maps to a non-empty `<evidence_dir>/<key>.md`. Satisfied upstreams are skipped; their evidence is attached to pending nodes as `refs`. The derived graph is saved as `<date>-<name>-resume.yaml` and activated; the new run records `resumes: <parent>` (visible in `gk run status` as `resumes_chain`). Graph edits since the run started are refused with `RESUME_GRAPH_DRIFT` — commit the graph change and start a fresh run instead, or pass `--force` consciously.
+
 ## Boundary
 
 This skill drives the Workflow tool; it does not itself implement the graph topology. If the workflow fails, surface the failure — do not retry outside the graph's declared loop config.
