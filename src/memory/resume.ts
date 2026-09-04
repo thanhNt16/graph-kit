@@ -1,0 +1,37 @@
+import { createHash } from "node:crypto";
+import { existsSync, readFileSync } from "node:fs";
+import { join } from "node:path";
+import YAML from "yaml";
+import { readRunMeta, readTrace, type TraceLine } from "./ledger.js";
+import { GraphSchema } from "../schemas/graph.schema.js";
+import type { Graph } from "../compiler/validate.js";
+
+export interface Reconciliation {
+  cwd: string; runId: string; graphPath: string; graph: Graph; evidenceDir: string;
+  satisfied: string[]; pending: string[]; skipped: Array<{ node: string; reason: string }>;
+}
+function parseGraph(path: string): Graph {
+  const parsed = GraphSchema.safeParse(YAML.parse(readFileSync(path, "utf-8")));
+  if (!parsed.success) throw new Error(`RESUME_GRAPH_INVALID: recorded graph ${path} no longer parses: ${parsed.error.issues[0]?.message}`);
+  return parsed.data;
+}
+function evidenceOnDisk(cwd: string, evidenceDir: string, keys: string[]): boolean {
+  return keys.every((k) => { const p = join(cwd, evidenceDir, `${k}.md`); return existsSync(p) && readFileSync(p, "utf-8").trim().length > 0; });
+}
+export function reconcileRun(cwd: string, runId: string, opts: { fromNode?: string; force?: boolean } = {}): Reconciliation {
+  const meta = readRunMeta(cwd, runId);
+  if (!opts.force) {
+    if (!existsSync(meta.graph_path)) throw new Error(`RESUME_GRAPH_DRIFT: recorded graph ${meta.graph_path} no longer exists (re-run gk init/graph, or --force)`);
+    const sha = createHash("sha256").update(readFileSync(meta.graph_path, "utf-8")).digest("hex");
+    if (sha !== meta.graph_sha256) throw new Error(`RESUME_GRAPH_DRIFT: ${meta.graph_path} changed since run ${runId} started (expected sha ${meta.graph_sha256.slice(0, 12)}…) — use --force to override`);
+  }
+  const graph = parseGraph(meta.graph_path); const names = Object.keys(graph.nodes);
+  if (opts.fromNode != null && !names.includes(opts.fromNode)) throw new Error(`RESUME_BAD_FROM_NODE: --from-node "${opts.fromNode}" is not a node of ${meta.graph_path}`);
+  const last = new Map<string, TraceLine>(); for (const line of readTrace(cwd, runId)) last.set(line.node, line);
+  const evidenceDir = graph.outputs?.evidence_dir ?? ".graphkit/evidence/"; const satisfied = new Set<string>();
+  for (const name of names) { const line = last.get(name); if (line?.status === "ok" && evidenceOnDisk(cwd, evidenceDir, line.evidence)) satisfied.add(name); }
+  let pending = opts.fromNode != null ? [opts.fromNode] : names.filter((n) => !satisfied.has(n));
+  for (let grew = true; grew;) { grew = false; for (const [name, node] of Object.entries(graph.nodes)) if (!pending.includes(name) && node.depend_on.some((d) => pending.includes(d))) { pending.push(name); grew = true; } }
+  const skipped = names.filter((n) => satisfied.has(n)).map((node) => ({ node, reason: "passed with evidence on disk" }));
+  return { cwd, runId, graphPath: meta.graph_path, graph, evidenceDir, satisfied: [...satisfied].filter((n) => !pending.includes(n)).sort(), pending: pending.sort(), skipped };
+}

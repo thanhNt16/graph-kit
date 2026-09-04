@@ -238,3 +238,10 @@ export function listRunIds(cwd: string): string[] {
     .map((e) => e.name)
     .sort();
 }
+
+export interface RunMeta { id: string; graph: string; graph_path: string; graph_sha256: string; started_at: string; ended_at?: string; resumes?: string; }
+export function readRunMeta(cwd: string, id: string): RunMeta {
+  const file = join(runsDir(cwd), id, "meta.json");
+  if (!/^\d{8}-\d{6}-[\w.-]+$/.test(id) || !existsSync(file)) throw new Error(`RESUME_RUN_NOT_FOUND: no run "${id}" under ${runsDir(cwd)}`);
+  return JSON.parse(readFileSync(file, "utf-8")) as RunMeta;
+}
