@@ -18,3 +18,5 @@ kits/cursor/viewer/*.mjs
 .fastembed_cache/
 .kg/
 raw/
+AGENTS.md
+updates.html
