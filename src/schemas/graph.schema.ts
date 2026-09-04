@@ -21,6 +21,16 @@ const LoopConfig = z.object({
   max_rounds: z.number().int().min(1).default(3),
   exit_condition: z.string().optional(),
 });
+const AdvisorConfig = z.object({
+  model: NodeRef.default("fable"),
+  after_failed_rounds: z.number().int().min(1).default(1),
+  max_calls: z.number().int().min(1).default(1),
+});
+
+const FanOutConfig = z.object({
+  briefs_from: z.string().min(1),
+  template: z.string().min(1).default("{brief.body}"),
+});
 
 export const LoopGroupSchema = z
   .object({
@@ -48,6 +58,12 @@ const NodeDefSchema = z.object({
   evidence: z.array(z.string()).default([]),
   role: z.string().optional(),
   eval: EvalConfig.optional(),
+  advisor: AdvisorConfig.optional(),
+  fan_out: FanOutConfig.optional(),
+}).superRefine((n, ctx) => {
+  if (n.advisor && !(n.loop?.enabled)) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["advisor"], message: "advisor requires loop.enabled: true on the same node" });
+  }
 });
 
 const LimitsSchema = z.object({
@@ -146,6 +162,26 @@ const GraphSchema = z
             message: `depend_on references unknown node "${dep}"`,
           });
         }
+      }
+    }
+    // fan_out.briefs_from must be a reachable predecessor (transitive depend_on closure)
+    const upstreamOf = (id: string, seen = new Set<string>()): Set<string> => {
+      for (const dep of nodes[id]?.depend_on ?? []) {
+        if (names.has(dep) && !seen.has(dep)) {
+          seen.add(dep);
+          for (const t of upstreamOf(dep, seen)) seen.add(t);
+        }
+      }
+      return seen;
+    };
+    for (const [id, node] of Object.entries(nodes)) {
+      if (!node.fan_out) continue;
+      const upstream = upstreamOf(id);
+      const target = node.fan_out.briefs_from;
+      if (!names.has(target)) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["nodes", id, "fan_out", "briefs_from"], message: `fan_out.briefs_from references unknown node "${target}"` });
+      } else if (!upstream.has(target)) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["nodes", id, "fan_out", "briefs_from"], message: `fan_out.briefs_from "${target}" is not an upstream node of "${id}" — add it to depend_on` });
       }
     }
     // Cycle detection: DFS with colors (0=white, 1=gray, 2=black)
