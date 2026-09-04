@@ -37,13 +37,45 @@ gk graph waves graph.yaml --json
 
 This outputs the topological wave structure — which nodes run in parallel, which wait for dependencies. Parse the JSON to understand execution order.
 
-Then mark the run active so the gk plugin's guards engage: create `.graphkit/runs/.active` (empty marker) and write `.graphkit/runs/current.json`:
+### Step 1b: Start the run ledger
+
+```bash
+gk run start --graph graph.yaml --json
+```
+
+Before dispatching wave 1, start the ledger — it creates the `.graphkit/runs/.active`
+marker the gk plugin's guards key on. If it fails with `RUN_ACTIVE`, a previous run never
+ended — ask the user, or run `gk run status` to inspect, before proceeding.
+
+Then write `.graphkit/runs/current.json` with the resolved node constraints (the plugin's
+lease-enforce guard reads it to inject constraints into each dispatch):
 
 ```json
 { "name": "<graph name>", "started_at": "<ISO>", "constraints": { "<nodeId>": { "assigned_only": true } } }
 ```
 
 `constraints` maps each node id to its declared constraints from graph.yaml (same shape the compiled workflow runtime uses).
+
+### Recording nodes
+
+After EVERY node dispatch returns (ok or fail), append a trace line:
+
+```bash
+gk run node <node-id> --status ok|fail --wave <wave-index> --agent <agent> --evidence <comma,keys> --duration-ms <ms>
+```
+
+A failed dispatch (ok:false) MUST be recorded with `--status fail` BEFORE stopping the
+graph — the failure pattern is exactly what `gk memory consolidate` later surfaces.
+
+If the waves payload carries `hooks: [...]` on a node, run those command strings
+verbatim instead of hand-writing the equivalent `gk run node` call; `{node}` in the
+string substitutes the node id.
+
+### Ending
+
+After the final wave (and the evidence gate): `gk run end --status merged|blocked|failed`,
+then `gk memory consolidate --json`. If the payload has `on_graph_complete`, run those
+commands verbatim — `gk run end` + `gk memory consolidate` are what they normally contain.
 
 ### Step 2: Execute wave by wave
 
@@ -101,7 +133,8 @@ When a node's payload carries `fan_out`:
 
 ### Step 3: After all waves complete
 
-Remove the run markers: delete `.graphkit/runs/.active` and write `.graphkit/runs/{name}-result.json`.
+End the run ledger (see Ending above): `gk run end --status merged|blocked|failed` — this
+removes `.graphkit/runs/.active` — then write `.graphkit/runs/{name}-result.json`.
 
 Write a summary to `.graphkit/reports/<graph-name>.md` with:
 - Each node's verdict/output
