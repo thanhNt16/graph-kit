@@ -102,6 +102,28 @@ Each dispatch gets:
 
 3. **Handle loops** — per-node `loop.enabled`: if the result doesn't satisfy its `stop_when`, re-dispatch that node (up to `max_rounds`). Top-level `loops:` (multi-node groups): see [Loop groups](#loop-groups-multi-node-loops) below — the hybrid stop ladder replaces the advisory-only rule.
 
+## Advisor escalation
+
+When a node's payload carries `advisor`:
+
+1. Track the failed-round streak while looping the node (a round fails when `stop_when` is unmet, the agent exits non-zero, or required evidence is missing).
+2. When streak ≥ `advisor.after_failed_rounds` AND advisor calls this run < `advisor.max_calls`: dispatch a read-only advisor subagent via `gk_dispatch_agent` with `constraints: { no_write: true }` BEFORE the next node round:
+   - model tier = `advisor.model`; tools: none beyond read; MUST NOT edit files.
+   - input: the node's objective, the last round's output, and the failure evidence.
+   - ask for: a diagnosis and the single next action.
+3. Record the escalation: `gk run node <id> --advisor-fired <round> --streak <n>`.
+4. Append the advice to the node's objective under an `## Advisor guidance` heading and re-dispatch the NODE at its original model tier.
+5. If `max_calls` is reached or `max_rounds` is exhausted, take the existing failure path.
+
+## Fan-out execution
+
+When a node's payload carries `fan_out`:
+
+1. Read `briefs.json` (a JSON array of `{id, title, body}`) from the evidence of node `fan_out.briefs_from`. Missing/malformed file = a failed round for this node (normal loop semantics; advisor may then fire).
+2. Dispatch one parallel `gk_dispatch_agent` call per brief (issue all calls for the wave, then collect), objective = `fan_out.template` rendered with the brief (default template `{brief.body}`). Subagents run at the NODE's model tier.
+3. Barrier on all briefs; only `ok:true` results count toward the barrier; consolidate their outputs into this node's evidence and final output. Any failed brief (ok:false) marks the round failed.
+4. Empty briefs array: node output is "no briefs" — ok status.
+
 4. **Write evidence** — write one non-whitespace file per declared evidence key: `<evidence_dir>/<key>.md`
 
 

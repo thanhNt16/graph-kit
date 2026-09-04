@@ -96,6 +96,28 @@ Then continue to the next wave — skip the action-wave steps below for curator 
 4. **Handle loops** — if a node has `loop.enabled` and its result doesn't meet the stop condition (`stop_when` is advisory), re-dispatch that node (up to `max_rounds`).
 
 
+## Advisor escalation
+
+When a node's payload carries `advisor`:
+
+1. Track the failed-round streak while looping the node (a round fails when `stop_when` is unmet, the agent exits non-zero, or required evidence is missing).
+2. When streak ≥ `advisor.after_failed_rounds` AND advisor calls this run < `advisor.max_calls`: dispatch a read-only advisor subagent BEFORE the next node round:
+   - model tier = `advisor.model`; tools: none beyond read; MUST NOT edit files.
+   - input: the node's objective, the last round's output, and the failure evidence.
+   - ask for: a diagnosis and the single next action.
+3. Record the escalation: `gk run node <id> --advisor-fired <round> --streak <n>`.
+4. Append the advice to the node's objective under an `## Advisor guidance` heading and re-dispatch the NODE at its original model tier.
+5. If `max_calls` is reached or `max_rounds` is exhausted, take the existing failure path.
+
+## Fan-out execution
+
+When a node's payload carries `fan_out`:
+
+1. Read `briefs.json` (a JSON array of `{id, title, body}`) from the evidence of node `fan_out.briefs_from`. Missing/malformed file = a failed round for this node (normal loop semantics; advisor may then fire).
+2. Dispatch one parallel subagent per brief, objective = `fan_out.template` rendered with the brief (default template `{brief.body}`). Subagents run at the NODE's model tier.
+3. Barrier on all briefs; consolidate their outputs into this node's evidence and final output. Any failed brief marks the round failed.
+4. Empty briefs array: node output is "no briefs" — ok status.
+
 5. **Write evidence** — write one non-whitespace file per declared evidence key: `<evidence_dir>/<key>.md`
 
 
