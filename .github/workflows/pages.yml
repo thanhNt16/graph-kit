@@ -34,7 +34,8 @@ jobs:
           <a href="graphkit-v0.2-report.html">GraphKit v0.2 report</a> ·
           <a href="templates-and-viewer.md">Templates &amp; diagrams docs</a> ·
           <a href="context-profiles.md">Context profiles</a> ·
-          <a href="worktree-merge-protocol.md">Worktree merge protocol</a>
+          <a href="worktree-merge-protocol.md">Worktree merge protocol</a> ·
+          <a href="superpowers/specs/2026-09-04-fable-advisor-orchestration-design.md">Advisor &amp; fan-out design</a>
           </body></html>
           HTML
       - uses: actions/configure-pages@v5
