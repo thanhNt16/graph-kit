@@ -20,7 +20,8 @@
       "!**/.tmp-*",
       "!kits/*/viewer",
       "!docs/**/*.html",
-      "!**/*.svg"
+      "!**/*.svg",
+      "!cli-manifest.json"
     ]
   },
   "formatter": {

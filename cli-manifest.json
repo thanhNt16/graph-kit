@@ -5,192 +5,287 @@
     {
       "name": "init",
       "description": "Install the GraphKit kit into the current project",
-      "options": ["--json", "--force", "--target <target>"]
+      "options": [
+        "--json",
+        "--force",
+        "--target <target>"
+      ]
     },
     {
       "name": "new",
       "description": "Scaffold a new project with the GraphKit kit",
-      "options": ["--dir <dir>", "--json", "--target <target>"]
+      "options": [
+        "--dir <dir>",
+        "--json",
+        "--target <target>"
+      ]
     },
     {
       "name": "validate",
       "description": "Validate a graph.yaml",
-      "options": ["--json"]
+      "options": [
+        "--json"
+      ]
     },
     {
       "name": "status",
       "description": "Summarize active graph run and evidence coverage",
-      "options": ["--json"]
+      "options": [
+        "--json"
+      ]
     },
     {
       "name": "execute",
       "description": "Execute a graph.yaml (not yet implemented)",
-      "options": ["--json", "--worktree"]
+      "options": [
+        "--json",
+        "--worktree"
+      ]
     },
     {
       "name": "visualize",
       "description": "Visualize a graph.yaml (not yet implemented)",
-      "options": ["--json"]
+      "options": [
+        "--json"
+      ]
     },
     {
       "name": "gate",
       "description": "Deterministic evidence gate: MERGE/BLOCK over required evidence keys",
-      "options": ["--json"]
+      "options": [
+        "--json"
+      ]
     },
     {
       "name": "compile",
       "description": "Compile graph.yaml to a .workflow.js script",
-      "options": ["--output <path>", "--json"]
+      "options": [
+        "--output <path>",
+        "--json"
+      ]
     },
     {
       "name": "graph list",
       "description": "List session graphs",
-      "options": ["--json"]
+      "options": [
+        "--json"
+      ]
     },
     {
       "name": "graph switch",
       "description": "Switch active session graph",
-      "options": ["--json"]
+      "options": [
+        "--json"
+      ]
     },
     {
       "name": "graph show",
       "description": "Show a session graph (default active)",
-      "options": ["--json"]
+      "options": [
+        "--json"
+      ]
     },
     {
       "name": "graph topologies",
       "description": "List canonical topologies",
-      "options": ["--json"]
+      "options": [
+        "--json"
+      ]
     },
     {
       "name": "graph inspect",
       "description": "Inspect a topology's config keys",
-      "options": ["--json"]
+      "options": [
+        "--json"
+      ]
     },
     {
       "name": "graph new",
       "description": "Emit a graph.yaml template for a topology",
-      "options": ["--json"]
+      "options": [
+        "--json"
+      ]
     },
     {
       "name": "graph ascii",
       "description": "Render an ASCII diagram",
-      "options": ["--json"]
+      "options": [
+        "--json"
+      ]
     },
     {
       "name": "graph svg",
       "description": "Render an SVG export",
-      "options": ["--json"]
+      "options": [
+        "--json"
+      ]
     },
     {
       "name": "graph waves",
       "description": "Output topological wave structure",
-      "options": ["--json"]
+      "options": [
+        "--json"
+      ]
     },
     {
       "name": "graph index",
       "description": "Index memory into CBM",
-      "options": ["--json"]
+      "options": [
+        "--json"
+      ]
     },
     {
       "name": "graph search",
       "description": "Search the CBM memory graph",
-      "options": ["--json"]
+      "options": [
+        "--json"
+      ]
     },
     {
       "name": "graph ask",
       "description": "Ask a natural-language question (routed to the right CBM primitive)",
-      "options": ["--json"]
+      "options": [
+        "--json"
+      ]
     },
     {
       "name": "graph trace",
       "description": "Trace calls/callees in the CBM graph",
-      "options": ["--json"]
+      "options": [
+        "--json"
+      ]
     },
     {
       "name": "graph query",
       "description": "Run a Cypher query against the CBM graph",
-      "options": ["--json"]
+      "options": [
+        "--json"
+      ]
     },
     {
       "name": "memory index",
       "description": "Index .graphkit/memory/ into the CBM memory project",
-      "options": ["--project <project>", "--json"]
+      "options": [
+        "--project <project>",
+        "--json"
+      ]
     },
     {
       "name": "memory trace",
       "description": "ACT-R score + expire .graphkit/memory/ entries (decay pass)",
-      "options": ["--json"]
+      "options": [
+        "--json"
+      ]
     },
     {
       "name": "memory touch",
       "description": "Reinforce a memory (bump use_count/last_used_at) so decay keeps it",
-      "options": ["--json"]
+      "options": [
+        "--json"
+      ]
     },
     {
       "name": "memory recall",
       "description": "Query .graphkit/memory (keyword×salience + validity filters); reinforces survivors",
-      "options": ["--json"]
+      "options": [
+        "--json"
+      ]
     },
     {
       "name": "memory consolidate",
       "description": "Derive patterns, suggestions, and links from the run ledger",
-      "options": ["--json"]
+      "options": [
+        "--json"
+      ]
     },
     {
       "name": "template pack",
       "description": "Package a graph.yaml as a reusable GraphTemplate",
-      "options": ["--name <name>", "--global", "--force", "--input <file>"]
+      "options": [
+        "--name <name>",
+        "--global",
+        "--force",
+        "--input <file>"
+      ]
     },
     {
       "name": "template list",
       "description": "List packaged templates",
-      "options": ["--json"]
+      "options": [
+        "--json"
+      ]
     },
     {
       "name": "template show",
       "description": "Show a packaged template",
-      "options": ["--json"]
+      "options": [
+        "--json"
+      ]
     },
     {
       "name": "template materialize",
       "description": "Materialize a template into a session graph",
-      "options": ["--params <json>", "--use", "--json"]
+      "options": [
+        "--params <json>",
+        "--use",
+        "--json"
+      ]
     },
     {
       "name": "inventory",
       "description": "Inventory installed agents, skills, tools, and MCP servers",
-      "options": ["--target <target>", "--json"]
+      "options": [
+        "--target <target>",
+        "--json"
+      ]
     },
     {
       "name": "models cursor",
       "description": "Show the Cursor model mapping",
-      "options": ["--json"]
+      "options": [
+        "--json"
+      ]
     },
     {
       "name": "models cursor set",
       "description": "Set a Cursor model override",
-      "options": ["--map <k=v,...>", "--json"]
+      "options": [
+        "--map <k=v,...>",
+        "--json"
+      ]
     },
     {
       "name": "models cursor reset",
       "description": "Remove Cursor model overrides",
-      "options": ["--json"]
+      "options": [
+        "--json"
+      ]
     },
     {
       "name": "run start",
       "description": "Start a run and write the ledger entry",
-      "options": ["--graph <path>", "--json"]
+      "options": [
+        "--graph <path>",
+        "--json"
+      ]
     },
     {
       "name": "evidence add",
       "description": "Record a typed artifact against an evidence key",
-      "options": ["--key <k>", "--node <n>", "--note <text>", "--json"]
+      "options": [
+        "--key <k>",
+        "--node <n>",
+        "--note <text>",
+        "--json"
+      ]
     },
     {
       "name": "evidence report",
       "description": "Criterion-first evidence report (markdown, or --html page)",
-      "options": ["--html", "--json"]
+      "options": [
+        "--html",
+        "--json"
+      ]
     },
     {
       "name": "run node",
@@ -209,22 +304,36 @@
     {
       "name": "run end",
       "description": "Finalize the active run and append to index.jsonl",
-      "options": ["--status <status>", "--json"]
+      "options": [
+        "--status <status>",
+        "--json"
+      ]
     },
     {
       "name": "run status",
       "description": "Show the active run directory",
-      "options": ["--json"]
+      "options": [
+        "--json"
+      ]
     },
     {
       "name": "run resume",
       "description": "Derive a pending-only session graph from a failed/interrupted run and start a child run",
-      "options": ["--from-node <id>", "--dry-run", "--force", "--json"]
+      "options": [
+        "--from-node <id>",
+        "--dry-run",
+        "--force",
+        "--json"
+      ]
     },
     {
       "name": "suggest",
       "description": "Show ranked workflow suggestions from memory",
-      "options": ["--dismiss <id>", "--all", "--json"]
+      "options": [
+        "--dismiss <id>",
+        "--all",
+        "--json"
+      ]
     }
   ]
 }
