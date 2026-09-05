@@ -1,6 +1,6 @@
 {
   "cli": "gk",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "commands": [
     {
       "name": "init",
@@ -178,9 +178,9 @@
       "options": ["--json"]
     },
     {
-      "name": "evidence report",
-      "description": "Criterion-first evidence report (markdown, or --html page)",
-      "options": ["--html", "--json"]
+      "name": "run start",
+      "description": "Start a run and write the ledger entry",
+      "options": ["--graph <path>", "--json"]
     },
     {
       "name": "evidence add",
@@ -188,9 +188,9 @@
       "options": ["--key <k>", "--node <n>", "--note <text>", "--json"]
     },
     {
-      "name": "run start",
-      "description": "Start a run and write the ledger entry",
-      "options": ["--graph <path>", "--json"]
+      "name": "evidence report",
+      "description": "Criterion-first evidence report (markdown, or --html page)",
+      "options": ["--html", "--json"]
     },
     {
       "name": "run node",
