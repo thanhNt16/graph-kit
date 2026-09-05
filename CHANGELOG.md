@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 ## [Unreleased]
+### Added
+- `criteria/` registry + `evidence.criteria` id list + `evidence.freshness: report|strict` in graph.yaml; `criteria-keys`/`criteria-file` validation
+- `gk evidence add` — content-addressed artifacts with provenance markers (`EVIDENCE_KEY_NOT_DECLARED` / `EVIDENCE_FILE_MISSING` / `EVIDENCE_TOO_LARGE`)
+- Gate/status per-key freshness (`fresh|stale|unknown`); strict mode BLOCKs on stale required keys
+- `gk evidence report` — criterion-first markdown + `--html` self-contained page (SVG never inlined, all content escaped)
+- `gk run start` stamps the repo fingerprint into the run ledger
 
 
 ## [0.3.8] - 2026-09-05

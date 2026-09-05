@@ -1,11 +1,11 @@
 import { createHash } from "node:crypto";
 import { appendFileSync, copyFileSync, existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { basename, extname, join } from "node:path";
+import type { Graph } from "../compiler/validate.js";
 import { GraphKitError } from "../errors.js";
 import { activeRun } from "../memory/ledger.js";
-import type { Graph } from "../compiler/validate.js";
 import { fingerprint } from "./fingerprint.js";
-import { renderMarker, type MarkerMeta } from "./marker.js";
+import { type MarkerMeta, renderMarker } from "./marker.js";
 
 export const DEFAULT_MAX_BYTES = 10 * 1024 * 1024;
 
@@ -32,9 +32,13 @@ export function addEvidence(
     ...Object.values(graph.nodes).flatMap((n) => n.evidence),
   ]);
   if (!declared.has(opts.key)) {
-    throw new GraphKitError("EVIDENCE_KEY_NOT_DECLARED", `Evidence key "${opts.key}" is not required by the graph nor produced by any node`, {
-      hint: "Declare it in evidence.required_keys or nodes.<id>.evidence in graph.yaml",
-    });
+    throw new GraphKitError(
+      "EVIDENCE_KEY_NOT_DECLARED",
+      `Evidence key "${opts.key}" is not required by the graph nor produced by any node`,
+      {
+        hint: "Declare it in evidence.required_keys or nodes.<id>.evidence in graph.yaml",
+      },
+    );
   }
   if (!existsSync(opts.file)) throw new GraphKitError("EVIDENCE_FILE_MISSING", `File not found: ${opts.file}`);
   const maxBytes = opts.maxBytes ?? maxBytesFromConfig(cwd);

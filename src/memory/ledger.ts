@@ -3,6 +3,8 @@ import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSyn
 import { basename, isAbsolute, join, resolve } from "node:path";
 import YAML from "yaml";
 
+import { fingerprint } from "../evidence/fingerprint.js";
+
 export interface TraceLine {
   at: string;
   node: string;
@@ -102,6 +104,7 @@ export function startRun(
     graph: name,
     graph_path: resolved,
     graph_sha256: createHash("sha256").update(raw).digest("hex"),
+    fingerprint: fingerprint(cwd),
     started_at: now,
   };
   if (resumes) meta.resumes = resumes;

@@ -24,7 +24,7 @@ describe("fingerprint", () => {
   test("stable across calls; commit moves head; edit moves tree", () => {
     const d = mk();
     const git = (cmd: string) => execSync(cmd, { cwd: d, stdio: "ignore" });
-    git('git init -q && git config user.email t@t && git config user.name t');
+    git("git init -q && git config user.email t@t && git config user.name t");
     writeFileSync(join(d, "a.txt"), "one\n");
     git("git add -A && git commit -qm one");
 
@@ -46,7 +46,7 @@ describe("fingerprint", () => {
   test("untracked file enters tree", () => {
     const d = mk();
     const git = (cmd: string) => execSync(cmd, { cwd: d, stdio: "ignore" });
-    git('git init -q && git config user.email t@t && git config user.name t && git commit -q --allow-empty -m e');
+    git("git init -q && git config user.email t@t && git config user.name t && git commit -q --allow-empty -m e");
     const before = fingerprint(d);
     writeFileSync(join(d, "u.txt"), "u\n");
     const after = fingerprint(d);

@@ -3,9 +3,9 @@ import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import YAML from "yaml";
+import { validateGraph } from "../../src/compiler/validate.js";
 import { loadCriteria } from "../../src/evidence/criteria.js";
 import { GraphSchema } from "../../src/schemas/graph.schema.js";
-import { validateGraph } from "../../src/compiler/validate.js";
 
 let cwd: string;
 beforeEach(() => {
@@ -44,8 +44,7 @@ describe("criteria schema + validation", () => {
 
   test("rejects object entries and bad freshness", () => {
     expect(
-      GraphSchema.safeParse(graphObj({ required_keys: ["api-response"], criteria: [{ id: "api-response" }] }))
-        .success,
+      GraphSchema.safeParse(graphObj({ required_keys: ["api-response"], criteria: [{ id: "api-response" }] })).success,
     ).toBe(false);
     expect(GraphSchema.safeParse(graphObj({ required_keys: ["api-response"], freshness: "always" })).success).toBe(
       false,
@@ -54,14 +53,14 @@ describe("criteria schema + validation", () => {
 
   test("criteria-keys rejects orphans and duplicates", () => {
     const orphan = parseGraph({ required_keys: ["api-response"], criteria: ["nope"] });
-    expect(
-      validateGraph(orphan, cwd).some((f) => f.check === "criteria-keys" && f.message.includes("nope")),
-    ).toBe(true);
+    expect(validateGraph(orphan, cwd).some((f) => f.check === "criteria-keys" && f.message.includes("nope"))).toBe(
+      true,
+    );
 
     const dup = parseGraph({ required_keys: ["api-response"], criteria: ["api-response", "api-response"] });
-    expect(
-      validateGraph(dup, cwd).some((f) => f.check === "criteria-keys" && f.message.includes("Duplicate")),
-    ).toBe(true);
+    expect(validateGraph(dup, cwd).some((f) => f.check === "criteria-keys" && f.message.includes("Duplicate"))).toBe(
+      true,
+    );
   });
 
   test("criteria-file rejects missing registry file and id mismatch", () => {
@@ -78,9 +77,7 @@ describe("criteria schema + validation", () => {
     ).toBe(true);
 
     writeFileSync(join(cwd, "criteria", "api-response.md"), "---\nid: other\nkind: json\n---\nbody\n");
-    expect(
-      validateGraph(missing, cwd).some((f) => f.check === "criteria-file" && f.message.includes("id")),
-    ).toBe(true);
+    expect(validateGraph(missing, cwd).some((f) => f.check === "criteria-file" && f.message.includes("id"))).toBe(true);
   });
 
   test("loadCriteria: kind default, body is description, never throws", () => {

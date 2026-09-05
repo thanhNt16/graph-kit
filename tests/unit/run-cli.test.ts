@@ -64,6 +64,8 @@ describe("gk run CLI", () => {
       const startOk = JSON.parse(runCli(["run", "start"], cwd).stdout);
       expect(startOk.status).toBe("ok");
       expect(startOk.data.id).toMatch(/test-graph$/);
+      const metaFile = JSON.parse(readFileSync(join(startOk.data.dir, "meta.json"), "utf-8"));
+      expect(metaFile.fingerprint).toEqual({ head: null, tree: null }); // tmp cwd is not a git repo
 
       // 4. Status returns active run directory
       const activeStatus = JSON.parse(runCli(["run", "status"], cwd).stdout);

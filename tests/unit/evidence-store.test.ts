@@ -4,7 +4,7 @@ import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import YAML from "yaml";
-import { GraphKitError } from "../../src/errors.js";
+import type { GraphKitError } from "../../src/errors.js";
 import { addEvidence, DEFAULT_MAX_BYTES, maxBytesFromConfig } from "../../src/evidence/store.js";
 import { GraphSchema } from "../../src/schemas/graph.schema.js";
 

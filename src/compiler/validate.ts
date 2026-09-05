@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import YAML from "yaml";
 import type { z } from "zod";
@@ -140,7 +140,7 @@ export function validateGraph(graph: Graph, projectRoot: string): Finding[] {
       });
     } else {
       const head = readFileSync(file, "utf-8").match(/^---\n([\s\S]*?)\n---/);
-      const fmId = head ? (YAML.parse(head[1]) ?? {}).id : undefined;
+      const fmId = head ? YAML.parse(head[1])?.id : undefined;
       if (fmId !== undefined && fmId !== id) {
         findings.push({
           check: "criteria-file",

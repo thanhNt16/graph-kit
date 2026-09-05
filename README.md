@@ -364,6 +364,28 @@ gk gate graph.yaml
 
 `gk gate` reads each required key `k` as `<evidence_dir>/<k>.md` and prints a deterministic MERGE/BLOCK verdict with a per-key scorecard and sha256 manifest. Exit 0 means `MERGE`; a missing or whitespace-only key yields `BLOCK` with exit 1 — repair or redispatch only the producer of that key, then rerun the gate. Compiled workflows do not invoke the gate automatically; it is the orchestrator's final step.
 
+### Criteria registry, provenance, freshness
+
+Declare what each key *means* in a criteria registry at the repo root, reference it from the graph, and make freshness load-bearing:
+
+```yaml
+evidence:
+  required_keys: [api-response]
+  criteria: [api-response]      # ids → criteria/<id>.md
+  freshness: report             # report (default) | strict
+```
+
+```bash
+echo '---
+kind: json
+---
+GET /users returns 200' > criteria/api-response.md
+gk evidence add resp.json --key api-response --node probe   # content-addressed blob + provenance marker
+gk evidence report --html      # criterion-first report → .graphkit/reports/<name>-evidence.html
+```
+
+`gk evidence add` copies the artifact to `<evidence_dir>/<key>/<sha256><ext>` and rewrites `<key>.md` with frontmatter provenance (run id, node, repo fingerprint head+tree, sha256, bytes, note); undeclared keys, missing files, and oversize artifacts fail with `EVIDENCE_KEY_NOT_DECLARED` / `EVIDENCE_FILE_MISSING` / `EVIDENCE_TOO_LARGE`. `gk gate` (and `gk status`) report per-key freshness `fresh|stale|unknown`; with `freshness: strict`, a stale required key BLOCKs the merge. The HTML report is self-contained: base64 `<img>` for screenshots (SVG linked, never inlined), escaped `<pre>` for text/JSON, zero scripts.
+
 ## Memory
 
 gk remembers every run and improves suggestions over time — all deterministic, no model calls.

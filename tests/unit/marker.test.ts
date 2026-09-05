@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { freshnessOf, parseMarker, renderMarker, type MarkerMeta } from "../../src/evidence/marker.js";
+import { freshnessOf, type MarkerMeta, parseMarker, renderMarker } from "../../src/evidence/marker.js";
 
 const meta: MarkerMeta = {
   key: "api-response",

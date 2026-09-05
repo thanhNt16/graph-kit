@@ -134,7 +134,11 @@ const GraphSchema = z
       .default({}),
     nodes: z.record(z.string(), NodeDefSchema).default({}),
     limits: LimitsSchema.optional().default(() => ({})),
-    evidence: EvidenceSchema.optional().default(() => ({ required_keys: [], format: "markdown" as const, freshness: "report" as const })),
+    evidence: EvidenceSchema.optional().default(() => ({
+      required_keys: [],
+      format: "markdown" as const,
+      freshness: "report" as const,
+    })),
     topology_config: z
       .record(z.string(), z.any())
       .default({})

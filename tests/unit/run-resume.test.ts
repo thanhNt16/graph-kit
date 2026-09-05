@@ -92,7 +92,7 @@ describe("reconcileRun", () => {
   test("graph changed since run → RESUME_GRAPH_DRIFT", () => {
     const { id } = startRun(cwd, join(cwd, "graph.yaml"), "2026-09-04T10:00:00.000Z");
     endRun(cwd, "failed", "2026-09-04T10:05:00.000Z");
-    writeFileSync(join(cwd, "graph.yaml"), GRAPH + "# drifted\n");
+    writeFileSync(join(cwd, "graph.yaml"), `${GRAPH}# drifted\n`);
     expect(() => reconcileRun(cwd, id)).toThrow(/RESUME_GRAPH_DRIFT/);
     expect(() => reconcileRun(cwd, id, { force: true })).not.toThrow();
   });
@@ -138,7 +138,7 @@ describe("deriveResumeGraph", () => {
     expect(derived.metadata.name).toBe("demo-resume");
     expect(derived.nodes.b!.depend_on).toEqual([]);
     expect(derived.nodes.b!.refs).toEqual([
-      { path: ".graphkit/evidence/a-out.md", purpose: "resumed evidence from node a (run " + id + ")" },
+      { path: ".graphkit/evidence/a-out.md", purpose: `resumed evidence from node a (run ${id})` },
     ]);
     expect(derived.nodes.c!.depend_on).toEqual(["b"]);
     expect(derived.topology).toBe("custom");
@@ -213,7 +213,7 @@ describe("deriveResumeGraph", () => {
     expect(GraphSchema.safeParse(derived).success).toBe(true);
   });
   test("evidence.required_keys pruned to keys produced by pending nodes (satisfied keys exist on disk)", () => {
-    const graph = GRAPH + "evidence:\n  required_keys: [a-out, b-out]\n";
+    const graph = `${GRAPH}evidence:\n  required_keys: [a-out, b-out]\n`;
     writeFileSync(join(cwd, "graph.yaml"), graph);
     const { id } = startRun(cwd, join(cwd, "graph.yaml"), "2026-09-04T10:00:00.000Z");
     writeEvidence(cwd, "a-out");
