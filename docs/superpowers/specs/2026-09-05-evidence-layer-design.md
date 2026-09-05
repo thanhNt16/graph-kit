@@ -1,5 +1,8 @@
 # Evidence Layer Port — Design Spec
 
+Date: 2026-09-05
+Status: Revised — pending re-approval (criteria registry switch)
+Origin: RunPort PRD v0.3 judged by 4 parallel reviewers (product/architecture/security/agent-DX; scores 3-4.5/10). Convergent verdict: RunPort's criterion-linked evidence model with freshness states is the real asset; its Docker execution layer is a commodity trap. This spec ports the surviving ideas into GraphKit. GK stays zero-runtime — no Docker, no daemon, no MCP surface.
 
 ## Decisions (user-selected)
 
@@ -88,7 +91,7 @@ Behavior:
    ---
    <marker body: one-line description>
    ```
-5. Append index entry to `.graphkit/evidence/.index` (existing index format, extended fields).
+5. Append a JSONL entry to `.graphkit/evidence/.index` — same line format as the kit hook `evidence-persist.cjs` (`{"file":...,"at":...}`), extended with `key`, `node`, `artifact`, `sha256`. Existing lines (hook-written, two-field) remain valid.
 
 Markers from the legacy convention (no frontmatter) remain valid: freshness `unknown`.
 
