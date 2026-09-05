@@ -110,6 +110,11 @@ export const CLI_COMMANDS: { path: string; description: string; options: string[
     options: ["--key <k>", "--node <n>", "--note <text>", "--json"],
   },
   {
+    path: "evidence report",
+    description: "Criterion-first evidence report (markdown, or --html page)",
+    options: ["--html", "--json"],
+  },
+  {
     path: "run node",
     description: "Append a node trace line to the active run",
     options: [

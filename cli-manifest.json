@@ -178,6 +178,11 @@
       "options": ["--json"]
     },
     {
+      "name": "evidence report",
+      "description": "Criterion-first evidence report (markdown, or --html page)",
+      "options": ["--html", "--json"]
+    },
+    {
       "name": "evidence add",
       "description": "Record a typed artifact against an evidence key",
       "options": ["--key <k>", "--node <n>", "--note <text>", "--json"]
