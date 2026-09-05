@@ -1,13 +1,10 @@
 # Evidence Layer Port — Design Spec
 
-Date: 2026-09-05
-Status: Approved (user), pending implementation plan
-Origin: RunPort PRD v0.3 judged by 4 parallel reviewers (product/architecture/security/agent-DX; scores 3–4.5/10). Convergent verdict: RunPort's criterion-linked evidence model with freshness states is the real asset; its Docker execution layer is a commodity trap. This spec ports the surviving ideas into GraphKit. GK stays zero-runtime — no Docker, no daemon, no MCP surface.
 
 ## Decisions (user-selected)
 
 1. **Scope**: Port ideas into GK — artifact evidence store, freshness/fingerprints, criterion model. No execution environments.
-2. **Criteria live in graph.yaml** as typed criterion objects; backward-compatible with bare `required_keys` strings.
+2. **Criteria live in a separate registry** (`criteria/<id>.md` at repo root — `.graphkit/` is gitignored so it cannot host tracked sources), referenced by id from graph.yaml; compiler-validated; backward-compatible with bare `required_keys` strings. *(Revised 2026-09-05: switched from in-graph.yaml objects — user decision.)*
 3. **Freshness**: report-only by default; graphs opt into `evidence.freshness: strict` where stale required-key evidence BLOCKs the gate.
 4. **Artifact submission**: new `gk evidence add` CLI; content-addressed store + provenance markers. No file-convention path for binaries.
 5. **Review surface**: criterion-first markdown report + `gk evidence report --html` self-contained page.
@@ -21,26 +18,32 @@ Origin: RunPort PRD v0.3 judged by 4 parallel reviewers (product/architecture/se
 ```yaml
 evidence:
   required_keys: [report, api-response]   # unchanged; bare strings still valid
-  criteria:                               # optional, new
-    - id: api-response
-      description: "GET /users returns 200, schema-valid body"
-      kind: json                          # report | screenshot | json | metrics | text
+  criteria: [api-response]                # optional, new — ids resolved from the registry
   freshness: strict                       # optional; "report" (default) | "strict"
+```
+
+Registry file `criteria/<id>.md` (one per criterion, id = filename):
+
+```markdown
+---
+kind: json                                # report (default) | screenshot | json | metrics | text
+---
+GET /users returns 200, schema-valid body
 ```
 
 Rules:
 
-- `criteria[].id` MUST appear in `evidence.required_keys` or in some node's `evidence` array. New `gk validate` check `criteria-keys` rejects orphans.
-- Duplicate `criteria[].id` rejected.
-- `kind` drives rendering only — never gating. Default `report`.
+- `evidence.criteria` is a list of **ids**; each id MUST appear in `evidence.required_keys` or in some node's `evidence` array — new `gk validate` check `criteria-keys` rejects orphans and duplicate ids.
+- Each listed id MUST have a registry file `criteria/<id>.md` — new check `criteria-file` rejects missing files. The file's frontmatter `id` (if present) MUST match its filename.
+- `kind` drives rendering only — never gating. Registry body text is the criterion description.
 - Bare keys without a criteria entry behave exactly as today (presence-gated `<key>.md`).
-- No revision DAG: graph.yaml sha256 in the run ledger already records criterion revision history.
+- No revision DAG: git history of `criteria/` already records criterion revisions.
 
-Zod (`src/schemas/graph.schema.ts`): `EvidenceSchema` gains optional `criteria: CriterionSchema[]` and `freshness: z.enum(["report","strict"]).default("report")` where `CriterionSchema = { id, description?, kind: z.enum([...]).default("report") }`.
+Zod (`src/schemas/graph.schema.ts`): `EvidenceSchema` gains optional `criteria: z.array(z.string())` and `freshness: z.enum(["report","strict"]).default("report")`. Registry loading is a new module `src/evidence/criteria.ts`: `loadCriteria(cwd, ids) -> Map<string, { description: string; kind: "report"|"screenshot"|"json"|"metrics"|"text" }>` (missing file → validation finding at `gk validate`; loader itself never throws).
 
 ## 2. Fingerprint and freshness
 
-`fingerprint(cwd)`:
+fingerprint(cwd):
 
 - `head`: `git rev-parse HEAD` (null when not a repo or no commits).
 - `tree`: sha256 over the sorted list of (path, content-sha256) for dirty tracked files (`git ls-files -m`) plus untracked non-ignored files (`git ls-files -o --exclude-standard`). Cap: files > 1MB contribute path + size + mtime instead of content hash (cheap, avoids big-binary stalls).
@@ -123,7 +126,7 @@ Markers from the legacy convention (no frontmatter) remain valid: freshness `unk
 2. Strict gate: stale required key BLOCKs; `unknown` never blocks; default mode reports but MERGEs.
 3. Marker round-trip: legacy marker (no frontmatter) still passes old gate; new marker passes old gate (body non-whitespace).
 4. `EVIDENCE_KEY_NOT_DECLARED` / `_MISSING` / `_TOO_LARGE` exit 1 with codes, no partial writes.
-5. `criteria-keys` validation: orphan criterion id and duplicate id rejected; valid criteria pass.
+5. `criteria-keys` + `criteria-file` validation: orphan id, duplicate id, missing registry file rejected; valid id-with-file passes. `loadCriteria` round-trip: kind default, body → description.
 6. HTML escaping: artifact containing `<script>alert(1)</script>` renders escaped; SVG screenshot refused inline.
 7. Content-addressing: same file added twice → one artifact blob, marker updated.
 
