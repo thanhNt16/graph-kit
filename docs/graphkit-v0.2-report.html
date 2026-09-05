@@ -149,7 +149,7 @@
 <body>
 
 <div class="hero">
-  <div class="hero-badge">gk v0.3.2 · graph engineering kit</div>
+  <div class="hero-badge">gk v0.3.5 · graph engineering kit</div>
   <h1>GraphKit</h1>
   <p class="hero-tag">Define graph-structured agent workflows as YAML. Compile to host-native execution across five targets — Claude Code, Cursor, OpenCode, Codex and Pi — each with its own native dispatch path. Eleven topologies, five targets, one CLI. Per-node model tiering. Evidence-based gates. Zero custom runtime. Now with a run ledger, project memory patterns, advisor escalation, and dynamic fan-out.</p>
   <div class="hero-stats">
@@ -327,6 +327,29 @@ gk suggest --dismiss &lt;id&gt;                 <span class="cmt"># keep the fil
       <div class="subsys-tag" style="background:rgba(57,208,216,0.15);color:var(--bridge)">COMPOUNDS</div>
       <p style="font-size:0.82rem;color:var(--text-dim)">Recall widened to subfolders with <code>.links.json</code> neighbors below direct hits. The <strong style="color:var(--text)">dream graph</strong> template proposes memory consolidations as reviewable diffs in <code>.graphkit/inbox/</code>. The waves payload now carries <code>hooks</code> (<code>on_node_complete</code>) and <code>on_graph_complete</code> commands verbatim to every host.</p>
     </div>
+  </div>
+</div>
+
+<div class="section">
+  <div class="section-label">Checkpoint Resume <span class="badge-new">0.3.5</span></div>
+  <h2>Failed Runs Resume Where They Stopped</h2>
+  <p>A failed or interrupted run is not a restart. <code>gk run resume &lt;run-id&gt;</code> <strong style="color:var(--text)">reconciles</strong> the ledger against the recorded graph — a node counts as satisfied only if its last trace line passed <em>and</em> every declared evidence key exists on disk — then <strong style="color:var(--text)">derives</strong> a pending-only session graph: dependents of failures reopen, satisfied upstreams drop out, and their evidence reattaches to pending nodes as <code>refs</code>. The derived graph is validated against the same structural rules the compiler enforces (fan-out targets, loop membership, required evidence, eval-gate dependencies) <em>before</em> anything is written, activated as the session graph, and run as a child carrying <code>resumes:</code> provenance — visible in <code>gk run status</code> as the full chain.</p>
+  <div class="lifecycle">
+    <div class="lc-step new"><div class="name">reconcile</div><div class="desc">passed ∩ evidence-on-disk → satisfied</div></div>
+    <div class="lc-step new"><div class="name">derive</div><div class="desc">pending-only graph · evidence → refs</div></div>
+    <div class="lc-step new"><div class="name">validate</div><div class="desc">compile rules, fail-fast, nothing written</div></div>
+    <div class="lc-step new"><div class="name">activate + start</div><div class="desc">session graph on · child run · resumes:</div></div>
+  </div>
+  <div class="code-block">
+    <div class="code-header"><div class="code-dot" style="background:#f85149"></div><div class="code-dot" style="background:#d29922"></div><div class="code-dot" style="background:#3fb950"></div> checkpoint resume</div>
+    <div class="code-body"><span class="cmt"># A run failed mid-flight:</span>
+gk run resume &lt;run-id&gt;              <span class="cmt"># derive pending-only graph + start child run</span>
+gk run resume &lt;run-id&gt; --dry-run    <span class="cmt"># preview reconciliation, write nothing</span>
+gk run resume &lt;run-id&gt; --from-node scan  <span class="cmt"># redo scan + dependents</span>
+gk run status                        <span class="cmt"># resumes_chain: [child, parent, …]</span>
+
+<span class="cmt"># Graph edited since the run started? Refused:</span>
+<span style="color:#f85149">RESUME_GRAPH_DRIFT</span> — commit the change and start fresh, or <span class="str">--force</span> consciously.</div>
   </div>
 </div>
 
