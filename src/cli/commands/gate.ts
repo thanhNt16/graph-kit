@@ -5,6 +5,8 @@ import type { CAC } from "cac";
 import { validateGraph } from "../../compiler/validate.js";
 import { GraphKitError } from "../../errors.js";
 import { scoreWorkProduct } from "../../eval/rubrics.js";
+import { fingerprint } from "../../evidence/fingerprint.js";
+import { type Freshness, freshnessOf, parseMarker } from "../../evidence/marker.js";
 import { fail, ok } from "../output.js";
 import { loadGraph } from "./graph.js";
 
@@ -21,32 +23,44 @@ import { loadGraph } from "./graph.js";
 export interface GateResult {
   verdict: "MERGE" | "BLOCK";
   scorecard: Record<string, "ok" | "missing" | "empty">;
+  freshness: Record<string, Freshness>;
   missing: string[];
   manifest: Record<string, { path: string; sha256: string; bytes: number }>;
 }
 
-export function gateGraph(requiredKeys: string[], evidenceDir: string): GateResult {
+export function gateGraph(
+  requiredKeys: string[],
+  evidenceDir: string,
+  opts?: { cwd?: string; strict?: boolean },
+): GateResult {
   const evidence: Record<string, string | undefined> = {};
   const manifest: Record<string, { path: string; sha256: string; bytes: number }> = {};
+  const freshness: Record<string, Freshness> = {};
+  const cur = opts?.cwd ? fingerprint(opts.cwd) : null;
   for (const key of requiredKeys) {
     const p = join(evidenceDir, `${key}.md`);
     if (!existsSync(p)) {
       evidence[key] = undefined; // → "missing"
+      freshness[key] = "unknown";
       continue;
     }
     const content = readFileSync(p, "utf-8");
     evidence[key] = content;
+    freshness[key] = freshnessOf(parseMarker(content), cur ?? { head: null, tree: null });
     manifest[key] = {
       path: p,
       sha256: createHash("sha256").update(content).digest("hex"),
       bytes: Buffer.byteLength(content),
     };
   }
-  const { verdict, scorecard } = scoreWorkProduct({ required_keys: requiredKeys }, evidence, "strict");
+  const base = scoreWorkProduct({ required_keys: requiredKeys }, evidence, "strict");
+  const stale = requiredKeys.filter((k) => freshness[k] === "stale" && base.scorecard[k] === "ok");
+  const verdict = opts?.strict && stale.length > 0 ? "BLOCK" : base.verdict;
   return {
     verdict,
-    scorecard,
-    missing: Object.entries(scorecard)
+    scorecard: base.scorecard,
+    freshness,
+    missing: Object.entries(base.scorecard)
       .filter(([, s]) => s !== "ok")
       .map(([k]) => k),
     manifest,
@@ -68,13 +82,23 @@ export function registerGateCommand(cli: CAC) {
           return;
         }
         const evidenceDir = join(process.cwd(), graph.outputs.evidence_dir);
-        const { verdict, scorecard, missing, manifest } = gateGraph(graph.evidence.required_keys, evidenceDir);
+        const { verdict, scorecard, freshness, missing, manifest } = gateGraph(
+          graph.evidence.required_keys,
+          evidenceDir,
+          {
+            cwd: process.cwd(),
+            strict: graph.evidence.freshness === "strict",
+          },
+        );
+        const stale = Object.keys(freshness).filter((k) => freshness[k] === "stale" && scorecard[k] === "ok");
         if (verdict === "MERGE") {
-          console.log(JSON.stringify(ok({ verdict, scorecard, manifest })));
+          console.log(JSON.stringify(ok({ verdict, scorecard, freshness, manifest })));
           return;
         }
         console.log(
-          JSON.stringify(fail("GATE_BLOCK", "evidence gate blocked merge", { missing, scorecard, manifest })),
+          JSON.stringify(
+            fail("GATE_BLOCK", "evidence gate blocked merge", { missing, stale, scorecard, freshness, manifest }),
+          ),
         );
         process.exit(1);
       } catch (e) {

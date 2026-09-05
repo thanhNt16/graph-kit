@@ -28,7 +28,9 @@ export function fingerprint(cwd: string): Fingerprint {
   const changed = git(["ls-files", "-m"], cwd)?.split("\n").filter(Boolean) ?? [];
   const untracked = git(["ls-files", "-o", "--exclude-standard"], cwd)?.split("\n").filter(Boolean) ?? [];
   const lines: string[] = [];
-  for (const rel of [...new Set([...changed, ...untracked])].sort()) {
+  // .graphkit/ holds kit outputs (runs, evidence) — state noise, never source;
+  // excluded so writing a marker never invalidates the fingerprint it records.
+  for (const rel of [...new Set([...changed, ...untracked])].filter((r) => !r.startsWith(".graphkit/")).sort()) {
     const p = join(cwd, rel);
     try {
       const st = statSync(p);

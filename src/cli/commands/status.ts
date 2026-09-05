@@ -37,7 +37,7 @@ export function registerStatusCommand(cli: CAC) {
         try {
           const graph = loadGraph(join(cwd, "graph.yaml"));
           const evidenceDir = join(cwd, graph.outputs.evidence_dir);
-          coverage = gateGraph(graph.evidence.required_keys, evidenceDir);
+          coverage = gateGraph(graph.evidence.required_keys, evidenceDir, { cwd });
         } catch (e) {
           gateError = e instanceof GraphKitError ? e.code : "UNKNOWN";
         }
