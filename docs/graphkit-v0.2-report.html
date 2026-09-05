@@ -41,6 +41,31 @@
   .section > p { color:var(--text-dim); margin-bottom:1rem; max-width:740px; }
   .badge-new { display:inline-block; padding:0.1rem 0.5rem; border-radius:4px; font-size:0.68rem; font-family:'IBM Plex Mono',monospace; font-weight:600; background:rgba(57,208,216,0.15); color:var(--bridge); vertical-align:middle; margin-left:0.4rem; }
 
+  .nav { position:sticky; top:0; z-index:50; display:flex; align-items:center; gap:1.4rem; padding:0.7rem 2rem; background:rgba(10,14,20,0.82); backdrop-filter:blur(10px); border-bottom:1px solid var(--border); font-size:0.82rem; }
+  .nav-brand { font-family:'IBM Plex Mono',monospace; font-weight:700; color:var(--text); text-decoration:none; letter-spacing:-0.02em; }
+  .nav a { color:var(--text-dim); text-decoration:none; }
+  .nav a:hover { color:var(--text); }
+  .nav .nav-gh { margin-left:auto; font-family:'IBM Plex Mono',monospace; color:var(--sonnet); }
+  @media(max-width:640px){ .nav{ gap:0.9rem; overflow-x:auto; } .nav .nav-hide{ display:none; } }
+
+  .hero-cta { display:flex; gap:0.8rem; justify-content:center; flex-wrap:wrap; margin:0 0 1.8rem; }
+  .btn { display:inline-block; padding:0.6rem 1.4rem; border-radius:9px; font-size:0.88rem; font-weight:600; text-decoration:none; border:1px solid transparent; }
+  .btn-primary { background:var(--sonnet); color:#0a0e14; }
+  .btn-primary:hover { background:#79b8ff; }
+  .btn-ghost { border-color:var(--border-bright); color:var(--text); }
+  .btn-ghost:hover { border-color:var(--sonnet); }
+  .hero-install { font-family:'IBM Plex Mono',monospace; font-size:0.8rem; color:var(--text-dim); background:var(--surface); border:1px solid var(--border); border-radius:9px; padding:0.55rem 1rem; margin:0 auto 1.6rem; width:fit-content; max-width:100%; overflow-x:auto; white-space:nowrap; }
+  .hero-install code { background:none; border:none; padding:0; color:var(--haiku); }
+
+  .track-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:1.2rem; margin:1.8rem 0; }
+  @media(max-width:860px){ .track-grid{ grid-template-columns:1fr; } }
+  .track-card { background:var(--bg-elev); border:1px solid var(--border); border-radius:14px; padding:1.4rem; }
+  .track-card:hover { border-color:var(--border-bright); }
+  .track-card h3 { font-size:1.05rem; margin-bottom:0.4rem; }
+  .track-card p { font-size:0.84rem; color:var(--text-dim); margin-bottom:0.8rem; }
+  .track-card a { font-family:'IBM Plex Mono',monospace; font-size:0.76rem; color:var(--sonnet); text-decoration:none; }
+  .track-card a:hover { text-decoration:underline; }
+
   .code-block { background:var(--bg-elev); border:1px solid var(--border); border-radius:12px; overflow:hidden; }
   .code-header { padding:0.6rem 1rem; border-bottom:1px solid var(--border); font-family:'IBM Plex Mono',monospace; font-size:0.76rem; color:var(--text-muted); display:flex; align-items:center; gap:0.5rem; }
   .code-dot { width:10px; height:10px; border-radius:50%; }
@@ -148,20 +173,37 @@
 </head>
 <body>
 
-<div class="hero">
+<nav class="nav">
+  <a class="nav-brand" href="#top">gk</a>
+  <a href="#quickstart">Quickstart</a>
+  <a href="#architecture">Architecture</a>
+  <a href="#topologies">Topologies</a>
+  <a class="nav-hide" href="#ledger">Runs</a>
+  <a class="nav-hide" href="#memory">Memory</a>
+  <a class="nav-hide" href="#cli">CLI</a>
+  <a href="#roadmap">Roadmap</a>
+  <a class="nav-gh" href="https://github.com/thanhNt16/graph-kit">GitHub ↗</a>
+</nav>
+
+<div class="hero" id="top">
   <div class="hero-badge">gk v0.3.5 · graph engineering kit</div>
   <h1>GraphKit</h1>
-  <p class="hero-tag">Define graph-structured agent workflows as YAML. Compile to host-native execution across five targets — Claude Code, Cursor, OpenCode, Codex and Pi — each with its own native dispatch path. Eleven topologies, five targets, one CLI. Per-node model tiering. Evidence-based gates. Zero custom runtime. Now with a run ledger, project memory patterns, advisor escalation, and dynamic fan-out.</p>
+  <p class="hero-tag">Define agent workflows as graph-shaped YAML. One CLI compiles them to native execution on five targets — Claude Code, Cursor, OpenCode, Codex and Pi. Every run lands in a ledger; failed runs resume where they stopped. No custom runtime, no daemon — the host's own primitives do the work.</p>
+  <div class="hero-cta">
+    <a class="btn btn-primary" href="#quickstart">Get started</a>
+    <a class="btn btn-ghost" href="https://github.com/thanhNt16/graph-kit">View on GitHub</a>
+  </div>
+  <div class="hero-install"><code>curl -fsSL https://github.com/thanhNt16/graph-kit/releases/latest/download/gk-darwin-arm64.tar.gz | sudo tar -xz -C /usr/local/bin</code></div>
   <div class="hero-stats">
     <div class="stat"><div class="stat-num">11</div><div class="stat-label">Topologies</div></div>
     <div class="stat"><div class="stat-num">5</div><div class="stat-label">Targets</div></div>
     <div class="stat"><div class="stat-num">13</div><div class="stat-label">Skills (claude)</div></div>
     <div class="stat"><div class="stat-num">8</div><div class="stat-label">Agents</div></div>
-    <div class="stat"><div class="stat-num">542</div><div class="stat-label">Tests</div></div>
+    <div class="stat"><div class="stat-num">575</div><div class="stat-label">Tests</div></div>
   </div>
 </div>
 
-<div class="section">
+<div class="section" id="quickstart">
   <div class="section-label">Quick Start</div>
   <h2>Install — Release Tarball or Source</h2>
   <p>Easiest: every push to <code>main</code> publishes a patch release with prebuilt binaries. Or clone and build from source (not on npm yet). Requires <a href="https://bun.sh" style="color:var(--sonnet)">Bun</a> (source build) and at least one supported host — Claude Code, Cursor, OpenCode, Codex or Pi.</p>
@@ -248,7 +290,29 @@ gk compile .graphkit/graphs/&lt;id&gt;.yaml    <span class="cmt"># → .claude/w
   </div>
 </div>
 
-<div class="section">
+
+<div class="section" id="tracks">
+  <div class="section-label">Three Ways In</div>
+  <h2>Author, Run, Remember</h2>
+  <div class="track-grid">
+    <div class="track-card">
+      <h3>✍️ Author</h3>
+      <p>Write <code>graph.yaml</code> — pick from 11 proven topologies, bind agents per node, tier models, declare evidence gates. Compile or dispatch directly.</p>
+      <a href="#topologies">Browse topologies →</a>
+    </div>
+    <div class="track-card">
+      <h3>⚡ Run</h3>
+      <p>Every dispatch lands in the run ledger — status, evidence, advisor events. Failed run? <code>gk run resume</code> replays checkpoints and re-runs only what's pending.</p>
+      <a href="#ledger">See the ledger →</a>
+    </div>
+    <div class="track-card">
+      <h3>🧠 Remember</h3>
+      <p>Consolidate ledgers into project memory — patterns, failure recurrence, ranked suggestions. The kit gets sharper about your repo over time.</p>
+      <a href="#memory">How memory works →</a>
+    </div>
+  </div>
+</div>
+<div class="section" id="architecture">
   <div class="section-label">Architecture</div>
   <h2>Three Layers, Clean Boundary</h2>
   <p>gk CLI validates, compiles, and — new in 0.2 — <em>bridges</em>. The host executes. The kit template connects them. No custom state machine: the host's native primitives own the runtime.</p>
@@ -290,7 +354,7 @@ gk compile .graphkit/graphs/&lt;id&gt;.yaml    <span class="cmt"># → .claude/w
   </table>
 </div>
 
-<div class="section">
+<div class="section" id="ledger">
   <div class="section-label">Run Ledger &amp; Project Memory <span class="badge-new">0.3</span></div>
   <h2>Every Run Recorded, Every Failure Mined</h2>
   <p>Two persistent subsystems turn execution history into an asset. The <strong style="color:var(--text)">run ledger</strong> records every dispatch to <code>.graphkit/runs/&lt;run-id&gt;/</code> — per-node status, rounds, evidence, advisor events. The <strong style="color:var(--text)">pattern compiler</strong> mines those ledgers plus project memory into reusable patterns and ranked suggestions. No daemon, no database: plain files written by the host's execute skill and read by the CLI.</p>
@@ -475,7 +539,7 @@ CBM direct  63.2ms   ·   CBM-via-MCP  525.6ms   ·   <span class="str">gk CLI  
   </div>
 </div>
 
-<div class="section">
+<div class="section" id="topologies">
   <div class="section-label">Graph Topologies</div>
   <h2>Eleven Canonical Shapes</h2>
   <p>Seven base topologies, plus <code>custom</code> for arbitrary DAGs and three flow presets (<code>sdd</code>, <code>superpowers</code>, <code>research-and-build</code>) built on it. They compose — a diamond's fan-out can embed an adversarial-verification subgraph, or wrap the whole thing in a memory-augmented layer.</p>
@@ -550,7 +614,7 @@ CBM direct  63.2ms   ·   CBM-via-MCP  525.6ms   ·   <span class="str">gk CLI  
   </div>
 </div>
 
-<div class="section">
+<div class="section" id="cli">
   <div class="section-label">Five Hosts, One CLI <span class="badge-new">0.2</span></div>
   <h2>Same CLI, Five Targets</h2>
   <p>Pass <code>--target &lt;id&gt;</code> to install the host-flavored kit — the same eight agents in each host's native format. The <code>gk</code> CLI is identical across targets — <code>validate</code>, <code>graph new/ascii/svg/waves</code>, memory, run ledger all work the same (pure CLI). The kit differs per host.</p>
@@ -711,7 +775,7 @@ gk models opencode set --map <span class="field">opus</span>=<span class="str">a
   </div>
 </div>
 
-<div class="section">
+<div class="section" id="memory">
   <div class="section-label">Memory Contract <span class="badge-new">0.2</span></div>
   <h2>Durable Memory, Strict Boundaries</h2>
   <p>Memory capture remains GraphKit's markdown store, with additive OKF-compatible provenance fields: <code>generated</code>, <code>recorded_at</code>, <code>status</code>, and <code>sources</code>. This is deliberately <strong style="color:var(--text)">not an OKF conformance claim</strong>; existing GraphKit fields stay authoritative and unknown fields survive rewrites. See the <a href="https://github.com/GoogleCloudPlatform/open-knowledge-format/blob/main/SPEC.md" style="color:var(--sonnet)">current OKF specification</a>.</p>
@@ -852,7 +916,7 @@ gk validate loop-demo.yaml           <span class="cmt"># → passes (contiguous 
   </div>
 </div>
 
-<div class="section">
+<div class="section" id="roadmap">
   <div class="section-label">Positioning — graph-engineering compiler kit <span class="badge-new">2026-08-19</span></div>
   <h2>The Part of the Stack Every Other Tool Makes You Run Itself</h2>
   <p>gk is a <em>graph-engineering compiler kit</em>, not a "multi-agent framework." Where CrewAI/AutoGen/ADK ship a runtime that invokes models and owns the execution loop, gk declares the graph, gates it at validate, and compiles it to a deterministic <code>.workflow.js</code> the host already runs — with zero models orchestrating. gk never invokes a model; coordination is compiled from <code>graph.yaml</code>, not delegated to an LLM, which is where other stacks' empirically measured flakiness lives (<a href="https://github.com/crewAIInc/crewAI" style="color:var(--sonnet)">CrewAI</a>: a 34% non-deterministic failure rate over 3 weeks on identical inputs vs 4% under explicit orchestration — per 2025–26 dev-shop retrospectives). The term "graph engineering" is the field's own label for this rung (<a href="https://www.drjoshcsimmons.com/writing/we-are-entering-the-graph-engineering-phase" style="color:var(--sonnet)">Simmons, "We Are Entering the Graph Engineering Phase"</a>): the craft of what happens <em>between</em> context windows.</p>
@@ -866,12 +930,12 @@ gk validate loop-demo.yaml           <span class="cmt"># → passes (contiguous 
   <p><strong style="color:var(--text)">Host-native = subscription-safe.</strong> gk rides each host's supported first-party harness — Claude Code Workflow / native subagents, Cursor, OpenCode, Codex, or Pi — instead of a third-party orchestration layer — the exact harnesses Anthropic keeps first-class in the subscription, unlike third-party bridges now billed extra (<a href="https://www.theverge.com/ai-artificial-intelligence/907074/anthropic-openclaw-claude-subscription-ban" style="color:var(--sonnet)">The Verge</a>; <a href="https://techcrunch.com/2026/04/04/anthropic-says-claude-code-subscribers-will-need-to-pay-extra-for-openclaw-support/" style="color:var(--sonnet)">TechCrunch</a>). No runtime tax: gk ships no Python/TS runtime, no dependency graph.</p>
 
   <h2 style="margin-top:1.5rem">Roadmap — Next Up</h2>
-  <p>Six consolidated candidates, cross-validated by four parallel research passes (competitive scan, user-pain mining, repo-internal deferrals, adjacent-standards bridges). Ranked by value × fit with the compiler thesis ÷ effort. The 0.3 run ledger already shipped the S1 prerequisite — resume is the payoff.</p>
+  <p>Five consolidated candidates, cross-validated by four parallel research passes (competitive scan, user-pain mining, repo-internal deferrals, adjacent-standards bridges). Ranked by value × fit with the compiler thesis ÷ effort. S1 checkpoint resume shipped in 0.3.5 — <code>gk run resume</code> replays the ledger, derives a pending-only graph, and starts a provenance-linked child run.</p>
   <div class="bridge-grid">
     <div class="subsys">
-      <div class="subsys-tag" style="background:rgba(240,171,252,0.15);color:var(--memory)">S1 · 3/4 SOURCES</div>
-      <div class="subsys-title" style="font-family:'IBM Plex Mono',monospace;font-size:0.8rem;color:var(--sonnet);margin-bottom:0.3rem">gk run --resume — checkpoint replay</div>
-      <p style="font-size:0.85rem;color:var(--text-dim)">Reconcile <code>.graphkit/runs/&lt;id&gt;/</code> against the graph, emit a waves payload for pending nodes only. Every rival ships checkpoint/resume (LangGraph checkpointer, Agents SDK <code>RunState</code>, Temporal replay); the runtime design spec deferred it pending the ledger — which 0.3 shipped.</p>
+      <div class="subsys-tag" style="background:rgba(46,160,67,0.15);color:var(--memory)">S1 · SHIPPED 0.3.5</div>
+      <div class="subsys-title" style="font-family:'IBM Plex Mono',monospace;font-size:0.8rem;color:var(--sonnet);margin-bottom:0.3rem">gk run resume — checkpoint replay ✓</div>
+      <p style="font-size:0.85rem;color:var(--text-dim)">Reconciles <code>.graphkit/runs/&lt;id&gt;/</code> against the recorded graph (passed + evidence-on-disk), derives a pending-only session graph where satisfied evidence becomes <code>refs</code>, validates it against the compiler's structural rules, and starts a child run carrying <code>resumes:</code> provenance. Drift-guarded by sha256.</p>
     </div>
     <div class="subsys">
       <div class="subsys-tag" style="background:rgba(240,171,252,0.15);color:var(--memory)">S2 · TABLE-STAKES</div>
@@ -903,9 +967,10 @@ gk validate loop-demo.yaml           <span class="cmt"># → passes (contiguous 
 </div>
 
 <div class="footer">
-  GraphKit 0.3 · graph engineering kit for Claude Code, Cursor, OpenCode, Codex &amp; Pi<br>
-  <span style="color:var(--memory)">8 agents</span> · <span style="color:var(--sonnet)">13 skills (claude) · 11 (others)</span> · <span style="color:var(--bridge)">11 topologies</span> · <span style="color:var(--fable)">5 targets</span> · <span style="color:var(--haiku)">542 tests</span><br>
-  run ledger · memory patterns · advisor escalation · fan-out · CBM bridge · gk never invokes a model · evidence-based gates
+  GraphKit 0.3.5 · graph engineering kit for Claude Code, Cursor, OpenCode, Codex &amp; Pi<br>
+  <span style="color:var(--memory)">8 agents</span> · <span style="color:var(--sonnet)">13 skills (claude) · 11 (others)</span> · <span style="color:var(--bridge)">11 topologies</span> · <span style="color:var(--fable)">5 targets</span> · <span style="color:var(--haiku)">575 tests</span><br>
+  run ledger · checkpoint resume · memory patterns · advisor escalation · fan-out · CBM bridge · gk never invokes a model · evidence-based gates<br>
+  <a href="https://github.com/thanhNt16/graph-kit" style="color:var(--sonnet)">github.com/thanhNt16/graph-kit</a> · <a href="https://github.com/thanhNt16/graph-kit/blob/main/CHANGELOG.md" style="color:var(--sonnet)">CHANGELOG</a> · <a href="https://github.com/thanhNt16/graph-kit/tree/main/docs/superpowers/specs" style="color:var(--sonnet)">design specs</a>
 </div>
 
 </body>

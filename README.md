@@ -1,9 +1,18 @@
 # GraphKit
 
+[![CI](https://github.com/thanhNt16/graph-kit/actions/workflows/ci.yml/badge.svg)](https://github.com/thanhNt16/graph-kit/actions/workflows/ci.yml)
+[![Release](https://github.com/thanhNt16/graph-kit/actions/workflows/release.yml/badge.svg)](https://github.com/thanhNt16/graph-kit/releases/latest)
+[![GitHub Pages](https://img.shields.io/badge/docs-pages-2ea043?logo=githubpages)](https://thanhnt16.github.io/graph-kit/)
+[![Tests](https://img.shields.io/badge/tests-575_passing-2ea043)](https://github.com/thanhNt16/graph-kit/actions/workflows/ci.yml)
+
+> **11 topologies · 5 targets · 8 agents · 13 skills (claude) · 575 tests · zero-model runtime**
+
+GraphKit is a graph engineering kit for AI coding agents (Claude Code, Cursor, OpenCode, Codex CLI, and pi). It installs agents, skills, hooks, and rules that let you define, validate, compile, and execute graph-structured agent workflows — with a run ledger, checkpoint resume, and project memory.
+
+**TOC** — [What it is](#what-it-is) · [Install](#install) · [Quickstart](#quickstart) · [Host support](#host-support) · [Define a graph](#define-a-graph) · [Session skills](#session-skills) · [Topologies](#eleven-topologies) · [Per-node binding](#per-node-binding) · [Loop groups](#loop-groups) · [CLI reference](#cli-reference) · [Project memory](#project-memory) · [CBM boundary](#cbm-boundary) · [Diagrams](#diagrams) · [Docs site](https://thanhnt16.github.io/graph-kit/)
+
 > **Changelog**: [CHANGELOG.md](CHANGELOG.md) documents all feature releases.
 > **Worktree merge protocol**: [docs/worktree-merge-protocol.md](docs/worktree-merge-protocol.md) details conflict-safe concurrent agent editing.
-
-GraphKit is a graph engineering kit for AI coding agents (Claude Code, Cursor, OpenCode, Codex CLI, and pi). It installs agents, skills, hooks, and rules that let you define, validate, compile, and execute graph-structured agent workflows.
 
 ## What it is
 
@@ -37,7 +46,7 @@ Memory files retain GraphKit's existing frontmatter and add OKF-compatible field
 
 The reader is strict at the filesystem boundary: malformed entries are dropped and counted in `malformed`; unreadable memory directories return `MEMORY_DIR_UNREADABLE` and fail, while a missing directory is treated as empty. Memory-augmented workflows use one terminal `INJECTION: <reminder>` / `INJECTION: null` contract on both execution paths. Curator cadence counts completed action-node executions, not curator calls. `recall_topk`, `expire_policy: manual`, and `null_intervention_allowed` are honored from graph configuration. Curator behavior is parity-tested across Claude Code, Cursor, OpenCode, Codex, and pi; Codex uses `workspace-write` so it can persist memory.
 
-Deterministic checks: `bun test` — **461 pass, 0 fail**; `bun run eval:memory` — `hit_rate: 1`, `validity_violations: []`, `malformed: 14` / `malformed_expected: 14`; `bun run typecheck` passes. These are fixture and behavior checks, not benchmark-superiority claims. The [@0xwast3 memory-engineering article](https://x.com/0xwast3/status/2084625810112032849) is third-party evidence only; its `status: conflicted` and three-month capture criterion are follow-up scope, not shipped behavior.
+Deterministic checks: `bun test` — **575 pass, 0 fail**; `bun run eval:memory` — `hit_rate: 1`, `validity_violations: []`, `malformed: 14` / `malformed_expected: 14`; `bun run typecheck` passes. These are fixture and behavior checks, not benchmark-superiority claims. The [@0xwast3 memory-engineering article](https://x.com/0xwast3/status/2084625810112032849) is third-party evidence only; its `status: conflicted` and three-month capture criterion are follow-up scope, not shipped behavior.
 
 ## CBM boundary
 
@@ -265,7 +274,7 @@ $ gk --help
     execute [file]                   Execute a graph.yaml (not yet implemented)
     visualize [file]                 Visualize a graph.yaml (not yet implemented)
     run [subcommand] [args...]       Run ledger commands
-                                     Subcommands: start node end status
+                                     Subcommands: start node end status resume
     suggest                          Show ranked workflow suggestions from memory
 
   Options:
@@ -285,6 +294,18 @@ $ gk status --json     # machine-readable: run, round, coverage, verdict
 ```
 
 No active run prints a stable "no run" summary and exits 0 — safe to call from scripts and CI.
+
+### `gk run resume`
+
+Resume a failed or interrupted run from its checkpoint — no restart from zero:
+
+```bash
+$ gk run resume <run-id>            # reconcile → derive pending-only graph → start child run
+$ gk run resume <run-id> --dry-run  # preview reconciliation, write nothing
+$ gk run resume <run-id> --from-node scan   # redo scan + dependents
+```
+
+A node counts as satisfied only if its last trace line passed **and** every declared evidence key exists on disk; dependents of failures reopen, satisfied upstreams drop out and their evidence reattaches as `refs`. The derived graph is validated against the compiler's structural rules (`RESUME_DERIVED_INVALID` — nothing written) before activation; the graph is drift-guarded by sha256 (`RESUME_GRAPH_DRIFT`, `--force` to override). The child run carries `resumes:` provenance — `gk run status` prints the full chain.
 
 ### `gk execute` / `gk visualize`
 
