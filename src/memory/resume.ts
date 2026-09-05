@@ -2,10 +2,10 @@ import { createHash } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import YAML from "yaml";
-import { readRunMeta, readTrace, startRun, type TraceLine, activeRun } from "./ledger.js";
-import { GraphSchema, type LoopGroup } from "../schemas/graph.schema.js";
 import type { Graph } from "../compiler/validate.js";
+import { GraphSchema, type LoopGroup } from "../schemas/graph.schema.js";
 import { saveSessionGraph, setActiveGraphId } from "../store/index.js";
+import { activeRun, readRunMeta, readTrace, startRun, type TraceLine } from "./ledger.js";
 
 export interface ResumeResult {
   resumed: boolean;
@@ -25,8 +25,10 @@ export function resumeRun(
   const rec = reconcileRun(cwd, runId, opts);
   const active = activeRun(cwd);
   if (active) throw new Error(`RUN_ACTIVE: run already active at ${active}; run \`gk run end\` first`);
-  if (rec.pending.length === 0) return { resumed: false, reason: "NOTHING_TO_RESUME", pending: [], satisfied: rec.satisfied, skipped: rec.skipped };
-  if (opts.dryRun) return { resumed: false, reason: "DRY_RUN", pending: rec.pending, satisfied: rec.satisfied, skipped: rec.skipped };
+  if (rec.pending.length === 0)
+    return { resumed: false, reason: "NOTHING_TO_RESUME", pending: [], satisfied: rec.satisfied, skipped: rec.skipped };
+  if (opts.dryRun)
+    return { resumed: false, reason: "DRY_RUN", pending: rec.pending, satisfied: rec.satisfied, skipped: rec.skipped };
   const derived = deriveResumeGraph(rec, runId);
   validateDerivedGraph(derived);
   const session = saveSessionGraph(derived, derived.metadata.name, cwd);
@@ -36,34 +38,84 @@ export function resumeRun(
 }
 
 export interface Reconciliation {
-  cwd: string; runId: string; graphPath: string; graph: Graph; evidenceDir: string;
-  satisfied: string[]; pending: string[]; skipped: Array<{ node: string; reason: string }>;
+  cwd: string;
+  runId: string;
+  graphPath: string;
+  graph: Graph;
+  evidenceDir: string;
+  satisfied: string[];
+  pending: string[];
+  skipped: Array<{ node: string; reason: string }>;
 }
 function parseGraph(path: string): Graph {
   const parsed = GraphSchema.safeParse(YAML.parse(readFileSync(path, "utf-8")));
-  if (!parsed.success) throw new Error(`RESUME_GRAPH_INVALID: recorded graph ${path} no longer parses: ${parsed.error.issues[0]?.message}`);
+  if (!parsed.success)
+    throw new Error(
+      `RESUME_GRAPH_INVALID: recorded graph ${path} no longer parses: ${parsed.error.issues[0]?.message}`,
+    );
   return parsed.data;
 }
 function evidenceOnDisk(cwd: string, evidenceDir: string, keys: string[]): boolean {
-  return keys.every((k) => { const p = join(cwd, evidenceDir, `${k}.md`); return existsSync(p) && readFileSync(p, "utf-8").trim().length > 0; });
+  return keys.every((k) => {
+    const p = join(cwd, evidenceDir, `${k}.md`);
+    return existsSync(p) && readFileSync(p, "utf-8").trim().length > 0;
+  });
 }
-export function reconcileRun(cwd: string, runId: string, opts: { fromNode?: string; force?: boolean } = {}): Reconciliation {
+export function reconcileRun(
+  cwd: string,
+  runId: string,
+  opts: { fromNode?: string; force?: boolean } = {},
+): Reconciliation {
   const meta = readRunMeta(cwd, runId);
-  if (typeof meta.graph_path !== "string" || typeof meta.graph_sha256 !== "string") throw new Error(`RESUME_RUN_NOT_FOUND: run ${runId} predates graph tracking (no graph_path/graph_sha256 in meta.json)`);
+  if (typeof meta.graph_path !== "string" || typeof meta.graph_sha256 !== "string")
+    throw new Error(
+      `RESUME_RUN_NOT_FOUND: run ${runId} predates graph tracking (no graph_path/graph_sha256 in meta.json)`,
+    );
   if (!opts.force) {
-    if (!existsSync(meta.graph_path)) throw new Error(`RESUME_GRAPH_DRIFT: recorded graph ${meta.graph_path} no longer exists (re-run gk init/graph, or --force)`);
+    if (!existsSync(meta.graph_path))
+      throw new Error(
+        `RESUME_GRAPH_DRIFT: recorded graph ${meta.graph_path} no longer exists (re-run gk init/graph, or --force)`,
+      );
     const sha = createHash("sha256").update(readFileSync(meta.graph_path, "utf-8")).digest("hex");
-    if (sha !== meta.graph_sha256) throw new Error(`RESUME_GRAPH_DRIFT: ${meta.graph_path} changed since run ${runId} started (expected sha ${meta.graph_sha256.slice(0, 12)}…) — use --force to override`);
+    if (sha !== meta.graph_sha256)
+      throw new Error(
+        `RESUME_GRAPH_DRIFT: ${meta.graph_path} changed since run ${runId} started (expected sha ${meta.graph_sha256.slice(0, 12)}…) — use --force to override`,
+      );
   }
-  const graph = parseGraph(meta.graph_path); const names = Object.keys(graph.nodes);
-  if (opts.fromNode != null && !names.includes(opts.fromNode)) throw new Error(`RESUME_BAD_FROM_NODE: --from-node "${opts.fromNode}" is not a node of ${meta.graph_path}`);
-  const last = new Map<string, TraceLine>(); for (const line of readTrace(cwd, runId)) last.set(line.node, line);
-  const evidenceDir = graph.outputs?.evidence_dir ?? ".graphkit/evidence/"; const satisfied = new Set<string>();
-  for (const name of names) { const line = last.get(name); if (line?.status === "ok" && evidenceOnDisk(cwd, evidenceDir, line.evidence)) satisfied.add(name); }
-  let pending = opts.fromNode != null ? [opts.fromNode] : names.filter((n) => !satisfied.has(n));
-  for (let grew = true; grew;) { grew = false; for (const [name, node] of Object.entries(graph.nodes)) if (!pending.includes(name) && node.depend_on.some((d) => pending.includes(d))) { pending.push(name); grew = true; } }
-  const skipped = names.filter((n) => satisfied.has(n) && !pending.includes(n)).map((node) => ({ node, reason: "passed with evidence on disk" }));
-  return { cwd, runId, graphPath: meta.graph_path, graph, evidenceDir, satisfied: [...satisfied].filter((n) => !pending.includes(n)).sort(), pending: pending.sort(), skipped };
+  const graph = parseGraph(meta.graph_path);
+  const names = Object.keys(graph.nodes);
+  if (opts.fromNode != null && !names.includes(opts.fromNode))
+    throw new Error(`RESUME_BAD_FROM_NODE: --from-node "${opts.fromNode}" is not a node of ${meta.graph_path}`);
+  const last = new Map<string, TraceLine>();
+  for (const line of readTrace(cwd, runId)) last.set(line.node, line);
+  const evidenceDir = graph.outputs?.evidence_dir ?? ".graphkit/evidence/";
+  const satisfied = new Set<string>();
+  for (const name of names) {
+    const line = last.get(name);
+    if (line?.status === "ok" && evidenceOnDisk(cwd, evidenceDir, line.evidence)) satisfied.add(name);
+  }
+  const pending = opts.fromNode != null ? [opts.fromNode] : names.filter((n) => !satisfied.has(n));
+  for (let grew = true; grew; ) {
+    grew = false;
+    for (const [name, node] of Object.entries(graph.nodes))
+      if (!pending.includes(name) && node.depend_on.some((d) => pending.includes(d))) {
+        pending.push(name);
+        grew = true;
+      }
+  }
+  const skipped = names
+    .filter((n) => satisfied.has(n) && !pending.includes(n))
+    .map((node) => ({ node, reason: "passed with evidence on disk" }));
+  return {
+    cwd,
+    runId,
+    graphPath: meta.graph_path,
+    graph,
+    evidenceDir,
+    satisfied: [...satisfied].filter((n) => !pending.includes(n)).sort(),
+    pending: pending.sort(),
+    skipped,
+  };
 }
 
 /**
@@ -84,11 +136,17 @@ export function validateDerivedGraph(derived: Graph): void {
   for (const [i, group] of (derived.loops ?? []).entries()) {
     const produced = new Set<string>();
     for (const node of group.nodes) {
-      if (!derived.nodes[node]) throw new Error(`RESUME_DERIVED_INVALID: derived graph failed loop validation: loops[${i}] — loop node "${node}" does not exist in graph.nodes`);
+      if (!derived.nodes[node])
+        throw new Error(
+          `RESUME_DERIVED_INVALID: derived graph failed loop validation: loops[${i}] — loop node "${node}" does not exist in graph.nodes`,
+        );
       for (const key of derived.nodes[node]!.evidence) produced.add(key);
     }
     for (const key of group.gate_evidence ?? []) {
-      if (!produced.has(key)) throw new Error(`RESUME_DERIVED_INVALID: derived graph failed loop validation: loops[${i}].gate_evidence — gate_evidence key "${key}" is not declared by any node in the loop group`);
+      if (!produced.has(key))
+        throw new Error(
+          `RESUME_DERIVED_INVALID: derived graph failed loop validation: loops[${i}].gate_evidence — gate_evidence key "${key}" is not declared by any node in the loop group`,
+        );
     }
   }
   // Compiler rule 5 (validate.ts): every required evidence key must be produced
@@ -96,7 +154,9 @@ export function validateDerivedGraph(derived: Graph): void {
   const declared = new Set(Object.values(derived.nodes).flatMap((n) => n.evidence));
   for (const key of derived.evidence.required_keys) {
     if (!declared.has(key)) {
-      throw new Error(`RESUME_DERIVED_INVALID: derived graph failed validation: evidence-keys — Required evidence key "${key}" is not produced by any node`);
+      throw new Error(
+        `RESUME_DERIVED_INVALID: derived graph failed validation: evidence-keys — Required evidence key "${key}" is not produced by any node`,
+      );
     }
   }
   // Compiler rule 6: memory-augmented graphs must keep their curator node.
@@ -104,13 +164,17 @@ export function validateDerivedGraph(derived: Graph): void {
     const tc = derived.topology_config as Record<string, any>;
     const curatorNode = tc?.memory?.curator_node ?? "curator";
     if (!derived.nodes[curatorNode]) {
-      throw new Error(`RESUME_DERIVED_INVALID: derived graph failed validation: memory-curator-node — memory-augmented memory.curator_node "${curatorNode}" is not defined in nodes`);
+      throw new Error(
+        `RESUME_DERIVED_INVALID: derived graph failed validation: memory-curator-node — memory-augmented memory.curator_node "${curatorNode}" is not defined in nodes`,
+      );
     }
   }
   // Compiler rule 7: eval-gate nodes must keep at least one producer dep.
   for (const [id, node] of Object.entries(derived.nodes)) {
     if (node.role === "eval-gate" && node.depend_on.length === 0) {
-      throw new Error(`RESUME_DERIVED_INVALID: derived graph failed validation: eval-gate-depend_on — nodes.${id}.depend_on — eval-gate node must depend_on at least one producer node`);
+      throw new Error(
+        `RESUME_DERIVED_INVALID: derived graph failed validation: eval-gate-depend_on — nodes.${id}.depend_on — eval-gate node must depend_on at least one producer node`,
+      );
     }
   }
 }

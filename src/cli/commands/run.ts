@@ -12,10 +12,10 @@ import {
   readRunMeta,
   startRun,
 } from "../../memory/ledger.js";
+import { resumeRun } from "../../memory/resume.js";
 import { GraphSchema } from "../../schemas/graph.schema.js";
 import { subcommandsFor } from "../command-registry.js";
 import { fail, ok } from "../output.js";
-import { resumeRun } from "../../memory/resume.js";
 
 function errCode(e: unknown): { code: string; message: string } {
   const message = String((e as Error)?.message ?? e);
@@ -135,7 +135,11 @@ export function registerRunCommands(cli: CAC) {
             return;
           }
           try {
-            console.log(JSON.stringify(ok(resumeRun(cwd, String(target), { fromNode: opts.fromNode, dryRun: opts.dryRun, force: opts.force }))));
+            console.log(
+              JSON.stringify(
+                ok(resumeRun(cwd, String(target), { fromNode: opts.fromNode, dryRun: opts.dryRun, force: opts.force })),
+              ),
+            );
           } catch (e) {
             process.exitCode = 1;
             const { code, message } = errCode(e);

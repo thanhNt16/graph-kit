@@ -72,7 +72,12 @@ function runId(now: string, name: string): string {
   return `${stamp}-${name}`;
 }
 
-export function startRun(cwd: string, graphPath: string, now = new Date().toISOString(), resumes?: string): { id: string; dir: string } {
+export function startRun(
+  cwd: string,
+  graphPath: string,
+  now = new Date().toISOString(),
+  resumes?: string,
+): { id: string; dir: string } {
   const existing = activeRun(cwd);
   if (existing) throw new Error(`RUN_ACTIVE: run already active at ${existing}; run \`gk run end\` first`);
   const resolved = isAbsolute(graphPath) ? graphPath : resolve(cwd, graphPath);
@@ -92,7 +97,13 @@ export function startRun(cwd: string, graphPath: string, now = new Date().toISOS
   mkdirSync(dir, { recursive: true });
 
   writeFileSync(join(dir, "trace.jsonl"), "");
-  const meta: Record<string, unknown> = { id, graph: name, graph_path: resolved, graph_sha256: createHash("sha256").update(raw).digest("hex"), started_at: now };
+  const meta: Record<string, unknown> = {
+    id,
+    graph: name,
+    graph_path: resolved,
+    graph_sha256: createHash("sha256").update(raw).digest("hex"),
+    started_at: now,
+  };
   if (resumes) meta.resumes = resumes;
   writeFileSync(join(dir, "meta.json"), `${JSON.stringify(meta, null, 2)}\n`);
   // GBrain layout: compiled truth above the rule, append-only timeline below.
@@ -239,9 +250,18 @@ export function listRunIds(cwd: string): string[] {
     .sort();
 }
 
-export interface RunMeta { id: string; graph: string; graph_path: string; graph_sha256: string; started_at: string; ended_at?: string; resumes?: string; }
+export interface RunMeta {
+  id: string;
+  graph: string;
+  graph_path: string;
+  graph_sha256: string;
+  started_at: string;
+  ended_at?: string;
+  resumes?: string;
+}
 export function readRunMeta(cwd: string, id: string): RunMeta {
   const file = join(runsDir(cwd), id, "meta.json");
-  if (!/^\d{8}-\d{6}-[\w.-]+$/.test(id) || !existsSync(file)) throw new Error(`RESUME_RUN_NOT_FOUND: no run "${id}" under ${runsDir(cwd)}`);
+  if (!/^\d{8}-\d{6}-[\w.-]+$/.test(id) || !existsSync(file))
+    throw new Error(`RESUME_RUN_NOT_FOUND: no run "${id}" under ${runsDir(cwd)}`);
   return JSON.parse(readFileSync(file, "utf-8")) as RunMeta;
 }

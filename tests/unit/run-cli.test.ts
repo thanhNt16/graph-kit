@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { appendFileSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { appendFileSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { cac } from "cac";
@@ -236,7 +236,10 @@ describe("gk run CLI", () => {
       );
       JSON.parse(runCli(["run", "start"], cwd).stdout);
       const before = JSON.parse(runCli(["run", "status"], cwd).stdout);
-      expect(before).toEqual({ status: "ok", data: { active: expect.any(String), advisor_events: 0, resumes_chain: [expect.any(String)] } });
+      expect(before).toEqual({
+        status: "ok",
+        data: { active: expect.any(String), advisor_events: 0, resumes_chain: [expect.any(String)] },
+      });
       runCli(["run", "node", "exec", "--advisor-fired", "1"], cwd);
       const after = JSON.parse(runCli(["run", "status"], cwd).stdout);
       expect(after.status).toBe("ok");
@@ -329,7 +332,9 @@ describe("gk run CLI", () => {
       const parsed = JSON.parse(runCli(["run", "status", "--json"], cwd).stdout);
       expect(parsed.status).toBe("ok");
       expect(parsed.data.resumes_chain).toEqual(["20260904-110000-demo", r1.id]);
-    } finally { rmSync(cwd, { recursive: true, force: true }); }
+    } finally {
+      rmSync(cwd, { recursive: true, force: true });
+    }
   });
 });
 
@@ -340,15 +345,36 @@ describe("run resume CLI", () => {
     mkdirSync(join(cwd, ".graphkit", "runs"), { recursive: true });
     mkdirSync(join(cwd, ".graphkit", "evidence"), { recursive: true });
     mkdirSync(join(cwd, ".graphkit", "graphs"), { recursive: true });
-    writeFileSync(join(cwd, "graph.yaml"), `apiVersion: graphkit.dev/v2\nkind: Graph\nmetadata:\n  name: demo\ntopology: custom\nnodes:\n  a:\n    agent: scout\n    objective: A\n    evidence: [a-out]\n  b:\n    agent: task\n    objective: B\n    depend_on: [a]\n  c:\n    agent: reviewer\n    objective: C\n    depend_on: [b]\n`);
+    writeFileSync(
+      join(cwd, "graph.yaml"),
+      `apiVersion: graphkit.dev/v2\nkind: Graph\nmetadata:\n  name: demo\ntopology: custom\nnodes:\n  a:\n    agent: scout\n    objective: A\n    evidence: [a-out]\n  b:\n    agent: task\n    objective: B\n    depend_on: [a]\n  c:\n    agent: reviewer\n    objective: C\n    depend_on: [b]\n`,
+    );
   });
   afterEach(() => rmSync(cwd, { recursive: true, force: true }));
 
   test("failed run derives session graph and reports pending", () => {
     writeFileSync(join(cwd, ".graphkit", "evidence", "a-out.md"), "ok\n");
     const r = startRun(cwd, join(cwd, "graph.yaml"));
-    appendNode(cwd, { node: "a", wave: 0, agent: "x", model: null, status: "ok", evidence: ["a-out"], duration_ms: 1, notes: null });
-    appendNode(cwd, { node: "b", wave: 0, agent: "x", model: null, status: "fail", evidence: [], duration_ms: 1, notes: null });
+    appendNode(cwd, {
+      node: "a",
+      wave: 0,
+      agent: "x",
+      model: null,
+      status: "ok",
+      evidence: ["a-out"],
+      duration_ms: 1,
+      notes: null,
+    });
+    appendNode(cwd, {
+      node: "b",
+      wave: 0,
+      agent: "x",
+      model: null,
+      status: "fail",
+      evidence: [],
+      duration_ms: 1,
+      notes: null,
+    });
     endRun(cwd, "failed");
     const res = runCli(["run", "resume", r.id], cwd);
     expect(res.code).toBe(0);
@@ -367,7 +393,16 @@ describe("run resume CLI", () => {
   });
   test("--dry-run writes nothing", () => {
     const r = startRun(cwd, join(cwd, "graph.yaml"));
-    appendNode(cwd, { node: "a", wave: 0, agent: "x", model: null, status: "fail", evidence: [], duration_ms: 1, notes: null });
+    appendNode(cwd, {
+      node: "a",
+      wave: 0,
+      agent: "x",
+      model: null,
+      status: "fail",
+      evidence: [],
+      duration_ms: 1,
+      notes: null,
+    });
     endRun(cwd, "failed");
     const before = readdirSync(join(cwd, ".graphkit", "graphs"));
     const out = JSON.parse(runCli(["run", "resume", r.id, "--dry-run"], cwd).stdout);
@@ -377,7 +412,17 @@ describe("run resume CLI", () => {
   });
   test("nothing pending is informational", () => {
     const r = startRun(cwd, join(cwd, "graph.yaml"));
-    for (const node of ["a", "b", "c"]) appendNode(cwd, { node, wave: 0, agent: "x", model: null, status: "ok", evidence: [], duration_ms: 1, notes: null });
+    for (const node of ["a", "b", "c"])
+      appendNode(cwd, {
+        node,
+        wave: 0,
+        agent: "x",
+        model: null,
+        status: "ok",
+        evidence: [],
+        duration_ms: 1,
+        notes: null,
+      });
     endRun(cwd, "merged");
     const out = JSON.parse(runCli(["run", "resume", r.id], cwd).stdout);
     expect(out.data.resumed).toBe(false);

@@ -49,7 +49,10 @@ describe("run resume e2e", () => {
     // 1. start + scan passes with evidence, build fails → end failed
     const start = JSON.parse((await runCli(["run", "start", "--json"], cwd)).stdout);
     writeFileSync(join(cwd, ".graphkit", "evidence", "scan-done.md"), "scan output\n");
-    await runCli(["run", "node", "scan", "--status", "ok", "--evidence", "scan-done", "--wave", "0", "--agent", "scout", "--json"], cwd);
+    await runCli(
+      ["run", "node", "scan", "--status", "ok", "--evidence", "scan-done", "--wave", "0", "--agent", "scout", "--json"],
+      cwd,
+    );
     await runCli(["run", "node", "build", "--status", "fail", "--wave", "1", "--agent", "implementer", "--json"], cwd);
     await runCli(["run", "end", "--status", "failed", "--json"], cwd);
 
@@ -71,7 +74,23 @@ describe("run resume e2e", () => {
 
     // 5. child passes → end merged
     writeFileSync(join(cwd, ".graphkit", "evidence", "build-done.md"), "build output\n");
-    await runCli(["run", "node", "build", "--status", "ok", "--evidence", "build-done", "--wave", "0", "--agent", "implementer", "--json"], cwd);
+    await runCli(
+      [
+        "run",
+        "node",
+        "build",
+        "--status",
+        "ok",
+        "--evidence",
+        "build-done",
+        "--wave",
+        "0",
+        "--agent",
+        "implementer",
+        "--json",
+      ],
+      cwd,
+    );
     const end = JSON.parse((await runCli(["run", "end", "--status", "merged", "--json"], cwd)).stdout);
     expect(end.data.status).toBe("merged");
     expect(end.data.evidence_keys).toEqual(["build-done"]);
