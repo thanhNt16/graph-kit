@@ -1,5 +1,6 @@
-import { existsSync, readdirSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { basename, join } from "node:path";
+import YAML from "yaml";
 import type { z } from "zod";
 import type { GraphSchema } from "../schemas/graph.schema.js";
 
@@ -109,6 +110,44 @@ export function validateGraph(graph: Graph, projectRoot: string): Finding[] {
         path: "evidence.required_keys",
         message: `Required evidence key "${key}" is not produced by any node`,
       });
+    }
+  }
+
+  // 5b. criteria: ids must be declared keys, unique, and backed by registry files
+  const seenCriteria = new Set<string>();
+  for (const id of graph.evidence.criteria ?? []) {
+    if (!produced.has(id) && !graph.evidence.required_keys.includes(id)) {
+      findings.push({
+        check: "criteria-keys",
+        path: "evidence.criteria",
+        message: `Criterion "${id}" is not a required key nor produced by any node`,
+      });
+    }
+    if (seenCriteria.has(id)) {
+      findings.push({
+        check: "criteria-keys",
+        path: "evidence.criteria",
+        message: `Duplicate criterion id "${id}"`,
+      });
+    }
+    seenCriteria.add(id);
+    const file = join(projectRoot, "criteria", `${id}.md`);
+    if (!existsSync(file)) {
+      findings.push({
+        check: "criteria-file",
+        path: "evidence.criteria",
+        message: `Criterion "${id}" has no registry file at criteria/${id}.md`,
+      });
+    } else {
+      const head = readFileSync(file, "utf-8").match(/^---\n([\s\S]*?)\n---/);
+      const fmId = head ? (YAML.parse(head[1]) ?? {}).id : undefined;
+      if (fmId !== undefined && fmId !== id) {
+        findings.push({
+          check: "criteria-file",
+          path: `criteria/${id}.md`,
+          message: `Registry file frontmatter id "${fmId}" does not match filename "${id}"`,
+        });
+      }
     }
   }
 

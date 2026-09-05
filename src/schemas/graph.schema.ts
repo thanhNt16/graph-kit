@@ -82,6 +82,8 @@ const LimitsSchema = z.object({
 const EvidenceSchema = z.object({
   required_keys: z.array(z.string()),
   format: z.enum(["markdown", "json"]).default("markdown"),
+  criteria: z.array(z.string()).optional(),
+  freshness: z.enum(["report", "strict"]).default("report"),
 });
 
 const HookRef = z.object({
@@ -132,7 +134,7 @@ const GraphSchema = z
       .default({}),
     nodes: z.record(z.string(), NodeDefSchema).default({}),
     limits: LimitsSchema.optional().default(() => ({})),
-    evidence: EvidenceSchema.optional().default(() => ({ required_keys: [], format: "markdown" as const })),
+    evidence: EvidenceSchema.optional().default(() => ({ required_keys: [], format: "markdown" as const, freshness: "report" as const })),
     topology_config: z
       .record(z.string(), z.any())
       .default({})
