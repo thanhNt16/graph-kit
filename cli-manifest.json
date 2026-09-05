@@ -178,6 +178,11 @@
       "options": ["--json"]
     },
     {
+      "name": "evidence add",
+      "description": "Record a typed artifact against an evidence key",
+      "options": ["--key <k>", "--node <n>", "--note <text>", "--json"]
+    },
+    {
       "name": "run start",
       "description": "Start a run and write the ledger entry",
       "options": ["--graph <path>", "--json"]

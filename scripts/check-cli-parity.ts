@@ -26,6 +26,7 @@ const UNKNOWN_CODES = [
   "UNKNOWN_MEMORY_SUBCOMMAND",
   "UNKNOWN_MODELS_SUBCOMMAND",
   "UNKNOWN_RUN_SUBCOMMAND",
+  "UNKNOWN_EVIDENCE_SUBCOMMAND",
 ];
 function isUnknownCommand(result: { stdout: string; stderr: string }, _parent: string): boolean {
   try {

@@ -105,6 +105,11 @@ export const CLI_COMMANDS: { path: string; description: string; options: string[
   { path: "models cursor reset", description: "Remove Cursor model overrides", options: ["--json"] },
   { path: "run start", description: "Start a run and write the ledger entry", options: ["--graph <path>", "--json"] },
   {
+    path: "evidence add",
+    description: "Record a typed artifact against an evidence key",
+    options: ["--key <k>", "--node <n>", "--note <text>", "--json"],
+  },
+  {
     path: "run node",
     description: "Append a node trace line to the active run",
     options: [

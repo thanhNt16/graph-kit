@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { cac } from "cac";
+import { registerEvidenceCommand } from "./cli/commands/evidence.js";
 import { registerExecuteCommand } from "./cli/commands/execute.js";
 import { registerGateCommand } from "./cli/commands/gate.js";
 import { registerGraphCommands } from "./cli/commands/graph.js";
@@ -22,6 +23,7 @@ registerMemoryCommands(cli);
 registerModelsCommands(cli);
 registerTemplateCommands(cli);
 registerInventoryCommands(cli);
+registerEvidenceCommand(cli);
 registerStatusCommand(cli);
 registerExecuteCommand(cli);
 registerVisualizeCommand(cli);
