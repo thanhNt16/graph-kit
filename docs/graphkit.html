@@ -1,0 +1,635 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GraphKit — Graph Engineering Kit for AI Coding Agents</title>
+<style>
+  :root {
+    --bg: #0a0e14; --bg-elev: #0d1117; --surface: #131822;
+    --border: #1c2333; --border-bright: #2a3447;
+    --text: #e6edf3; --text-dim: #8b949e; --text-muted: #6e7681;
+    --opus: #a371f7; --sonnet: #58a6ff; --haiku: #3fb950; --fable: #f0883e;
+    --diamond: #2ea043; --classify: #58a6ff; --adversarial: #f85149;
+    --loop: #d29922; --generate: #79c0ff; --tournament: #bc8cff;
+    --memory: #2ea043; --eval: #f85149; --gold: #d29922;
+    --bridge: #39d0d8; --custom: #d2a8ff; --flow: #f0883e; --cursor: #56d3dd;
+    --opencode: #ffa657; --codex: #ff7b72; --pi: #a5d6ff;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family:'IBM Plex Sans',-apple-system,system-ui,sans-serif; background:var(--bg); color:var(--text); line-height:1.65; -webkit-font-smoothing:antialiased; }
+  .mono { font-family:'IBM Plex Mono','SF Mono',monospace; }
+  code { font-family:'IBM Plex Mono',monospace; font-size:0.88em; background:var(--surface); border:1px solid var(--border); border-radius:4px; padding:0.1em 0.35em; color:var(--fable); }
+
+  .hero { padding:5.5rem 2rem 4rem; text-align:center;
+    background: radial-gradient(ellipse 80% 60% at 50% 0%, rgba(163,113,247,0.11), transparent),
+                radial-gradient(ellipse 50% 40% at 78% 15%, rgba(57,208,216,0.08), transparent),
+                radial-gradient(ellipse 40% 30% at 22% 20%, rgba(46,160,67,0.06), transparent);
+    border-bottom:1px solid var(--border); }
+  .hero-badge { display:inline-block; padding:0.35rem 1rem; border:1px solid var(--border-bright); border-radius:20px; font-size:0.8rem; color:var(--sonnet); font-family:'IBM Plex Mono',monospace; margin-bottom:1.3rem; background:var(--surface); }
+  .hero h1 { font-size:clamp(2.3rem,5.5vw,3.8rem); font-weight:700; letter-spacing:-0.03em;
+    background:linear-gradient(135deg,#fff 25%,var(--sonnet) 45%,var(--bridge) 70%,var(--memory) 100%);
+    -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text; margin-bottom:0.8rem; }
+  .hero-tag { font-size:1.15rem; color:var(--text-dim); max-width:760px; margin:0 auto 2rem; line-height:1.6; }
+  .hero-stats { display:flex; justify-content:center; gap:2.4rem; flex-wrap:wrap; font-variant-numeric:tabular-nums; margin-top:2rem; }
+  .stat-num { font-size:1.8rem; font-weight:700; font-family:'IBM Plex Mono',monospace; color:var(--text); }
+  .stat-label { font-size:0.72rem; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.08em; margin-top:0.2rem; }
+
+  .section { max-width:1040px; margin:0 auto; padding:4.5rem 2rem; }
+  .section-label { font-family:'IBM Plex Mono',monospace; font-size:0.76rem; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.12em; margin-bottom:0.5rem; }
+  .section h2 { font-size:1.85rem; font-weight:700; letter-spacing:-0.02em; margin-bottom:1rem; text-wrap:balance; }
+  .section > p { color:var(--text-dim); margin-bottom:1.5rem; max-width:780px; }
+  .badge-tag { display:inline-block; padding:0.12rem 0.55rem; border-radius:4px; font-size:0.7rem; font-family:'IBM Plex Mono',monospace; font-weight:600; background:rgba(57,208,216,0.15); color:var(--bridge); vertical-align:middle; margin-left:0.4rem; }
+
+  .nav { position:sticky; top:0; z-index:50; display:flex; align-items:center; gap:1.4rem; padding:0.75rem 2rem; background:rgba(10,14,20,0.88); backdrop-filter:blur(12px); border-bottom:1px solid var(--border); font-size:0.84rem; }
+  .nav-brand { font-family:'IBM Plex Mono',monospace; font-weight:700; color:var(--text); text-decoration:none; letter-spacing:-0.02em; font-size:0.95rem; }
+  .nav a { color:var(--text-dim); text-decoration:none; transition:color 0.15s; }
+  .nav a:hover { color:var(--text); }
+  .nav .nav-gh { margin-left:auto; font-family:'IBM Plex Mono',monospace; color:var(--sonnet); }
+  @media(max-width:768px){ .nav{ gap:0.9rem; overflow-x:auto; } .nav .nav-hide{ display:none; } }
+
+  .hero-cta { display:flex; gap:0.9rem; justify-content:center; flex-wrap:wrap; margin:0 0 1.8rem; }
+  .btn { display:inline-block; padding:0.65rem 1.4rem; border-radius:9px; font-size:0.9rem; font-weight:600; text-decoration:none; border:1px solid transparent; transition:all 0.15s; }
+  .btn-primary { background:var(--sonnet); color:#0a0e14; }
+  .btn-primary:hover { background:#79b8ff; transform:translateY(-1px); }
+  .btn-ghost { border-color:var(--border-bright); color:var(--text); }
+  .btn-ghost:hover { border-color:var(--sonnet); background:var(--surface); }
+  .hero-install { font-family:'IBM Plex Mono',monospace; font-size:0.82rem; color:var(--text-dim); background:var(--surface); border:1px solid var(--border); border-radius:9px; padding:0.6rem 1.1rem; margin:0 auto 1.6rem; width:fit-content; max-width:100%; overflow-x:auto; white-space:nowrap; }
+  .hero-install code { background:none; border:none; padding:0; color:var(--haiku); }
+
+  .lifecycle-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:1.2rem; margin:2rem 0; }
+  @media(max-width:860px){ .lifecycle-grid{ grid-template-columns:1fr; } }
+  .lifecycle-card { background:var(--bg-elev); border:1px solid var(--border); border-radius:14px; padding:1.5rem; transition:border-color 0.2s, transform 0.2s; position:relative; overflow:hidden; }
+  .lifecycle-card:hover { border-color:var(--border-bright); transform:translateY(-2px); }
+  .card-num { font-family:'IBM Plex Mono',monospace; font-size:0.75rem; color:var(--text-muted); margin-bottom:0.4rem; }
+  .lifecycle-card h3 { font-size:1.1rem; margin-bottom:0.5rem; color:var(--text); }
+  .lifecycle-card p { font-size:0.86rem; color:var(--text-dim); margin-bottom:1rem; line-height:1.55; }
+  .lifecycle-card a { font-family:'IBM Plex Mono',monospace; font-size:0.78rem; color:var(--sonnet); text-decoration:none; }
+  .lifecycle-card a:hover { text-decoration:underline; }
+
+  .code-block { background:var(--bg-elev); border:1px solid var(--border); border-radius:12px; overflow:hidden; margin:1rem 0; }
+  .code-header { padding:0.6rem 1rem; border-bottom:1px solid var(--border); font-family:'IBM Plex Mono',monospace; font-size:0.76rem; color:var(--text-muted); display:flex; align-items:center; gap:0.5rem; background:rgba(0,0,0,0.2); }
+  .code-dot { width:10px; height:10px; border-radius:50%; }
+  .code-body { padding:1rem 1.2rem; font-family:'IBM Plex Mono',monospace; font-size:0.81rem; line-height:1.75; overflow-x:auto; white-space:pre; color:var(--text); }
+  .kw{color:var(--opus);} .str{color:var(--haiku);} .cmt{color:var(--text-muted);} .num{color:var(--fable);} .field{color:var(--sonnet);}
+
+  .install-grid { display:grid; grid-template-columns:1fr 1fr; gap:1.2rem; margin:1.5rem 0; }
+  @media(max-width:768px){ .install-grid{ grid-template-columns:1fr; } }
+
+  .arch { display:flex; flex-direction:column; gap:1rem; margin:2rem 0; }
+  .arch-layer { background:var(--bg-elev); border:1px solid var(--border-bright); border-radius:12px; padding:1.4rem; position:relative; }
+  .arch-layer-tag { position:absolute; top:-10px; left:1.5rem; background:var(--bg); padding:0 0.6rem; font-family:'IBM Plex Mono',monospace; font-size:0.72rem; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.1em; }
+  .arch-layer-title { font-size:1.05rem; font-weight:600; margin-bottom:0.3rem; }
+  .arch-layer-desc { font-size:0.88rem; color:var(--text-dim); margin-bottom:0.7rem; }
+  .arch-flow { display:flex; align-items:center; gap:0.7rem; flex-wrap:wrap; font-family:'IBM Plex Mono',monospace; font-size:0.8rem; }
+  .arch-pill { padding:0.3rem 0.7rem; border:1px solid var(--border-bright); border-radius:6px; background:var(--surface); white-space:nowrap; }
+  .arch-arrow { color:var(--text-muted); }
+  .arch-arrow-down { text-align:center; color:var(--text-muted); font-size:1.3rem; line-height:1; }
+
+  .cmp-table { width:100%; border-collapse:collapse; margin:1.5rem 0; font-size:0.85rem; }
+  .cmp-table th { text-align:left; background:var(--surface); color:var(--sonnet); padding:0.65rem 0.9rem; border-bottom:2px solid var(--border); font-size:0.8rem; }
+  .cmp-table td { padding:0.6rem 0.9rem; border-bottom:1px solid var(--border); color:var(--text-dim); }
+  .cmp-table td:first-child { color:var(--text); font-family:'IBM Plex Mono',monospace; font-size:0.8rem; }
+  .cmp-table th:nth-child(2){ color:var(--sonnet); }
+  .cmp-table th:nth-child(3){ color:var(--haiku); }
+
+  .topo-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(300px,1fr)); gap:1.2rem; margin:2rem 0; }
+  .topo-card { background:var(--bg-elev); border:1px solid var(--border); border-radius:14px; padding:1.3rem; transition:transform 0.22s cubic-bezier(.2,.8,.3,1),border-color 0.2s,box-shadow 0.25s; overflow:hidden; }
+  .topo-card:hover { transform:translateY(-5px); border-color:var(--border-bright); box-shadow:0 12px 32px rgba(0,0,0,0.35); }
+  .topo-card-header { display:flex; align-items:center; gap:0.6rem; margin-bottom:0.7rem; }
+  .topo-dot { width:10px; height:10px; border-radius:50%; flex-shrink:0; transition:transform 0.25s,box-shadow 0.25s; }
+  .topo-card:hover .topo-dot { transform:scale(1.4); box-shadow:0 0 10px currentColor; }
+  .topo-name { font-size:0.98rem; font-weight:600; }
+  .topo-shape { font-size:0.7rem; color:var(--text-muted); font-family:'IBM Plex Mono',monospace; margin-left:auto; }
+  .topo-diagram { height:100px; display:flex; align-items:center; justify-content:center; margin:0.4rem 0 0.7rem; }
+  .topo-diagram svg { transition:transform 0.25s cubic-bezier(.2,.8,.3,1); }
+  .topo-card:hover .topo-diagram svg { transform:scale(1.07); }
+  .topo-card rect { fill:currentColor; fill-opacity:0; transition:fill-opacity 0.2s; }
+  .topo-card:hover rect { fill-opacity:0.08; }
+  .topo-card .svg-line { transition:stroke 0.2s; }
+  .topo-card:hover .svg-line { stroke:var(--text-dim); stroke-width:2; }
+  .topo-card:hover [stroke-dasharray] { animation:flow-dash 1.2s linear infinite; }
+  .topo-desc { font-size:0.82rem; color:var(--text-dim); line-height:1.5; }
+  .topo-use { font-size:0.72rem; color:var(--text-muted); margin-top:0.4rem; font-family:'IBM Plex Mono',monospace; }
+  .svg-line { stroke:var(--border-bright); stroke-width:1.5; fill:none; }
+  @keyframes flow-dash { to { stroke-dashoffset:-24; } }
+
+  .bridge-flow { display:flex; align-items:center; justify-content:center; gap:0.5rem; flex-wrap:wrap; margin:1.5rem 0; padding:1.4rem; background:var(--bg-elev); border:1px solid var(--border); border-radius:12px; font-family:'IBM Plex Mono',monospace; font-size:0.78rem; }
+  .flow-node { padding:0.45rem 0.8rem; border:1px solid var(--border-bright); border-radius:8px; background:var(--surface); white-space:nowrap; }
+  .flow-arrow { color:var(--text-muted); }
+
+  .bridge-grid { display:grid; grid-template-columns:1fr 1fr; gap:1.3rem; margin:1.5rem 0; }
+  @media(max-width:768px){ .bridge-grid{ grid-template-columns:1fr; } }
+  .subsys { background:var(--bg-elev); border:1px solid var(--border-bright); border-radius:14px; padding:1.5rem; }
+  .subsys-tag { display:inline-block; padding:0.2rem 0.6rem; border-radius:5px; font-size:0.72rem; font-family:'IBM Plex Mono',monospace; font-weight:600; margin-bottom:0.6rem; }
+  .subsys h3 { font-size:1.05rem; margin-bottom:0.4rem; }
+  .subsys p { font-size:0.85rem; color:var(--text-dim); margin-bottom:0.7rem; line-height:1.55; }
+
+  .lifecycle { display:grid; grid-template-columns:repeat(auto-fill,minmax(195px,1fr)); gap:0.7rem; margin:1.5rem 0; }
+  .lc-step { background:var(--bg-elev); border:1px solid var(--border); border-radius:10px; padding:0.75rem 1rem; }
+  .lc-step .name { font-family:'IBM Plex Mono',monospace; font-size:0.8rem; color:var(--sonnet); margin-bottom:0.15rem; }
+  .lc-step .desc { font-size:0.73rem; color:var(--text-dim); }
+
+  .cli-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(290px,1fr)); gap:1rem; margin:1.5rem 0; }
+  .cli-card { background:var(--bg-elev); border:1px solid var(--border); border-radius:10px; padding:1rem 1.2rem; }
+  .cli-cmd { font-family:'IBM Plex Mono',monospace; font-size:0.85rem; font-weight:600; color:var(--sonnet); margin-bottom:0.3rem; }
+  .cli-desc { font-size:0.8rem; color:var(--text-dim); }
+
+  .footer { text-align:center; padding:3.5rem 2rem; border-top:1px solid var(--border); color:var(--text-muted); font-size:0.82rem; line-height:1.8; }
+</style>
+</head>
+<body>
+
+<nav class="nav">
+  <a class="nav-brand" href="#top">GraphKit</a>
+  <a href="#quickstart">Quickstart</a>
+  <a href="#lifecycle">Workflow</a>
+  <a href="#topologies">Topologies</a>
+  <a class="nav-hide" href="#runtimes">Runtimes</a>
+  <a class="nav-hide" href="#evidence">Evidence &amp; Gates</a>
+  <a class="nav-hide" href="#ledger">Resume</a>
+  <a class="nav-hide" href="#memory">Memory</a>
+  <a class="nav-hide" href="#hosts">Hosts</a>
+  <a href="#cli">CLI</a>
+  <a class="nav-gh" href="https://github.com/thanhNt16/graph-kit">GitHub ↗</a>
+</nav>
+
+<div class="hero" id="top">
+  <div class="hero-badge">Graph Engineering Kit · Claude Code · Cursor · OpenCode · Codex · Pi</div>
+  <h1>Define, Execute, and Verify Agent Workflows</h1>
+  <p class="hero-tag">GraphKit compiles declarative, graph-structured agent workflows into native execution across five hosts. With deterministic DAG validation, dual execution runtimes, a run ledger with checkpoint resume, a criteria-based content-addressed evidence store, and project memory. No custom runtime, no daemon.</p>
+  <div class="hero-cta">
+    <a class="btn btn-primary" href="#quickstart">Get started</a>
+    <a class="btn btn-ghost" href="https://github.com/thanhNt16/graph-kit">View on GitHub</a>
+  </div>
+  <div class="hero-install"><code>curl -fsSL https://github.com/thanhNt16/graph-kit/releases/latest/download/gk-darwin-arm64.tar.gz | sudo tar -xz -C /usr/local/bin</code></div>
+  <div class="hero-stats">
+    <div class="stat"><div class="stat-num">11</div><div class="stat-label">Canonical Topologies</div></div>
+    <div class="stat"><div class="stat-num">5</div><div class="stat-label">Supported Host Targets</div></div>
+    <div class="stat"><div class="stat-num">9</div><div class="stat-label">Static DAG Gates</div></div>
+    <div class="stat"><div class="stat-num">8</div><div class="stat-label">Native Agents</div></div>
+    <div class="stat"><div class="stat-num">sha256</div><div class="stat-label">Content-Addressed Store</div></div>
+    <div class="stat"><div class="stat-num">0</div><div class="stat-label">Daemons / Lock-In</div></div>
+  </div>
+</div>
+
+<div class="section" id="lifecycle">
+  <div class="section-label">End-to-End System</div>
+  <h2>How GraphKit Works</h2>
+  <p>Every workflow follows a structured lifecycle from authoring to durable memory — replacing bespoke scripts and brittle prompt chaining with deterministic contracts.</p>
+
+  <div class="lifecycle-grid">
+    <div class="lifecycle-card">
+      <div class="card-num">01. AUTHOR</div>
+      <h3>✍️ Declarative Topologies</h3>
+      <p>Define workflows in <code>graph.yaml</code> using 11 battle-tested topology shapes. Bind native agent fragments, model tiers, tool allowlists, and constraints per node.</p>
+      <a href="#topologies">Explore Topologies →</a>
+    </div>
+
+    <div class="lifecycle-card">
+      <div class="card-num">02. VALIDATE</div>
+      <h3>🛡️ 9-Check DAG Gate</h3>
+      <p>Fail fast before execution. Static checks verify syntax, schema, DAG acyclicity, agent file existence, reference paths, required evidence keys, and loop boundaries.</p>
+      <a href="#validation">Validation Rules →</a>
+    </div>
+
+    <div class="lifecycle-card">
+      <div class="card-num">03. EXECUTE</div>
+      <h3>⚡ Dual Execution Runtimes</h3>
+      <p>Run via transparent subagent wave dispatch on all five hosts (<code>/gk:execute</code> with git worktree isolation) or compile to Claude Code's native Workflow tool (<code>/gk:run</code>).</p>
+      <a href="#runtimes">Execution Paths →</a>
+    </div>
+
+    <div class="lifecycle-card">
+      <div class="card-num">04. VERIFY &amp; GATE</div>
+      <h3>📦 Criteria &amp; Evidence Store</h3>
+      <p>Artifacts are stored in a content-addressed blob store with SHA256 hashes. Deterministic gates enforce required criteria keys and git tree freshness before merge.</p>
+      <a href="#evidence">Evidence &amp; Gating →</a>
+    </div>
+
+    <div class="lifecycle-card">
+      <div class="card-num">05. RESUME</div>
+      <h3>🔁 Ledger &amp; Checkpoint Resume</h3>
+      <p>Every node run lands in <code>.graphkit/runs/&lt;id&gt;/</code>. Interrupted or failed runs reconcile satisfied nodes against disk evidence and re-run only pending descendants.</p>
+      <a href="#ledger">Checkpoint Replay →</a>
+    </div>
+
+    <div class="lifecycle-card">
+      <div class="card-num">06. REMEMBER</div>
+      <h3>🧠 Project Memory &amp; Code Graph</h3>
+      <p>Execution history is mined into reusable patterns and suggestions. The CBM MCP bridge provides instant LSP-backed search, caller tracing, and Cypher queries.</p>
+      <a href="#memory">Project Memory →</a>
+    </div>
+  </div>
+</div>
+
+<div class="section" id="quickstart">
+  <div class="section-label">Getting Started</div>
+  <h2>Installation &amp; Setup</h2>
+  <p>GraphKit installs as a single standalone binary or via source build. Initialize the kit into your repository to configure host-native agents, skills, hooks, and rules.</p>
+
+  <div class="install-grid">
+    <div class="code-block">
+      <div class="code-header"><div class="code-dot" style="background:#f85149"></div><div class="code-dot" style="background:#d29922"></div><div class="code-dot" style="background:#3fb950"></div> 1. Install Prebuilt Binary</div>
+      <div class="code-body"><span class="cmt"># macOS Apple Silicon</span>
+curl -fsSL https://github.com/thanhNt16/graph-kit/releases/latest/download/gk-darwin-arm64.tar.gz \
+  | sudo tar -xz -C /usr/local/bin
+
+<span class="cmt"># Linux x64</span>
+curl -fsSL https://github.com/thanhNt16/graph-kit/releases/latest/download/gk-linux-x64.tar.gz \
+  | sudo tar -xz -C /usr/local/bin
+
+gk --version</div>
+    </div>
+
+    <div class="code-block">
+      <div class="code-header"><div class="code-dot" style="background:#f85149"></div><div class="code-dot" style="background:#d29922"></div><div class="code-dot" style="background:#3fb950"></div> 2. Or Build From Source (Bun)</div>
+      <div class="code-body"><span class="cmt"># Clone and build</span>
+git clone https://github.com/thanhNt16/graph-kit.git
+cd graph-kit
+bun install &amp;&amp; bun run build:bin
+
+<span class="cmt"># Move executable to PATH</span>
+cp dist/gk /usr/local/bin/gk
+chmod +x /usr/local/bin/gk</div>
+    </div>
+  </div>
+
+  <div class="code-block">
+    <div class="code-header"><div class="code-dot" style="background:#f85149"></div><div class="code-dot" style="background:#d29922"></div><div class="code-dot" style="background:#3fb950"></div> 3. Initialize Kit in Your Project</div>
+    <div class="code-body"><span class="cmt"># Install kit into an existing repository:</span>
+cd /path/to/your-project
+gk init                                  <span class="cmt"># → .claude/   (Claude Code)</span>
+gk init --target cursor                  <span class="cmt"># → .cursor/   (Cursor)</span>
+gk init --target opencode                <span class="cmt"># → .opencode/ (OpenCode)</span>
+gk init --target codex                   <span class="cmt"># → .codex/    (Codex CLI)</span>
+gk init --target pi                      <span class="cmt"># → .omp/      (Pi / OMP)</span>
+
+<span class="cmt"># Or materialize a workflow from the template gallery:</span>
+gk template materialize audit-pr --params '<span class="str">{"task":"the auth module"}</span>' --use
+gk validate                              <span class="cmt"># check active graph against 9 DAG rules</span></div>
+  </div>
+</div>
+
+<div class="section" id="topologies">
+  <div class="section-label">Graph Architecture</div>
+  <h2>Eleven Canonical Topologies</h2>
+  <p>Workflows are built from eleven proven topological patterns. Each topology defines a specific execution flow — from parallel reduction and adversarial verification to iterative loops and tournaments.</p>
+
+  <div class="topo-grid">
+    <div class="topo-card" style="border-left:3px solid var(--diamond)">
+      <div class="topo-card-header"><div class="topo-dot" style="background:var(--diamond)"></div><div class="topo-name">Diamond</div><div class="topo-shape">fan-out → reduce → synthesize</div></div>
+      <div class="topo-diagram"><svg width="150" height="90" viewBox="0 0 150 90"><line class="svg-line" x1="75" y1="12" x2="28" y2="45"/><line class="svg-line" x1="75" y1="12" x2="75" y2="45"/><line class="svg-line" x1="75" y1="12" x2="122" y2="45"/><line class="svg-line" x1="28" y1="45" x2="75" y2="80"/><line class="svg-line" x1="75" y1="45" x2="75" y2="80"/><line class="svg-line" x1="122" y1="45" x2="75" y2="80"/><rect x="62" y="4" width="26" height="16" rx="3" fill="none" stroke="var(--diamond)"/><rect x="15" y="37" width="26" height="16" rx="3" fill="none" stroke="var(--sonnet)"/><rect x="62" y="37" width="26" height="16" rx="3" fill="none" stroke="var(--sonnet)"/><rect x="109" y="37" width="26" height="16" rx="3" fill="none" stroke="var(--sonnet)"/><rect x="62" y="72" width="26" height="16" rx="3" fill="none" stroke="var(--opus)"/></svg></div>
+      <div class="topo-desc">Split work to N parallel workers, reduce with deterministic logic, synthesize with a lead agent.</div>
+      <div class="topo-use">→ code review · security audit · research</div>
+    </div>
+
+    <div class="topo-card" style="border-left:3px solid var(--classify)">
+      <div class="topo-card-header"><div class="topo-dot" style="background:var(--classify)"></div><div class="topo-name">Classify-and-Act</div><div class="topo-shape">route 1 → 1 handler</div></div>
+      <div class="topo-diagram"><svg width="150" height="90" viewBox="0 0 150 90"><line class="svg-line" x1="75" y1="18" x2="22" y2="68"/><line class="svg-line" x1="75" y1="18" x2="60" y2="68"/><line class="svg-line" x1="75" y1="18" x2="98" y2="68"/><line class="svg-line" x1="75" y1="18" x2="135" y2="68"/><rect x="58" y="6" width="34" height="20" rx="3" fill="none" stroke="var(--opus)"/><rect x="6" y="65" width="32" height="18" rx="3" fill="none" stroke="var(--sonnet)"/><rect x="44" y="65" width="32" height="18" rx="3" fill="none" stroke="var(--sonnet)"/><rect x="82" y="65" width="32" height="18" rx="3" fill="none" stroke="var(--sonnet)"/><rect x="120" y="65" width="24" height="18" rx="3" fill="none" stroke="var(--haiku)"/></svg></div>
+      <div class="topo-desc">Classifier inspects input, routes to exactly one specialized handler with fallback.</div>
+      <div class="topo-use">→ triage · ticket routing · escalation</div>
+    </div>
+
+    <div class="topo-card" style="border-left:3px solid var(--adversarial)">
+      <div class="topo-card-header"><div class="topo-dot" style="background:var(--adversarial)"></div><div class="topo-name">Adversarial Verification</div><div class="topo-shape">produce → refute → adjudicate</div></div>
+      <div class="topo-diagram"><svg width="150" height="90" viewBox="0 0 150 90"><line class="svg-line" x1="75" y1="12" x2="28" y2="45"/><line class="svg-line" x1="75" y1="12" x2="75" y2="45"/><line class="svg-line" x1="75" y1="12" x2="122" y2="45"/><line class="svg-line" x1="28" y1="45" x2="75" y2="80"/><line class="svg-line" x1="75" y1="45" x2="75" y2="80"/><line class="svg-line" x1="122" y1="45" x2="75" y2="80"/><rect x="58" y="4" width="34" height="16" rx="3" fill="none" stroke="var(--adversarial)"/><rect x="12" y="37" width="26" height="16" rx="3" fill="none" stroke="var(--sonnet)" stroke-dasharray="3,2"/><rect x="62" y="37" width="26" height="16" rx="3" fill="none" stroke="var(--sonnet)" stroke-dasharray="3,2"/><rect x="112" y="37" width="26" height="16" rx="3" fill="none" stroke="var(--sonnet)" stroke-dasharray="3,2"/><rect x="58" y="72" width="34" height="16" rx="3" fill="none" stroke="var(--opus)"/></svg></div>
+      <div class="topo-desc">Producer emits items. Independent refuters with fresh context challenge each proposal.</div>
+      <div class="topo-use">→ security audit · correctness check</div>
+    </div>
+
+    <div class="topo-card" style="border-left:3px solid var(--loop)">
+      <div class="topo-card-header"><div class="topo-dot" style="background:var(--loop)"></div><div class="topo-name">Loop Until Done</div><div class="topo-shape">scout → work → dedup → repeat</div></div>
+      <div class="topo-diagram"><svg width="150" height="90" viewBox="0 0 150 90"><path class="svg-line" d="M 75 18 Q 130 18 130 45 Q 130 72 75 72" stroke-dasharray="4,3"/><rect x="52" y="8" width="46" height="18" rx="3" fill="none" stroke="var(--opus)"/><rect x="18" y="38" width="32" height="14" rx="3" fill="none" stroke="var(--sonnet)"/><rect x="58" y="38" width="32" height="14" rx="3" fill="none" stroke="var(--sonnet)"/><rect x="98" y="38" width="32" height="14" rx="3" fill="none" stroke="var(--sonnet)"/><text x="75" y="68" text-anchor="middle" fill="var(--loop)" font-size="7" font-family="monospace">stop when dry</text></svg></div>
+      <div class="topo-desc">Scout discovers items, workers process, dedup against seen. Loops until stop criteria or cap.</div>
+      <div class="topo-use">→ bug sweep · test coverage · discovery</div>
+    </div>
+
+    <div class="topo-card" style="border-left:3px solid var(--generate)">
+      <div class="topo-card-header"><div class="topo-dot" style="background:var(--generate)"></div><div class="topo-name">Generate-and-Filter</div><div class="topo-shape">generate N → keep best K</div></div>
+      <div class="topo-diagram"><svg width="150" height="90" viewBox="0 0 150 90"><line class="svg-line" x1="75" y1="18" x2="75" y2="42"/><line class="svg-line" x1="75" y1="50" x2="75" y2="72"/><rect x="52" y="8" width="46" height="18" rx="3" fill="none" stroke="var(--sonnet)"/><rect x="56" y="40" width="38" height="14" rx="7" fill="none" stroke="var(--haiku)"/><rect x="46" y="70" width="28" height="16" rx="3" fill="none" stroke="var(--opus)"/><rect x="78" y="70" width="28" height="16" rx="3" fill="none" stroke="var(--opus)"/></svg></div>
+      <div class="topo-desc">Generators produce diverse candidates. A rubric scores in one deterministic pass to select top-K.</div>
+      <div class="topo-use">→ naming · architecture options · design</div>
+    </div>
+
+    <div class="topo-card" style="border-left:3px solid var(--tournament)">
+      <div class="topo-card-header"><div class="topo-dot" style="background:var(--tournament)"></div><div class="topo-name">Tournament</div><div class="topo-shape">pairwise elimination</div></div>
+      <div class="topo-diagram"><svg width="150" height="90" viewBox="0 0 150 90"><line class="svg-line" x1="22" y1="18" x2="55" y2="45"/><line class="svg-line" x1="55" y1="18" x2="55" y2="45"/><line class="svg-line" x1="95" y1="18" x2="95" y2="45"/><line class="svg-line" x1="132" y1="18" x2="95" y2="45"/><line class="svg-line" x1="55" y1="55" x2="75" y2="78"/><line class="svg-line" x1="95" y1="55" x2="75" y2="78"/><rect x="8" y="8" width="28" height="14" rx="3" fill="none" stroke="var(--sonnet)"/><rect x="41" y="8" width="28" height="14" rx="3" fill="none" stroke="var(--sonnet)"/><rect x="81" y="8" width="28" height="14" rx="3" fill="none" stroke="var(--sonnet)"/><rect x="114" y="8" width="28" height="14" rx="3" fill="none" stroke="var(--sonnet)"/><rect x="41" y="45" width="28" height="14" rx="3" fill="none" stroke="var(--sonnet)"/><rect x="81" y="45" width="28" height="14" rx="3" fill="none" stroke="var(--sonnet)"/><rect x="58" y="74" width="34" height="14" rx="3" fill="none" stroke="var(--opus)"/></svg></div>
+      <div class="topo-desc">Candidates compete in pairwise judged brackets until one clear champion emerges.</div>
+      <div class="topo-use">→ ranking solutions · eval benchmarking</div>
+    </div>
+
+    <div class="topo-card" style="border-left:3px solid var(--memory)">
+      <div class="topo-card-header"><div class="topo-dot" style="background:var(--memory)"></div><div class="topo-name">Memory-Augmented</div><div class="topo-shape">wrapper: any topology + curator</div></div>
+      <div class="topo-diagram"><svg width="150" height="90" viewBox="0 0 150 90"><rect x="10" y="6" width="130" height="78" rx="6" fill="none" stroke="var(--memory)" stroke-dasharray="5,3" opacity="0.5"/><rect x="30" y="20" width="40" height="14" rx="3" fill="none" stroke="var(--sonnet)"/><rect x="80" y="20" width="40" height="14" rx="3" fill="none" stroke="var(--sonnet)"/><line class="svg-line" x1="50" y1="34" x2="50" y2="52"/><line class="svg-line" x1="100" y1="34" x2="100" y2="52"/><rect x="28" y="52" width="44" height="14" rx="3" fill="none" stroke="var(--opus)"/><rect x="80" y="52" width="44" height="14" rx="3" fill="none" stroke="var(--memory)"/><text x="102" y="63" text-anchor="middle" fill="var(--memory)" font-size="7" font-family="monospace">curator</text><text x="75" y="82" text-anchor="middle" fill="var(--text-muted)" font-size="6" font-family="monospace">wraps diamond inside</text></svg></div>
+      <div class="topo-desc">Wraps any base topology. A curator agent interleaves memory extraction, expiration, and injection.</div>
+      <div class="topo-use">→ long-running tasks · multi-step builds</div>
+    </div>
+
+    <div class="topo-card" style="border-left:3px solid var(--custom)">
+      <div class="topo-card-header"><div class="topo-dot" style="background:var(--custom)"></div><div class="topo-name">Custom DAG</div><div class="topo-shape">arbitrary DAG via depend_on</div></div>
+      <div class="topo-diagram"><svg width="150" height="90" viewBox="0 0 150 90"><line class="svg-line" x1="40" y1="20" x2="75" y2="45"/><line class="svg-line" x1="110" y1="20" x2="75" y2="45"/><line class="svg-line" x1="75" y1="45" x2="30" y2="75"/><line class="svg-line" x1="75" y1="45" x2="75" y2="75"/><line class="svg-line" x1="75" y1="45" x2="120" y2="75"/><line class="svg-line" x1="40" y1="20" x2="110" y2="20" stroke-dasharray="2,2"/><rect x="26" y="12" width="28" height="16" rx="3" fill="none" stroke="var(--opus)"/><rect x="96" y="12" width="28" height="16" rx="3" fill="none" stroke="var(--sonnet)"/><rect x="61" y="37" width="28" height="16" rx="3" fill="none" stroke="var(--custom)"/><rect x="16" y="67" width="28" height="16" rx="3" fill="none" stroke="var(--sonnet)"/><rect x="61" y="67" width="28" height="16" rx="3" fill="none" stroke="var(--sonnet)"/><rect x="106" y="67" width="28" height="16" rx="3" fill="none" stroke="var(--haiku)"/></svg></div>
+      <div class="topo-desc">Define arbitrary node dependencies. GraphKit automatically computes execution waves.</div>
+      <div class="topo-use">→ bespoke agent pipelines</div>
+    </div>
+
+    <div class="topo-card" style="border-left:3px solid var(--flow)">
+      <div class="topo-card-header"><div class="topo-dot" style="background:var(--flow)"></div><div class="topo-name">SDD Flow</div><div class="topo-shape">spec → design → dev → review</div></div>
+      <div class="topo-diagram"><svg width="150" height="90" viewBox="0 0 150 90"><line class="svg-line" x1="75" y1="14" x2="75" y2="30"/><line class="svg-line" x1="75" y1="38" x2="30" y2="55"/><line class="svg-line" x1="75" y1="38" x2="75" y2="55"/><line class="svg-line" x1="75" y1="38" x2="120" y2="55"/><line class="svg-line" x1="30" y1="63" x2="75" y2="78"/><line class="svg-line" x1="75" y1="63" x2="75" y2="78"/><line class="svg-line" x1="120" y1="63" x2="75" y2="78"/><rect x="55" y="2" width="40" height="14" rx="3" fill="none" stroke="var(--flow)"/><rect x="55" y="24" width="40" height="14" rx="3" fill="none" stroke="var(--opus)"/><rect x="12" y="49" width="36" height="14" rx="3" fill="none" stroke="var(--sonnet)"/><rect x="57" y="49" width="36" height="14" rx="3" fill="none" stroke="var(--sonnet)"/><rect x="102" y="49" width="36" height="14" rx="3" fill="none" stroke="var(--sonnet)"/><rect x="55" y="72" width="40" height="14" rx="3" fill="none" stroke="var(--haiku)"/></svg></div>
+      <div class="topo-desc">Spec-driven development flow. Brainstorm → plan → parallel implementation → multi-perspective review.</div>
+      <div class="topo-use">→ feature development · SDD</div>
+    </div>
+
+    <div class="topo-card" style="border-left:3px solid var(--flow)">
+      <div class="topo-card-header"><div class="topo-dot" style="background:var(--flow)"></div><div class="topo-name">Superpowers Flow</div><div class="topo-shape">brainstorm → plan → loop</div></div>
+      <div class="topo-diagram"><svg width="150" height="90" viewBox="0 0 150 90"><line class="svg-line" x1="75" y1="20" x2="75" y2="36"/><line class="svg-line" x1="75" y1="44" x2="75" y2="60"/><path class="svg-line" d="M 75 60 Q 140 60 140 40 Q 140 20 90 20" stroke-dasharray="4,3"/><rect x="52" y="8" width="46" height="14" rx="3" fill="none" stroke="var(--flow)"/><rect x="52" y="30" width="46" height="14" rx="3" fill="none" stroke="var(--opus)"/><rect x="48" y="54" width="54" height="14" rx="3" fill="none" stroke="var(--sonnet)"/><text x="75" y="82" text-anchor="middle" fill="var(--flow)" font-size="7" font-family="monospace">verify · loop</text></svg></div>
+      <div class="topo-desc">Structured brainstorming, task planning, execution, and verification loops.</div>
+      <div class="topo-use">→ autonomous engineering cycles</div>
+    </div>
+
+    <div class="topo-card" style="border-left:3px solid var(--flow)">
+      <div class="topo-card-header"><div class="topo-dot" style="background:var(--flow)"></div><div class="topo-name">Research &amp; Build</div><div class="topo-shape">scout → research → build</div></div>
+      <div class="topo-diagram"><svg width="150" height="90" viewBox="0 0 150 90"><line class="svg-line" x1="75" y1="14" x2="75" y2="30"/><line class="svg-line" x1="75" y1="38" x2="75" y2="54"/><line class="svg-line" x1="75" y1="62" x2="40" y2="78"/><line class="svg-line" x1="75" y1="62" x2="110" y2="78"/><rect x="52" y="2" width="46" height="14" rx="3" fill="none" stroke="var(--haiku)"/><rect x="52" y="24" width="46" height="14" rx="3" fill="none" stroke="var(--sonnet)"/><rect x="48" y="48" width="54" height="14" rx="3" fill="none" stroke="var(--opus)"/><rect x="18" y="72" width="44" height="14" rx="3" fill="none" stroke="var(--sonnet)"/><rect x="88" y="72" width="44" height="14" rx="3" fill="none" stroke="var(--haiku)"/><text x="40" y="82" text-anchor="middle" fill="var(--text-muted)" font-size="6" font-family="monospace">build</text><text x="110" y="82" text-anchor="middle" fill="var(--text-muted)" font-size="6" font-family="monospace">review</text></svg></div>
+      <div class="topo-desc">Deep scouting and literature research before writing code. Architectural decisions grounded first.</div>
+      <div class="topo-use">→ novel architecture · exploration</div>
+    </div>
+  </div>
+</div>
+
+<div class="section" id="validation">
+  <div class="section-label">Declarative Schema &amp; Node Binding</div>
+  <h2>Per-Node Contracts &amp; Static Gating</h2>
+  <p>Every node binds its own configuration: model tier (opus, sonnet, haiku, fable), tool allowlists, reference files, loop bounds, advisor escalation triggers, and expected evidence outputs. <code>gk validate</code> enforces 9 static checks before anything runs.</p>
+
+  <div class="install-grid">
+    <div class="code-block">
+      <div class="code-header"><div class="code-dot" style="background:#f85149"></div><div class="code-dot" style="background:#d29922"></div><div class="code-dot" style="background:#3fb950"></div> graph.yaml</div>
+      <div class="code-body"><span class="kw">apiVersion:</span> <span class="str">graphkit.dev/v2</span>
+<span class="kw">kind:</span> <span class="str">Graph</span>
+<span class="kw">metadata:</span>
+  <span class="field">name:</span> <span class="str">security-audit</span>
+<span class="kw">topology:</span> <span class="str">custom</span>
+<span class="kw">nodes:</span>
+  <span class="field">scouter:</span>
+    <span class="field">agent:</span> <span class="str">Software Architect</span>
+    <span class="field">model:</span> <span class="str">opus</span>
+    <span class="field">objective:</span> <span class="str">Map attack surfaces</span>
+    <span class="field">tools:</span> [<span class="str">Read</span>, <span class="str">Glob</span>, <span class="str">Grep</span>]
+    <span class="field">constraints:</span>
+      - <span class="field">no_write:</span> <span class="num">true</span>
+    <span class="field">evidence:</span> [<span class="str">attack_surface</span>]
+  <span class="field">fixer:</span>
+    <span class="field">agent:</span> <span class="str">Code Reviewer</span>
+    <span class="field">model:</span> <span class="str">haiku</span>
+    <span class="field">objective:</span> <span class="str">Fix identified security defects</span>
+    <span class="field">depend_on:</span> [<span class="str">scouter</span>]
+    <span class="field">loop:</span>
+      <span class="field">enabled:</span> <span class="num">true</span>
+      <span class="field">stop_when:</span> <span class="str">evidence found</span>
+      <span class="field">max_rounds:</span> <span class="num">3</span>
+    <span class="field">advisor:</span>
+      <span class="field">model:</span> <span class="str">fable</span>
+      <span class="field">after_failed_rounds:</span> <span class="num">1</span>
+      <span class="field">max_calls:</span> <span class="num">2</span>
+    <span class="field">evidence:</span> [<span class="str">patch</span>]
+<span class="kw">evidence:</span>
+  <span class="field">required_keys:</span> [<span class="str">attack_surface</span>, <span class="str">patch</span>]</div>
+    </div>
+
+    <div class="code-block">
+      <div class="code-header"><div class="code-dot" style="background:#f85149"></div><div class="code-dot" style="background:#d29922"></div><div class="code-dot" style="background:#3fb950"></div> 9 Static DAG Validation Gates</div>
+      <div class="code-body"><span class="cmt"># Run before compilation or dispatch:</span>
+gk validate
+
+<span class="cmt"># 1. Syntax: Clean YAML parsing</span>
+<span class="cmt"># 2. Schema: graphkit.dev/v2 schema conformance</span>
+<span class="cmt"># 3. Topology: Canonical shape rules (diamond, etc.)</span>
+<span class="cmt"># 4. Agent Binding: Agent fragments exist in .omp/agents/</span>
+<span class="cmt"># 5. References: Referenced ref paths exist on disk</span>
+<span class="cmt"># 6. Acyclic: depend_on forms valid DAG without cycles</span>
+<span class="cmt"># 7. Evidence Keys: Node evidence matches graph declaration</span>
+<span class="cmt"># 8. Loop Exits: stop_when, gate_evidence, or max_rounds set</span>
+<span class="cmt"># 9. Constraints: tools_allowlist and no_write rules</span>
+
+<span class="str">PASS: 9 validation gates satisfied</span></div>
+    </div>
+  </div>
+</div>
+
+<div class="section" id="runtimes">
+  <div class="section-label">Execution Architecture</div>
+  <h2>Dual Execution Runtimes</h2>
+  <p>One graph specification, two execution paths. <code>/gk:execute</code> provides transparent, interactive wave-by-wave dispatch across all 5 host targets. <code>/gk:run</code> compiles graphs into native Claude Code Workflow scripts.</p>
+
+  <table class="cmp-table">
+    <tr><th>Capability</th><th>/gk:execute (All 5 Hosts)</th><th>/gk:run (Claude Code)</th></tr>
+    <tr><td>Supported Hosts</td><td>Claude Code, Cursor, OpenCode, Codex, Pi</td><td>Claude Code Workflow tool</td></tr>
+    <tr><td>Compilation</td><td>Zero compile step — executes wave-by-wave</td><td>Compiles to <code>.workflow.js</code></td></tr>
+    <tr><td>Visibility</td><td>Full visibility — every subagent interactive</td><td>Opaque background execution</td></tr>
+    <tr><td>Isolation Mode</td><td><code>--worktree</code> (isolated git branches per write node)</td><td>Single workspace process</td></tr>
+    <tr><td>Advisor Escalation</td><td>Automatic advisor injection on failed streaks</td><td>Static round loops</td></tr>
+    <tr><td>Dynamic Fan-Out</td><td>Fleet sizing determined by upstream briefs</td><td>Fixed array maps</td></tr>
+  </table>
+
+  <div class="bridge-grid">
+    <div class="subsys" style="border-color:var(--fable)">
+      <div class="subsys-tag" style="background:rgba(240,136,62,0.15);color:var(--fable)">ADVISOR ESCALATION</div>
+      <h3>Autonomous Tier Escalation</h3>
+      <p>When a looping worker encounters repeated failed rounds, GraphKit dispatches a read-only advisor at a stronger model tier (e.g., <code>fable</code>), injects its diagnostic guidance into the node objective, and retries the original worker.</p>
+    </div>
+
+    <div class="subsys" style="border-color:var(--bridge)">
+      <div class="subsys-tag" style="background:rgba(57,208,216,0.15);color:var(--bridge)">WORKTREE ISOLATION</div>
+      <h3>Parallel Worktree Merging</h3>
+      <p>Passing <code>--worktree</code> isolates each write-capable node in its own git worktree branch. At the wave barrier, branches are reconciled and merged cleanly before dependent waves begin.</p>
+    </div>
+  </div>
+</div>
+
+<div class="section" id="evidence">
+  <div class="section-label">Verification &amp; Gating</div>
+  <h2>Criteria Registry &amp; Evidence Store</h2>
+  <p>GraphKit replaces unverified agent assertions with a content-addressed evidence store and strict git freshness gating. Work products are hashed, cataloged, and evaluated against declarative criteria.</p>
+
+  <div class="lifecycle">
+    <div class="lc-step"><div class="name">criteria/&lt;key&gt;.md</div><div class="desc">Repository criteria registry</div></div>
+    <div class="lc-step"><div class="name">gk evidence add</div><div class="desc">Content-addressed sha256 blob store</div></div>
+    <div class="lc-step"><div class="name">provenance marker</div><div class="desc">Commit SHA, run ID, and timestamps</div></div>
+    <div class="lc-step"><div class="name">gk gate</div><div class="desc">Strict freshness check: MERGE or BLOCK</div></div>
+    <div class="lc-step"><div class="name">gk evidence report</div><div class="desc">Criterion-first HTML &amp; JSON reports</div></div>
+  </div>
+
+  <div class="install-grid">
+    <div class="code-block">
+      <div class="code-header"><div class="code-dot" style="background:#f85149"></div><div class="code-dot" style="background:#d29922"></div><div class="code-dot" style="background:#3fb950"></div> Evidence Store &amp; Provenance</div>
+      <div class="code-body"><span class="cmt"># 1. Add an artifact to the content-addressed store:</span>
+gk evidence add security_report ./docs/security.pdf \
+  --run-id 2026-09-07-audit \
+  --node-id scouter \
+  --desc <span class="str">"OWASP attack surface mapping"</span>
+
+<span class="cmt"># Stored under .graphkit/evidence/security_report/:</span>
+<span class="cmt"># - a1b2c3d4...pdf  (content-addressed by SHA-256)</span>
+<span class="cmt"># - a1b2c3d4...md   (provenance marker with commit hash)</span>
+<span class="cmt"># - .index          (append-only JSONL lookup index)</span>
+
+<span class="cmt"># 2. Inspect recorded evidence:</span>
+gk evidence list
+gk evidence get security_report</div>
+    </div>
+
+    <div class="code-block">
+      <div class="code-header"><div class="code-dot" style="background:#f85149"></div><div class="code-dot" style="background:#d29922"></div><div class="code-dot" style="background:#3fb950"></div> Deterministic Gate Verification</div>
+      <div class="code-body"><span class="cmt"># 3. Evaluate gate status for active graph:</span>
+gk gate
+
+<span class="cmt"># Strict mode ensures:</span>
+<span class="cmt"># - Every required evidence key exists</span>
+<span class="cmt"># - Artifact git fingerprints match the current tree</span>
+<span class="cmt"># - Stale or missing artifacts trigger BLOCK verdict</span>
+
+<span class="kw">Verdict:</span> <span class="str">MERGE</span> (2/2 criteria fresh)
+
+<span class="cmt"># 4. Generate standalone, self-contained HTML report:</span>
+gk evidence report --html &gt; report.html</div>
+    </div>
+  </div>
+</div>
+
+<div class="section" id="ledger">
+  <div class="section-label">Fault Tolerance</div>
+  <h2>Run Ledger &amp; Checkpoint Resume</h2>
+  <p>Failed or interrupted runs do not restart from scratch. The ledger tracks every node dispatch in <code>.graphkit/runs/&lt;id&gt;/</code>. <code>gk run resume</code> derives a pending-only subgraph, reattaches upstream evidence as references, and guards against git graph drift.</p>
+
+  <div class="lifecycle">
+    <div class="lc-step"><div class="name">1. Reconcile</div><div class="desc">passed nodes ∩ on-disk evidence → satisfied</div></div>
+    <div class="lc-step"><div class="name">2. Derive</div><div class="desc">pending-only subgraph · upstream artifacts → refs</div></div>
+    <div class="lc-step"><div class="name">3. Validate</div><div class="desc">static checks guarantee valid structural DAG</div></div>
+    <div class="lc-step"><div class="name">4. Child Run</div><div class="desc">executes pending nodes with resumes: chain</div></div>
+  </div>
+
+  <div class="code-block">
+    <div class="code-header"><div class="code-dot" style="background:#f85149"></div><div class="code-dot" style="background:#d29922"></div><div class="code-dot" style="background:#3fb950"></div> Checkpoint Resume Workflow</div>
+    <div class="code-body"><span class="cmt"># Start a graph run:</span>
+gk run start                              <span class="cmt"># → opens ledger in .graphkit/runs/&lt;run-id&gt;/</span>
+
+<span class="cmt"># Subagent executions update ledger status:</span>
+gk run node &lt;run-id&gt; scouter --status passed --evidence <span class="str">'{"attack_surface":"..."}'</span>
+gk run node &lt;run-id&gt; fixer --status failed --round 2
+
+<span class="cmt"># Replay and resume failed or interrupted runs:</span>
+gk run resume &lt;run-id&gt;                    <span class="cmt"># derives pending graph + starts child run</span>
+gk run resume &lt;run-id&gt; --dry-run          <span class="cmt"># preview reconciliation without modifying state</span>
+gk run resume &lt;run-id&gt; --from-node fixer  <span class="cmt"># re-execute a specific node and its dependents</span>
+
+<span class="cmt"># Drift protection:</span>
+<span class="cmt"># If graph.yaml was edited since run start, resume is safely blocked:</span>
+<span class="str">RESUME_GRAPH_DRIFT: graph modified. Use --force or commit changes.</span></div>
+  </div>
+</div>
+
+<div class="section" id="memory">
+  <div class="section-label">Durable Intelligence</div>
+  <h2>Project Memory &amp; Code-Graph Bridge</h2>
+  <p>GraphKit turns execution history into project assets. The memory compiler consolidates run ledgers into durable patterns, while the CBM MCP bridge enables fast code-graph queries without requiring a separate graph database.</p>
+
+  <div class="bridge-grid">
+    <div class="subsys" style="border-color:var(--memory)">
+      <div class="subsys-tag" style="background:rgba(46,160,67,0.15);color:var(--memory)">PROJECT MEMORY</div>
+      <h3>Pattern Mining &amp; Suggestions</h3>
+      <p>Consolidation analyzes run ledgers across five pattern families: node sequencing, evidence co-occurrence, failure recurrence, graph reuse, and advisor escalation repeat.</p>
+      <div class="code-block" style="margin:0.6rem 0 0"><div class="code-body">gk memory consolidate --runs 20
+gk suggest                 <span class="cmt"># ranked workflow recommendations</span>
+gk recall "auth tokens"    <span class="cmt"># retrieve contextual memory</span></div></div>
+    </div>
+
+    <div class="subsys" style="border-color:var(--bridge)">
+      <div class="subsys-tag" style="background:rgba(57,208,216,0.15);color:var(--bridge)">CBM CODE GRAPH</div>
+      <h3>LSP-Backed Graph Queries</h3>
+      <p>Bridge to Codebase Memory MCP for multi-language semantic code search, caller/callee tracing, and direct Cypher queries directly within workflow nodes.</p>
+      <div class="code-block" style="margin:0.6rem 0 0"><div class="code-body">gk graph index /path/to/repo
+gk graph search "validation gate"
+gk graph trace validateGraph
+gk graph query "MATCH (f:Function) RETURN f.name"</div></div>
+    </div>
+  </div>
+</div>
+
+<div class="section" id="hosts">
+  <div class="section-label">Multi-Host Compatibility</div>
+  <h2>Five Targets, One Universal CLI</h2>
+  <p>Pass <code>--target &lt;host&gt;</code> to install the native kit for your coding environment. The <code>gk</code> CLI provides identical validation, compilation, memory, and ledger capabilities across all five hosts.</p>
+
+  <table class="cmp-table">
+    <tr><th>Host Target</th><th>Rules Format</th><th>Agents Format</th><th>Skills Directory</th><th>Hook Mechanism</th></tr>
+    <tr><td>Claude Code</td><td><code>.claude/rules/*.md</code></td><td><code>.claude/agents/*.md</code></td><td><code>.claude/skills/</code></td><td><code>settings.json</code> + <code>*.cjs</code></td></tr>
+    <tr><td>Cursor</td><td><code>.cursor/rules/*.mdc</code></td><td><code>.cursor/agents/*.md</code></td><td><code>.cursor/skills/</code></td><td><code>hooks.json</code> + <code>*.cjs</code></td></tr>
+    <tr><td>OpenCode</td><td><code>AGENTS.md</code></td><td><code>.opencode/agent/*.md</code></td><td><code>.opencode/skills/</code></td><td>TS Plugin <code>gk.ts</code></td></tr>
+    <tr><td>Codex CLI</td><td><code>AGENTS.md</code> rules</td><td><code>.codex/agents/*.toml</code></td><td><code>.codex/skills/</code></td><td>Instruction-enforced</td></tr>
+    <tr><td>Pi (OMP)</td><td><code>AGENTS.md</code></td><td><code>.omp/agents/*.md</code></td><td><code>.omp/skills/</code></td><td>OMP extension handlers</td></tr>
+  </table>
+</div>
+
+<div class="section" id="cli">
+  <div class="section-label">CLI Surface</div>
+  <h2>Comprehensive Command Reference</h2>
+  <p>GraphKit provides 15 top-level command groups covering the full graph engineering lifecycle.</p>
+
+  <div class="cli-grid">
+    <div class="cli-card">
+      <div class="cli-cmd">gk init [--target &lt;host&gt;]</div>
+      <div class="cli-desc">Install agents, skills, hooks, and rules into the project for the target host.</div>
+    </div>
+
+    <div class="cli-card">
+      <div class="cli-cmd">gk validate [file]</div>
+      <div class="cli-desc">Run 9 static DAG checks against graph.yaml or the active session graph.</div>
+    </div>
+
+    <div class="cli-card">
+      <div class="cli-cmd">gk compile [file]</div>
+      <div class="cli-desc">Compile graph.yaml into a standalone <code>.workflow.js</code> for Claude Code.</div>
+    </div>
+
+    <div class="cli-card">
+      <div class="cli-cmd">gk gate [file]</div>
+      <div class="cli-desc">Evaluate required evidence criteria and tree freshness: MERGE or BLOCK verdict.</div>
+    </div>
+
+    <div class="cli-card">
+      <div class="cli-cmd">gk evidence &lt;add|list|get|report&gt;</div>
+      <div class="cli-desc">Manage content-addressed evidence blobs, provenance markers, and HTML reports.</div>
+    </div>
+
+    <div class="cli-card">
+      <div class="cli-cmd">gk run &lt;start|node|end|resume|status&gt;</div>
+      <div class="cli-desc">Manage run ledgers, track node status, and replay interrupted runs via checkpoint resume.</div>
+    </div>
+
+    <div class="cli-card">
+      <div class="cli-cmd">gk template &lt;list|materialize|pack&gt;</div>
+      <div class="cli-desc">Package and materialize reusable workflow templates from the gallery.</div>
+    </div>
+
+    <div class="cli-card">
+      <div class="cli-cmd">gk graph &lt;list|switch|show|topologies&gt;</div>
+      <div class="cli-desc">Manage session graphs and inspect canonical topology definitions.</div>
+    </div>
+
+    <div class="cli-card">
+      <div class="cli-cmd">gk memory &lt;consolidate|recall|suggest&gt;</div>
+      <div class="cli-desc">Mine run ledgers into reusable patterns and ranked workflow suggestions.</div>
+    </div>
+  </div>
+</div>
+
+<div class="footer">
+  GraphKit — Graph Engineering Kit for AI Coding Agents<br>
+  Built for Claude Code · Cursor · OpenCode · Codex · Pi<br>
+  <a href="https://github.com/thanhNt16/graph-kit" style="color:var(--sonnet)">GitHub Repository</a> · 
+  <a href="https://github.com/thanhNt16/graph-kit/blob/main/CHANGELOG.md" style="color:var(--sonnet)">Changelog</a> · 
+  <a href="https://github.com/thanhNt16/graph-kit/tree/main/docs" style="color:var(--sonnet)">Documentation</a>
+</div>
+
+</body>
+</html>
