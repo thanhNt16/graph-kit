@@ -1,0 +1,85 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "GraphKit System Architecture",
+    "quality_profile": "showcase",
+    "output": "docs/diagrams/gk-architecture.html",
+    "viewBox": [1280, 760],
+    "views": [
+      {
+        "id": "authoring",
+        "label": "Authoring flow",
+        "focus": ["graph_yaml", "compiler", "kits"],
+        "note": "graph.yaml feeds gk CLI which validates and compiles for host kits."
+      },
+      {
+        "id": "runtimes",
+        "label": "Dual runtimes",
+        "focus": ["compiler", "claude_rt", "exec_rt", "agents"],
+        "note": "Claude Workflow runtime vs native subagent dispatch — same compiled plan."
+      },
+      {
+        "id": "state",
+        "label": "State & memory",
+        "focus": ["memory", "evidence", "ledger"],
+        "note": "Project memory, evidence store, and run ledger persist under .graphkit/."
+      }
+    ]
+  },
+  "components": [
+    { "id": "graph_yaml", "type": "database", "label": "graph.yaml", "sublabel": "GraphKit v2 schema", "pos": [220, 140], "size": [150, 60], "tag": "11 topologies" },
+    { "id": "kits", "type": "backend", "label": "gk kits", "sublabel": "agents · skills · hooks", "pos": [220, 320], "size": [150, 60], "tag": "5 hosts" },
+    { "id": "compiler", "type": "backend", "label": "gk CLI", "sublabel": "validate · compile · run", "pos": [420, 320], "size": [150, 60], "tag": "43 commands" },
+    { "id": "claude_rt", "type": "cloud", "label": "Claude Workflows", "sublabel": "/gk:run", "pos": [640, 180], "size": [150, 60] },
+    { "id": "exec_rt", "type": "cloud", "label": "Subagent Dispatch", "sublabel": "/gk:execute", "pos": [640, 340], "size": [150, 60] },
+    { "id": "agents", "type": "backend", "label": "Node Subagents", "sublabel": "one per node", "pos": [640, 500], "size": [150, 60], "tag": "model tiers" },
+    { "id": "memory", "type": "database", "label": "Project Memory", "sublabel": "gk recall", "pos": [1000, 180], "size": [150, 60] },
+    { "id": "evidence", "type": "security", "label": "Evidence Store", "sublabel": "criteria + gates", "pos": [1000, 340], "size": [150, 60], "tag": "sha256" },
+    { "id": "ledger", "type": "database", "label": "Run Ledger", "sublabel": "trace.jsonl", "pos": [1000, 500], "size": [150, 60], "tag": "resume" }
+  ],
+  "boundaries": [
+    { "kind": "region", "label": "Host Session (Claude Code · Cursor · OpenCode · Codex · pi)", "wraps": ["claude_rt", "exec_rt", "agents", "kits"] },
+    { "kind": "region", "label": ".graphkit/", "wraps": ["memory", "evidence", "ledger"] }
+  ],
+  "connections": [
+    { "id": "yaml-to-compiler", "from": "graph_yaml", "to": "compiler", "label": "compile", "fromSide": "bottom", "toSide": "top", "via": [[295, 240], [495, 240]] },
+    { "id": "kits-to-compiler", "from": "kits", "to": "compiler", "label": "installs into", "fromSide": "bottom", "toSide": "bottom", "via": [[295, 440], [495, 440]] },
+    { "id": "compiler-to-claude", "from": "compiler", "to": "claude_rt", "label": ".workflow.js" },
+    { "id": "compiler-to-exec", "from": "compiler", "to": "exec_rt", "label": "wave plan", "labelAt": [608, 378] },
+    { "id": "exec-to-agents", "from": "exec_rt", "to": "agents", "label": "dispatch", "labelAt": [715, 450] },
+    { "id": "agents-to-evidence", "from": "agents", "to": "evidence", "label": "artifacts", "fromSide": "right", "toSide": "left", "via": [[870, 530], [870, 370]] },
+    { "id": "compiler-to-ledger", "from": "compiler", "to": "ledger", "label": "trace", "labelSegment": 4, "fromSide": "left", "toSide": "bottom", "via": [[390, 350], [390, 300], [180, 300], [180, 620], [1075, 620]] },
+    { "id": "ledger-to-memory", "from": "ledger", "to": "memory", "label": "session context", "fromSide": "right", "toSide": "right", "via": [[1230, 530], [1230, 210]] },
+    { "id": "evidence-to-compiler", "from": "evidence", "to": "compiler", "label": "gate verdict", "variant": "emphasis", "fromSide": "top", "toSide": "right", "via": [[1075, 290], [620, 290], [620, 350]] }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "Compiler Boundary",
+      "items": [
+        "gk never invokes a model or reads an API key",
+        "Validation catches schema, DAG, and ref errors before any run",
+        "Compilation output targets either Claude Workflows or raw dispatch"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "State & Evidence",
+      "items": [
+        "Run ledger writes every wave, node, and advisor event",
+        "Evidence store is content-addressed (sha256) and freshness-aware",
+        "Project memory indexes prior runs for deterministic recall"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "Host Kits",
+      "items": [
+        "Same compiler feeds all five host kits",
+        "Session skills expose /gk:validate, /gk:execute, /gk:recall, …",
+        "Hooks persist evidence at task end without extra config"
+      ]
+    }
+  ]
+}

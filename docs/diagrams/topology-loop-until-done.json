@@ -1,0 +1,135 @@
+{
+  "schema_version": 1,
+  "diagram_type": "workflow",
+  "meta": {
+    "title": "Loop-Until-Done Topology",
+    "locale": "en",
+    "animation": "trace",
+    "quality_profile": "showcase",
+    "output": "docs/diagrams/topology-loop-until-done.html",
+    "viewBox": [
+      1000,
+      680
+    ],
+    "views": [
+      {
+        "id": "main",
+        "label": "Shape",
+        "focus": [
+          "scout",
+          "work",
+          "dedup",
+          "done"
+        ],
+        "note": "Each pass claims fresh targets; dedup loops back until the queue runs dry."
+      }
+    ]
+  },
+  "lanes": [
+    {
+      "id": "disc",
+      "label": "Discover"
+    },
+    {
+      "id": "exec",
+      "label": "Execute"
+    },
+    {
+      "id": "dedup",
+      "label": "Dedup"
+    },
+    {
+      "id": "done",
+      "label": "Done"
+    }
+  ],
+  "mainPath": [
+    "scout",
+    "work",
+    "dedup",
+    "done"
+  ],
+  "nodes": [
+    {
+      "id": "scout",
+      "lane": "disc",
+      "col": 0,
+      "type": "external",
+      "label": "Scout",
+      "sublabel": "find targets"
+    },
+    {
+      "id": "work",
+      "lane": "exec",
+      "col": 1,
+      "type": "backend",
+      "label": "Work",
+      "sublabel": "process one"
+    },
+    {
+      "id": "dedup",
+      "lane": "dedup",
+      "col": 2,
+      "type": "database",
+      "label": "Dedup",
+      "sublabel": "check backlog"
+    },
+    {
+      "id": "done",
+      "lane": "done",
+      "col": 3,
+      "type": "frontend",
+      "label": "Done",
+      "sublabel": "queue empty"
+    }
+  ],
+  "edges": [
+    {
+      "id": "e1",
+      "from": "scout",
+      "to": "work",
+      "label": "claim"
+    },
+    {
+      "id": "e2",
+      "from": "work",
+      "to": "dedup",
+      "label": "result"
+    },
+    {
+      "id": "e3",
+      "from": "dedup",
+      "to": "scout",
+      "label": "until dry",
+      "variant": "dashed",
+      "role": "return"
+    },
+    {
+      "id": "e4",
+      "from": "dedup",
+      "to": "done",
+      "label": "when dry",
+      "variant": "emphasis"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "violet",
+      "title": "Use when",
+      "items": [
+        "Discovery sweeps",
+        "Backlog burn-down",
+        "Unknown total work size"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "Mechanics",
+      "items": [
+        "Each pass claims fresh targets",
+        "Dedup tracks what still remains",
+        "Loop exits only when the queue is dry"
+      ]
+    }
+  ]
+}

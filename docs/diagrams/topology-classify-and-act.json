@@ -1,0 +1,173 @@
+{
+  "schema_version": 1,
+  "diagram_type": "workflow",
+  "meta": {
+    "title": "Classify-and-Act Topology",
+    "locale": "en",
+    "animation": "trace",
+    "quality_profile": "showcase",
+    "output": "docs/diagrams/topology-classify-and-act.html",
+    "viewBox": [
+      1000,
+      800
+    ],
+    "views": [
+      {
+        "id": "main",
+        "label": "Shape",
+        "focus": [
+          "intake",
+          "classify",
+          "h2",
+          "resolve"
+        ],
+        "note": "The classifier sends each item down exactly one handler lane; every outcome still reaches resolve."
+      }
+    ]
+  },
+  "lanes": [
+    {
+      "id": "in",
+      "label": "Intake"
+    },
+    {
+      "id": "h1",
+      "label": "Handler A"
+    },
+    {
+      "id": "decide",
+      "label": "Classifier"
+    },
+    {
+      "id": "h2",
+      "label": "Handler B"
+    },
+    {
+      "id": "h3",
+      "label": "Handler C"
+    }
+  ],
+  "mainPath": [
+    "intake",
+    "classify",
+    "h2",
+    "resolve"
+  ],
+  "nodes": [
+    {
+      "id": "intake",
+      "lane": "in",
+      "col": 0,
+      "type": "frontend",
+      "label": "Intake",
+      "sublabel": "new item"
+    },
+    {
+      "id": "classify",
+      "lane": "decide",
+      "col": 1,
+      "type": "backend",
+      "label": "Classify",
+      "sublabel": "pick one route"
+    },
+    {
+      "id": "h1",
+      "lane": "h1",
+      "col": 2,
+      "type": "backend",
+      "label": "Handler A",
+      "sublabel": "fast path"
+    },
+    {
+      "id": "h2",
+      "lane": "h2",
+      "col": 2,
+      "type": "backend",
+      "label": "Handler B",
+      "sublabel": "standard"
+    },
+    {
+      "id": "h3",
+      "lane": "h3",
+      "col": 2,
+      "type": "security",
+      "label": "Handler C",
+      "sublabel": "escalate"
+    },
+    {
+      "id": "resolve",
+      "lane": "decide",
+      "col": 3,
+      "type": "backend",
+      "label": "Resolve",
+      "sublabel": "merge outcome"
+    }
+  ],
+  "edges": [
+    {
+      "id": "e0",
+      "from": "intake",
+      "to": "classify"
+    },
+    {
+      "id": "e1",
+      "from": "classify",
+      "to": "h1",
+      "label": "if A",
+      "variant": "dashed"
+    },
+    {
+      "id": "e2",
+      "from": "classify",
+      "to": "h2",
+      "label": "if B",
+      "variant": "dashed",
+      "labelDx": -14
+    },
+    {
+      "id": "e3",
+      "from": "classify",
+      "to": "h3",
+      "label": "if C",
+      "variant": "dashed",
+      "labelDx": 14,
+      "labelDy": 8
+    },
+    {
+      "id": "e4",
+      "from": "h1",
+      "to": "resolve"
+    },
+    {
+      "id": "e5",
+      "from": "h2",
+      "to": "resolve",
+      "variant": "emphasis"
+    },
+    {
+      "id": "e6",
+      "from": "h3",
+      "to": "resolve"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "amber",
+      "title": "Use when",
+      "items": [
+        "Triage and routing desks",
+        "Mutually exclusive treatments",
+        "Each item needs exactly one owner"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "Mechanics",
+      "items": [
+        "Classifier emits exactly one branch",
+        "Handlers never see foreign items",
+        "All paths converge on resolve"
+      ]
+    }
+  ]
+}

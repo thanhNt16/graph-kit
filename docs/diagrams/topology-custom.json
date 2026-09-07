@@ -1,0 +1,61 @@
+{
+  "schema_version": 1,
+  "diagram_type": "workflow",
+  "meta": {
+    "title": "Custom Topology",
+    "animation": "trace",
+    "quality_profile": "showcase",
+    "views": [
+      {
+        "id": "main",
+        "label": "Shape",
+        "focus": ["a", "b", "c", "d", "e"],
+        "note": "Any DAG you define: fan out, join on a barrier, then continue."
+      }
+    ],
+    "output": "docs/diagrams/topology-custom.html",
+    "viewBox": [760, 800]
+  },
+  "lanes": [
+    { "id": "src", "label": "Root" },
+    { "id": "b1", "label": "Branch 1" },
+    { "id": "b2", "label": "Branch 2" },
+    { "id": "join", "label": "Join" },
+    { "id": "out", "label": "Output" }
+  ],
+  "mainPath": ["a", "b", "d", "e"],
+  "nodes": [
+    { "id": "a", "lane": "src", "col": 0, "type": "backend", "label": "Node A", "sublabel": "root task" },
+    { "id": "b", "lane": "b1", "col": 2, "type": "backend", "label": "Node B", "sublabel": "after A" },
+    { "id": "c", "lane": "b2", "col": 2, "type": "backend", "label": "Node C", "sublabel": "after A" },
+    { "id": "d", "lane": "join", "col": 3, "type": "security", "label": "Node D", "sublabel": "waives on depend_on barrier", "width": 176 },
+    { "id": "e", "lane": "out", "col": 5, "type": "backend", "label": "Node E", "sublabel": "downstream" }
+  ],
+  "edges": [
+    { "id": "ab", "from": "a", "to": "b" },
+    { "id": "ac", "from": "a", "to": "c" },
+    { "id": "bd", "from": "b", "to": "d" },
+    { "id": "cd", "from": "c", "to": "d" },
+    { "id": "de", "from": "d", "to": "e", "variant": "emphasis" }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "Use when",
+      "items": [
+        "The built-in shapes do not fit the run",
+        "You need fan-out, then a barrier join",
+        "Custom depend_on ordering is the plan"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "Mechanics",
+      "items": [
+        "depend_on edges define the DAG, no template",
+        "B and C run in parallel after A completes",
+        "D waits for both; it can waive on the barrier, then E runs"
+      ]
+    }
+  ]
+}

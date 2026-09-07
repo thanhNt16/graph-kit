@@ -1,0 +1,137 @@
+{
+  "schema_version": 1,
+  "diagram_type": "workflow",
+  "meta": {
+    "title": "Adversarial-Verification Topology",
+    "locale": "en",
+    "animation": "trace",
+    "quality_profile": "showcase",
+    "output": "docs/diagrams/topology-adversarial-verification.html",
+    "viewBox": [
+      1000,
+      680
+    ],
+    "views": [
+      {
+        "id": "main",
+        "label": "Shape",
+        "focus": [
+          "produce",
+          "refute",
+          "adjudicate",
+          "verdict"
+        ],
+        "note": "A challenger attacks the producer's draft; the adjudicator weighs both and rules."
+      }
+    ]
+  },
+  "lanes": [
+    {
+      "id": "propose",
+      "label": "Producer"
+    },
+    {
+      "id": "challenge",
+      "label": "Challenger"
+    },
+    {
+      "id": "judge",
+      "label": "Judge"
+    },
+    {
+      "id": "out",
+      "label": "Outcome"
+    }
+  ],
+  "mainPath": [
+    "produce",
+    "refute",
+    "adjudicate",
+    "verdict"
+  ],
+  "nodes": [
+    {
+      "id": "produce",
+      "lane": "propose",
+      "col": 0,
+      "type": "backend",
+      "label": "Produce",
+      "sublabel": "draft claim"
+    },
+    {
+      "id": "refute",
+      "lane": "challenge",
+      "col": 1,
+      "type": "security",
+      "label": "Refute",
+      "sublabel": "attack draft"
+    },
+    {
+      "id": "adjudicate",
+      "lane": "judge",
+      "col": 2,
+      "type": "backend",
+      "label": "Adjudicate",
+      "sublabel": "weigh both"
+    },
+    {
+      "id": "verdict",
+      "lane": "out",
+      "col": 3,
+      "type": "frontend",
+      "label": "Verdict",
+      "sublabel": "final ruling"
+    }
+  ],
+  "edges": [
+    {
+      "id": "e1",
+      "from": "produce",
+      "to": "refute",
+      "label": "draft",
+      "labelDx": -16
+    },
+    {
+      "id": "e2",
+      "from": "produce",
+      "to": "adjudicate",
+      "label": "claim",
+      "variant": "dashed",
+      "labelDx": 16,
+      "labelDy": 12
+    },
+    {
+      "id": "e3",
+      "from": "refute",
+      "to": "adjudicate",
+      "label": "rebuttal"
+    },
+    {
+      "id": "e4",
+      "from": "adjudicate",
+      "to": "verdict",
+      "label": "ruling",
+      "variant": "emphasis"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "rose",
+      "title": "Use when",
+      "items": [
+        "Security review",
+        "Fact-checking",
+        "High-stakes claims need a second voice"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "Mechanics",
+      "items": [
+        "Challenger attacks the draft, not the author",
+        "Adjudicator weighs both sides independently",
+        "No node both produces and rules"
+      ]
+    }
+  ]
+}

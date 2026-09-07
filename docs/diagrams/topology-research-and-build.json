@@ -1,0 +1,57 @@
+{
+  "schema_version": 1,
+ "diagram_type": "workflow",
+  "meta": {
+    "title": "Research and Build Topology",
+    "animation": "trace",
+    "quality_profile": "showcase",
+    "output": "docs/diagrams/topology-research-and-build.html",
+    "viewBox": [720, 460],
+    "views": [
+      {
+        "id": "main",
+        "label": "Shape",
+        "focus": ["scout", "research", "plan", "build", "review"],
+        "note": "Scout and research come first; plan, build, and review then run as one linear pass."
+      }
+    ]
+  },
+  "lanes": [
+    { "id": "research", "label": "Research" },
+    { "id": "build", "label": "Build" }
+  ],
+  "mainPath": ["scout", "research", "plan", "build", "review"],
+  "nodes": [
+    { "id": "scout", "lane": "research", "col": 0, "type": "messagebus", "label": "Scout", "sublabel": "fast, read-only" },
+    { "id": "research", "lane": "build", "col": 1, "type": "database", "label": "Research", "sublabel": "synthesize sources" },
+    { "id": "plan", "lane": "research", "col": 2, "type": "frontend", "label": "Plan", "sublabel": "write plan.md" },
+    { "id": "build", "lane": "build", "col": 3, "type": "backend", "label": "Build", "sublabel": "implement tasks" },
+    { "id": "review", "lane": "research", "col": 4, "type": "security", "label": "Review", "sublabel": "quality gate" }
+  ],
+  "edges": [
+    { "id": "e1", "from": "scout", "to": "research", "role": "main" },
+    { "id": "e2", "from": "research", "to": "plan", "role": "main" },
+    { "id": "e3", "from": "plan", "to": "build", "role": "main" },
+    { "id": "e4", "from": "build", "to": "review", "role": "main" }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "Use when",
+      "items": [
+        "The feature needs codebase or domain research first",
+        "Facts must precede the plan to avoid rework",
+        "A single-threaded flow suffices - no parallel workers"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "Mechanics",
+      "items": [
+        "Scout maps the terrain fast and read-only",
+        "Research synthesizes evidence before any planning",
+        "Plan, build, and review run strictly in order"
+      ]
+    }
+  ]
+}

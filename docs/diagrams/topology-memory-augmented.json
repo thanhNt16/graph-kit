@@ -1,0 +1,59 @@
+{
+  "schema_version": 1,
+  "diagram_type": "workflow",
+  "meta": {
+    "title": "Memory-Augmented Topology",
+    "animation": "trace",
+    "quality_profile": "showcase",
+    "views": [
+      {
+        "id": "main",
+        "label": "Shape",
+        "focus": ["task", "recall", "work", "curator", "store"],
+        "note": "Recall feeds the run; the curator writes back and indexes for the next run."
+      }
+    ],
+    "output": "docs/diagrams/topology-memory-augmented.html",
+    "viewBox": [760, 520]
+  },
+  "lanes": [
+    { "id": "run", "label": "Run" },
+    { "id": "memory", "label": "Memory" },
+    { "id": "archive", "label": "Store" }
+  ],
+  "mainPath": ["task", "recall", "work", "curator", "store"],
+  "nodes": [
+    { "id": "task", "lane": "run", "col": 0, "type": "external", "label": "Task", "sublabel": "one long task" },
+    { "id": "recall", "lane": "memory", "col": 1, "type": "database", "label": "gk recall", "sublabel": "salience rank" },
+    { "id": "work", "lane": "run", "col": 2, "type": "backend", "label": "Core Work", "sublabel": "the run itself" },
+    { "id": "curator", "lane": "memory", "col": 4, "type": "database", "label": "Curator", "sublabel": "curate" },
+    { "id": "store", "lane": "archive", "col": 5, "type": "database", "label": "Memory", "sublabel": "durable store" }
+  ],
+  "edges": [
+    { "id": "q", "from": "task", "to": "recall", "label": "query" },
+    { "id": "ctx", "from": "recall", "to": "work", "label": "context", "variant": "emphasis" },
+    { "id": "out", "from": "work", "to": "curator", "label": "learnings" },
+    { "id": "put", "from": "curator", "to": "store", "label": "write" },
+    { "id": "loop", "from": "curator", "to": "recall", "label": "index for next run", "variant": "dashed", "role": "return", "fromSide": "left", "toSide": "left", "route": "return-left", "labelDy": 50 }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "Use when",
+      "items": [
+        "The task outgrows one context window",
+        "Prior runs should inform the next one",
+        "Graph work spans many sessions"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "Mechanics",
+      "items": [
+        "gk recall injects ranked memory before work starts",
+        "The core node runs with recalled context",
+        "The curator curates, writes to the store, re-indexes recall"
+      ]
+    }
+  ]
+}

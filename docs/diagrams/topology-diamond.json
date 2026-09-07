@@ -1,0 +1,165 @@
+{
+  "schema_version": 1,
+  "diagram_type": "workflow",
+  "meta": {
+    "title": "Diamond Topology",
+    "locale": "en",
+    "animation": "trace",
+    "quality_profile": "showcase",
+    "output": "docs/diagrams/topology-diamond.html",
+    "viewBox": [
+      1000,
+      660
+    ],
+    "views": [
+      {
+        "id": "main",
+        "label": "Shape",
+        "focus": [
+          "intake",
+          "reviews",
+          "reduce",
+          "synth"
+        ],
+        "note": "One brief fans out to parallel workers; every verdict reduces into a single synthesis."
+      }
+    ]
+  },
+  "lanes": [
+    {
+      "id": "coord",
+      "label": "Coordinator"
+    },
+    {
+      "id": "reviews",
+      "label": "Reviews"
+    },
+    {
+      "id": "research",
+      "label": "Research"
+    },
+    {
+      "id": "migrate",
+      "label": "Migrations"
+    }
+  ],
+  "mainPath": [
+    "intake",
+    "reviews",
+    "reduce",
+    "synth"
+  ],
+  "nodes": [
+    {
+      "id": "intake",
+      "lane": "coord",
+      "col": 0,
+      "type": "frontend",
+      "label": "Intake",
+      "sublabel": "one brief"
+    },
+    {
+      "id": "reviews",
+      "lane": "reviews",
+      "col": 2,
+      "type": "backend",
+      "label": "Reviews",
+      "sublabel": "judge diffs"
+    },
+    {
+      "id": "research",
+      "lane": "research",
+      "col": 2,
+      "type": "external",
+      "label": "Research",
+      "sublabel": "read sources"
+    },
+    {
+      "id": "migrate",
+      "lane": "migrate",
+      "col": 2,
+      "type": "database",
+      "label": "Migrate",
+      "sublabel": "schema work"
+    },
+    {
+      "id": "reduce",
+      "lane": "coord",
+      "col": 3,
+      "type": "backend",
+      "label": "Reduce",
+      "sublabel": "merge verdicts"
+    },
+    {
+      "id": "synth",
+      "lane": "coord",
+      "col": 5,
+      "type": "frontend",
+      "label": "Synthesize",
+      "sublabel": "final answer"
+    }
+  ],
+  "edges": [
+    {
+      "id": "f1",
+      "from": "intake",
+      "to": "reviews"
+    },
+    {
+      "id": "f2",
+      "from": "intake",
+      "to": "research"
+    },
+    {
+      "id": "f3",
+      "from": "intake",
+      "to": "migrate"
+    },
+    {
+      "id": "c1",
+      "from": "reviews",
+      "to": "reduce",
+      "label": "verdict"
+    },
+    {
+      "id": "c2",
+      "from": "research",
+      "to": "reduce",
+      "label": "findings",
+      "labelDx": -16
+    },
+    {
+      "id": "c3",
+      "from": "migrate",
+      "to": "reduce",
+      "label": "result",
+      "labelDx": 16
+    },
+    {
+      "id": "s1",
+      "from": "reduce",
+      "to": "synth",
+      "variant": "emphasis"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "Use when",
+      "items": [
+        "Reviews, research, migrations",
+        "One brief, several independent perspectives",
+        "Verdicts must land in one place"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "Mechanics",
+      "items": [
+        "Workers share a column, each in its own lane",
+        "All outputs converge on the reducer",
+        "Only the reducer synthesizes the answer"
+      ]
+    }
+  ]
+}

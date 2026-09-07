@@ -1,0 +1,65 @@
+{
+  "schema_version": 1,
+  "diagram_type": "workflow",
+  "meta": {
+    "title": "Generate-and-Filter Topology",
+    "animation": "trace",
+    "quality_profile": "showcase",
+    "views": [
+      {
+        "id": "main",
+        "label": "Shape",
+        "focus": ["task", "genA", "genB", "genC", "filter", "selected"],
+        "note": "One prompt fans out to parallel slots; a filter keeps the best K."
+      }
+    ],
+    "output": "docs/diagrams/topology-generate-and-filter.html",
+    "viewBox": [760, 880]
+  },
+  "lanes": [
+    { "id": "driver", "label": "Driver" },
+    { "id": "genA", "label": "Slot A" },
+    { "id": "genB", "label": "Slot B" },
+    { "id": "genC", "label": "Slot C" },
+    { "id": "select", "label": "Filter" },
+    { "id": "outcome", "label": "Result" }
+  ],
+  "mainPath": ["task", "genB", "filter", "selected"],
+  "nodes": [
+    { "id": "task", "lane": "driver", "col": 0, "type": "external", "label": "Task", "sublabel": "one prompt" },
+    { "id": "genA", "lane": "genA", "col": 2, "type": "backend", "label": "Agent A", "sublabel": "draft one" },
+    { "id": "genB", "lane": "genB", "col": 2, "type": "backend", "label": "Agent B", "sublabel": "draft two" },
+    { "id": "genC", "lane": "genC", "col": 2, "type": "backend", "label": "Agent C", "sublabel": "draft three" },
+    { "id": "filter", "lane": "select", "col": 4, "type": "security", "label": "Filter", "sublabel": "keep best K" },
+    { "id": "selected", "lane": "outcome", "col": 5, "type": "backend", "label": "Selected", "sublabel": "top K" }
+  ],
+  "edges": [
+    { "id": "fanA", "from": "task", "to": "genA" },
+    { "id": "fanB", "from": "task", "to": "genB" },
+    { "id": "fanC", "from": "task", "to": "genC" },
+    { "id": "inA", "from": "genA", "to": "filter" },
+    { "id": "inB", "from": "genB", "to": "filter" },
+    { "id": "inC", "from": "genC", "to": "filter" },
+    { "id": "pick", "from": "filter", "to": "selected", "variant": "emphasis" }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "Use when",
+      "items": [
+        "Naming a product, package, or feature",
+        "Ideation where many drafts are cheap",
+        "Only the best K candidates should move on"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "Mechanics",
+      "items": [
+        "One prompt fans out to three parallel slots",
+        "Each slot returns an independent candidate",
+        "The filter scores every draft, keeps K, drops the rest"
+      ]
+    }
+  ]
+}

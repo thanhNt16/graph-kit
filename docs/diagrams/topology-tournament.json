@@ -1,0 +1,69 @@
+{
+  "schema_version": 1,
+  "diagram_type": "workflow",
+  "meta": {
+    "title": "Tournament Topology",
+    "animation": "trace",
+    "quality_profile": "showcase",
+    "views": [
+      {
+        "id": "main",
+        "label": "Shape",
+        "focus": ["ra", "rb", "rc", "rd", "m1", "m2", "final", "champ"],
+        "note": "Four entrants, two elimination matches, one final, one champion."
+      }
+    ],
+    "output": "docs/diagrams/topology-tournament.html",
+    "viewBox": [760, 1140]
+  },
+  "lanes": [
+    { "id": "ea", "label": "Entrant A" },
+    { "id": "eb", "label": "Entrant B" },
+    { "id": "semi1", "label": "Semifinal 1" },
+    { "id": "ec", "label": "Entrant C" },
+    { "id": "ed", "label": "Entrant D" },
+    { "id": "semi2", "label": "Semifinal 2" },
+    { "id": "finalL", "label": "Final" },
+    { "id": "podium", "label": "Champion" }
+  ],
+  "mainPath": ["ra", "m1", "final", "champ"],
+  "nodes": [
+    { "id": "ra", "lane": "ea", "col": 0, "type": "external", "label": "Entrant A", "sublabel": "seed one" },
+    { "id": "rb", "lane": "eb", "col": 0, "type": "external", "label": "Entrant B", "sublabel": "seed two" },
+    { "id": "m1", "lane": "semi1", "col": 1, "type": "security", "label": "Match 1", "sublabel": "A vs B", "tag": "loser out" },
+    { "id": "rc", "lane": "ec", "col": 0, "type": "external", "label": "Entrant C", "sublabel": "seed three" },
+    { "id": "rd", "lane": "ed", "col": 0, "type": "external", "label": "Entrant D", "sublabel": "seed four" },
+    { "id": "m2", "lane": "semi2", "col": 1, "type": "security", "label": "Match 2", "sublabel": "C vs D", "tag": "loser out" },
+    { "id": "final", "lane": "finalL", "col": 3, "type": "security", "label": "Final", "sublabel": "winners meet" },
+    { "id": "champ", "lane": "podium", "col": 4, "type": "backend", "label": "Champion", "sublabel": "top ranked" }
+  ],
+  "edges": [
+    { "id": "s1a", "from": "ra", "to": "m1" },
+    { "id": "s1b", "from": "rb", "to": "m1", "fromSide": "bottom", "toSide": "left" },
+    { "id": "s2a", "from": "rc", "to": "m2" },
+    { "id": "s2b", "from": "rd", "to": "m2", "fromSide": "bottom", "toSide": "left" },
+    { "id": "w1", "from": "m1", "to": "final", "label": "winner" },
+    { "id": "w2", "from": "m2", "to": "final", "label": "winner", "fromSide": "bottom", "toSide": "left" },
+    { "id": "crown", "from": "final", "to": "champ", "variant": "emphasis" }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "Use when",
+      "items": [
+        "Ranking candidates head to head",
+        "Model evals with pairwise votes",
+        "Any fixed bracket with eliminations"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "Mechanics",
+      "items": [
+        "Each match consumes exactly two entrants",
+        "The loser exits, the winner advances",
+        "Semifinal winners meet; one champion leaves"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,66 @@
+{
+  "schema_version": 1,
+  "diagram_type": "workflow",
+  "meta": {
+    "title": "SDD Topology",
+    "animation": "trace",
+    "quality_profile": "showcase",
+    "output": "docs/diagrams/topology-sdd.html",
+    "viewBox": [720, 776],
+    "views": [
+      {
+        "id": "main",
+        "label": "Shape",
+        "focus": ["brainstorm", "plan", "worker-a", "review", "test"],
+        "note": "Plan once, fan out to isolated subagent workers, merge at review, gate on test."
+      }
+    ]
+  },
+  "lanes": [
+    { "id": "lead", "label": "Lead" },
+    { "id": "review", "label": "Review" },
+    { "id": "w1", "label": "Worker 1" },
+    { "id": "w2", "label": "Worker 2" },
+    { "id": "w3", "label": "Worker 3" }
+  ],
+  "mainPath": ["brainstorm", "plan", "worker-a", "review", "test"],
+  "nodes": [
+    { "id": "brainstorm", "lane": "lead", "col": 0, "type": "frontend", "label": "Brainstorm", "sublabel": "explore intent" },
+    { "id": "plan", "lane": "lead", "col": 2, "type": "frontend", "label": "Plan", "sublabel": "write plan.md" },
+    { "id": "worker-a", "lane": "w1", "col": 3, "type": "backend", "label": "Worker 1", "sublabel": "subagent" },
+    { "id": "worker-b", "lane": "w2", "col": 3, "type": "backend", "label": "Worker 2", "sublabel": "subagent" },
+    { "id": "worker-c", "lane": "w3", "col": 3, "type": "backend", "label": "Worker 3", "sublabel": "subagent" },
+    { "id": "review", "lane": "review", "col": 5, "type": "security", "label": "Review", "sublabel": "spec check" },
+    { "id": "test", "lane": "lead", "col": 5, "type": "backend", "label": "Test", "sublabel": "suite green" }
+  ],
+  "edges": [
+    { "id": "e1", "from": "brainstorm", "to": "plan", "role": "main" },
+    { "id": "e2", "from": "plan", "to": "worker-a", "role": "branch" },
+    { "id": "e3", "from": "plan", "to": "worker-b", "role": "branch" },
+    { "id": "e4", "from": "plan", "to": "worker-c", "role": "branch" },
+    { "id": "e5", "from": "worker-a", "to": "review" },
+    { "id": "e6", "from": "worker-b", "to": "review" },
+    { "id": "e7", "from": "worker-c", "to": "review" },
+    { "id": "e8", "from": "review", "to": "test", "label": "approve", "variant": "emphasis" }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "Use when",
+      "items": [
+        "The plan decomposes into 2-4 independent tasks",
+        "Tasks need isolated worktrees or different skills",
+        "You want parallel speed without losing the review step"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "Mechanics",
+      "items": [
+        "Lead brainstorms intent once, then writes plan.md",
+        "Each task dispatches exactly once to its own subagent lane",
+        "Results merge at review; the test suite gates the merge"
+      ]
+    }
+  ]
+}

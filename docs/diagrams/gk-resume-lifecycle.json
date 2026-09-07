@@ -1,0 +1,88 @@
+{
+  "schema_version": 1,
+  "diagram_type": "lifecycle",
+  "meta": {
+    "title": "GraphKit Run Resume Lifecycle",
+    "quality_profile": "showcase",
+    "output": "docs/diagrams/gk-resume-lifecycle.html",
+    "viewBox": [1000, 720],
+    "views": [
+      {
+        "id": "happy-path",
+        "label": "Run to completion",
+        "focus": ["idle", "running", "gating", "merged"],
+        "note": "Standard path: ledger open -> wave execution -> gate pass -> MERGE."
+      },
+      {
+        "id": "failure-loop",
+        "label": "Failure & advisor loop",
+        "focus": ["failed", "advising"],
+        "note": "Node fails -> advisor fires after streak -> re-dispatch same node."
+      },
+      {
+        "id": "resume-path",
+        "label": "Resume after BLOCK",
+        "focus": ["blocked", "resuming"],
+        "note": "sha256 drift guard passes -> failed subtree re-executes -> gate re-checked."
+      }
+    ]
+  },
+  "lanes": [
+    { "id": "main", "label": "Run phases" },
+    { "id": "waiting", "label": "Gate & wait" },
+    { "id": "recovery", "label": "Recovery loop" },
+    { "id": "terminal", "label": "Terminal exits" }
+  ],
+  "states": [
+    { "id": "idle", "type": "start", "label": "Idle", "sublabel": "no active run", "lane": "main", "col": 0, "step": "01", "tag": "entry" },
+    { "id": "running", "type": "active", "label": "Running", "sublabel": "wave dispatch", "lane": "main", "col": 1, "step": "02", "tag": "work" },
+    { "id": "gating", "type": "decision", "label": "Gating", "sublabel": "evidence check", "lane": "main", "col": 3, "step": "03", "tag": "gate" },
+    { "id": "merged", "type": "success", "label": "Merged", "sublabel": "all criteria pass", "lane": "main", "col": 4, "step": "04", "tag": "success" },
+    { "id": "advising", "type": "waiting", "label": "Advising", "sublabel": "failed-round streak", "lane": "waiting", "col": 0, "yOffset": 90, "tag": "escalate" },
+    { "id": "resuming", "type": "active", "label": "Resuming", "sublabel": "drift-checked subtree", "lane": "recovery", "col": 0, "yOffset": 190, "tag": "resume" },
+    { "id": "failed", "type": "failure", "label": "Failed", "sublabel": "node error", "lane": "recovery", "col": 0, "tag": "retryable" },
+    { "id": "blocked", "type": "failure", "label": "Blocked", "sublabel": "stale / missing keys", "lane": "terminal", "col": 1, "tag": "terminal" },
+    { "id": "cancelled", "type": "failure", "label": "Cancelled", "sublabel": "user stop", "lane": "terminal", "col": 2, "tag": "terminal" }
+  ],
+  "transitions": [
+    { "id": "start-run", "from": "idle", "to": "running", "variant": "default" },
+    { "id": "wave-done", "from": "running", "to": "gating", "variant": "emphasis", "channelX": 390 },
+    { "id": "gate-pass", "from": "gating", "to": "merged", "variant": "emphasis", "channelX": 646 },
+    { "id": "node-failed", "from": "running", "to": "failed", "variant": "security" },
+    { "id": "fail-advise", "from": "failed", "to": "advising", "variant": "dashed" },
+    { "id": "advise-retry", "from": "advising", "to": "running", "variant": "emphasis" },
+    { "id": "gate-block", "from": "gating", "to": "blocked", "variant": "security" },
+    { "id": "gate-cancel", "from": "gating", "to": "cancelled", "variant": "security" },
+    { "id": "blocked-resume", "from": "blocked", "to": "resuming", "variant": "dashed" },
+    { "id": "resume-dispatch", "from": "resuming", "to": "running", "variant": "emphasis" }
+  ],
+  "cards": [
+    {
+      "dot": "emerald",
+      "title": "Main Rail",
+      "items": [
+        "Four ordered phases from ledger open to MERGE",
+        "Every wave records a trace event before gating",
+        "MERGE is a phase outcome, not a detached box"
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "Recovery Loop",
+      "items": [
+        "Failed nodes escalate to read-only advisor at fable tier",
+        "Advisor guidance re-enters the same wave, not a new graph",
+        "Retry budget is bounded by loop.max_rounds"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "Terminal Exits",
+      "items": [
+        "BLOCK is terminal for the current ledger, not the run",
+        "gk run resume requires clean sha256 drift check",
+        "Only failed nodes and descendants re-dispatch on resume"
+      ]
+    }
+  ]
+}
