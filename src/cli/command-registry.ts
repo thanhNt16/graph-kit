@@ -28,6 +28,11 @@ export const CLI_COMMANDS: { path: string; description: string; options: string[
   },
   { path: "validate", description: "Validate a graph.yaml", options: ["--json"] },
   { path: "status", description: "Summarize active graph run and evidence coverage", options: ["--json"] },
+  {
+    path: "doctor",
+    description: "One-shot environment check (version, kit, .graphkit dir, graph.yaml, CBM bridge)",
+    options: ["--json"],
+  },
   { path: "execute", description: "Execute a graph.yaml (not yet implemented)", options: ["--json", "--worktree"] },
   { path: "visualize", description: "Visualize a graph.yaml (not yet implemented)", options: ["--json"] },
   {
@@ -50,13 +55,13 @@ export const CLI_COMMANDS: { path: string; description: string; options: string[
   { path: "graph svg", description: "Render an SVG export", options: ["--json"] },
   { path: "graph waves", description: "Output topological wave structure", options: ["--json"] },
   { path: "graph index", description: "Index memory into CBM", options: ["--json"] },
-  { path: "graph search", description: "Search the CBM memory graph", options: ["--json"] },
+  { path: "graph search", description: "Search the CBM memory graph", options: ["--limit <n>", "--json"] },
   {
     path: "graph ask",
     description: "Ask a natural-language question (routed to the right CBM primitive)",
-    options: ["--json"],
+    options: ["--limit <n>", "--depth <n>", "--json"],
   },
-  { path: "graph trace", description: "Trace calls/callees in the CBM graph", options: ["--json"] },
+  { path: "graph trace", description: "Trace calls/callees in the CBM graph", options: ["--depth <n>", "--json"] },
   { path: "graph query", description: "Run a Cypher query against the CBM graph", options: ["--json"] },
   {
     path: "memory index",
