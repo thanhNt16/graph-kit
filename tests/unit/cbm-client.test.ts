@@ -113,6 +113,21 @@ describe("cbm client", () => {
     }
   });
 
+  test("close() on a spawn-failed (ENOENT) child resolves fast — sawExit, not the 1s fallback", async () => {
+    // ENOENT fires "error" WITHOUT "exit": exitCode/signalCode stay null forever,
+    // so the old close() attached an exit listener no event would ever run and
+    // burned the full 1s fallback timer on every such client (~3s of this suite).
+    const client = createCbmClient({ cmd: "definitely-not-a-real-binary-xyz" });
+    // Let the spawn failure settle, then close must resolve immediately.
+    await new Promise((r) => setTimeout(r, 50));
+    const t0 = Date.now();
+    await Promise.race([
+      client.close(),
+      new Promise((_, rej) => setTimeout(() => rej(new Error("close() hung on spawn-failed child")), 200)),
+    ]);
+    expect(Date.now() - t0).toBeLessThan(200);
+  });
+
   test("close() on an already-dead child resolves immediately — no hang before the caller's catch (regression pin)", async () => {
     // Real spawn path: node exits at once (0) before any call, exactly the
     // spawn-death case that made `memory index --json` exit 0 silently.
