@@ -141,7 +141,22 @@ function unwrap<T>(res: unknown): T {
   return text ? (JSON.parse(text) as T) : (res as T);
 }
 
-export async function routeAndRetrieve(client: CbmClient, question: string, project?: string): Promise<RoutedResult> {
+// Optional result-shaping knobs threaded from `gk graph ask --limit/--depth`.
+// Absent keys keep the measured defaults below — existing call sites and
+// benchmarks are unchanged unless the caller explicitly overrides.
+export interface RouteOpts {
+  /** search_graph result cap (default 8). */
+  limit?: number;
+  /** trace_path hop depth (default 3). */
+  depth?: number;
+}
+
+export async function routeAndRetrieve(
+  client: CbmClient,
+  question: string,
+  project?: string,
+  opts?: RouteOpts,
+): Promise<RoutedResult> {
   const kind = classifyQuestion(question);
   const hit = (r: unknown) =>
     unwrap<{
@@ -149,7 +164,7 @@ export async function routeAndRetrieve(client: CbmClient, question: string, proj
     }>(r).results.map((h) => ({ n: h.name, q: h.qualified_name, f: h.file_path, l: h.label, s: h.start_line }));
   const run = (query: string) =>
     client
-      .call("search_graph", { query, project, limit: 8 })
+      .call("search_graph", { query, project, limit: opts?.limit ?? 8 })
       .then(hit)
       .catch(() => [] as TrimHit[]);
   // identifier query first (exact symbol match), token query as fallback/merge
@@ -170,7 +185,7 @@ export async function routeAndRetrieve(client: CbmClient, question: string, proj
     // deps ("what does X depend on") = outbound callees; callers = inbound; dataflow = both
     const direction = kind === "callers" ? "inbound" : kind === "deps" ? "outbound" : "both";
     const t = await client
-      .call("trace_path", { function_name: seed, project, depth: 3, direction })
+      .call("trace_path", { function_name: seed, project, depth: opts?.depth ?? 3, direction })
       .then((r) =>
         unwrap<{
           callers?: { name: string; qualified_name: string }[];
