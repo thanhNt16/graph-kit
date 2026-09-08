@@ -1,8 +1,9 @@
 import { createHash } from "node:crypto";
-import { appendFileSync, copyFileSync, existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { appendFileSync, copyFileSync, existsSync, mkdirSync, readFileSync, statSync } from "node:fs";
 import { basename, extname, join } from "node:path";
 import type { Graph } from "../compiler/validate.js";
 import { GraphKitError } from "../errors.js";
+import { atomicWrite } from "../fs.js";
 import { activeRun } from "../memory/ledger.js";
 import { fingerprint } from "./fingerprint.js";
 import { type MarkerMeta, renderMarker } from "./marker.js";
@@ -72,7 +73,8 @@ export function addEvidence(
     ts,
     note: opts.note ?? null,
   };
-  writeFileSync(
+  // F6: marker overwrite is atomic — evidence freshness readers never see a torn marker.
+  atomicWrite(
     join(evidenceDir, `${opts.key}.md`),
     renderMarker(meta, `Evidence artifact "${opts.key}" recorded ${ts}.`),
   );

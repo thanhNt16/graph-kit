@@ -1,6 +1,6 @@
 ---
 name: gk:compile
-description: Compile graph.yaml into a self-contained .workflow.js file for Claude Code Workflows. Use after gk:validate passes. Trigger: "compile graph", "build workflow", "gk compile".
+description: "Compile graph.yaml into a self-contained .workflow.js file for Claude Code Workflows. Use after gk:validate passes. Trigger: \"compile graph\", \"build workflow\", \"gk compile\"."
 when_to_use: A validated graph.yaml exists and the user wants to compile it into a .workflow.js for Claude Code Workflows execution.
 user-invocable: true
 disable-model-invocation: false

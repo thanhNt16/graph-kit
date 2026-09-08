@@ -1,6 +1,6 @@
 ---
 name: gk-execute
-description: Execute a graph.yaml by dispatching isolated subagent runs through the gk_dispatch_agent tool — no compilation. Transparent, real-time, interactive. Optional worktree mode (--worktree / "batch") isolates write nodes in git worktrees. Trigger: "execute graph", "run graph directly", "spawn agents for graph", "batch the graph".
+description: "Execute a graph.yaml by dispatching isolated subagent runs through the gk_dispatch_agent tool — no compilation. Transparent, real-time, interactive. Optional worktree mode (--worktree / \"batch\") isolates write nodes in git worktrees. Trigger: \"execute graph\", \"run graph directly\", \"spawn agents for graph\", \"batch the graph\"."
 when_to_use: User wants to execute a graph with full visibility — see each node dispatch and result, watch progress, debug failures. Use worktree mode when a wave has 2+ write nodes with overlapping scopes.
 user-invocable: true
 disable-model-invocation: false

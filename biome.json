@@ -16,6 +16,7 @@
       "!kits/pi/skills/excalidraw-diagram",
       "!.omp/skills/excalidraw-diagram",
       "!.claude",
+      "!.pi",
       "!.graphkit",
       "!**/.tmp-*",
       "!kits/*/viewer",

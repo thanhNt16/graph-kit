@@ -13,6 +13,7 @@
     "test": "bun test",
     "eval": "bun run src/eval/replay-cli.ts",
     "cbm:parity": "bun run scripts/cbm-parity.ts",
+    "check:parity": "bun run scripts/check-cli-parity.ts",
     "prepack": "bun run build",
     "check-changelog": "bun run scripts/check-changelog.ts",
     "ci:local": "bun run typecheck && bun run lint && bun run build && bun test && bun run cbm:parity && bun run check-changelog",
@@ -24,8 +25,6 @@
   ],
   "dependencies": {
     "@dagrejs/dagre": "^3.1.1",
-    "ajv": "^8.17.1",
-    "ajv-formats": "^3.0.1",
     "cac": "^6.7.14",
     "yaml": "^2.8.1",
     "zod": "^4.0.17"

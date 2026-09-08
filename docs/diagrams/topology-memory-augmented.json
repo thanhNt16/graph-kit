@@ -24,7 +24,14 @@
   "mainPath": ["task", "recall", "work", "curator", "store"],
   "nodes": [
     { "id": "task", "lane": "run", "col": 0, "type": "external", "label": "Task", "sublabel": "one long task" },
-    { "id": "recall", "lane": "memory", "col": 1, "type": "database", "label": "gk recall", "sublabel": "salience rank" },
+    {
+      "id": "recall",
+      "lane": "memory",
+      "col": 1,
+      "type": "database",
+      "label": "gk recall",
+      "sublabel": "salience rank"
+    },
     { "id": "work", "lane": "run", "col": 2, "type": "backend", "label": "Core Work", "sublabel": "the run itself" },
     { "id": "curator", "lane": "memory", "col": 4, "type": "database", "label": "Curator", "sublabel": "curate" },
     { "id": "store", "lane": "archive", "col": 5, "type": "database", "label": "Memory", "sublabel": "durable store" }
@@ -34,7 +41,18 @@
     { "id": "ctx", "from": "recall", "to": "work", "label": "context", "variant": "emphasis" },
     { "id": "out", "from": "work", "to": "curator", "label": "learnings" },
     { "id": "put", "from": "curator", "to": "store", "label": "write" },
-    { "id": "loop", "from": "curator", "to": "recall", "label": "index for next run", "variant": "dashed", "role": "return", "fromSide": "left", "toSide": "left", "route": "return-left", "labelDy": 50 }
+    {
+      "id": "loop",
+      "from": "curator",
+      "to": "recall",
+      "label": "index for next run",
+      "variant": "dashed",
+      "role": "return",
+      "fromSide": "left",
+      "toSide": "left",
+      "route": "return-left",
+      "labelDy": 50
+    }
   ],
   "cards": [
     {

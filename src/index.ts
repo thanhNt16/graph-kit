@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { cac } from "cac";
+import { registerDoctorCommand } from "./cli/commands/doctor.js";
 import { registerEvidenceCommand } from "./cli/commands/evidence.js";
 import { registerExecuteCommand } from "./cli/commands/execute.js";
 import { registerGateCommand } from "./cli/commands/gate.js";
@@ -25,6 +26,7 @@ registerTemplateCommands(cli);
 registerInventoryCommands(cli);
 registerEvidenceCommand(cli);
 registerStatusCommand(cli);
+registerDoctorCommand(cli);
 registerExecuteCommand(cli);
 registerVisualizeCommand(cli);
 registerRunCommands(cli);

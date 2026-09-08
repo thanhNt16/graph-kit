@@ -34,15 +34,93 @@
     { "id": "terminal", "label": "Terminal exits" }
   ],
   "states": [
-    { "id": "idle", "type": "start", "label": "Idle", "sublabel": "no active run", "lane": "main", "col": 0, "step": "01", "tag": "entry" },
-    { "id": "running", "type": "active", "label": "Running", "sublabel": "wave dispatch", "lane": "main", "col": 1, "step": "02", "tag": "work" },
-    { "id": "gating", "type": "decision", "label": "Gating", "sublabel": "evidence check", "lane": "main", "col": 3, "step": "03", "tag": "gate" },
-    { "id": "merged", "type": "success", "label": "Merged", "sublabel": "all criteria pass", "lane": "main", "col": 4, "step": "04", "tag": "success" },
-    { "id": "advising", "type": "waiting", "label": "Advising", "sublabel": "failed-round streak", "lane": "waiting", "col": 0, "yOffset": 90, "tag": "escalate" },
-    { "id": "resuming", "type": "active", "label": "Resuming", "sublabel": "drift-checked subtree", "lane": "recovery", "col": 0, "yOffset": 190, "tag": "resume" },
-    { "id": "failed", "type": "failure", "label": "Failed", "sublabel": "node error", "lane": "recovery", "col": 0, "tag": "retryable" },
-    { "id": "blocked", "type": "failure", "label": "Blocked", "sublabel": "stale / missing keys", "lane": "terminal", "col": 1, "tag": "terminal" },
-    { "id": "cancelled", "type": "failure", "label": "Cancelled", "sublabel": "user stop", "lane": "terminal", "col": 2, "tag": "terminal" }
+    {
+      "id": "idle",
+      "type": "start",
+      "label": "Idle",
+      "sublabel": "no active run",
+      "lane": "main",
+      "col": 0,
+      "step": "01",
+      "tag": "entry"
+    },
+    {
+      "id": "running",
+      "type": "active",
+      "label": "Running",
+      "sublabel": "wave dispatch",
+      "lane": "main",
+      "col": 1,
+      "step": "02",
+      "tag": "work"
+    },
+    {
+      "id": "gating",
+      "type": "decision",
+      "label": "Gating",
+      "sublabel": "evidence check",
+      "lane": "main",
+      "col": 3,
+      "step": "03",
+      "tag": "gate"
+    },
+    {
+      "id": "merged",
+      "type": "success",
+      "label": "Merged",
+      "sublabel": "all criteria pass",
+      "lane": "main",
+      "col": 4,
+      "step": "04",
+      "tag": "success"
+    },
+    {
+      "id": "advising",
+      "type": "waiting",
+      "label": "Advising",
+      "sublabel": "failed-round streak",
+      "lane": "waiting",
+      "col": 0,
+      "yOffset": 90,
+      "tag": "escalate"
+    },
+    {
+      "id": "resuming",
+      "type": "active",
+      "label": "Resuming",
+      "sublabel": "drift-checked subtree",
+      "lane": "recovery",
+      "col": 0,
+      "yOffset": 190,
+      "tag": "resume"
+    },
+    {
+      "id": "failed",
+      "type": "failure",
+      "label": "Failed",
+      "sublabel": "node error",
+      "lane": "recovery",
+      "col": 0,
+      "tag": "retryable"
+    },
+    {
+      "id": "blocked",
+      "type": "failure",
+      "label": "Blocked",
+      "sublabel": "stale / missing keys",
+      "lane": "terminal",
+      "col": 1,
+      "tag": "terminal"
+    },
+    {
+      "id": "cancelled",
+      "type": "failure",
+      "label": "Cancelled",
+      "sublabel": "user stop",
+      "lane": "terminal",
+      "col": 2,
+      "tag": "terminal"
+    }
   ],
   "transitions": [
     { "id": "start-run", "from": "idle", "to": "running", "variant": "default" },

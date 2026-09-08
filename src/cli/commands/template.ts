@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, renameSync as osRenameSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -6,6 +6,7 @@ import type { CAC } from "cac";
 import YAML from "yaml";
 import { type Graph, validateGraph } from "../../compiler/validate.js";
 import { GraphKitError } from "../../errors.js";
+import { _resetRenameSeam, _setRenameSeam, atomicWrite } from "../../fs.js";
 import { GraphSchema } from "../../schemas/graph.schema.js";
 import {
   type GraphTemplate,
@@ -18,15 +19,15 @@ import { saveSessionGraph, setActiveGraphId } from "../../store/index.js";
 import { fail, ok } from "../output.js";
 
 // ponytail: DI seam mirroring graph.ts — lets tests simulate a rename failure
-// without touching the real filesystem. Restore via _resetWriteSeam.
-let wRename: typeof osRenameSync = osRenameSync;
+// without touching the real filesystem. Delegates to the shared fs.ts seam;
+// template's atomicWrite IS fs.ts's atomicWrite (one implementation, F6).
 /** @internal test seam — inject rename implementation. */
-export function _setWriteSeam(opts: { rename?: typeof osRenameSync }) {
-  if (opts.rename) wRename = opts.rename;
+export function _setWriteSeam(opts: { rename?: typeof import("node:fs").renameSync }) {
+  _setRenameSeam(opts);
 }
 /** @internal test seam — restore real rename. */
 export function _resetWriteSeam() {
-  wRename = osRenameSync;
+  _resetRenameSeam();
 }
 
 function localTemplatesDir(cwd: string): string {
@@ -135,28 +136,6 @@ function templateFromInput(input: string): GraphTemplate {
     });
   }
   return parsed.data;
-}
-
-/** Atomic write: sibling temp file + rename; cleanup temp on rename failure. */
-function atomicWrite(path: string, content: string): void {
-  const dir = dirname(path);
-  mkdirSync(dir, { recursive: true });
-  const tmp = `${path}.${process.pid}.tmp`;
-  writeFileSync(tmp, content, "utf-8");
-  try {
-    wRename(tmp, path);
-  } catch (e) {
-    try {
-      // cleanup on failure; ignore errors — temp file may have been created elsewhere
-      if (existsSync(tmp)) {
-        const { unlinkSync } = require("node:fs");
-        unlinkSync(tmp);
-      }
-    } catch {
-      /* best-effort cleanup */
-    }
-    throw new GraphKitError("WRITE_FAILED", `Failed to write template: ${String(e)}`);
-  }
 }
 
 type PackResult =

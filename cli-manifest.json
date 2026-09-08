@@ -35,6 +35,13 @@
       ]
     },
     {
+      "name": "doctor",
+      "description": "One-shot environment check (version, kit, .graphkit dir, graph.yaml, CBM bridge)",
+      "options": [
+        "--json"
+      ]
+    },
+    {
       "name": "execute",
       "description": "Execute a graph.yaml (not yet implemented)",
       "options": [
@@ -138,6 +145,7 @@
       "name": "graph search",
       "description": "Search the CBM memory graph",
       "options": [
+        "--limit <n>",
         "--json"
       ]
     },
@@ -145,6 +153,8 @@
       "name": "graph ask",
       "description": "Ask a natural-language question (routed to the right CBM primitive)",
       "options": [
+        "--limit <n>",
+        "--depth <n>",
         "--json"
       ]
     },
@@ -152,6 +162,7 @@
       "name": "graph trace",
       "description": "Trace calls/callees in the CBM graph",
       "options": [
+        "--depth <n>",
         "--json"
       ]
     },

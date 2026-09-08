@@ -1,6 +1,6 @@
 ---
 name: gk-template
-description: Package an existing graph.yaml as a reusable, parameterized workflow template (GraphTemplate v1) that init-graph can adapt. Use when the user wants to package/save a graph as a template, reuse a graph across tasks, or parameterize a workflow. Trigger: "package graph", "save as template", "gk template pack", "make a template".
+description: "Package an existing graph.yaml as a reusable, parameterized workflow template (GraphTemplate v1) that init-graph can adapt. Use when the user wants to package/save a graph as a template, reuse a graph across tasks, or parameterize a workflow. Trigger: \"package graph\", \"save as template\", \"gk template pack\", \"make a template\"."
 when_to_use: User wants to turn an existing graph.yaml into a reusable template for init-graph, parameterize a graph's variable inputs, or save a workflow for reuse.
 user-invocable: true
 disable-model-invocation: false

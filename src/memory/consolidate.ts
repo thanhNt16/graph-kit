@@ -6,6 +6,7 @@ import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import YAML from "yaml";
+import { atomicWrite } from "../fs.js";
 import { PatternFileSchema, SuggestionFileSchema } from "../schemas/memory.schema.js";
 import { type AdvisorEvent, listRunIds, readAdvisorEvents, readRunIndex, readTrace, type TraceLine } from "./ledger.js";
 import { buildLinks, writeLinks } from "./links.js";
@@ -74,8 +75,9 @@ export function suggestionsFor(patterns: Pattern[]): SuggestionDraft[] {
 }
 
 function writeEntry(dir: string, file: string, frontmatter: Record<string, unknown>, body: string) {
-  mkdirSync(dir, { recursive: true });
-  writeFileSync(join(dir, file), `---\n${YAML.stringify(frontmatter)}---\n${body}`);
+  // F6: generated entries rewrite in place on every consolidate pass — atomic,
+  // so a crash can never leave a half-written pattern/suggestion behind.
+  atomicWrite(join(dir, file), `---\n${YAML.stringify(frontmatter)}---\n${body}`);
 }
 
 /** Delete generated files in `dir` whose basename is not in `keep`. Hand-written

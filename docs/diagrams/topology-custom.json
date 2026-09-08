@@ -28,7 +28,15 @@
     { "id": "a", "lane": "src", "col": 0, "type": "backend", "label": "Node A", "sublabel": "root task" },
     { "id": "b", "lane": "b1", "col": 2, "type": "backend", "label": "Node B", "sublabel": "after A" },
     { "id": "c", "lane": "b2", "col": 2, "type": "backend", "label": "Node C", "sublabel": "after A" },
-    { "id": "d", "lane": "join", "col": 3, "type": "security", "label": "Node D", "sublabel": "waives on depend_on barrier", "width": 176 },
+    {
+      "id": "d",
+      "lane": "join",
+      "col": 3,
+      "type": "security",
+      "label": "Node D",
+      "sublabel": "waives on depend_on barrier",
+      "width": 176
+    },
     { "id": "e", "lane": "out", "col": 5, "type": "backend", "label": "Node E", "sublabel": "downstream" }
   ],
   "edges": [

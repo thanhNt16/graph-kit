@@ -79,6 +79,25 @@ describe("gk memory trace", () => {
     expect(r.total).toBe(0);
   });
 
+  test("syntax-broken frontmatter is dropped, not fatal (malformed convention)", () => {
+    // `tags: [unclosed` never closes the flow sequence — YAML.parse throws.
+    writeFileSync(join(cwd, ".graphkit", "memory", "broken.md"), "---\nid: broken\ntags: [unclosed\n---\nnotes\n");
+    writeMemory(cwd, "good.md", { id: "good", salience: 0.5, expired: false, valid_from: NOW, tags: "[]" });
+
+    const r = traceMemory(cwd, NOW); // must not throw — one bad file can't kill decay
+    expect(r.total).toBe(1); // malformed entry dropped, not counted
+    expect(r.memories.map((m) => m.id)).toEqual(["good"]);
+    const broken = readFileSync(join(cwd, ".graphkit", "memory", "broken.md"), "utf-8");
+    expect(broken).toContain("tags: [unclosed"); // dropped ≠ deleted (audit rule)
+  });
+
+  test("touchMemory skips syntax-broken frontmatter instead of crashing", () => {
+    writeFileSync(join(cwd, ".graphkit", "memory", "broken.md"), "---\nid: broken\ntags: [unclosed\n---\nnotes\n");
+    expect(touchMemory(cwd, "broken")).toBeNull(); // id matches the filename, parse fails → skip
+    writeMemory(cwd, "good.md", { id: "good", salience: 0.5, expired: false, valid_from: NOW, tags: "[]" });
+    expect(touchMemory(cwd, "good")?.id).toBe("good"); // store still usable after the skip
+  });
+
   test("touchMemory reinforces: touched memory survives +21d decay, untouched twin expires", () => {
     const LATER = "2026-09-05T00:00:00.000Z"; // NOW + 21 days
     // identical neutral twins, both last used at creation

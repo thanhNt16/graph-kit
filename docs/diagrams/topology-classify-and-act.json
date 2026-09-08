@@ -7,20 +7,12 @@
     "animation": "trace",
     "quality_profile": "showcase",
     "output": "docs/diagrams/topology-classify-and-act.html",
-    "viewBox": [
-      1000,
-      800
-    ],
+    "viewBox": [1000, 800],
     "views": [
       {
         "id": "main",
         "label": "Shape",
-        "focus": [
-          "intake",
-          "classify",
-          "h2",
-          "resolve"
-        ],
+        "focus": ["intake", "classify", "h2", "resolve"],
         "note": "The classifier sends each item down exactly one handler lane; every outcome still reaches resolve."
       }
     ]
@@ -47,12 +39,7 @@
       "label": "Handler C"
     }
   ],
-  "mainPath": [
-    "intake",
-    "classify",
-    "h2",
-    "resolve"
-  ],
+  "mainPath": ["intake", "classify", "h2", "resolve"],
   "nodes": [
     {
       "id": "intake",
@@ -154,11 +141,7 @@
     {
       "dot": "amber",
       "title": "Use when",
-      "items": [
-        "Triage and routing desks",
-        "Mutually exclusive treatments",
-        "Each item needs exactly one owner"
-      ]
+      "items": ["Triage and routing desks", "Mutually exclusive treatments", "Each item needs exactly one owner"]
     },
     {
       "dot": "emerald",

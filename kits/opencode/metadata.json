@@ -1,6 +1,6 @@
 {
   "name": "graphkit",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "apiVersion": "graphkit.dev/v2",
   "deletions": ["viewer"],
   "target": "opencode"

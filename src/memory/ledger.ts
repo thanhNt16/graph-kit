@@ -1,9 +1,20 @@
 import { createHash } from "node:crypto";
-import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  appendFileSync,
+  closeSync,
+  existsSync,
+  mkdirSync,
+  openSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { basename, isAbsolute, join, resolve } from "node:path";
 import YAML from "yaml";
 
 import { fingerprint } from "../evidence/fingerprint.js";
+import { atomicWrite } from "../fs.js";
 
 export interface TraceLine {
   at: string;
@@ -74,6 +85,34 @@ function runId(now: string, name: string): string {
   return `${stamp}-${name}`;
 }
 
+/** Exclusive-create the .active pointer (O_EXCL via "wx"). F6: the RUN_ACTIVE
+ *  guard is atomic now — two concurrent starts race on file creation, and the
+ *  loser gets the exact error the up-front check throws. Escape surface is
+ *  unchanged: `gk run end` still clears the file; no --force flag exists. */
+function claimActiveRun(cwd: string, dir: string): void {
+  mkdirSync(runsDir(cwd), { recursive: true });
+  try {
+    writeActiveClaim(cwd, dir);
+  } catch (e) {
+    if ((e as NodeJS.ErrnoException)?.code !== "EEXIST") throw e;
+    const live = activeRun(cwd);
+    if (live) throw new Error(`RUN_ACTIVE: run already active at ${live}; run \`gk run end\` first`);
+    // Stale pointer: the claimed run dir vanished, which activeRun() already
+    // treats as "no active run" — recover the dead file instead of deadlocking.
+    rmSync(activeFile(cwd), { force: true });
+    writeActiveClaim(cwd, dir);
+  }
+}
+
+function writeActiveClaim(cwd: string, dir: string): void {
+  const fd = openSync(activeFile(cwd), "wx");
+  try {
+    writeFileSync(fd, dir);
+  } finally {
+    closeSync(fd);
+  }
+}
+
 export function startRun(
   cwd: string,
   graphPath: string,
@@ -108,9 +147,9 @@ export function startRun(
     started_at: now,
   };
   if (resumes) meta.resumes = resumes;
-  writeFileSync(join(dir, "meta.json"), `${JSON.stringify(meta, null, 2)}\n`);
+  atomicWrite(join(dir, "meta.json"), `${JSON.stringify(meta, null, 2)}\n`);
   // GBrain layout: compiled truth above the rule, append-only timeline below.
-  writeFileSync(
+  atomicWrite(
     join(dir, "run.md"),
     [
       `# Run ${id}`,
@@ -126,7 +165,7 @@ export function startRun(
       "",
     ].join("\n"),
   );
-  writeFileSync(activeFile(cwd), dir);
+  claimActiveRun(cwd, dir);
   return { id, dir };
 }
 
@@ -238,7 +277,7 @@ export function endRun(cwd: string, status: RunIndexLine["status"], now = new Da
       `- failures: ${summary.failures}`,
     ].join("\n"),
   );
-  writeFileSync(join(dir, "run.md"), md);
+  atomicWrite(join(dir, "run.md"), md);
   rmSync(activeFile(cwd), { force: true });
   return summary;
 }

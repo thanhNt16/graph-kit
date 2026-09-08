@@ -55,6 +55,10 @@ jobs:
         env:
           next: ${{ steps.version.outputs.next }}
       - run: bun install --frozen-lockfile
+      - name: Typecheck
+        run: bun run typecheck
+      - name: Test
+        run: bun test
       - run: bun run build
       - run: bun run build:bin
       - name: Build release archives

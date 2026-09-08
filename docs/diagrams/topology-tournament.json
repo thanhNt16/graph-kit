@@ -30,10 +30,26 @@
   "nodes": [
     { "id": "ra", "lane": "ea", "col": 0, "type": "external", "label": "Entrant A", "sublabel": "seed one" },
     { "id": "rb", "lane": "eb", "col": 0, "type": "external", "label": "Entrant B", "sublabel": "seed two" },
-    { "id": "m1", "lane": "semi1", "col": 1, "type": "security", "label": "Match 1", "sublabel": "A vs B", "tag": "loser out" },
+    {
+      "id": "m1",
+      "lane": "semi1",
+      "col": 1,
+      "type": "security",
+      "label": "Match 1",
+      "sublabel": "A vs B",
+      "tag": "loser out"
+    },
     { "id": "rc", "lane": "ec", "col": 0, "type": "external", "label": "Entrant C", "sublabel": "seed three" },
     { "id": "rd", "lane": "ed", "col": 0, "type": "external", "label": "Entrant D", "sublabel": "seed four" },
-    { "id": "m2", "lane": "semi2", "col": 1, "type": "security", "label": "Match 2", "sublabel": "C vs D", "tag": "loser out" },
+    {
+      "id": "m2",
+      "lane": "semi2",
+      "col": 1,
+      "type": "security",
+      "label": "Match 2",
+      "sublabel": "C vs D",
+      "tag": "loser out"
+    },
     { "id": "final", "lane": "finalL", "col": 3, "type": "security", "label": "Final", "sublabel": "winners meet" },
     { "id": "champ", "lane": "podium", "col": 4, "type": "backend", "label": "Champion", "sublabel": "top ranked" }
   ],

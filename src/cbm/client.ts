@@ -35,6 +35,11 @@ export function createCbmClient(opts?: CbmClientOpts): CbmClient {
   // CBM_UNAVAILABLE message — the user sees WHY the bridge died.
   let stderrBuf = "";
   let started = false;
+  // F6: set the moment the child can never speak again — the "exit" event, or
+  // the "error" event for a spawn failure (Bun/Node emit error WITHOUT exit on
+  // ENOENT, and exitCode/signalCode stay null forever in that case). close()
+  // reads it to avoid re-arming a listener for an event already delivered.
+  let sawExit = false;
 
   const rl = createInterface({ input: child.stdout! });
   rl.on("line", (line: string) => {
@@ -62,6 +67,7 @@ export function createCbmClient(opts?: CbmClientOpts): CbmClient {
 
   // Child failed to spawn (e.g. npx ENOENT / npm 404) — fail every pending call.
   child.on("error", (err) => {
+    sawExit = true; // spawn failure: there is no child, no exit event will ever come
     fatal = new Error(`${CBM_UNAVAILABLE_MSG}\nspawn ${cmd} failed: ${err.message}`);
     rejectAll(fatal);
   });
@@ -70,6 +76,7 @@ export function createCbmClient(opts?: CbmClientOpts): CbmClient {
   // Set fatal even with zero pending: a LATER call would otherwise write to a
   // corpse and hang (stdin callback never errs), the same silent-exit class.
   child.on("exit", (_code, _signal) => {
+    sawExit = true;
     if (!fatal) {
       const withoutDetail = started ? `\n${cmd} exited unexpectedly.` : `\n${cmd} exited before handshake.`;
       const detail = stderrBuf.trim() !== "" ? `\nstderr tail: ${stderrBuf.trim()}` : withoutDetail;
@@ -107,15 +114,25 @@ export function createCbmClient(opts?: CbmClientOpts): CbmClient {
   }
 
   function close(): Promise<void> {
-    // Already-dead child: the exit event fired before we could attach a
-    // listener (and an unref'd timer won't hold the loop), so awaiting the
-    // exit promise would hang-then-exit silently before the caller's catch.
-    if (child.exitCode !== null || child.signalCode !== null) return Promise.resolve();
+    // Already-dead child: sawExit/exitCode/signalCode tell us the exit (or
+    // spawn-error) event already fired, so a freshly attached exit listener
+    // would never run — awaiting the exit promise would hang-then-exit
+    // silently before the caller's catch. Invariant: sawExit is set
+    // synchronously by the error/exit handlers above, before close() could
+    // miss the event, so this check is race-free.
+    if (sawExit || child.exitCode !== null || child.signalCode !== null) return Promise.resolve();
     return new Promise((resolve) => {
       child.kill();
-      child.on("exit", () => resolve());
-      // resolve after timeout even if no exit event
-      setTimeout(resolve, 1000).unref();
+      const killTimer = setTimeout(() => {
+        // F6: escalate — a child that ignored SIGTERM must not be orphaned by close().
+        child.kill("SIGKILL");
+        resolve();
+      }, 1000);
+      killTimer.unref();
+      child.on("exit", () => {
+        clearTimeout(killTimer);
+        resolve();
+      });
     });
   }
 
