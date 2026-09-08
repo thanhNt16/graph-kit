@@ -9,7 +9,7 @@
 
 GraphKit is a graph engineering kit for AI coding agents (Claude Code, Cursor, OpenCode, Codex CLI, and pi). It installs agents, skills, hooks, and rules that let you define, validate, compile, and execute graph-structured agent workflows — with a run ledger, checkpoint resume, and project memory.
 
-**TOC** — [What it is](#what-it-is) · [Install](#install) · [Quickstart](#quickstart) · [Host support](#host-support) · [Define a graph](#define-a-graph) · [Session skills](#session-skills) · [Topologies](#eleven-topologies) · [Per-node binding](#per-node-binding) · [Loop groups](#loop-groups) · [CLI reference](#cli-reference) · [Project memory](#project-memory) · [CBM boundary](#cbm-boundary) · [Diagrams](#diagrams) · [Docs site](https://thanhnt16.github.io/graph-kit/)
+**TOC** — [What it is](#what-it-is) · [Install](#install) · [Quickstart](#quickstart) · [Host support](#host-support) · [Define a graph](#define-a-graph) · [Session skills](#session-skills) · [Topologies](#eleven-topologies) · [Per-node binding](#per-node-binding) · [Loop groups](#loop-groups) · [CLI reference](#cli-reference) · [Project memory](#project-memory) · [CBM boundary](#cbm-boundary) · [Diagrams](#diagrams) · [Docs site](https://thanhnt16.github.io/graph-kit/) · [Development](#development)
 
 > **Changelog**: [CHANGELOG.md](CHANGELOG.md) documents all feature releases.
 > **Worktree merge protocol**: [docs/worktree-merge-protocol.md](docs/worktree-merge-protocol.md) details conflict-safe concurrent agent editing.
@@ -271,6 +271,7 @@ $ gk --help
     template [subcommand] [args...]  Package, list, inspect, and materialize reusable GraphTemplates
     inventory                        Inventory installed agents, skills, tools, and MCP servers
     status                           Summarize active graph run and evidence coverage
+    doctor                           One-shot environment check (version, kit, .graphkit dir, graph.yaml, CBM bridge)
     execute [file]                   Execute a graph.yaml (not yet implemented)
     visualize [file]                 Visualize a graph.yaml (not yet implemented)
     run [subcommand] [args...]       Run ledger commands
@@ -407,3 +408,14 @@ failures, and graph reuse (salience = count with a 14-day half-life), writes
 link graph. The bundled `dream` template (`gk template list`) dispatches agents to
 propose deeper consolidations as a unified diff into `.graphkit/inbox/` — applied
 only by a human via `git apply`.
+
+## Development
+
+```bash
+git clone https://github.com/thanhNt16/graph-kit && cd graph-kit
+bun install        # Bun only — the version is pinned in .bun-version
+bun test           # full unit suite, no network needed
+bun run ci:local   # THE pre-push gate: typecheck + lint + build + test + parity + changelog
+```
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the scripts table, the changelog convention, kit-editing rules, and the release flow.

@@ -1,5 +1,12 @@
 # Axis Backlogs — merged, ranked
 
+> **Status (2026-09-08):** surveyed at `329e4fa`, but R1–R3 shipped in `fae84c0`
+> (`classifyQuestion`/`routeAndRetrieve` in `src/cbm/route.ts`). R4 completed in the
+> current round — `--limit`/`--depth` flags on `gk graph search|ask|trace|query`.
+> Still open: R5 (`file_path`/`start_line`/`end_line` on `TraceHop`), R6 (Cypher
+> templates — half done: the dead-code anti-join exists, templates don't), R7
+> (single shaped-result code path).
+
 Surveyed at commit `329e4fa` on branch `autoresearch/aug14`.
 Per-axis, single clean ranked queue, deduped from scout local backlogs (R1-R7 / I1-I5 / E1-E5)
 and the axis-retrieve round-1 research (research-slots.md SLOT 1-3).
