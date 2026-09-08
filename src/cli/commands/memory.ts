@@ -5,6 +5,7 @@ import YAML from "yaml";
 import { CBM_UNAVAILABLE_MSG, type CbmClient, createCbmClient } from "../../cbm/client.js";
 import { indexProject } from "../../cbm/index.js";
 import { actRScore, shouldExpire } from "../../eval/forgetting.js";
+import { atomicWrite } from "../../fs.js";
 import { consolidate } from "../../memory/consolidate.js";
 import { expandedRecall } from "../../memory/recall-expanded.js";
 import { MemoryConfig, MemoryFileSchema } from "../../schemas/memory.schema.js";
@@ -102,8 +103,16 @@ export function traceMemory(
     // Strict schema parse before rewrites; malformed entries are counted but skipped.
     const m = raw.match(/^---\n([\s\S]*?)\n---/);
     if (!m) continue;
-    const parsedYaml = YAML.parse(m[1]);
-    const fm = (parsedYaml && typeof parsedYaml === "object" ? parsedYaml : {}) as Record<string, unknown>;
+    let fm: Record<string, unknown>;
+    try {
+      const parsedYaml = YAML.parse(m[1]);
+      fm = (parsedYaml && typeof parsedYaml === "object" ? parsedYaml : {}) as Record<string, unknown>;
+    } catch {
+      // Syntax-broken frontmatter (e.g. `tags: [unclosed`) follows the same
+      // malformed convention as a schema miss below: dropped, not counted,
+      // never fatal — one bad file must not kill the whole decay pass.
+      continue;
+    }
     const legacyTags = Array.isArray(fm.tags)
       ? fm.tags
       : typeof fm.tags === "string"
@@ -155,7 +164,9 @@ export function traceMemory(
       fm.expired = true;
       fm.valid_to = now;
       fm.status = "deprecated";
-      writeFileSync(path, `---\n${YAML.stringify(fm)}---\n${raw.slice(m[0].length)}`);
+      // F6: in-place rewrite of a file the user may read — atomic, so a crash
+      // mid-decay leaves the previous frontmatter intact.
+      atomicWrite(path, `---\n${YAML.stringify(fm)}---\n${raw.slice(m[0].length)}`);
       report.expired++;
       report.newly_expired++;
       report.memories.push({ id: String(fm.id ?? file), score, state: "expired", action: "newly-expired" });
@@ -202,7 +213,13 @@ export function touchMemory(
     const raw = readFileSync(path, "utf-8");
     const m = raw.match(/^---\n([\s\S]*?)\n---/);
     if (!m) continue;
-    const fm = (YAML.parse(m[1]) ?? {}) as Record<string, unknown>;
+    let fm: Record<string, unknown>;
+    try {
+      fm = (YAML.parse(m[1]) ?? {}) as Record<string, unknown>;
+    } catch {
+      // Syntax-broken frontmatter: skip — same malformed convention as trace.
+      continue;
+    }
     if (String(fm.id ?? "") !== id && file.replace(/\.md$/, "") !== id) continue;
     const useCount = (typeof fm.use_count === "number" ? fm.use_count : 1) + 1;
     fm.use_count = useCount;
@@ -213,7 +230,8 @@ export function touchMemory(
       type: typeof fm.type === "string" && fm.type.trim() ? fm.type : "knowledge",
     });
     if (!validated.success) continue;
-    writeFileSync(path, `---\n${YAML.stringify(validated.data)}---\n${raw.slice(m[0].length)}`);
+    // F6: reinforcement rewrite is atomic — decay reads these files concurrently.
+    atomicWrite(path, `---\n${YAML.stringify(validated.data)}---\n${raw.slice(m[0].length)}`);
     return { id: String(fm.id ?? id), file, use_count: useCount, last_used_at: now };
   }
   return null;
@@ -241,12 +259,30 @@ Subcommands: ${subcommandsFor("memory")}\n\nOptions:\n  --project <project>  CBM
       }
       if (subcommand === "trace") {
         // decay pass: ACT-R score + expiry marking, no CBM needed
-        console.log(JSON.stringify(ok(traceMemory(process.cwd()))));
+        try {
+          console.log(JSON.stringify(ok(traceMemory(process.cwd()))));
+        } catch (e) {
+          // a corrupt store must exit via the JSON contract, not a raw stack trace
+          console.log(
+            JSON.stringify(fail("MEMORY_TRACE_FAILED", `trace failed: ${String((e as Error)?.message ?? e)}`)),
+          );
+          process.exit(1);
+          return;
+        }
         return;
       }
       if (subcommand === "touch") {
         const id = Array.isArray(_args) ? _args[0] : _args;
-        const touched = id ? touchMemory(process.cwd(), String(id)) : null;
+        let touched: ReturnType<typeof touchMemory>;
+        try {
+          touched = id ? touchMemory(process.cwd(), String(id)) : null;
+        } catch (e) {
+          console.log(
+            JSON.stringify(fail("MEMORY_TOUCH_FAILED", `touch failed: ${String((e as Error)?.message ?? e)}`)),
+          );
+          process.exit(1);
+          return;
+        }
         if (!touched) {
           console.log(JSON.stringify(fail("MEMORY_NOT_FOUND", `No memory with id "${id}"`)));
           process.exit(1);
@@ -290,7 +326,19 @@ Subcommands: ${subcommandsFor("memory")}\n\nOptions:\n  --project <project>  CBM
           process.exit(1);
           return;
         }
-        for (const h of results) touchMemory(process.cwd(), h.id);
+        // Reinforcement reads/writes the same store as expandedRecall above —
+        // a failure routes through the same fail() contract, not a raw throw.
+        try {
+          for (const h of results) touchMemory(process.cwd(), h.id);
+        } catch (e) {
+          console.log(
+            JSON.stringify(
+              fail("MEMORY_DIR_UNREADABLE", `memory store unreadable: ${String((e as Error)?.message ?? e)}`),
+            ),
+          );
+          process.exit(1);
+          return;
+        }
         console.log(JSON.stringify(ok({ query, top_k: results.length, results, linked, recall_topk: topk })));
         return;
       }

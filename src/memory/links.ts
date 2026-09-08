@@ -1,8 +1,10 @@
 // Derived connection graph. Disposable by contract: always rebuildable from the
 // memory files, never hand-edited. Authored [[wikilinks]] are canonical; shared
 // entity mentions (paths, evidence keys, graph/node ids) add the rest — no model.
-import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+
+import { atomicWrite } from "../fs.js";
 
 export interface LinkGraph {
   generated_at: string;
@@ -98,7 +100,8 @@ export function buildLinks(memDir: string, now = new Date().toISOString()): Link
 }
 
 export function writeLinks(memDir: string, graph: LinkGraph): void {
-  writeFileSync(join(memDir, ".links.json"), `${JSON.stringify(graph, null, 2)}\n`);
+  // F6: derived graph is rewritten in place — atomic, readers never see a torn JSON.
+  atomicWrite(join(memDir, ".links.json"), `${JSON.stringify(graph, null, 2)}\n`);
 }
 
 export function readLinks(memDir: string): LinkGraph {

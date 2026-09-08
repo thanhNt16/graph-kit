@@ -36,6 +36,30 @@ describe("run ledger", () => {
     expect(() => startRun(cwd, join(cwd, "graph.yaml"), "2026-09-03T11:00:00.000Z")).toThrow(/RUN_ACTIVE/);
   });
 
+  test("out-of-band .active from a concurrent start fails with the same RUN_ACTIVE error", () => {
+    // The O_EXCL claim's contract: whoever created .active owns the run, and
+    // the loser gets the exact error the up-front check throws — same code,
+    // same message shape, same escape hatch (`gk run end`).
+    const otherDir = join(cwd, ".graphkit", "runs", "20260903-090000-other");
+    mkdirSync(otherDir, { recursive: true });
+    writeFileSync(join(cwd, ".graphkit", "runs", ".active"), otherDir);
+    expect(() => startRun(cwd, join(cwd, "graph.yaml"), "2026-09-03T10:00:00.000Z")).toThrow(
+      /RUN_ACTIVE: run already active at .*20260903-090000-other; run `gk run end` first/,
+    );
+  });
+
+  test("stale .active pointing at a vanished run dir is recovered, not a permanent RUN_ACTIVE", () => {
+    // wx contract: EEXIST with a dead pointer must recover — activeRun()
+    // already treats a vanished dir as "no active run", so start must too.
+    const goneDir = join(cwd, ".graphkit", "runs", "20260903-080000-gone");
+    mkdirSync(goneDir, { recursive: true });
+    writeFileSync(join(cwd, ".graphkit", "runs", ".active"), goneDir);
+    rmSync(goneDir, { recursive: true, force: true });
+    expect(activeRun(cwd)).toBeNull(); // stale by the reader's contract
+    const { dir } = startRun(cwd, join(cwd, "graph.yaml"), "2026-09-03T10:00:00.000Z");
+    expect(activeRun(cwd)).toBe(dir); // claim survived; pointer now live
+  });
+
   test("node append without active run fails", () => {
     expect(() =>
       appendNode(cwd, {
