@@ -14,8 +14,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `gk evidence report` — criterion-first markdown + `--html` self-contained page (SVG never inlined, all content escaped)
 - `gk run start` stamps the repo fingerprint into the run ledger
 - Archify diagram suite (`docs/diagrams/`): system architecture, execution workflow, run-resume lifecycle, and all eleven topologies as standalone explorables (inline SVG, trace motion, dark/light). Gallery linked from the docs landing page.
+- `gk doctor` — one-shot environment check (version, installed-kit freshness, `.graphkit/` state, graph.yaml validity, CBM bridge configuration); human output + `--json`, exit 1 only on failures
+- `--limit <n>` / `--depth <n>` flags on `gk graph search|ask|trace|query` (defaults unchanged: 8 / 3), threaded through the CBM routing layer
+- `CONTRIBUTING.md`, `.bun-version` (pins the CI bun 1.3.9), README "Development" section; `check:parity` script wired into CI with a `cli-manifest.json` drift guard
+
+### Fixed
+- **Kit SKILL.md frontmatter was invalid YAML**: 52/57 shipped `kits/**/SKILL.md` files had unquoted `: ` inside `description:`/`when_to_use:` scalars, so strict YAML parsers rejected them. All values quoted (text unchanged); `tests/unit/kit-skill-frontmatter.test.ts` committed as a regression guard. Kit `metadata.json` versions synced to 0.3.0.
+- `gk memory trace|touch|recall` crashed with a raw stack trace on syntax-broken memory frontmatter; malformed entries are now skipped like shape-invalid ones and the CLI paths emit structured errors (`MEMORY_TRACE_FAILED` / `MEMORY_TOUCH_FAILED`)
+- CBM client `close()` waited a fixed 1 s for already-exited children (spawn-failed children never fire `exit`); now resolves immediately and escalates to `SIGKILL` on the grace timeout
+- Run-ledger `.active` pointer used check-then-write (two concurrent `gk run start` could both win); creation is now exclusive (`wx`) with the same `RUN_ACTIVE` error, and a stale pointer (run dir vanished) is recovered instead of deadlocking
+- Memory/ledger/evidence in-place rewrites were non-atomic (interrupt could destroy prior content); shared `atomicWrite` (sibling temp + rename) applied across `memory`, `consolidate`, `links`, `ledger`, `evidence store`, `template`
 
 ### Changed
+- Removed unused `ajv` + `ajv-formats` dependencies (zod migration leftover, −2.4 MB install)
+- dagre is now lazy-loaded on first `gk graph svg` render instead of at CLI startup
+- CI gates: `check-cli-parity` + manifest drift guard run in CI; release workflow runs typecheck + tests before packaging; `docs/diagrams/*.json` biome-formatted (lint green)
 - **Pages landing page rewritten version-free** (`docs/graphkit.html`, renamed from `graphkit-v0.2-report.html`): features ordered as a workflow — lifecycle → install → 11 topologies → per-node binding & validation → dual runtimes → evidence & gates → run ledger & resume → memory & CBM bridge → host table → CLI. All version badges, "shipped in X.Y" labels, dated sections, roadmap, and historical demo/story sections removed. `pages.yml` redirect updated.
 - **Landing page visual pass**: topology cards now carry animated SVG diagrams (traveling signal dots via SMIL `animateMotion`, node pulse, edge dash-flow, hover gradient glow, scroll-driven reveal under `@supports`, `prefers-reduced-motion` fallback; zero JS). "Comprehensive Command Reference" gains "The gk Lifecycle" — a 6-stage orchestration flow diagram (install → compose → validate → execute → evidence & gate → close out) with animated connectors, MERGE/BLOCK/RESUME verdict chips, and a BLOCK→resume loop-back lane — plus per-stage session-skill chips and a 13-card "Session Skills" grid.
 
