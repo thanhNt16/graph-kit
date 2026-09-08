@@ -15,16 +15,90 @@
   ],
   "mainPath": ["author", "validate", "ledger", "dispatch", "waves", "persist", "gate", "merge"],
   "nodes": [
-    { "id": "author", "lane": "author", "col": 0, "type": "frontend", "label": "graph.yaml", "sublabel": "topologies + nodes" },
-    { "id": "validate", "lane": "cli", "col": 0, "type": "backend", "label": "gk validate", "sublabel": "9 checks", "width": 72 },
-    { "id": "fix", "lane": "exceptions", "col": 1, "type": "security", "label": "Fix Graph", "sublabel": "schema / DAG / refs" },
-    { "id": "ledger", "lane": "cli", "col": 2, "type": "database", "label": "gk run start", "sublabel": "ledger", "width": 80 },
-    { "id": "dispatch", "lane": "runtime", "col": 2, "type": "backend", "label": "/gk:execute", "sublabel": "dispatch" },
-    { "id": "waves", "lane": "runtime", "col": 3, "type": "messagebus", "label": "Agent Waves", "sublabel": "parallel" },
-    { "id": "advisor", "lane": "exceptions", "col": 3, "type": "messagebus", "label": "Advisor", "sublabel": "escalation", "width": 54 },
-    { "id": "persist", "lane": "evidence", "col": 4, "type": "database", "label": "Evidence", "sublabel": "sha256 blobs" },
-    { "id": "resume", "lane": "exceptions", "col": 4, "type": "backend", "label": "Resume", "sublabel": "gk run resume", "width": 55 },
-    { "id": "gate", "lane": "evidence", "col": 5, "type": "security", "label": "gk gate", "sublabel": "freshness + keys" },
+    {
+      "id": "author",
+      "lane": "author",
+      "col": 0,
+      "type": "frontend",
+      "label": "graph.yaml",
+      "sublabel": "topologies + nodes"
+    },
+    {
+      "id": "validate",
+      "lane": "cli",
+      "col": 0,
+      "type": "backend",
+      "label": "gk validate",
+      "sublabel": "9 checks",
+      "width": 72
+    },
+    {
+      "id": "fix",
+      "lane": "exceptions",
+      "col": 1,
+      "type": "security",
+      "label": "Fix Graph",
+      "sublabel": "schema / DAG / refs"
+    },
+    {
+      "id": "ledger",
+      "lane": "cli",
+      "col": 2,
+      "type": "database",
+      "label": "gk run start",
+      "sublabel": "ledger",
+      "width": 80
+    },
+    {
+      "id": "dispatch",
+      "lane": "runtime",
+      "col": 2,
+      "type": "backend",
+      "label": "/gk:execute",
+      "sublabel": "dispatch"
+    },
+    {
+      "id": "waves",
+      "lane": "runtime",
+      "col": 3,
+      "type": "messagebus",
+      "label": "Agent Waves",
+      "sublabel": "parallel"
+    },
+    {
+      "id": "advisor",
+      "lane": "exceptions",
+      "col": 3,
+      "type": "messagebus",
+      "label": "Advisor",
+      "sublabel": "escalation",
+      "width": 54
+    },
+    {
+      "id": "persist",
+      "lane": "evidence",
+      "col": 4,
+      "type": "database",
+      "label": "Evidence",
+      "sublabel": "sha256 blobs"
+    },
+    {
+      "id": "resume",
+      "lane": "exceptions",
+      "col": 4,
+      "type": "backend",
+      "label": "Resume",
+      "sublabel": "gk run resume",
+      "width": 55
+    },
+    {
+      "id": "gate",
+      "lane": "evidence",
+      "col": 5,
+      "type": "security",
+      "label": "gk gate",
+      "sublabel": "freshness + keys"
+    },
     { "id": "merge", "lane": "author", "col": 5, "type": "backend", "label": "MERGE", "sublabel": "verdict" },
     { "id": "block", "lane": "exceptions", "col": 5, "type": "security", "label": "BLOCK", "sublabel": "stale keys" }
   ],
@@ -34,7 +108,16 @@
     { "id": "e3", "from": "validate", "to": "fix", "label": "error", "variant": "security" },
     { "id": "e4", "from": "ledger", "to": "dispatch", "label": "open run" },
     { "id": "e5", "from": "dispatch", "to": "waves", "variant": "emphasis" },
-    { "id": "e6", "from": "waves", "to": "advisor", "label": "failed streak", "variant": "security", "route": "straight", "labelDx": -42, "labelDy": 28 },
+    {
+      "id": "e6",
+      "from": "waves",
+      "to": "advisor",
+      "label": "failed streak",
+      "variant": "security",
+      "route": "straight",
+      "labelDx": -42,
+      "labelDy": 28
+    },
     { "id": "e7", "from": "waves", "to": "persist", "label": "artifacts", "labelDx": 40 },
     { "id": "e8", "from": "persist", "to": "gate", "label": "evaluate", "labelDy": -28 },
     { "id": "e9", "from": "gate", "to": "merge", "label": "fresh", "variant": "emphasis" },

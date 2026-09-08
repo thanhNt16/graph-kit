@@ -25,7 +25,14 @@
   ],
   "mainPath": ["brainstorm", "plan", "worker-a", "review", "test"],
   "nodes": [
-    { "id": "brainstorm", "lane": "lead", "col": 0, "type": "frontend", "label": "Brainstorm", "sublabel": "explore intent" },
+    {
+      "id": "brainstorm",
+      "lane": "lead",
+      "col": 0,
+      "type": "frontend",
+      "label": "Brainstorm",
+      "sublabel": "explore intent"
+    },
     { "id": "plan", "lane": "lead", "col": 2, "type": "frontend", "label": "Plan", "sublabel": "write plan.md" },
     { "id": "worker-a", "lane": "w1", "col": 3, "type": "backend", "label": "Worker 1", "sublabel": "subagent" },
     { "id": "worker-b", "lane": "w2", "col": 3, "type": "backend", "label": "Worker 2", "sublabel": "subagent" },
