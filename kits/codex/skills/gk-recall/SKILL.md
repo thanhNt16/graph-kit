@@ -1,6 +1,6 @@
 ---
 name: gk-recall
-description: Query the run's memory store for context relevant to the current node's objective. Keyword×salience retrieval with temporal-validity and supersede filters. Trigger: "recall", "what do we know about", "memory", "prior context", "past decisions".
+description: "Query the run's memory store for context relevant to the current node's objective. Keyword×salience retrieval with temporal-validity and supersede filters. Trigger: \"recall\", \"what do we know about\", \"memory\", \"prior context\", \"past decisions\"."
 when_to_use: A graph node needs prior-run or intra-run memory — constraints, past decisions, diagnosed errors, distilled experience — that it would not otherwise know to ask for.
 user-invocable: true
 disable-model-invocation: false

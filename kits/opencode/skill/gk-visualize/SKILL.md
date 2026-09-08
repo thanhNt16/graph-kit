@@ -1,6 +1,6 @@
 ---
 name: gk-visualize
-description: Visualize a graph.yaml. Four modes: archify HTML (default, shareable artifact), ASCII (in-session), SVG (fast export), Excalidraw (editable). Trigger: "visualize graph", "show diagram", "draw the graph", "what does the graph look like".
+description: "Visualize a graph.yaml. Four modes: archify HTML (default, shareable artifact), ASCII (in-session), SVG (fast export), Excalidraw (editable). Trigger: \"visualize graph\", \"show diagram\", \"draw the graph\", \"what does the graph look like\"."
 when_to_use: User wants to see the graph structure visually — topology, nodes, model tiers, depend_on edges, fan-out/fan-in.
 user-invocable: true
 disable-model-invocation: false
