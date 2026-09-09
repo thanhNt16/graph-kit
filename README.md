@@ -3,9 +3,9 @@
 [![CI](https://github.com/thanhNt16/graph-kit/actions/workflows/ci.yml/badge.svg)](https://github.com/thanhNt16/graph-kit/actions/workflows/ci.yml)
 [![Release](https://github.com/thanhNt16/graph-kit/actions/workflows/release.yml/badge.svg)](https://github.com/thanhNt16/graph-kit/releases/latest)
 [![GitHub Pages](https://img.shields.io/badge/docs-pages-2ea043?logo=githubpages)](https://thanhnt16.github.io/graph-kit/)
-[![Tests](https://img.shields.io/badge/tests-575_passing-2ea043)](https://github.com/thanhNt16/graph-kit/actions/workflows/ci.yml)
+[![Tests](https://img.shields.io/badge/tests-passing-2ea043?logo=bun)](https://github.com/thanhNt16/graph-kit/actions/workflows/ci.yml)
 
-> **11 topologies · 5 targets · 8 agents · 13 skills (claude) · 575 tests · zero-model runtime**
+> **11 topologies · 5 targets · 8 agents · 13 skills (claude) · zero-model runtime**
 
 GraphKit is a graph engineering kit for AI coding agents (Claude Code, Cursor, OpenCode, Codex CLI, and pi). It installs agents, skills, hooks, and rules that let you define, validate, compile, and execute graph-structured agent workflows — with a run ledger, checkpoint resume, and project memory.
 
@@ -46,7 +46,7 @@ Memory files retain GraphKit's existing frontmatter and add OKF-compatible field
 
 The reader is strict at the filesystem boundary: malformed entries are dropped and counted in `malformed`; unreadable memory directories return `MEMORY_DIR_UNREADABLE` and fail, while a missing directory is treated as empty. Memory-augmented workflows use one terminal `INJECTION: <reminder>` / `INJECTION: null` contract on both execution paths. Curator cadence counts completed action-node executions, not curator calls. `recall_topk`, `expire_policy: manual`, and `null_intervention_allowed` are honored from graph configuration. Curator behavior is parity-tested across Claude Code, Cursor, OpenCode, Codex, and pi; Codex uses `workspace-write` so it can persist memory.
 
-Deterministic checks: `bun test` — **575 pass, 0 fail**; `bun run eval:memory` — `hit_rate: 1`, `validity_violations: []`, `malformed: 14` / `malformed_expected: 14`; `bun run typecheck` passes. These are fixture and behavior checks, not benchmark-superiority claims. The [@0xwast3 memory-engineering article](https://x.com/0xwast3/status/2084625810112032849) is third-party evidence only; its `status: conflicted` and three-month capture criterion are follow-up scope, not shipped behavior.
+Deterministic checks: `bun test` and `bun run typecheck` both run inside the `ci:local` gate. `bun run eval:memory` is a **manual eval command**, not a gate: it replays the memory-recall fixtures and prints `hit_rate`, `validity_violations`, and malformed counts for inspection (current fixture run: `hit_rate: 1`, `validity_violations: []`, `malformed: 14` / `malformed_expected: 14`). These are fixture and behavior checks, not benchmark-superiority claims. The [@0xwast3 memory-engineering article](https://x.com/0xwast3/status/2084625810112032849) is third-party evidence only; its `status: conflicted` and three-month capture criterion are follow-up scope, not shipped behavior.
 
 ## CBM boundary
 
@@ -415,7 +415,8 @@ only by a human via `git apply`.
 git clone https://github.com/thanhNt16/graph-kit && cd graph-kit
 bun install        # Bun only — the version is pinned in .bun-version
 bun test           # full unit suite, no network needed
-bun run ci:local   # THE pre-push gate: typecheck + lint + build + test + parity + changelog
+bun run ci:local   # THE pre-push gate — the exact steps CI runs: typecheck + lint + build + test + cbm:parity + check-changelog + check:parity + manifest drift guard
+bun run perf       # runtime perf harness (informational, no thresholds)
 ```
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for the scripts table, the changelog convention, kit-editing rules, and the release flow.

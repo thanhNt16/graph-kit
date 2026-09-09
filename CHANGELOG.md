@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 ### Added
+- **`gk graph query --template dead-code|callers-of <symbol>|symbol-set <file>`** (backlog R6) — pre-rolled graph queries for the question classes raw Cypher missed: dead-code uses only proven CBM Cypher constructs and does all filtering client-side; `--templates` lists them offline without touching the bridge; unknown names fail with `UNKNOWN_TEMPLATE` + available list. The dead-code anti-join is now single-source (`src/cbm/templates.ts`) — `routeAndRetrieve`'s deadcode branch delegates to it. Templates documented in the claude kit's code-reviewer/data-engineer agents
+- **`TraceHop.file_path` / `start_line` / `end_line`** (backlog R5) — server-side coordinates surface verbatim in `gk graph trace`/`ask` payloads (caller/callee entries gain `line`). The client-side fallback no longer mis-derives file/dir-node hops (`proj.src.cli.commands.graph` → `src/cli/commands/graph.ts`, was `commands.ts`; `proj.src.index` → `src/index.ts`, was `src.ts`)
+- `gk doctor` kit-source check (catches a standalone binary missing its `share/gk/kits` tree before `gk init` fails with `KIT_SOURCE_MISSING`) and PATH-shadow warning (another `gk` earlier in `$PATH`)
+- `bun run perf` — runtime latency harness (`scripts/perf-runtime.ts`): synthetic memory stores (50/200/1000/5000), times recall, fingerprint, and end-to-end CLI recall
 - `criteria/` registry + `evidence.criteria` id list + `evidence.freshness: report|strict` in graph.yaml; `criteria-keys`/`criteria-file` validation
 - `gk evidence add` — content-addressed artifacts with provenance markers (`EVIDENCE_KEY_NOT_DECLARED` / `EVIDENCE_FILE_MISSING` / `EVIDENCE_TOO_LARGE`)
 - Gate/status per-key freshness (`fresh|stale|unknown`); strict mode BLOCKs on stale required keys
@@ -19,6 +23,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `CONTRIBUTING.md`, `.bun-version` (pins the CI bun 1.3.9), README "Development" section; `check:parity` script wired into CI with a `cli-manifest.json` drift guard
 
 ### Fixed
+- **`gk memory touch` silently dropped legacy entries with string `tags:`**: decay (`memory trace`) coerced legacy string tags back to arrays but reinforcement did not, so those entries never scored reinforcement. Shared `parseMemoryFile` (`src/memory/frontmatter.ts`) now serves both paths; regression-tested
+- **No-op `--json` flags made honest**: `gk gate`, `gk status`, `gk inventory`, `gk init`/`new`, `gk run status`, `gk memory recall` advertised `--json` in help but ignored it and always printed one-line JSON. Default output is now human-readable (gate prints `VERDICT:` + per-key table instead of a wall of sha256 hashes; the manifest stays `--json`-only; fail envelopes stay JSON in both modes), and `--json` prints the exact previous envelope — README's "`gk status` # human-readable" is now true
+- **`bun run ci:local` was weaker than CI**: it skipped `check:parity` and the cli-manifest drift guard, so a contributor could pass the "THE gate" and still red CI. Both gates added (CONTRIBUTING/README updated to match)
 - **Kit SKILL.md frontmatter was invalid YAML**: 52/57 shipped `kits/**/SKILL.md` files had unquoted `: ` inside `description:`/`when_to_use:` scalars, so strict YAML parsers rejected them. All values quoted (text unchanged); `tests/unit/kit-skill-frontmatter.test.ts` committed as a regression guard. Kit `metadata.json` versions synced to 0.3.0.
 - `gk memory trace|touch|recall` crashed with a raw stack trace on syntax-broken memory frontmatter; malformed entries are now skipped like shape-invalid ones and the CLI paths emit structured errors (`MEMORY_TRACE_FAILED` / `MEMORY_TOUCH_FAILED`)
 - CBM client `close()` waited a fixed 1 s for already-exited children (spawn-failed children never fire `exit`); now resolves immediately and escalates to `SIGKILL` on the grace timeout
@@ -26,6 +33,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Memory/ledger/evidence in-place rewrites were non-atomic (interrupt could destroy prior content); shared `atomicWrite` (sibling temp + rename) applied across `memory`, `consolidate`, `links`, `ledger`, `evidence store`, `template`
 
 ### Changed
+- **`gk graph` CBM subcommands collapse to one dispatch path** (backlog R7) — the four near-duplicate search/ask/trace/query bodies (error handling, flag validation, client lifecycle) become a shared runner; previously-untested `INVALID_LIMIT`/`INVALID_DEPTH` CLI paths now covered. The 515-line YAML template block moved to `src/cli/graph-templates.ts`; `loadGraph`/`resolveBareValidateGraph` moved to `src/compiler/loader.ts`; SVG/ASCII renderers take the zod `Graph` (4× `as any` casts and hand-rolled duplicate graph types removed)
+- **Memory/ledger errors are structured end-to-end**: `ledger`/`resume`/`consolidate` throw `GraphKitError` (codes and messages unchanged, so existing matchers hold) instead of `Error("CODE: msg")` that the CLI regex-parsed back apart; error `details` now reach fail envelopes (`RESUME_RUN_NOT_FOUND` can carry available run ids); shared `readJsonl`/`walkMemoryStore` helpers replace triplicated parsing loops
+- **Recall/perf hot paths**: `gk memory recall` reinforces each hit by path (O(k) file reads instead of up to 5 full store rescans); `resolveSuperseded` de-duplicates via `Set` (was O(n²)); `fingerprint()` issues one `git ls-files -mo` spawn instead of two (`--no-optional-locks`, ~15-20 ms off every `gate`/`status`/`evidence report`/`run start`)
 - Removed unused `ajv` + `ajv-formats` dependencies (zod migration leftover, −2.4 MB install)
 - dagre is now lazy-loaded on first `gk graph svg` render instead of at CLI startup
 - CI gates: `check-cli-parity` + manifest drift guard run in CI; release workflow runs typecheck + tests before packaging; `docs/diagrams/*.json` biome-formatted (lint green)
