@@ -67,11 +67,33 @@ export function gateGraph(
   };
 }
 
+// Human default: verdict line + padded per-key table (scorecard × freshness).
+// The sha256 manifest stays machine-only — it is noise in a terminal and the
+// whole point of --json.
+export function renderGate(result: {
+  verdict: GateResult["verdict"];
+  scorecard: GateResult["scorecard"];
+  freshness: GateResult["freshness"];
+}): string {
+  const keys = Object.keys(result.scorecard);
+  const verdict = result.verdict === "MERGE" ? "PASS" : "BLOCK";
+  if (keys.length === 0) return `VERDICT: ${verdict}\n(no required evidence keys)`;
+  const keyW = Math.max("key".length, ...keys.map((k) => k.length));
+  const stateW = Math.max("state".length, ...keys.map((k) => result.scorecard[k].length));
+  const lines = [
+    `VERDICT: ${verdict}`,
+    "",
+    `${"key".padEnd(keyW)}  ${"state".padEnd(stateW)}  freshness`,
+    ...keys.map((k) => `${k.padEnd(keyW)}  ${result.scorecard[k].padEnd(stateW)}  ${result.freshness[k] ?? "unknown"}`),
+  ];
+  return lines.join("\n");
+}
+
 export function registerGateCommand(cli: CAC) {
   cli
     .command("gate [file]", "Deterministic evidence gate: MERGE/BLOCK over required evidence keys")
     .option("--json", "JSON output")
-    .action((file) => {
+    .action((file, opts: { json?: boolean }) => {
       try {
         const resolved = file ?? join(process.cwd(), "graph.yaml");
         const graph = loadGraph(resolved);
@@ -91,16 +113,22 @@ export function registerGateCommand(cli: CAC) {
           },
         );
         const stale = Object.keys(freshness).filter((k) => freshness[k] === "stale" && scorecard[k] === "ok");
-        if (verdict === "MERGE") {
-          console.log(JSON.stringify(ok({ verdict, scorecard, freshness, manifest })));
+        if (verdict !== "MERGE") {
+          // A block is a failure: fail envelope JSON-on-stdout in both modes
+          // (scripts parse it for `missing`), exit 1 via fail().
+          console.log(
+            JSON.stringify(
+              fail("GATE_BLOCK", "evidence gate blocked merge", { missing, stale, scorecard, freshness, manifest }),
+            ),
+          );
+          process.exit(1);
           return;
         }
         console.log(
-          JSON.stringify(
-            fail("GATE_BLOCK", "evidence gate blocked merge", { missing, stale, scorecard, freshness, manifest }),
-          ),
+          opts.json
+            ? JSON.stringify(ok({ verdict, scorecard, freshness, manifest }))
+            : renderGate({ verdict, scorecard, freshness }),
         );
-        process.exit(1);
       } catch (e) {
         console.log(
           JSON.stringify(

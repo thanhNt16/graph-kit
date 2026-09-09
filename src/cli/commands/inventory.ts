@@ -286,6 +286,41 @@ export function runInventory(opts: { cwd?: string; target?: string; userDir?: st
   };
 }
 
+// Human default: target line, padded agents table, comma lists for the rest.
+// --json keeps the full InventoryResult envelope (unchanged shape).
+export function renderInventory(r: InventoryResult): string {
+  const lines: string[] = [`target: ${r.target}`, ""];
+
+  lines.push(`agents (${r.agents.length})`);
+  if (r.agents.length > 0) {
+    const nameW = Math.max("name".length, ...r.agents.map((a) => a.name.length));
+    const modelW = Math.max("model".length, ...r.agents.map((a) => (a.model ?? "-").length));
+    lines.push(`${"name".padEnd(nameW)}  ${"model".padEnd(modelW)}`);
+    for (const a of r.agents) {
+      lines.push(`${a.name.padEnd(nameW)}  ${(a.model ?? "-").padEnd(modelW)}`);
+    }
+  }
+  lines.push("");
+
+  const list = (label: string, items: string[]) => {
+    lines.push(`${label} (${items.length})`);
+    if (items.length > 0) lines.push(`  ${items.join(", ")}`);
+    lines.push("");
+  };
+  list("skills", r.skills);
+  list("hooks", r.hooks);
+  list("commands", r.commands);
+
+  lines.push(`mcp servers (${r.mcpServers.length})`);
+  for (const s of r.mcpServers) lines.push(`  ${s.name}: ${s.tools.length > 0 ? s.tools.join(", ") : "(no tools)"}`);
+  if (r.mcpServers.length === 0) lines.push("");
+  lines.push("");
+
+  list("tools", r.tools);
+  lines.push(`warnings: ${r.warnings.length > 0 ? r.warnings.join("; ") : "none"}`);
+  return lines.join("\n");
+}
+
 export function registerInventoryCommands(cli: CAC) {
   cli
     .command("inventory", "Inventory installed agents, skills, tools, and MCP servers")
@@ -310,7 +345,7 @@ export function registerInventoryCommands(cli: CAC) {
       }
       try {
         const result = runInventory({ target: opts.target });
-        console.log(JSON.stringify(ok(result)));
+        console.log(opts.json ? JSON.stringify(ok(result)) : renderInventory(result));
       } catch (e) {
         console.log(JSON.stringify(fail("INVENTORY_FAILED", String(e))));
         process.exit(1);

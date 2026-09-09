@@ -1,11 +1,13 @@
-import { existsSync, readdirSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
+import { delimiter, dirname, join, resolve } from "node:path";
 import type { CAC } from "cac";
 import { GraphKitError } from "../../errors.js";
 import { listTargets } from "../../targets/registry.js";
+import type { TargetId } from "../../targets/types.js";
 import { APP_VERSION } from "../../version.js";
 import { ok } from "../output.js";
 import { loadGraph } from "./graph.js";
+import { kitSourceDir } from "./kit.js";
 
 export type DoctorStatus = "ok" | "warn" | "fail" | "info";
 
@@ -13,6 +15,18 @@ export interface DoctorCheck {
   check: string;
   status: DoctorStatus;
   detail: string;
+}
+
+// Test seam: in a repo checkout the bundled kits/ dir always resolves (the dev
+// candidate paths exist), so the standalone-binary failure mode — binary
+// extracted without its share/gk/kits tree — is unreachable. Tests inject a
+// throwing resolver to exercise it, same idea as the CBM seams.
+let kitSource: (targetId: TargetId) => string = kitSourceDir;
+export function _setDoctorKitSource(fn: (targetId: TargetId) => string): void {
+  kitSource = fn;
+}
+export function _resetDoctorKitSource(): void {
+  kitSource = kitSourceDir;
 }
 
 // gk doctor — one-shot environment check for the 5-target workflow tool.
@@ -126,6 +140,60 @@ export function runDoctor(cwd: string): DoctorCheck[] {
           detail:
             "CBM_CMD/CBM_ARGS not set — bridge unconfigured (expected: @graphkit/codebase-memory-mcp is not yet published)",
         },
+  );
+
+  // 6. kit source — probe the same bundled-kits resolution `gk init` will do,
+  // for every target detected above. A standalone binary extracted without its
+  // share/gk/kits tree passes every other check yet dies mid-init; surface it
+  // here with the exact KIT_SOURCE_MISSING hint init would print.
+  if (installed.length === 0) {
+    checks.push({ check: "kit source", status: "info", detail: "nothing to probe (no kit installed)" });
+  } else {
+    const resolved: string[] = [];
+    const problems: string[] = [];
+    for (const { t } of installed) {
+      try {
+        // t.id comes from the registry itself, so it is always a valid TargetId.
+        kitSource(t.id as TargetId);
+        resolved.push(t.id);
+      } catch (e) {
+        const code = e instanceof GraphKitError ? e.code : "KIT_SOURCE_MISSING";
+        const hint = e instanceof GraphKitError && typeof e.details?.hint === "string" ? e.details.hint : null;
+        problems.push(`${t.id}: ${code}: ${String((e as Error)?.message ?? e)}${hint ? ` (hint: ${hint})` : ""}`);
+      }
+    }
+    checks.push(
+      problems.length > 0
+        ? { check: "kit source", status: "fail", detail: problems.join("; ") }
+        : { check: "kit source", status: "ok", detail: `bundled kits/ resolvable for ${resolved.join(", ")}` },
+    );
+  }
+
+  // 7. PATH shadow — another `gk` earlier in $PATH silently wins (`which gk`
+  // resolves to it), so upgrades look like no-ops. Warn only: the doctor
+  // contract keeps warn at exit 0, and a deliberate shadow is legitimate.
+  const pathDirs = (process.env.PATH ?? "").split(delimiter).filter(Boolean);
+  const binDir = dirname(process.execPath);
+  const selfIdx = pathDirs.findIndex((d) => resolve(d) === resolve(binDir));
+  const ahead = selfIdx === -1 ? pathDirs : pathDirs.slice(0, selfIdx);
+  const shadows: string[] = [];
+  for (const dir of ahead) {
+    const candidate = join(dir, "gk");
+    try {
+      const st = statSync(candidate);
+      if (st.isFile() && (st.mode & 0o111) !== 0) shadows.push(candidate);
+    } catch {
+      // no such file or unreadable PATH entry — not a shadow
+    }
+  }
+  checks.push(
+    shadows.length > 0
+      ? {
+          check: "PATH shadow",
+          status: "warn",
+          detail: `an earlier \`gk\` on $PATH wins over this binary: ${shadows.join(", ")}`,
+        }
+      : { check: "PATH shadow", status: "ok", detail: "no other gk earlier on $PATH" },
   );
 
   return checks;

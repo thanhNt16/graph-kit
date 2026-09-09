@@ -110,17 +110,33 @@ describe("gk gate command", () => {
     rmSync(tmp, { recursive: true, force: true });
   });
 
-  test("MERGE: exits 0 with ok envelope", () => {
+  test("MERGE default output is human: VERDICT line + per-key table, no JSON", () => {
     writeFileSync(join(tmp, "graph.yaml"), MINIMAL_GRAPH);
     const evDir = join(tmp, ".graphkit", "evidence");
     mkdirSync(evDir, { recursive: true });
     writeFileSync(join(evDir, "design.md"), "approved\n");
     const result = runCli(["gate", join(tmp, "graph.yaml")], tmp);
     expect(result.code).toBe(0);
+    expect(() => JSON.parse(result.stdout)).toThrow(); // human mode is not JSON
+    expect(result.stdout).toContain("VERDICT: PASS");
+    expect(result.stdout).toContain("key");
+    expect(result.stdout).toContain("design");
+    expect(result.stdout).toMatch(/design\s+ok\s+unknown/); // state + freshness columns
+    expect(result.stdout).not.toContain("sha256"); // manifest is machine-only
+  });
+
+  test("gate --json keeps the ok envelope (verdict, scorecard, sha256 manifest)", () => {
+    writeFileSync(join(tmp, "graph.yaml"), MINIMAL_GRAPH);
+    const evDir = join(tmp, ".graphkit", "evidence");
+    mkdirSync(evDir, { recursive: true });
+    writeFileSync(join(evDir, "design.md"), "approved\n");
+    const result = runCli(["gate", "--json", join(tmp, "graph.yaml")], tmp);
+    expect(result.code).toBe(0);
     const parsed = JSON.parse(result.stdout);
     expect(parsed.status).toBe("ok");
     expect(parsed.data.verdict).toBe("MERGE");
     expect(parsed.data.scorecard).toEqual({ design: "ok" });
+    expect(parsed.data.manifest.design.sha256).toBe(createHash("sha256").update("approved\n").digest("hex"));
   });
 
   test("BLOCK: exits 1 with GATE_BLOCK fail envelope", () => {
@@ -134,6 +150,15 @@ describe("gk gate command", () => {
     expect(parsed.error.details.missing).toContain("design");
   });
 
+  test("BLOCK --json keeps the same fail envelope as default mode", () => {
+    writeFileSync(join(tmp, "graph.yaml"), MINIMAL_GRAPH);
+    const result = runCli(["gate", "--json", join(tmp, "graph.yaml")], tmp);
+    expect(result.code).toBe(1);
+    const parsed = JSON.parse(result.stdout);
+    expect(parsed.status).toBe("fail");
+    expect(parsed.error.code).toBe("GATE_BLOCK");
+  });
+
   test("default file is graph.yaml in cwd", () => {
     writeFileSync(join(tmp, "graph.yaml"), MINIMAL_GRAPH);
     const evDir = join(tmp, ".graphkit", "evidence");
@@ -141,9 +166,7 @@ describe("gk gate command", () => {
     writeFileSync(join(evDir, "design.md"), "approved\n");
     const result = runCli(["gate"], tmp);
     expect(result.code).toBe(0);
-    const parsed = JSON.parse(result.stdout);
-    expect(parsed.status).toBe("ok");
-    expect(parsed.data.verdict).toBe("MERGE");
+    expect(result.stdout).toContain("VERDICT: PASS");
   });
 
   test("schema invalid graph exits 1", () => {
@@ -153,17 +176,5 @@ describe("gk gate command", () => {
     const parsed = JSON.parse(result.stdout);
     expect(parsed.status).toBe("fail");
     expect(parsed.error.code).toBe("SCHEMA_INVALID");
-  });
-
-  test("--json flag is accepted but does not change output", () => {
-    writeFileSync(join(tmp, "graph.yaml"), MINIMAL_GRAPH);
-    const evDir = join(tmp, ".graphkit", "evidence");
-    mkdirSync(evDir, { recursive: true });
-    writeFileSync(join(evDir, "design.md"), "approved\n");
-    const result = runCli(["gate", "--json", join(tmp, "graph.yaml")], tmp);
-    expect(result.code).toBe(0);
-    const parsed = JSON.parse(result.stdout);
-    expect(parsed.status).toBe("ok");
-    expect(parsed.data.verdict).toBe("MERGE");
   });
 });
