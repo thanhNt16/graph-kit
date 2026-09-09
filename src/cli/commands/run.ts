@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import type { CAC } from "cac";
 import YAML from "yaml";
+import { GraphKitError } from "../../errors.js";
 import {
   activeRun,
   activeRunGraph,
@@ -10,6 +11,7 @@ import {
   endRun,
   readAdvisorEvents,
   readRunMeta,
+  readTrace,
   startRun,
 } from "../../memory/ledger.js";
 import { resumeRun } from "../../memory/resume.js";
@@ -17,10 +19,48 @@ import { GraphSchema } from "../../schemas/graph.schema.js";
 import { subcommandsFor } from "../command-registry.js";
 import { fail, ok } from "../output.js";
 
-function errCode(e: unknown): { code: string; message: string } {
+function errCode(e: unknown): { code: string; message: string; details?: Record<string, unknown> } {
+  // GraphKitError carries its code (and optional details) — use them directly.
+  // Anything else keeps the legacy behavior: an "CODE: msg" prefix extracted
+  // from the message, else the generic RUN_ERROR fallback.
+  if (e instanceof GraphKitError) return { code: e.code, message: e.message, details: e.details };
   const message = String((e as Error)?.message ?? e);
   const code = message.match(/^([A-Z_]+):/)?.[1] ?? "RUN_ERROR";
   return { code, message };
+}
+
+// Human default for `gk run status`: a short progress summary for the active
+// run (id, graph, round, node/evidence progress, verdict chain). `--json`
+// prints the machine envelope instead. Fail envelopes stay JSON on stdout.
+function renderRunStatus(
+  cwd: string,
+  data: { active: string | null; advisor_events: number; resumes_chain: string[] },
+): string {
+  if (!data.active) return "no active run";
+  const id = basename(data.active);
+  let graph = "unknown";
+  let started = "unknown";
+  try {
+    const meta = readRunMeta(cwd, id);
+    graph = meta.graph;
+    started = meta.started_at;
+  } catch {
+    /* legacy meta without graph tracking — render what we know */
+  }
+  const trace = readTrace(cwd, id);
+  const okNodes = trace.filter((t) => t.status === "ok").length;
+  const failedNodes = trace.filter((t) => t.status === "fail").length;
+  const waves = new Set(trace.map((t) => t.wave).filter((w) => w != null));
+  const round = waves.size ? Math.max(...waves) + 1 : 0;
+  const evidence = new Set(trace.flatMap((t) => t.evidence));
+  return [
+    `run: ${id}`,
+    `graph: ${graph}`,
+    `started: ${started}`,
+    `round: ${round} · nodes: ${okNodes} ok / ${failedNodes} failed / ${trace.length} traced · evidence: ${evidence.size} keys`,
+    `advisor events: ${data.advisor_events}`,
+    `verdict chain: ${data.resumes_chain.join(" <- ")}`,
+  ].join("\n");
 }
 
 export function registerRunCommands(cli: CAC) {
@@ -142,8 +182,8 @@ export function registerRunCommands(cli: CAC) {
             );
           } catch (e) {
             process.exitCode = 1;
-            const { code, message } = errCode(e);
-            console.log(JSON.stringify(fail(code, message)));
+            const { code, message, details } = errCode(e);
+            console.log(JSON.stringify(fail(code, message, details)));
           }
           return;
         }
@@ -162,7 +202,12 @@ export function registerRunCommands(cli: CAC) {
               cursor = null;
             }
           }
-          console.log(JSON.stringify(ok({ active: dir, advisor_events, resumes_chain: chain })));
+          const data = { active: dir, advisor_events, resumes_chain: chain };
+          if (opts.json) {
+            console.log(JSON.stringify(ok(data)));
+          } else {
+            console.log(renderRunStatus(cwd, data));
+          }
           return;
         }
         console.log(
@@ -173,8 +218,8 @@ export function registerRunCommands(cli: CAC) {
           ),
         );
       } catch (e) {
-        const { code, message } = errCode(e);
-        console.log(JSON.stringify(fail(code, message)));
+        const { code, message, details } = errCode(e);
+        console.log(JSON.stringify(fail(code, message, details)));
       }
     });
 }

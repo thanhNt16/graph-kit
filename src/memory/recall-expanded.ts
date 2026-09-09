@@ -2,19 +2,23 @@
 // Recall over root + subfolders (patterns/, suggestions/), with .links.json
 // neighbors joining below direct hits. Imports the frozen retriever from
 // src/eval — this module only widens the doc set and joins the link graph.
-import { existsSync, readdirSync } from "node:fs";
-import { join } from "node:path";
 import {
   applyRecallFilters,
-  loadMemories,
   type MemoryDoc,
+  queryTerms,
   type RecallHit,
   rankByOverlap,
+  termsOf,
 } from "../eval/memory-recall.js";
+import { walkMemoryStore } from "./frontmatter.js";
 import { readLinks } from "./links.js";
 
 export interface ExpandedHit extends RecallHit {
   linked: boolean;
+  /** store-relative path ("patterns/p1.md") — the single-file reinforcement target */
+  path: string;
+  /** keyword-overlap × salience score the ranker used (linked hits: 0.5× salience) */
+  score: number;
 }
 
 export interface ExpandedRecall {
@@ -25,30 +29,33 @@ export interface ExpandedRecall {
 
 const LINK_PENALTY = 0.5; // linked-not-keyword ranks below any direct hit
 
-/** Memory root plus one sublevel, matching the consolidate layout. */
-function recallDirs(memDir: string): Array<{ dir: string; prefix: string }> {
-  if (!existsSync(memDir)) return [];
-  const dirs = [{ dir: memDir, prefix: "" }];
-  for (const de of readdirSync(memDir, { withFileTypes: true })) {
-    if (de.isDirectory() && !de.name.startsWith(".")) dirs.push({ dir: join(memDir, de.name), prefix: `${de.name}/` });
-  }
-  return dirs;
-}
-
 export function expandedRecall(memDir: string, query: string, k = 5, now = new Date().toISOString()): ExpandedRecall {
   const docs: MemoryDoc[] = [];
-  const where = new Map<string, string>(); // id → relative file path
-  for (const { dir, prefix } of recallDirs(memDir)) {
-    for (const d of loadMemories(dir)) {
-      docs.push(d);
-      where.set(d.id, prefix + d.file);
-    }
+  const where = new Map<string, string>(); // id → store-relative file path
+  for (const entry of walkMemoryStore(memDir, { skip: ["index.md", "log.md"] })) {
+    docs.push({
+      id: entry.id,
+      file: entry.file,
+      valid_from: entry.fm.valid_from,
+      valid_to: entry.fm.valid_to ?? undefined,
+      expired: entry.fm.expired,
+      superseded_by: entry.fm.superseded_by ?? undefined,
+      salience: typeof entry.fm.salience === "number" ? entry.fm.salience : 0.5,
+      terms: termsOf(entry.raw),
+    });
+    where.set(entry.id, entry.file);
   }
 
   const direct = applyRecallFilters(rankByOverlap(query, docs), now) as MemoryDoc[];
-  const hits: ExpandedHit[] = direct
-    .slice(0, k)
-    .map((d) => ({ id: d.id, file: where.get(d.id) ?? d.file, salience: d.salience, linked: false }));
+  const qTerms = queryTerms(query);
+  const hits: ExpandedHit[] = direct.slice(0, k).map((d) => ({
+    id: d.id,
+    file: where.get(d.id) ?? d.file,
+    salience: d.salience,
+    linked: false,
+    path: where.get(d.id) ?? d.file,
+    score: qTerms.filter((t) => d.terms.has(t)).length * d.salience,
+  }));
 
   // Link expansion: neighbors of direct hits fill leftover slots, penalized.
   const graph = readLinks(memDir);
@@ -60,7 +67,14 @@ export function expandedRecall(memDir: string, query: string, k = 5, now = new D
       const doc = docs.find((d) => d.id === n);
       if (!doc) continue; // neighbor must exist as a loaded doc to be returnable
       if (hits.length >= k) break outer;
-      hits.push({ id: n, file: where.get(n) ?? doc.file, salience: doc.salience * LINK_PENALTY, linked: true });
+      hits.push({
+        id: n,
+        file: where.get(n) ?? doc.file,
+        salience: doc.salience * LINK_PENALTY,
+        linked: true,
+        path: where.get(n) ?? doc.file,
+        score: doc.salience * LINK_PENALTY,
+      });
       seen.add(n);
       linked += 1;
     }

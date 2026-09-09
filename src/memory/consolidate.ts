@@ -6,6 +6,7 @@ import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import YAML from "yaml";
+import { GraphKitError } from "../errors.js";
 import { atomicWrite } from "../fs.js";
 import { PatternFileSchema, SuggestionFileSchema } from "../schemas/memory.schema.js";
 import { type AdvisorEvent, listRunIds, readAdvisorEvents, readRunIndex, readTrace, type TraceLine } from "./ledger.js";
@@ -137,7 +138,8 @@ export function consolidate(cwd: string, now = new Date().toISOString()): Consol
     // Invariant guard: generated entries must satisfy the published schemas (fail loud on drift).
     const parsed = PatternFileSchema.safeParse(frontmatter);
     if (!parsed.success)
-      throw new Error(
+      throw new GraphKitError(
+        "PATTERN_SCHEMA_VIOLATION",
         `consolidate: ${file} violates PatternFileSchema: ${parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; ")}`,
       );
     writeEntry(
@@ -179,7 +181,8 @@ export function consolidate(cwd: string, now = new Date().toISOString()): Consol
     // Invariant guard: generated entries must satisfy the published schemas (fail loud on drift).
     const parsed = SuggestionFileSchema.safeParse(frontmatter);
     if (!parsed.success)
-      throw new Error(
+      throw new GraphKitError(
+        "SUGGESTION_SCHEMA_VIOLATION",
         `consolidate: ${file} violates SuggestionFileSchema: ${parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; ")}`,
       );
     writeEntry(suggestionsDir, file, frontmatter, `${s.rationale}\n`);

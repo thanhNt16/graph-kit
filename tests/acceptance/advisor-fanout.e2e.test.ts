@@ -134,7 +134,7 @@ describe("advisor + fan-out e2e smoke over real CLI", () => {
     expect(ev.streak).toBe(2);
 
     // 6. run status reports active run and advisor_events count === 1
-    const statusRes = await runCli(["run", "status"], tmpCwd);
+    const statusRes = await runCli(["run", "status", "--json"], tmpCwd);
     expect(statusRes.exitCode).toBe(0);
     const statusData = JSON.parse(statusRes.stdout);
     expect(statusData.status).toBe("ok");

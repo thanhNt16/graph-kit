@@ -1,17 +1,19 @@
 // Derived connection graph. Disposable by contract: always rebuildable from the
 // memory files, never hand-edited. Authored [[wikilinks]] are canonical; shared
 // entity mentions (paths, evidence keys, graph/node ids) add the rest — no model.
-import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import { z } from "zod";
 
 import { atomicWrite } from "../fs.js";
+import { walkMemoryStore } from "./frontmatter.js";
 
 export interface LinkGraph {
   generated_at: string;
   links: Record<string, string[]>;
 }
 
-const RESERVED = new Set(["index.md", "log.md"]);
+const RESERVED = ["index.md", "log.md"];
 const WIKILINK = /\[\[([^\]|]+)(?:\|[^\]]*)?\]\]/g;
 // Entities worth linking on: repo-ish paths and dotted/slashed identifiers.
 const ENTITY = /(?:[\w.-]+\/)+[\w.-]+/g;
@@ -22,44 +24,22 @@ interface Entry {
   entities: Set<string>;
 }
 
-function parseEntry(path: string, fallbackId: string): Entry | null {
-  let raw: string;
-  try {
-    raw = readFileSync(path, "utf-8");
-  } catch {
-    return null;
-  }
-  const m = raw.match(/^---\n([\s\S]*?)\n---/);
-  const head = m?.[1] ?? "";
-  const id = head.match(/^id:\s*(.+)$/m)?.[1]?.trim() || fallbackId;
-  const body = m ? raw.slice(m[0].length) : raw;
-
-  const wikilinks = Array.from(body.matchAll(WIKILINK), (w) => w[1].trim()).filter(Boolean);
-  const entities = new Set<string>();
-  const source = head.match(/^source:\s*(.+)$/m)?.[1]?.trim();
-  if (source) entities.add(source);
-  for (const e of `${head}\n${body}`.matchAll(ENTITY)) entities.add(e[0]);
-  return { id, wikilinks, entities };
-}
+// Any frontmatter'd markdown participates in the link graph: suggestion and
+// pattern files carry fields outside MemoryFileSchema (their own status enums
+// and pattern-only fields), so links validate with a permissive shape and lean
+// on parseMemoryFile's id/type defaults only.
+const LINK_FILE_SCHEMA = z.object({}).passthrough();
 
 /** Walk the memory root plus one level of subfolders (patterns/, suggestions/). */
 function collect(memDir: string): Entry[] {
-  if (!existsSync(memDir)) return [];
-  const out: Entry[] = [];
-  for (const de of readdirSync(memDir, { withFileTypes: true })) {
-    if (de.isFile() && de.name.endsWith(".md") && !RESERVED.has(de.name)) {
-      const e = parseEntry(join(memDir, de.name), de.name.replace(/\.md$/, ""));
-      if (e) out.push(e);
-    } else if (de.isDirectory() && !de.name.startsWith(".")) {
-      const sub = join(memDir, de.name);
-      for (const f of readdirSync(sub, { withFileTypes: true })) {
-        if (!f.isFile() || !f.name.endsWith(".md")) continue;
-        const e = parseEntry(join(sub, f.name), f.name.replace(/\.md$/, ""));
-        if (e) out.push(e);
-      }
-    }
-  }
-  return out;
+  return walkMemoryStore(memDir, { skip: RESERVED, schema: LINK_FILE_SCHEMA }).map((entry) => {
+    const wikilinks = Array.from(entry.body.matchAll(WIKILINK), (w) => w[1].trim()).filter(Boolean);
+    const entities = new Set<string>();
+    const source = entry.fm.source == null ? undefined : String(entry.fm.source);
+    if (source) entities.add(source);
+    for (const e of entry.raw.matchAll(ENTITY)) entities.add(e[0]);
+    return { id: entry.id, wikilinks, entities };
+  });
 }
 
 export function buildLinks(memDir: string, now = new Date().toISOString()): LinkGraph {

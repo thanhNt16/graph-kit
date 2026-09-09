@@ -19,7 +19,7 @@ function runRecall(cwd: string, query: string) {
   try {
     const cli = cac("gk");
     registerMemoryCommands(cli);
-    cli.parse(["node", "gk", "memory", "recall", query], { run: true });
+    cli.parse(["node", "gk", "memory", "recall", query, "--json"], { run: true });
   } finally {
     process.chdir(originalCwd);
     console.log = originalLog;
