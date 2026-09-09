@@ -217,4 +217,204 @@ describe("gk graph CBM subcommands", () => {
 
     expect(closeCalled).toBe(true);
   });
+
+  // --- R7: flag validation (previously uncovered INVALID_LIMIT / INVALID_DEPTH) ---
+  test("graph search --limit 0 emits fail INVALID_LIMIT with no CBM call", async () => {
+    runCli(["graph", "search", "foo", "--limit", "0"]);
+    await new Promise((r) => setTimeout(r, 50));
+    const parsed = JSON.parse(sink.join("\n"));
+    expect(parsed.status).toBe("fail");
+    expect(parsed.error.code).toBe("INVALID_LIMIT");
+    expect(parsed.error.message).toContain("must be a positive integer");
+    expect(capturedTool).toBeUndefined();
+  });
+
+  test("graph ask --limit 0 emits fail INVALID_LIMIT", async () => {
+    runCli(["graph", "ask", "Who calls validateGraph?", "--limit", "0"]);
+    await new Promise((r) => setTimeout(r, 50));
+    const parsed = JSON.parse(sink.join("\n"));
+    expect(parsed.status).toBe("fail");
+    expect(parsed.error.code).toBe("INVALID_LIMIT");
+    expect(capturedTool).toBeUndefined();
+  });
+
+  test("graph ask --depth -1 emits fail INVALID_DEPTH (limit checked before depth)", async () => {
+    runCli(["graph", "ask", "Who calls validateGraph?", "--depth=-1"]);
+    await new Promise((r) => setTimeout(r, 50));
+    const parsed = JSON.parse(sink.join("\n"));
+    expect(parsed.status).toBe("fail");
+    expect(parsed.error.code).toBe("INVALID_DEPTH");
+    expect(parsed.error.message).toContain("must be a positive integer");
+    expect(capturedTool).toBeUndefined();
+  });
+
+  test("graph trace --depth -1 emits fail INVALID_DEPTH with no CBM call", async () => {
+    runCli(["graph", "trace", "sampleAdd", "--depth=-1"]);
+    await new Promise((r) => setTimeout(r, 50));
+    const parsed = JSON.parse(sink.join("\n"));
+    expect(parsed.status).toBe("fail");
+    expect(parsed.error.code).toBe("INVALID_DEPTH");
+    expect(capturedTool).toBeUndefined();
+  });
+
+  // --- R7: happy-path flag threading ---
+  test("graph search --limit 2 threads limit into the search_graph call", async () => {
+    fakeCallFn = async () => ({ total: 0, search_mode: "bm25", results: [], has_more: false });
+    fakeCloseFn = async () => {};
+
+    runCli(["graph", "search", "sampleAdd", "--limit", "2"]);
+    await new Promise((r) => setTimeout(r, 50));
+
+    expect(capturedTool).toBe("search_graph");
+    expect(_capturedArgs?.limit).toBe(2);
+    expect(_capturedArgs?.pattern).toBe("sampleAdd");
+  });
+
+  test("graph ask --limit 2 --depth 2 threads both into the routed primitives", async () => {
+    const calls: { tool: string; args: Record<string, unknown> }[] = [];
+    fakeCallFn = async (tool, args) => {
+      calls.push({ tool, args });
+      if (tool === "search_graph") {
+        return {
+          results: [
+            {
+              name: "validateGraph",
+              qualified_name: "proj.src.compiler.validate.validateGraph",
+              file_path: "src/compiler/validate.ts",
+              label: "Function",
+              start_line: 1,
+            },
+          ],
+        };
+      }
+      return { callers: [], callees: [] };
+    };
+    fakeCloseFn = async () => {};
+
+    runCli(["graph", "ask", "Who calls validateGraph in production code?", "--limit", "2", "--depth", "2"]);
+    await new Promise((r) => setTimeout(r, 50));
+
+    const parsed = JSON.parse(sink.join("\n"));
+    expect(parsed.status).toBe("ok");
+    expect(parsed.data.kind).toBe("callers");
+    const searches = calls.filter((c) => c.tool === "search_graph");
+    expect(searches.length).toBeGreaterThan(0);
+    for (const c of searches) expect(c.args.limit).toBe(2);
+    const trace = calls.find((c) => c.tool === "trace_path");
+    expect(trace?.args.depth).toBe(2);
+  });
+
+  test("graph trace --depth 2 threads depth into the trace_path call", async () => {
+    fakeCallFn = async () => ({ function: "sampleAdd", direction: "both", callers: [], callees: [] });
+    fakeCloseFn = async () => {};
+
+    runCli(["graph", "trace", "sampleAdd", "--depth", "2"]);
+    await new Promise((r) => setTimeout(r, 50));
+
+    expect(capturedTool).toBe("trace_path");
+    expect(_capturedArgs?.depth).toBe(2);
+  });
+
+  // --- R5: trace pass-through of server-provided hop coordinates ---
+  test("graph trace forwards server file_path/start_line/end_line on hops", async () => {
+    fakeCallFn = async (_tool, args) => ({
+      function: args.function_name,
+      direction: "both",
+      callers: [
+        {
+          name: "bigCaller",
+          qualified_name: "proj.src.cli.commands.graph.bigCaller",
+          hop: 1,
+          file_path: "server/anchor.ts",
+          start_line: 42,
+          end_line: 60,
+        },
+      ],
+      callees: [],
+    });
+    fakeCloseFn = async () => {};
+
+    runCli(["graph", "trace", "sampleAdd"]);
+    await new Promise((r) => setTimeout(r, 50));
+
+    const parsed = JSON.parse(sink.join("\n"));
+    expect(parsed.status).toBe("ok");
+    expect(parsed.data.callers[0].file_path).toBe("server/anchor.ts");
+    expect(parsed.data.callers[0].start_line).toBe(42);
+    expect(parsed.data.callers[0].end_line).toBe(60);
+  });
+
+  // --- R6: query templates ---
+  test("graph query --template dead-code emits ok via query_graph", async () => {
+    fakeCallFn = async (_tool, args) => {
+      const query = String((args as { query: string }).query);
+      if (query.includes("DISTINCT")) return { columns: ["n.name"], rows: [["usedVar"]], total: 1 };
+      return {
+        columns: ["n.name", "n.file_path", "n.start_line"],
+        rows: [
+          ["usedVar", "src/a.ts", 1],
+          ["lonelyVar", "src/b.ts", 2],
+        ],
+        total: 2,
+      };
+    };
+    fakeCloseFn = async () => {};
+
+    runCli(["graph", "query", "--template", "dead-code"]);
+    await new Promise((r) => setTimeout(r, 50));
+
+    expect(capturedTool).toBe("query_graph");
+    const parsed = JSON.parse(sink.join("\n"));
+    expect(parsed.status).toBe("ok");
+    expect(parsed.data.isolated).toEqual([{ name: "lonelyVar", file: "src/b.ts", line: 2 }]);
+  });
+
+  test("graph query --templates lists offline — the CBM client factory is never invoked", () => {
+    let factoryCalls = 0;
+    _setCbmSeam({
+      clientFactory: () => {
+        factoryCalls++;
+        throw new Error("client must not be created for --templates");
+      },
+    });
+
+    runCli(["graph", "query", "--templates", "--json"]);
+    const parsed = JSON.parse(sink.join("\n"));
+    expect(parsed.status).toBe("ok");
+    expect(parsed.data.templates.map((t: { name: string }) => t.name).sort()).toEqual([
+      "callers-of",
+      "dead-code",
+      "symbol-set",
+    ]);
+    expect(factoryCalls).toBe(0);
+    expect(capturedTool).toBeUndefined();
+  });
+
+  test("graph query --template nope emits fail UNKNOWN_TEMPLATE with available, no CBM call", async () => {
+    runCli(["graph", "query", "--template", "nope"]);
+    await new Promise((r) => setTimeout(r, 50));
+    const parsed = JSON.parse(sink.join("\n"));
+    expect(parsed.status).toBe("fail");
+    expect(parsed.error.code).toBe("UNKNOWN_TEMPLATE");
+    expect(parsed.error.details.available).toContain("dead-code");
+    expect(capturedTool).toBeUndefined();
+  });
+
+  test("graph query --template dead-code maps an escaping CBM failure to CBM_UNAVAILABLE", async () => {
+    // The dead-code anti-join fail-opens on query_graph rejections (route.ts
+    // semantics, preserved verbatim) — the honest CBM_UNAVAILABLE surface is for
+    // failures that escape the template, e.g. the client lifecycle itself.
+    _setCbmSeam({
+      clientFactory: () => {
+        throw new Error("spawn ENOENT");
+      },
+    });
+
+    runCli(["graph", "query", "--template", "dead-code"]);
+    await new Promise((r) => setTimeout(r, 50));
+
+    const parsed = JSON.parse(sink.join("\n"));
+    expect(parsed.status).toBe("fail");
+    expect(parsed.error.code).toBe("CBM_UNAVAILABLE");
+  });
 });

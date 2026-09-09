@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import type { CAC } from "cac";
 import YAML from "yaml";
@@ -6,14 +6,16 @@ import { CBM_UNAVAILABLE_MSG, type CbmClient, createCbmClient } from "../../cbm/
 import type { QueryResult, SearchResult, TraceResult } from "../../cbm/contract.js";
 import { indexProject } from "../../cbm/index.js";
 import { routeAndRetrieve } from "../../cbm/route.js";
+import { listTemplates, QUERY_TEMPLATES, runTemplate } from "../../cbm/templates.js";
 import { compileGraph } from "../../compiler/emitter.js";
-import { type Graph, validateGraph } from "../../compiler/validate.js";
+import { loadGraph, resolveBareValidateGraph } from "../../compiler/loader.js";
+import { validateGraph } from "../../compiler/validate.js";
 import { GraphKitError } from "../../errors.js";
-import { GraphSchema } from "../../schemas/graph.schema.js";
 import { getTopologyConfigKeys, TOPOLOGY_NAMES, type TopologyName } from "../../schemas/topology/index.js";
 import { getActiveGraphId, listSessionGraphs, loadActiveGraph, setActiveGraphId } from "../../store/index.js";
 import { renderAscii } from "../ascii.js";
 import { subcommandsFor } from "../command-registry.js";
+import { graphTemplate } from "../graph-templates.js";
 import { fail, ok } from "../output.js";
 import { renderSvg } from "../svg.js";
 import { templatesDir } from "./kit.js";
@@ -64,561 +66,166 @@ function cbmFailure(e: unknown): ReturnType<typeof fail> {
   );
 }
 
-export function loadGraph(file: string) {
-  let raw: string;
-  try {
-    raw = readFileSync(file, "utf-8");
-  } catch (e) {
-    if ((e as NodeJS.ErrnoException).code === "ENOENT") {
-      throw new GraphKitError("GRAPH_FILE_NOT_FOUND", `file not found: ${file}`, {
-        file,
-        hint: "run `gk graph new <topology>` to scaffold one, or check the path",
-      });
-    }
-    throw e;
-  }
-  const doc = YAML.parse(raw);
-  const parsed = GraphSchema.safeParse(doc);
-  if (!parsed.success) {
-    throw new GraphKitError("SCHEMA_INVALID", "graph.yaml failed schema validation", {
-      issues: parsed.error.issues.map((i) => ({ path: i.path.join("."), message: i.message })),
-    });
-  }
-  return parsed.data;
+// R7: the four CBM subcommands as data — one dispatch table, one runner. The
+// runner preserves the exact per-command contract: MISSING_ARG before flag
+// validation, --limit checked before --depth (ask's documented order), absent
+// flags omitted from the payload so server-side defaults stay authoritative.
+interface CbmFlags {
+  limit?: number;
+  depth?: number;
 }
-// Spec §3.3 — validate-only wiring: bare `gk validate` reads the active session
-// graph when the project is initialized with an active pointer, falling back to
-// root ./graph.yaml otherwise. compile/gate/ascii/waves stay explicit-path.
-function resolveBareValidateGraph(): Graph {
-  const baseDir = process.cwd();
-  if (!existsSync(join(baseDir, ".graphkit"))) return loadGraph(join(baseDir, "graph.yaml"));
-  const active = getActiveGraphId();
-  if (active !== null) return loadActiveGraph().graph; // dangling → ACTIVE_POINTER_DANGLING with available ids
-  if (existsSync(join(baseDir, "graph.yaml"))) return loadGraph(join(baseDir, "graph.yaml"));
-  throw new GraphKitError(
-    "NO_ACTIVE_GRAPH",
-    "No active graph and no graph.yaml — run `gk template materialize --use` or `gk init` first",
-    { baseDir },
-  );
+interface CbmAction {
+  missingArg?: { value: (pos: string[]) => string | undefined; message: string };
+  usesLimit?: boolean;
+  usesDepth?: boolean;
+  run: (c: CbmClient, pos: string[], flags: CbmFlags) => Promise<unknown>;
+}
+const CBM_ACTIONS: Record<string, CbmAction> = {
+  search: {
+    missingArg: { value: (pos) => pos[0], message: "search requires a pattern argument" },
+    usesLimit: true,
+    run: (c, pos, flags) =>
+      c.call<SearchResult>("search_graph", {
+        pattern: pos[0],
+        project: pos[1],
+        // flag absent → key omitted, so the CBM server-side default stays authoritative
+        ...(flags.limit !== undefined ? { limit: flags.limit } : {}),
+      }),
+  },
+  ask: {
+    missingArg: {
+      value: (pos) => (pos.length > 0 ? pos.join(" ") : undefined),
+      message: "ask requires a natural-language question",
+    },
+    usesLimit: true,
+    usesDepth: true,
+    // project undefined = CBM derives from cwd, same as `graph search`
+    run: (c, pos, flags) => routeAndRetrieve(c, pos.join(" "), undefined, { limit: flags.limit, depth: flags.depth }),
+  },
+  trace: {
+    missingArg: { value: (pos) => pos[0], message: "trace requires a function_name argument" },
+    usesDepth: true,
+    run: (c, pos, flags) =>
+      c.call<TraceResult>("trace_path", {
+        function_name: pos[0],
+        project: pos[1],
+        depth: flags.depth ?? 3,
+        direction: "both",
+      }),
+  },
+  query: {
+    missingArg: { value: (pos) => pos[0], message: "query requires a Cypher query argument" },
+    run: (c, pos) => c.call<QueryResult>("query_graph", { query: pos[0], project: pos[1] }),
+  },
+};
+
+// cac hands positionals as string | string[] | undefined — normalize once.
+function posArgs(args: string | string[] | undefined): string[] {
+  if (Array.isArray(args)) return args;
+  return args === undefined ? [] : [args];
 }
 
-// Valid graph.yaml templates for each topology — emitted by `gk graph new <topology>`
-export function graphTemplate(topology: TopologyName): string {
-  const name = topology.replace(/[^a-z0-9]+/g, "-");
-  const templates: Record<TopologyName, string> = {
-    diamond: `apiVersion: graphkit.dev/v2
-kind: Graph
-metadata:
-  name: ${name}
-  description: Diamond — fan-out workers, reduce, synthesize
-topology: diamond
-inputs:
-  task:
-    type: string
-    required: true
-nodes:
-  scouter:
-    agent: software-architect
-    model: opus
-    objective: |
-      Analyze the task. Break it into independent work items.
-      Produce a list of items for parallel workers.
-    tools: [Read, Glob, Grep]
-    depend_on: []
-    evidence: [work_items]
-  worker:
-    agent: code-reviewer
-    model: sonnet
-    objective: |
-      Complete the assigned work item.
-      Record findings, changes, and evidence.
-    depend_on: [scouter]
-    evidence: [findings]
-  synthesizer:
-    agent: software-architect
-    model: opus
-    objective: |
-      Merge all worker findings into a single report.
-      Resolve conflicts, prioritize recommendations.
-    depend_on: [worker]
-    evidence: [report]
-evidence:
-  required_keys: [report]
-  format: markdown
-`,
-    "classify-and-act": `apiVersion: graphkit.dev/v2
-kind: Graph
-metadata:
-  name: ${name}
-  description: Classify-and-act — route input to one handler
-topology: classify-and-act
-inputs:
-  task:
-    type: string
-    required: true
-nodes:
-  classifier:
-    agent: software-architect
-    model: sonnet
-    objective: |
-      Classify the input into exactly one category.
-      Return ONLY the category label.
-    depend_on: []
-    evidence: [label]
-  handler-a:
-    agent: code-reviewer
-    model: sonnet
-    objective: Handle category A.
-    depend_on: [classifier]
-    evidence: [result]
-  handler-b:
-    agent: qa-engineer
-    model: sonnet
-    objective: Handle category B.
-    depend_on: [classifier]
-    evidence: [result]
-  fallback:
-    agent: document-generator
-    model: haiku
-    objective: Handle unknown categories gracefully.
-    depend_on: [classifier]
-    evidence: [result]
-topology_config:
-  classifier: classifier
-  routes:
-    - condition: category-a
-      handler: handler-a
-    - condition: category-b
-      handler: handler-b
-  fallback: fallback
-evidence:
-  required_keys: [result]
-`,
-    "adversarial-verification": `apiVersion: graphkit.dev/v2
-kind: Graph
-metadata:
-  name: ${name}
-  description: Adversarial verification — produce, refute, adjudicate
-topology: adversarial-verification
-inputs:
-  task:
-    type: string
-    required: true
-nodes:
-  producer:
-    agent: code-reviewer
-    model: sonnet
-    objective: Produce findings or claims to be verified.
-    depend_on: []
-    evidence: [claims]
-  refuter-1:
-    agent: qa-engineer
-    model: sonnet
-    objective: Try to REFUTE each claim. Default to refuted if uncertain.
-    depend_on: [producer]
-    evidence: [verdicts]
-  refuter-2:
-    agent: agents-orchestrator
-    model: sonnet
-    objective: Try to REFUTE each claim from a different angle.
-    depend_on: [producer]
-    evidence: [verdicts]
-  adjudicator:
-    agent: software-architect
-    model: opus
-    objective: Count survivals. Claims surviving >= threshold are kept.
-    depend_on: [refuter-1, refuter-2]
-    evidence: [verified_claims]
-topology_config:
-  producer: producer
-  refuters: [refuter-1, refuter-2]
-  survive_threshold: 2
-  adjudicator: adjudicator
-evidence:
-  required_keys: [verified_claims]
-`,
-    "loop-until-done": `apiVersion: graphkit.dev/v2
-kind: Graph
-metadata:
-  name: ${name}
-  description: Loop until done — discover, work, dedup until dry
-topology: loop-until-done
-inputs:
-  task:
-    type: string
-    required: true
-nodes:
-  scouter:
-    agent: software-architect
-    model: opus
-    objective: |
-      Discover NEW work items not yet found.
-      Return empty if nothing new.
-    depend_on: []
-    evidence: [discovered_items]
-  worker:
-    agent: code-reviewer
-    model: sonnet
-    objective: Process the assigned work item.
-    depend_on: [scouter]
-    evidence: [results]
-topology_config:
-  scouter: scouter
-  worker_batch: worker
-  stop_rule: dry_rounds
-  dry_threshold: 2
-evidence:
-  required_keys: [results]
-`,
-    "generate-and-filter": `apiVersion: graphkit.dev/v2
-kind: Graph
-metadata:
-  name: ${name}
-  description: Generate-and-filter — many candidates, keep best K
-topology: generate-and-filter
-inputs:
-  task:
-    type: string
-    required: true
-nodes:
-  generator-1:
-    agent: software-architect
-    model: sonnet
-    objective: Generate candidates from angle 1.
-    depend_on: []
-    evidence: [candidates]
-  generator-2:
-    agent: code-reviewer
-    model: sonnet
-    objective: Generate candidates from angle 2.
-    depend_on: []
-    evidence: [candidates]
-  generator-3:
-    agent: ui-ux-researcher
-    model: sonnet
-    objective: Generate candidates from angle 3.
-    depend_on: []
-    evidence: [candidates]
-  scorer:
-    agent: qa-engineer
-    model: opus
-    objective: Score each candidate against the rubric. Return ranked.
-    depend_on: [generator-1, generator-2, generator-3]
-    evidence: [ranked]
-topology_config:
-  generators: [generator-1, generator-2, generator-3]
-  rubric: |
-    Correctness, completeness, feasibility.
-    Score 1-10. Higher is better.
-  keep_top: 3
-  scorer: scorer
-evidence:
-  required_keys: [ranked]
-`,
-    tournament: `apiVersion: graphkit.dev/v2
-kind: Graph
-metadata:
-  name: ${name}
-  description: Tournament — pairwise elimination to one champion
-topology: tournament
-inputs:
-  task:
-    type: string
-    required: true
-nodes:
-  candidate-1:
-    agent: software-architect
-    model: sonnet
-    objective: Produce a candidate solution emphasizing aspect 1.
-    depend_on: []
-    evidence: [solution]
-  candidate-2:
-    agent: code-reviewer
-    model: sonnet
-    objective: Produce a candidate solution emphasizing aspect 2.
-    depend_on: []
-    evidence: [solution]
-  candidate-3:
-    agent: data-engineer
-    model: sonnet
-    objective: Produce a candidate solution emphasizing aspect 3.
-    depend_on: []
-    evidence: [solution]
-  candidate-4:
-    agent: ui-ux-researcher
-    model: sonnet
-    objective: Produce a candidate solution emphasizing aspect 4.
-    depend_on: []
-    evidence: [solution]
-  judge:
-    agent: software-architect
-    model: opus
-    objective: |
-      Compare two candidates. Pick the better one.
-      Return {winner: "A"|"B", reason: "..."}.
-    depend_on: [candidate-1, candidate-2, candidate-3, candidate-4]
-    evidence: [champion]
-topology_config:
-  candidates: [candidate-1, candidate-2, candidate-3, candidate-4]
-  judge: judge
-evidence:
-  required_keys: [champion]
-`,
-    "memory-augmented": `apiVersion: graphkit.dev/v2
-kind: Graph
-metadata:
-  name: ${name}
-  description: Memory-augmented — wraps an inner topology with a Curator
-topology: memory-augmented
-inputs:
-  task:
-    type: string
-    required: true
-topology_config:
-  inner:
-    template: diamond
-  memory:
-    project: graph-kit-memory
-    cadence: on_node_complete
-    curator_node: curator
-    recall_topk: 5
-    expire_policy: act_r
-    null_intervention_allowed: true
-nodes:
-  scouter:
-    agent: software-architect
-    model: opus
-    objective: Analyze the task and break it into work items.
-    depend_on: []
-    evidence: [work_items]
-  worker:
-    agent: code-reviewer
-    model: sonnet
-    objective: Complete the assigned work item.
-    depend_on: [scouter]
-    evidence: [findings]
-  synthesizer:
-    agent: software-architect
-    model: opus
-    objective: Merge findings into a report.
-    depend_on: [worker]
-    evidence: [report]
-  curator:
-    agent: memory-curator
-    model: opus
-    objective: |
-      Curate memory: extract, consolidate, resolve, expire.
-      Decide whether to inject a reminder or stay silent.
-    depend_on: []
-    evidence: [memory_delta, injection_decision]
-evidence:
-  required_keys: [report]
-`,
-    custom: `apiVersion: graphkit.dev/v2
-kind: Graph
-metadata:
-  name: ${name}
-  description: Custom DAG — define any acyclic graph via depend_on
-topology: custom
-nodes:
-  step-1:
-    agent: code-reviewer
-    objective: "First step — no dependencies"
-    depend_on: []
-  step-2:
-    agent: code-reviewer
-    objective: "Second step — depends on step-1"
-    depend_on: [step-1]
-`,
-    sdd: `apiVersion: graphkit.dev/v2
-kind: Graph
-metadata:
-  name: sdd
-  description: Subagent-driven development — brainstorm, plan, parallel workers, review, test loop
-topology: custom
-inputs:
-  task: { type: string, required: true }
-nodes:
-  brainstormer:
-    agent: software-architect
-    model: opus
-    objective: |
-      Brainstorm the approach. Ask clarifying questions.
-      Identify key decisions and constraints.
-    depend_on: []
-    evidence: [approach, decisions]
-  planner:
-    agent: software-architect
-    model: opus
-    objective: |
-      Write a detailed implementation plan with tasks.
-      Each task should be independently assignable.
-    depend_on: [brainstormer]
-    evidence: [plan, task_list]
-  worker-1:
-    agent: code-reviewer
-    model: sonnet
-    objective: Execute plan task 1. Write tests. Record evidence.
-    depend_on: [planner]
-    evidence: [implementation, tests]
-  worker-2:
-    agent: code-reviewer
-    model: sonnet
-    objective: Execute plan task 2. Write tests. Record evidence.
-    depend_on: [planner]
-    evidence: [implementation, tests]
-  worker-3:
-    agent: data-engineer
-    model: sonnet
-    objective: Execute plan task 3. Write tests. Record evidence.
-    depend_on: [planner]
-    evidence: [implementation, tests]
-  reviewer:
-    agent: agents-orchestrator
-    model: sonnet
-    objective: |
-      Review all worker implementations against the plan.
-      Check for integration issues, missing tests, code quality.
-    depend_on: [worker-1, worker-2, worker-3]
-    evidence: [review_findings]
-  tester:
-    agent: qa-engineer
-    model: haiku
-    objective: |
-      Run all tests. Report failures with details.
-      Return {passed: bool, failures: [...]}.
-    depend_on: [reviewer]
-    loop:
-      enabled: true
-      stop_when: all tests pass
-      max_rounds: 5
-    evidence: [test_results, coverage]
-evidence:
-  required_keys: [test_results]
-`,
-    superpowers: `apiVersion: graphkit.dev/v2
-kind: Graph
-metadata:
-  name: superpowers
-  description: Superpowers flow — brainstorm, plan, parallel execution, test until done
-topology: custom
-inputs:
-  task: { type: string, required: true }
-nodes:
-  brainstormer:
-    agent: software-architect
-    model: opus
-    objective: Brainstorm and clarify the task. Explore approaches.
-    depend_on: []
-    evidence: [approach]
-  planner:
-    agent: software-architect
-    model: opus
-    objective: |
-      Write a bite-sized implementation plan.
-      Split into independent, testable tasks.
-    depend_on: [brainstormer]
-    evidence: [plan]
-  executor-1:
-    agent: code-reviewer
-    model: sonnet
-    objective: Implement task 1 from the plan. TDD — write test first.
-    depend_on: [planner]
-    evidence: [code, tests]
-  executor-2:
-    agent: code-reviewer
-    model: sonnet
-    objective: Implement task 2 from the plan. TDD — write test first.
-    depend_on: [planner]
-    evidence: [code, tests]
-  executor-3:
-    agent: ui-ux-researcher
-    model: sonnet
-    objective: Implement task 3 from the plan. TDD — write test first.
-    depend_on: [planner]
-    evidence: [code, tests]
-  tester:
-    agent: qa-engineer
-    model: haiku
-    objective: |
-      Run all tests. If any fail, report which and why.
-      Return {passed, failures} so the loop can decide.
-    depend_on: [executor-1, executor-2, executor-3]
-    loop:
-      enabled: true
-      stop_when: all tests pass
-      max_rounds: 5
-    evidence: [test_results]
-evidence:
-  required_keys: [test_results]
-`,
-    "research-and-build": `apiVersion: graphkit.dev/v2
-kind: Graph
-metadata:
-  name: research-and-build
-  description: Research tools/approaches, then plan and build based on findings
-topology: custom
-inputs:
-  task: { type: string, required: true }
-nodes:
-  scouter:
-    agent: software-architect
-    model: opus
-    objective: |
-      Identify what needs researching.
-      Break the research into independent areas.
-    depend_on: []
-    evidence: [research_areas]
-  researcher-1:
-    agent: data-engineer
-    model: sonnet
-    objective: Deep-dive research area 1. Report findings, pros/cons, evidence.
-    depend_on: [scouter]
-    evidence: [findings]
-  researcher-2:
-    agent: code-reviewer
-    model: sonnet
-    objective: Deep-dive research area 2. Report findings, pros/cons, evidence.
-    depend_on: [scouter]
-    evidence: [findings]
-  researcher-3:
-    agent: ui-ux-researcher
-    model: sonnet
-    objective: Deep-dive research area 3. Report findings, pros/cons, evidence.
-    depend_on: [scouter]
-    evidence: [findings]
-  planner:
-    agent: software-architect
-    model: opus
-    objective: |
-      Synthesize research into a build plan.
-      Decide what to build vs leverage.
-    depend_on: [researcher-1, researcher-2, researcher-3]
-    evidence: [decision, plan]
-  builder-1:
-    agent: code-reviewer
-    model: sonnet
-    objective: Build plan task 1. Write code and tests.
-    depend_on: [planner]
-    evidence: [implementation]
-  builder-2:
-    agent: data-engineer
-    model: sonnet
-    objective: Build plan task 2. Write code and tests.
-    depend_on: [planner]
-    evidence: [implementation]
-  reviewer:
-    agent: agents-orchestrator
-    model: opus
-    objective: Review the full build against the plan. Verify integration.
-    depend_on: [builder-1, builder-2]
-    evidence: [review, verdict]
-evidence:
-  required_keys: [verdict]
-`,
-  };
-  return templates[topology];
+// Shared CBM runner: MISSING_ARG → INVALID_LIMIT → INVALID_DEPTH (each printed
+// as a fail envelope; fail() already sets exit code 1), then cbmCall so a thrown
+// call still closes the client, then one catch → cbmFailure + exit 1.
+async function runCbmAction(
+  name: string,
+  pos: string[],
+  opts: { limit?: number | string; depth?: number | string },
+): Promise<void> {
+  try {
+    const action = CBM_ACTIONS[name];
+    const arg = action.missingArg?.value(pos);
+    if (action.missingArg && !arg) {
+      console.log(JSON.stringify(fail("MISSING_ARG", action.missingArg.message)));
+      return;
+    }
+    const flags: CbmFlags = {};
+    if (action.usesLimit) {
+      const limit = parsePositiveInt(opts.limit);
+      if (limit === null) {
+        console.log(
+          JSON.stringify(
+            fail("INVALID_LIMIT", `--limit must be a positive integer, got ${JSON.stringify(opts.limit)}`),
+          ),
+        );
+        return;
+      }
+      flags.limit = limit;
+    }
+    if (action.usesDepth) {
+      const depth = parsePositiveInt(opts.depth);
+      if (depth === null) {
+        console.log(
+          JSON.stringify(
+            fail("INVALID_DEPTH", `--depth must be a positive integer, got ${JSON.stringify(opts.depth)}`),
+          ),
+        );
+        return;
+      }
+      flags.depth = depth;
+    }
+    const raw = await cbmCall((c) => action.run(c, pos, flags));
+    console.log(JSON.stringify(ok(raw)));
+  } catch (e) {
+    console.log(JSON.stringify(cbmFailure(e)));
+    process.exit(1);
+  }
 }
+
+// R6: `gk graph query --template <name>` — named template runners with the same
+// lifecycle hygiene as the raw actions (cbmCall close-on-throw, cbmFailure).
+async function runQueryTemplate(name: string, pos: string[], opts: { limit?: number | string }): Promise<void> {
+  const tpl = QUERY_TEMPLATES[name];
+  if (!tpl) {
+    // no CBM call, no client — the template table is checked offline
+    console.log(
+      JSON.stringify(
+        fail("UNKNOWN_TEMPLATE", `Unknown query template "${name}"`, { available: Object.keys(QUERY_TEMPLATES) }),
+      ),
+    );
+    return;
+  }
+  const arg = tpl.argHint ? pos[0] : undefined;
+  const project = tpl.argHint ? pos[1] : pos[0];
+  if (tpl.argHint && !arg) {
+    console.log(JSON.stringify(fail("MISSING_ARG", `template "${name}" requires an argument (${tpl.argHint})`)));
+    return;
+  }
+  const limit = parsePositiveInt(opts.limit);
+  if (limit === null) {
+    console.log(
+      JSON.stringify(fail("INVALID_LIMIT", `--limit must be a positive integer, got ${JSON.stringify(opts.limit)}`)),
+    );
+    return;
+  }
+  try {
+    const raw = await cbmCall((c) => runTemplate(c, name, arg, project, limit ?? 25));
+    console.log(JSON.stringify(ok(raw)));
+  } catch (e) {
+    console.log(JSON.stringify(cbmFailure(e)));
+    process.exit(1);
+  }
+}
+
+// R6: `gk graph query --templates` — offline listing, never creates a client.
+function printQueryTemplates(json: boolean | undefined): void {
+  const templates = listTemplates();
+  if (json) {
+    console.log(JSON.stringify(ok({ templates })));
+    return;
+  }
+  const nameW = Math.max("name".length, ...templates.map((t) => t.name.length));
+  console.log(`${"name".padEnd(nameW)}  arg  description`);
+  for (const t of templates) {
+    console.log(`${t.name.padEnd(nameW)}  ${t.arg_hint ?? "-"}  ${t.description}`);
+  }
+}
+
+// Back-compat re-exports: sibling commands (gate/doctor/status/evidence) and
+// tests import loadGraph/graphTemplate from this module — keep the surface
+// stable now that the implementations live in dedicated modules.
+export { graphTemplate, loadGraph, resolveBareValidateGraph };
 
 export function registerGraphCommands(cli: CAC) {
   cli
@@ -681,11 +288,21 @@ export function registerGraphCommands(cli: CAC) {
     // knob (search/ask → limit, ask/trace → depth), silently ignored elsewhere.
     .option("--limit <n>", "Max search results for `graph search`/`graph ask` (default: CBM default / 8)")
     .option("--depth <n>", "Trace depth for `graph trace`/`graph ask` (default 3)")
+    // R6: `graph query` template knobs — --templates lists offline (no client);
+    // --template <name> runs a named template with args[0] as its argument.
+    .option("--template <name>", "Query template for `graph query` (dead-code | callers-of | symbol-set)")
+    .option("--templates", "List available query templates (offline, no CBM client)")
     .action(
       (
         subcommand: string | undefined,
         args: string | string[] | undefined,
-        opts: { json?: boolean; limit?: number | string; depth?: number | string },
+        opts: {
+          json?: boolean;
+          limit?: number | string;
+          depth?: number | string;
+          template?: string;
+          templates?: boolean;
+        },
       ) => {
         if (!subcommand) {
           // Bare `gk graph` prints usage and exits 0 — same surface as `gk memory`.
@@ -851,7 +468,8 @@ export function registerGraphCommands(cli: CAC) {
           // Instant ASCII diagram — no model, no rendering pipeline
           const file = Array.isArray(args) ? args[0] : args;
           try {
-            const out = renderAscii(file ?? join(process.cwd(), "graph.yaml"));
+            // load once, schema-validate once — the renderers take the typed graph
+            const out = renderAscii(loadGraph(file ?? join(process.cwd(), "graph.yaml")));
             console.log(out);
           } catch (e) {
             console.log(JSON.stringify(fail("ASCII_ERROR", String(e))));
@@ -860,11 +478,10 @@ export function registerGraphCommands(cli: CAC) {
         } else if (subcommand === "svg") {
           const file = Array.isArray(args) ? args[0] : args;
           try {
-            const resolved = file ?? join(process.cwd(), "graph.yaml");
-            const svg = renderSvg(resolved);
+            const graph = loadGraph(file ?? join(process.cwd(), "graph.yaml"));
+            const svg = renderSvg(graph);
             const outDir = join(process.cwd(), ".graphkit", "diagrams");
             mkdirSync(outDir, { recursive: true });
-            const graph = YAML.parse(readFileSync(resolved, "utf-8"));
             const outPath = join(outDir, `${graph.metadata?.name || "graph"}.svg`);
             writeFileSync(outPath, svg);
             console.log(JSON.stringify(ok({ svg: outPath })));
@@ -1031,117 +648,23 @@ export function registerGraphCommands(cli: CAC) {
               process.exit(1);
             }
           })();
-        } else if (subcommand === "search") {
-          (async () => {
-            try {
-              const pattern = Array.isArray(args) ? args[0] : args;
-              if (!pattern) {
-                console.log(JSON.stringify(fail("MISSING_ARG", "search requires a pattern argument")));
-                return;
-              }
-              const limit = parsePositiveInt(opts.limit);
-              if (limit === null) {
-                console.log(
-                  JSON.stringify(
-                    fail("INVALID_LIMIT", `--limit must be a positive integer, got ${JSON.stringify(opts.limit)}`),
-                  ),
-                );
-                return;
-              }
-              const raw = await cbmCall((c) =>
-                c.call<SearchResult>("search_graph", {
-                  pattern,
-                  project: Array.isArray(args) ? args[1] : undefined,
-                  // flag absent → key omitted, so the CBM server-side default stays authoritative
-                  ...(limit !== undefined ? { limit } : {}),
-                }),
-              );
-              console.log(JSON.stringify(ok(raw)));
-            } catch (e) {
-              console.log(JSON.stringify(cbmFailure(e)));
-              process.exit(1);
-            }
-          })();
-        } else if (subcommand === "ask") {
-          (async () => {
-            try {
-              const q = Array.isArray(args) ? args.join(" ") : args;
-              if (!q) {
-                console.log(JSON.stringify(fail("MISSING_ARG", "ask requires a natural-language question")));
-                return;
-              }
-              const limit = parsePositiveInt(opts.limit);
-              const depth = parsePositiveInt(opts.depth);
-              if (limit === null || depth === null) {
-                const bad = limit === null ? "--limit" : "--depth";
-                console.log(
-                  JSON.stringify(
-                    fail(
-                      limit === null ? "INVALID_LIMIT" : "INVALID_DEPTH",
-                      `${bad} must be a positive integer, got ${JSON.stringify(limit === null ? opts.limit : opts.depth)}`,
-                    ),
-                  ),
-                );
-                return;
-              }
-              // project undefined = CBM derives from cwd, same as `graph search`
-              const raw = await cbmCall((c) => routeAndRetrieve(c, q, undefined, { limit, depth }));
-              console.log(JSON.stringify(ok(raw)));
-            } catch (e) {
-              console.log(JSON.stringify(cbmFailure(e)));
-              process.exit(1);
-            }
-          })();
-        } else if (subcommand === "trace") {
-          (async () => {
-            try {
-              const fn = Array.isArray(args) ? args[0] : args;
-              if (!fn) {
-                console.log(JSON.stringify(fail("MISSING_ARG", "trace requires a function_name argument")));
-                return;
-              }
-              const depth = parsePositiveInt(opts.depth);
-              if (depth === null) {
-                console.log(
-                  JSON.stringify(
-                    fail("INVALID_DEPTH", `--depth must be a positive integer, got ${JSON.stringify(opts.depth)}`),
-                  ),
-                );
-                return;
-              }
-              const raw = await cbmCall((c) =>
-                c.call<TraceResult>("trace_path", {
-                  function_name: fn,
-                  project: Array.isArray(args) ? args[1] : undefined,
-                  depth: depth ?? 3,
-                  direction: "both",
-                }),
-              );
-              console.log(JSON.stringify(ok(raw)));
-            } catch (e) {
-              console.log(JSON.stringify(cbmFailure(e)));
-              process.exit(1);
-            }
-          })();
+        } else if (subcommand === "search" || subcommand === "ask" || subcommand === "trace") {
+          // R7: one dispatch table + shared runner for the CBM primitives.
+          const pos = posArgs(args);
+          (async () => runCbmAction(subcommand, pos, opts))();
         } else if (subcommand === "query") {
+          const pos = posArgs(args);
           (async () => {
-            try {
-              const q = Array.isArray(args) ? args[0] : args;
-              if (!q) {
-                console.log(JSON.stringify(fail("MISSING_ARG", "query requires a Cypher query argument")));
-                return;
-              }
-              const raw = await cbmCall((c) =>
-                c.call<QueryResult>("query_graph", {
-                  query: q,
-                  project: Array.isArray(args) ? args[1] : undefined,
-                }),
-              );
-              console.log(JSON.stringify(ok(raw)));
-            } catch (e) {
-              console.log(JSON.stringify(cbmFailure(e)));
-              process.exit(1);
+            // R6: offline template listing — printed before any client could exist.
+            if (opts.templates) {
+              printQueryTemplates(opts.json);
+              return;
             }
+            if (opts.template) {
+              await runQueryTemplate(opts.template, pos, opts);
+              return;
+            }
+            await runCbmAction("query", pos, opts);
           })();
         } else {
           console.log(

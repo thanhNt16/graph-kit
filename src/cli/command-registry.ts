@@ -30,7 +30,7 @@ export const CLI_COMMANDS: { path: string; description: string; options: string[
   { path: "status", description: "Summarize active graph run and evidence coverage", options: ["--json"] },
   {
     path: "doctor",
-    description: "One-shot environment check (version, kit, .graphkit dir, graph.yaml, CBM bridge)",
+    description: "One-shot environment check (version, kit source, .graphkit dir, graph.yaml, CBM bridge, PATH shadow)",
     options: ["--json"],
   },
   { path: "execute", description: "Execute a graph.yaml (not yet implemented)", options: ["--json", "--worktree"] },
@@ -62,7 +62,11 @@ export const CLI_COMMANDS: { path: string; description: string; options: string[
     options: ["--limit <n>", "--depth <n>", "--json"],
   },
   { path: "graph trace", description: "Trace calls/callees in the CBM graph", options: ["--depth <n>", "--json"] },
-  { path: "graph query", description: "Run a Cypher query against the CBM graph", options: ["--json"] },
+  {
+    path: "graph query",
+    description: "Run a Cypher query against the CBM graph",
+    options: ["--template <name>", "--templates", "--json"],
+  },
   {
     path: "memory index",
     description: "Index .graphkit/memory/ into the CBM memory project",

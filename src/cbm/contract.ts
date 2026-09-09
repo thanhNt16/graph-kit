@@ -24,6 +24,11 @@ export interface TraceHop {
   name: string;
   qualified_name: string;
   hop: number;
+  // R5: server-provided anchors when the CBM build carries them (additive so
+  // older mocks/bridges type-check); hop() prefers them over derivation.
+  file_path?: string;
+  start_line?: number;
+  end_line?: number;
 }
 
 /** `gk graph trace` result — mirrors CBM `trace_path`. */
