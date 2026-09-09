@@ -28,9 +28,13 @@ export function dropInvalid(entries: RecallEntry[], now: string): RecallEntry[] 
 export function resolveSuperseded(entries: RecallEntry[]): RecallEntry[] {
   const byId = new Map(entries.map((e) => [e.id, e]));
   const out: RecallEntry[] = [];
+  const pushed = new Set<string>(); // ids already emitted — replaces the O(n²) scans
   for (const e of entries) {
     if (!e.superseded_by) {
-      if (!out.some((o) => o.id === e.id)) out.push(e);
+      if (!pushed.has(e.id)) {
+        out.push(e);
+        pushed.add(e.id);
+      }
       continue;
     }
     // follow the chain to its current, present member
@@ -44,7 +48,10 @@ export function resolveSuperseded(entries: RecallEntry[]): RecallEntry[] {
       cur = next.superseded_by;
     }
     const successor = cur && byId.has(cur) ? byId.get(cur) : undefined;
-    if (successor && !successor.superseded_by && !out.includes(successor)) out.push(successor);
+    if (successor && !successor.superseded_by && !pushed.has(successor.id)) {
+      out.push(successor);
+      pushed.add(successor.id);
+    }
   }
   return out;
 }
@@ -62,8 +69,7 @@ export function applyRecallFilters(entries: RecallEntry[], now: string): RecallE
 
 import { readdirSync, readFileSync } from "node:fs";
 import { resolve as pathResolve } from "node:path";
-import YAML from "yaml";
-import { MemoryFileSchema } from "../schemas/memory.schema.js";
+import { parseMemoryFile } from "../memory/frontmatter.js";
 
 export interface MemoryDoc extends RecallEntry {
   salience: number;
@@ -73,6 +79,24 @@ export interface MemoryDoc extends RecallEntry {
 interface LoadedMemories {
   docs: MemoryDoc[];
   malformed: number;
+}
+
+/** Tokenizer shared by the doc loader and the ranker — keep both in lockstep. */
+export function termsOf(raw: string): Set<string> {
+  return new Set(
+    raw
+      .toLowerCase()
+      .replace(/[^a-z0-9_\s]/g, " ")
+      .split(/\s+/)
+      .filter((t) => t.length > 2),
+  );
+}
+
+export function queryTerms(query: string): string[] {
+  return query
+    .toLowerCase()
+    .split(/\s+/)
+    .filter((t) => t.length > 2);
 }
 
 function readMemories(dir: string): LoadedMemories {
@@ -89,40 +113,24 @@ function readMemories(dir: string): LoadedMemories {
   let malformed = 0;
   for (const file of files.filter((f) => f.endsWith(".md") && f !== "index.md" && f !== "log.md")) {
     const raw = readFileSync(pathResolve(dir, file), "utf-8");
-    try {
-      const parsedYaml = YAML.parse(raw.match(/^---\n([\s\S]*?)\n---/)?.[1] ?? "{}");
-      const fm = parsedYaml && typeof parsedYaml === "object" ? (parsedYaml as Record<string, unknown>) : {};
-      // Legacy stores omitted type; infer the historical knowledge type before validation.
-      const candidate = {
-        ...fm,
-        id: typeof fm.id === "string" && fm.id.trim() ? fm.id : file.replace(/\.md$/, ""),
-        type: typeof fm.type === "string" && fm.type.trim() ? fm.type : "knowledge",
-      };
-      const validated = MemoryFileSchema.safeParse(candidate);
-      if (!validated.success) {
-        malformed++;
-        continue;
-      }
-      const value = validated.data;
-      docs.push({
-        id: value.id,
-        file,
-        valid_from: value.valid_from,
-        valid_to: value.valid_to ?? undefined,
-        expired: value.expired,
-        superseded_by: value.superseded_by ?? undefined,
-        salience: typeof value.salience === "number" ? value.salience : 0.5,
-        terms: new Set(
-          raw
-            .toLowerCase()
-            .replace(/[^a-z0-9_\s]/g, " ")
-            .split(/\s+/)
-            .filter((t) => t.length > 2),
-        ),
-      });
-    } catch {
+    // Same parse path as every other store reader (src/memory/frontmatter.ts):
+    // legacy string tags coerced, id/type defaulted, malformations counted.
+    const parsed = parseMemoryFile(raw, file.replace(/\.md$/, ""));
+    if (!parsed) {
       malformed++;
+      continue;
     }
+    const value = parsed.fm;
+    docs.push({
+      id: value.id,
+      file,
+      valid_from: value.valid_from,
+      valid_to: value.valid_to ?? undefined,
+      expired: value.expired,
+      superseded_by: value.superseded_by ?? undefined,
+      salience: typeof value.salience === "number" ? value.salience : 0.5,
+      terms: termsOf(raw),
+    });
   }
   return { docs, malformed };
 }
@@ -146,10 +154,7 @@ export function recallWithStats(dir: string, query: string, k = 5, now = new Dat
 }
 
 export function rankByOverlap(query: string, docs: MemoryDoc[]): MemoryDoc[] {
-  const q = query
-    .toLowerCase()
-    .split(/\s+/)
-    .filter((t) => t.length > 2);
+  const q = queryTerms(query);
   return docs
     .map((d) => ({ d, s: q.filter((t) => d.terms.has(t)).length * d.salience }))
     .filter((x) => x.s > 0)

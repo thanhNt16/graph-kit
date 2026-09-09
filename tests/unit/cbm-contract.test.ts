@@ -1,5 +1,11 @@
 import { describe, expect, test } from "bun:test";
-import { CBM_CONTRACT_VERSION, type QueryResult, type SearchResult, type TraceResult } from "../../src/cbm/contract";
+import {
+  CBM_CONTRACT_VERSION,
+  type QueryResult,
+  type SearchResult,
+  type TraceHop,
+  type TraceResult,
+} from "../../src/cbm/contract";
 
 describe("CBM contract", () => {
   test("version is 2", () => {
@@ -34,6 +40,23 @@ describe("CBM contract", () => {
       callees: [],
     };
     expect(r.callers).toHaveLength(1);
+  });
+
+  test("TraceHop literal type-checks with optional server coordinates (R5)", () => {
+    const hop: TraceHop = {
+      name: "registerGraphCommands",
+      qualified_name: "proj.src.cli.commands.graph.registerGraphCommands",
+      hop: 1,
+      file_path: "src/cli/commands/graph.ts",
+      start_line: 231,
+      end_line: 812,
+    };
+    expect(hop.file_path).toBe("src/cli/commands/graph.ts");
+    expect(hop.start_line).toBe(231);
+    expect(hop.end_line).toBe(812);
+    // and a bare hop still type-checks (additive change)
+    const bare: TraceHop = { name: "x", qualified_name: "y", hop: 2 };
+    expect(bare.file_path).toBeUndefined();
   });
 
   test("QueryResult literal type-checks", () => {

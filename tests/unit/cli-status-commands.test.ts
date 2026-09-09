@@ -27,7 +27,7 @@ function runCli(args: string[], cwd: string, register: (cli: CAC) => void) {
     process.exit = origExit;
     process.cwd = origCwd;
   }
-  return { code, output: JSON.parse(logs.join("\n")) };
+  return { code, output: logs.join("\n") };
 }
 
 describe("gk status", () => {
@@ -41,29 +41,54 @@ describe("gk status", () => {
     rmSync(root, { recursive: true, force: true });
   });
 
-  test("no active run returns stable success", () => {
-    const result = runCli(["status"], root, registerStatusCommand);
+  test("no active run: --json keeps the stable ok envelope", () => {
+    const result = runCli(["status", "--json"], root, registerStatusCommand);
     expect(result.code).toBe(0);
-    expect(result.output).toEqual({ status: "ok", data: { running: false, run: null, coverage: null } });
+    expect(JSON.parse(result.output)).toEqual({
+      status: "ok",
+      data: { running: false, run: null, coverage: null },
+    });
   });
 
-  test("active run reports current run and evidence gate", () => {
-    mkdirSync(join(root, ".graphkit", "runs"), { recursive: true });
-    mkdirSync(join(root, ".graphkit", "evidence"), { recursive: true });
-    writeFileSync(join(root, ".graphkit", "runs", ".active"), "");
-    writeFileSync(join(root, ".graphkit", "runs", "current.json"), JSON.stringify({ name: "demo", started_at: "now" }));
-    writeFileSync(
-      join(root, "graph.yaml"),
-      `apiVersion: graphkit.dev/v2\nkind: Graph\nmetadata:\n  name: demo\ntopology: diamond\nnodes:\n  a:\n    agent: reviewer\n    objective: test\n    depend_on: []\n    evidence: [design]\nevidence:\n  required_keys: [design]\n`,
-    );
-    writeFileSync(join(root, ".graphkit", "evidence", "design.md"), "done\n");
+  test("no active run: default output is a human one-liner, exit 0", () => {
     const result = runCli(["status"], root, registerStatusCommand);
     expect(result.code).toBe(0);
-    expect(result.output.data.running).toBe(true);
-    expect(result.output.data.run.name).toBe("demo");
-    expect(result.output.data.coverage.verdict).toBe("MERGE");
+    expect(result.output).toBe("no active run");
+  });
+
+  test("active run: --json keeps the full envelope (run, coverage, gate_error)", () => {
+    seedActiveRun(root);
+    const result = runCli(["status", "--json"], root, registerStatusCommand);
+    expect(result.code).toBe(0);
+    const parsed = JSON.parse(result.output);
+    expect(parsed.status).toBe("ok");
+    expect(parsed.data.running).toBe(true);
+    expect(parsed.data.run.name).toBe("demo");
+    expect(parsed.data.coverage.verdict).toBe("MERGE");
+  });
+
+  test("active run: default output is a human summary (run, round, coverage, verdict)", () => {
+    seedActiveRun(root);
+    const result = runCli(["status"], root, registerStatusCommand);
+    expect(result.code).toBe(0);
+    expect(result.output).toContain("run: demo");
+    expect(result.output).toContain("round:");
+    expect(result.output).toContain("coverage: 1/1 keys ok");
+    expect(result.output).toContain("verdict: MERGE");
   });
 });
+
+function seedActiveRun(root: string) {
+  mkdirSync(join(root, ".graphkit", "runs"), { recursive: true });
+  mkdirSync(join(root, ".graphkit", "evidence"), { recursive: true });
+  writeFileSync(join(root, ".graphkit", "runs", ".active"), "");
+  writeFileSync(join(root, ".graphkit", "runs", "current.json"), JSON.stringify({ name: "demo", started_at: "now" }));
+  writeFileSync(
+    join(root, "graph.yaml"),
+    `apiVersion: graphkit.dev/v2\nkind: Graph\nmetadata:\n  name: demo\ntopology: diamond\nnodes:\n  a:\n    agent: reviewer\n    objective: test\n    depend_on: []\n    evidence: [design]\nevidence:\n  required_keys: [design]\n`,
+  );
+  writeFileSync(join(root, ".graphkit", "evidence", "design.md"), "done\n");
+}
 
 describe("gk execute/visualize stubs", () => {
   let root: string;
@@ -78,11 +103,11 @@ describe("gk execute/visualize stubs", () => {
   test("execute exits 1 with NOT_IMPLEMENTED", () => {
     const result = runCli(["execute"], root, registerExecuteCommand);
     expect(result.code).toBe(1);
-    expect(result.output.error.code).toBe("NOT_IMPLEMENTED");
+    expect(JSON.parse(result.output).error.code).toBe("NOT_IMPLEMENTED");
   });
   test("visualize exits 1 with NOT_IMPLEMENTED", () => {
     const result = runCli(["visualize"], root, registerVisualizeCommand);
     expect(result.code).toBe(1);
-    expect(result.output.error.code).toBe("NOT_IMPLEMENTED");
+    expect(JSON.parse(result.output).error.code).toBe("NOT_IMPLEMENTED");
   });
 });

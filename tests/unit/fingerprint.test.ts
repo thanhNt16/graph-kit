@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { execSync } from "node:child_process";
-import { appendFileSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { appendFileSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fingerprint } from "../../src/evidence/fingerprint.js";
@@ -51,5 +52,43 @@ describe("fingerprint", () => {
     writeFileSync(join(d, "u.txt"), "u\n");
     const after = fingerprint(d);
     expect(after.tree).not.toBe(before.tree);
+  });
+
+  test("single-spawn listing ≡ old two-call union (modified + untracked)", () => {
+    const d = mk();
+    const gitOut = (cmd: string) => execSync(cmd, { cwd: d, encoding: "utf8" });
+    execSync("git init -q && git config user.email t@t && git config user.name t", { cwd: d, stdio: "ignore" });
+    writeFileSync(join(d, "a.txt"), "one\n");
+    writeFileSync(join(d, "b.txt"), "keep\n");
+    writeFileSync(join(d, ".gitignore"), "ignored.txt\n");
+    execSync("git add -A && git commit -qm one", { cwd: d, stdio: "ignore" });
+
+    // dirty tracked file + untracked file + an ignored file that must stay out
+    appendFileSync(join(d, "a.txt"), "two\n");
+    writeFileSync(join(d, "u.txt"), "u\n");
+    writeFileSync(join(d, "ignored.txt"), "nope\n");
+
+    // Old implementation: two spawns, newline-split, unioned.
+    const changed = gitOut("git ls-files -m").split("\n").filter(Boolean);
+    const untracked = gitOut("git ls-files -o --exclude-standard").split("\n").filter(Boolean);
+    const oldUnion = [...new Set([...changed, ...untracked])].filter((r) => !r.startsWith(".graphkit/")).sort();
+    expect(oldUnion).toEqual(["a.txt", "u.txt"]); // exact expected set
+
+    // New implementation: one spawn, NUL-split.
+    const combined = gitOut("git --no-optional-locks ls-files -mo --exclude-standard -z")
+      .split("\0")
+      .filter(Boolean)
+      .filter((r) => !r.startsWith(".graphkit/"))
+      .sort();
+    expect(combined).toEqual(oldUnion);
+
+    // Fingerprint output identical: tree hash over the same per-file lines.
+    const lines = oldUnion.map(
+      (rel) =>
+        `${rel}:${createHash("sha256")
+          .update(readFileSync(join(d, rel)))
+          .digest("hex")}`,
+    );
+    expect(fingerprint(d).tree).toBe(createHash("sha256").update(lines.join("\n")).digest("hex"));
   });
 });

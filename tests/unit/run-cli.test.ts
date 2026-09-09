@@ -51,8 +51,8 @@ describe("gk run CLI", () => {
     const cwd = join(tmpdir(), `gk-run-cli-${process.pid}-${Date.now()}`);
     mkdirSync(cwd, { recursive: true });
     try {
-      // 1. Initial status -> inactive
-      const initialStatus = JSON.parse(runCli(["run", "status"], cwd).stdout);
+      // 1. Initial status -> inactive (--json: the machine envelope)
+      const initialStatus = JSON.parse(runCli(["run", "status", "--json"], cwd).stdout);
       expect(initialStatus).toEqual({ status: "ok", data: { active: null, advisor_events: 0, resumes_chain: [] } });
 
       // 2. Start run without graph file fails with GRAPH_NOT_FOUND
@@ -68,7 +68,7 @@ describe("gk run CLI", () => {
       expect(metaFile.fingerprint).toEqual({ head: null, tree: null }); // tmp cwd is not a git repo
 
       // 4. Status returns active run directory
-      const activeStatus = JSON.parse(runCli(["run", "status"], cwd).stdout);
+      const activeStatus = JSON.parse(runCli(["run", "status", "--json"], cwd).stdout);
       expect(activeStatus.status).toBe("ok");
       expect(activeStatus.data.active).toBe(startOk.data.dir);
 
@@ -125,8 +125,55 @@ describe("gk run CLI", () => {
       expect(endOk.data.evidence_keys).toEqual(["cov", "lint"]);
 
       // 10. Status returns null after end
-      const finalStatus = JSON.parse(runCli(["run", "status"], cwd).stdout);
+      const finalStatus = JSON.parse(runCli(["run", "status", "--json"], cwd).stdout);
       expect(finalStatus).toEqual({ status: "ok", data: { active: null, advisor_events: 0, resumes_chain: [] } });
+    } finally {
+      rmSync(cwd, { recursive: true, force: true });
+    }
+  });
+
+  test("run status default output is human-readable (run id, graph, round, verdict chain); --json prints the envelope", () => {
+    const cwd = join(tmpdir(), `gk-run-human-${process.pid}-${Date.now()}`);
+    mkdirSync(cwd, { recursive: true });
+    try {
+      writeFileSync(
+        join(cwd, "graph.yaml"),
+        [
+          "apiVersion: graphkit.dev/v2",
+          "kind: Graph",
+          "metadata:",
+          "  name: human-graph",
+          "topology: diamond",
+          "nodes:",
+          "  exec:",
+          "    agent: haiku",
+          "    objective: do the thing",
+          "    loop: { enabled: true }",
+          "    advisor: { model: opus }",
+        ].join("\n"),
+      );
+      // inactive: plain human notice, not JSON
+      const inactive = runCli(["run", "status"], cwd).stdout;
+      expect(() => JSON.parse(inactive)).toThrow();
+      expect(inactive).toContain("no active run");
+
+      const start = JSON.parse(runCli(["run", "start"], cwd).stdout);
+      runCli(["run", "node", "exec", "--status", "ok", "--wave", "1", "--evidence", "cov"], cwd);
+      const human = runCli(["run", "status"], cwd).stdout;
+      expect(() => JSON.parse(human)).toThrow(); // default output is not JSON
+      expect(human).toContain(start.data.id); // run id
+      expect(human).toContain("graph: human-graph");
+      expect(human).toContain("round:"); // progress marker
+      expect(human).toContain("1 ok / 0 failed / 1 traced");
+      expect(human).toContain("evidence: 1 keys");
+      expect(human).toContain(`verdict chain: ${start.data.id}`);
+
+      // --json keeps today's envelope shape byte-for-byte
+      const js = JSON.parse(runCli(["run", "status", "--json"], cwd).stdout);
+      expect(js).toEqual({
+        status: "ok",
+        data: { active: start.data.dir, advisor_events: 0, resumes_chain: [start.data.id] },
+      });
     } finally {
       rmSync(cwd, { recursive: true, force: true });
     }
@@ -237,13 +284,13 @@ describe("gk run CLI", () => {
         ].join("\n"),
       );
       JSON.parse(runCli(["run", "start"], cwd).stdout);
-      const before = JSON.parse(runCli(["run", "status"], cwd).stdout);
+      const before = JSON.parse(runCli(["run", "status", "--json"], cwd).stdout);
       expect(before).toEqual({
         status: "ok",
         data: { active: expect.any(String), advisor_events: 0, resumes_chain: [expect.any(String)] },
       });
       runCli(["run", "node", "exec", "--advisor-fired", "1"], cwd);
-      const after = JSON.parse(runCli(["run", "status"], cwd).stdout);
+      const after = JSON.parse(runCli(["run", "status", "--json"], cwd).stdout);
       expect(after.status).toBe("ok");
       expect(after.data.advisor_events).toBe(1);
     } finally {

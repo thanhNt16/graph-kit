@@ -36,7 +36,7 @@
     },
     {
       "name": "doctor",
-      "description": "One-shot environment check (version, kit, .graphkit dir, graph.yaml, CBM bridge)",
+      "description": "One-shot environment check (version, kit source, .graphkit dir, graph.yaml, CBM bridge, PATH shadow)",
       "options": [
         "--json"
       ]
@@ -170,6 +170,8 @@
       "name": "graph query",
       "description": "Run a Cypher query against the CBM graph",
       "options": [
+        "--template <name>",
+        "--templates",
         "--json"
       ]
     },

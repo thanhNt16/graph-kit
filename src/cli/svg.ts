@@ -1,6 +1,20 @@
-import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
-import YAML from "yaml";
+import type { Graph } from "../compiler/validate.js";
+
+type GraphNode = Graph["nodes"][string];
+
+// dagre's re-exported graphlib defaults its generics to `any`; pin the layout
+// shapes we rely on so the render path stays honestly typed.
+interface LayoutNode {
+  label: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+interface LayoutEdge {
+  points?: { x: number; y: number }[];
+}
 
 const TIER_COLOR: Record<string, string> = {
   opus: "#a371f7",
@@ -17,10 +31,8 @@ const TIER_COLOR: Record<string, string> = {
 type DagreModule = typeof import("@dagrejs/dagre").default;
 const lazyRequire = createRequire(import.meta.url);
 
-export function renderSvg(graphFile: string): string {
+export function renderSvg(graph: Graph): string {
   const dagre = lazyRequire("@dagrejs/dagre") as DagreModule;
-  const raw = readFileSync(graphFile, "utf-8");
-  const graph = YAML.parse(raw);
   const nodes = graph.nodes || {};
 
   const g = new dagre.graphlib.Graph();
@@ -28,12 +40,12 @@ export function renderSvg(graphFile: string): string {
   g.setDefaultEdgeLabel(() => ({}));
 
   for (const [id, node] of Object.entries(nodes)) {
-    const label = `${id}\n${(node as any).agent || ""} · ${(node as any).model || "sonnet"}`;
+    const label = `${id}\n${node.agent || ""} · ${node.model || "sonnet"}`;
     g.setNode(id, { width: 180, height: 50, label });
   }
 
   for (const [id, node] of Object.entries(nodes)) {
-    for (const dep of (node as any).depend_on || []) {
+    for (const dep of node.depend_on || []) {
       if (nodes[dep]) g.setEdge(dep, id);
     }
   }
@@ -42,10 +54,10 @@ export function renderSvg(graphFile: string): string {
 
   const svgNodes = Object.keys(nodes)
     .map((id) => {
-      const n = g.node(id);
-      const node = nodes[id];
-      const color = TIER_COLOR[(node as any).model || "sonnet"] || "#58a6ff";
-      const lines = (n.label as string).split("\n");
+      const n = g.node(id) as LayoutNode;
+      const node: GraphNode = nodes[id];
+      const color = TIER_COLOR[node.model || "sonnet"] || "#58a6ff";
+      const lines = n.label.split("\n");
       return `
     <g transform="translate(${n.x - n.width / 2},${n.y - n.height / 2})">
       <rect width="${n.width}" height="${n.height}" rx="8" fill="#0d1117" stroke="${color}" stroke-width="2"/>
@@ -58,9 +70,9 @@ export function renderSvg(graphFile: string): string {
   const svgEdges = g
     .edges()
     .map((e) => {
-      const edge = g.edge(e);
+      const edge = g.edge(e) as LayoutEdge;
       if (!edge.points || edge.points.length < 2) return "";
-      const path = edge.points.map((p: any, i: number) => `${i === 0 ? "M" : "L"} ${p.x},${p.y}`).join(" ");
+      const path = edge.points.map((p, i) => `${i === 0 ? "M" : "L"} ${p.x},${p.y}`).join(" ");
       return `\n    <path d="${path}" fill="none" stroke="#30363d" stroke-width="1.5"/>`;
     })
     .join("");

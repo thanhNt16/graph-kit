@@ -1,24 +1,6 @@
-import { readFileSync } from "node:fs";
-import YAML from "yaml";
+import type { Graph } from "../compiler/validate.js";
 
-interface GraphNode {
-  agent: string;
-  model?: string;
-  objective?: string;
-  depend_on?: string[];
-  evidence?: string[];
-  role?: string;
-  loop?: { enabled?: boolean; stop_when?: string; max_rounds?: number };
-}
-
-interface Graph {
-  metadata: { name: string; description?: string };
-  topology: string;
-  nodes: Record<string, GraphNode>;
-  evidence?: { required_keys?: string[] };
-  limits?: Record<string, number>;
-  topology_config?: Record<string, unknown>;
-}
+type GraphNode = Graph["nodes"][string];
 
 // Pure ASCII charset — no Unicode, no emoji. Works in every terminal/markdown/editor.
 const TIER_TAG: Record<string, string> = {
@@ -122,10 +104,9 @@ function fanInConnector(centers: number[]): string[] {
 /**
  * Render a graph.yaml as a pure-ASCII diagram.
  * Deterministic layout — no model, no rendering pipeline. Instant.
+ * Takes the schema-validated Graph (see src/compiler/loader.ts).
  */
-export function renderAscii(graphFile: string): string {
-  const raw = readFileSync(graphFile, "utf-8");
-  const graph = YAML.parse(raw) as Graph;
+export function renderAscii(graph: Graph): string {
   const nodes = graph.nodes;
   const nodeIds = Object.keys(nodes);
 

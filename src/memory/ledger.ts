@@ -12,7 +12,7 @@ import {
 } from "node:fs";
 import { basename, isAbsolute, join, resolve } from "node:path";
 import YAML from "yaml";
-
+import { GraphKitError } from "../errors.js";
 import { fingerprint } from "../evidence/fingerprint.js";
 import { atomicWrite } from "../fs.js";
 
@@ -96,7 +96,8 @@ function claimActiveRun(cwd: string, dir: string): void {
   } catch (e) {
     if ((e as NodeJS.ErrnoException)?.code !== "EEXIST") throw e;
     const live = activeRun(cwd);
-    if (live) throw new Error(`RUN_ACTIVE: run already active at ${live}; run \`gk run end\` first`);
+    if (live)
+      throw new GraphKitError("RUN_ACTIVE", `RUN_ACTIVE: run already active at ${live}; run \`gk run end\` first`);
     // Stale pointer: the claimed run dir vanished, which activeRun() already
     // treats as "no active run" — recover the dead file instead of deadlocking.
     rmSync(activeFile(cwd), { force: true });
@@ -120,9 +121,10 @@ export function startRun(
   resumes?: string,
 ): { id: string; dir: string } {
   const existing = activeRun(cwd);
-  if (existing) throw new Error(`RUN_ACTIVE: run already active at ${existing}; run \`gk run end\` first`);
+  if (existing)
+    throw new GraphKitError("RUN_ACTIVE", `RUN_ACTIVE: run already active at ${existing}; run \`gk run end\` first`);
   const resolved = isAbsolute(graphPath) ? graphPath : resolve(cwd, graphPath);
-  if (!existsSync(resolved)) throw new Error(`GRAPH_NOT_FOUND: ${graphPath}`);
+  if (!existsSync(resolved)) throw new GraphKitError("GRAPH_NOT_FOUND", `GRAPH_NOT_FOUND: ${graphPath}`);
 
   const raw = readFileSync(resolved, "utf-8");
   const name = safeGraphName(graphName(resolved));
@@ -172,7 +174,8 @@ export function startRun(
 export function appendNode(cwd: string, line: Omit<TraceLine, "at">, now = new Date().toISOString()) {
   const dir = activeRun(cwd);
   // Strict on purpose: an orphan trace line silently corrupts pattern statistics.
-  if (!dir) throw new Error("NO_ACTIVE_RUN: start a run with `gk run start` before recording nodes");
+  if (!dir)
+    throw new GraphKitError("NO_ACTIVE_RUN", "NO_ACTIVE_RUN: start a run with `gk run start` before recording nodes");
   const entry: TraceLine = { at: now, ...line };
   appendFileSync(join(dir, "trace.jsonl"), `${JSON.stringify(entry)}\n`);
   const detail = [line.agent, line.duration_ms == null ? null : `${line.duration_ms}ms`, line.notes]
@@ -197,60 +200,47 @@ export function appendAdvisor(
 ): { event: AdvisorEvent; run: string } {
   const dir = activeRun(cwd);
   // Same strictness as appendNode: an advisor event with no live run is a bug, not noise.
-  if (!dir) throw new Error("NO_ACTIVE_RUN: start a run with `gk run start` before recording advisor events");
+  if (!dir)
+    throw new GraphKitError(
+      "NO_ACTIVE_RUN",
+      "NO_ACTIVE_RUN: start a run with `gk run start` before recording advisor events",
+    );
   const event: AdvisorEvent = { at: now, ...ev };
   appendFileSync(join(dir, "advisor.jsonl"), `${JSON.stringify(event)}\n`);
   return { event, run: basename(dir) };
 }
 
 export function readAdvisorEvents(cwd: string, id: string): AdvisorEvent[] {
-  const f = join(runsDir(cwd), id, "advisor.jsonl");
-  if (!existsSync(f)) return [];
-  return readFileSync(f, "utf-8")
-    .split("\n")
-    .filter((l) => l.trim())
-    .flatMap((l) => {
-      try {
-        return [JSON.parse(l) as AdvisorEvent];
-      } catch {
-        return []; // skip a torn line rather than abort the whole scan
-      }
-    });
+  return readJsonl<AdvisorEvent>(join(runsDir(cwd), id, "advisor.jsonl"));
 }
 
 export function readTrace(cwd: string, id: string): TraceLine[] {
-  const f = join(runsDir(cwd), id, "trace.jsonl");
-  if (!existsSync(f)) return [];
-  return readFileSync(f, "utf-8")
-    .split("\n")
-    .filter((l) => l.trim())
-    .flatMap((l) => {
-      try {
-        return [JSON.parse(l) as TraceLine];
-      } catch {
-        return []; // skip a torn line rather than abort the whole scan
-      }
-    });
+  return readJsonl<TraceLine>(join(runsDir(cwd), id, "trace.jsonl"));
 }
 
 export function readRunIndex(cwd: string): RunIndexLine[] {
-  const f = indexFile(cwd);
-  if (!existsSync(f)) return [];
-  return readFileSync(f, "utf-8")
+  return readJsonl<RunIndexLine>(indexFile(cwd));
+}
+
+// Shared JSONL reader: missing file → [], torn line skipped rather than aborting
+// the whole scan. The one split/parse/skip rule for every ledger log.
+function readJsonl<T>(file: string): T[] {
+  if (!existsSync(file)) return [];
+  return readFileSync(file, "utf-8")
     .split("\n")
     .filter((l) => l.trim())
     .flatMap((l) => {
       try {
-        return [JSON.parse(l) as RunIndexLine];
+        return [JSON.parse(l) as T];
       } catch {
-        return [];
+        return []; // skip a torn line rather than abort the whole scan
       }
     });
 }
 
 export function endRun(cwd: string, status: RunIndexLine["status"], now = new Date().toISOString()): RunIndexLine {
   const dir = activeRun(cwd);
-  if (!dir) throw new Error("NO_ACTIVE_RUN: nothing to end");
+  if (!dir) throw new GraphKitError("NO_ACTIVE_RUN", "NO_ACTIVE_RUN: nothing to end");
   const id = basename(dir);
   const meta = JSON.parse(readFileSync(join(dir, "meta.json"), "utf-8"));
   const trace = readTrace(cwd, id);
@@ -304,6 +294,6 @@ export interface RunMeta {
 export function readRunMeta(cwd: string, id: string): RunMeta {
   const file = join(runsDir(cwd), id, "meta.json");
   if (!/^\d{8}-\d{6}-[\w.-]+$/.test(id) || !existsSync(file))
-    throw new Error(`RESUME_RUN_NOT_FOUND: no run "${id}" under ${runsDir(cwd)}`);
+    throw new GraphKitError("RESUME_RUN_NOT_FOUND", `RESUME_RUN_NOT_FOUND: no run "${id}" under ${runsDir(cwd)}`);
   return JSON.parse(readFileSync(file, "utf-8")) as RunMeta;
 }

@@ -25,12 +25,16 @@ const HASH_CAP_BYTES = 1024 * 1024;
 export function fingerprint(cwd: string): Fingerprint {
   const head = git(["rev-parse", "HEAD"], cwd);
   if (head === null) return { head: null, tree: null };
-  const changed = git(["ls-files", "-m"], cwd)?.split("\n").filter(Boolean) ?? [];
-  const untracked = git(["ls-files", "-o", "--exclude-standard"], cwd)?.split("\n").filter(Boolean) ?? [];
+  // One spawn covers both sets: `-m` modified tracked + `-o --exclude-standard`
+  // untracked non-ignored, NUL-separated (`-z`) so filenames with newlines or
+  // spaces survive verbatim. `--no-optional-locks` keeps this read-only probe
+  // from taking index.lock and racing a concurrent `git add`.
+  const dirty =
+    git(["--no-optional-locks", "ls-files", "-mo", "--exclude-standard", "-z"], cwd)?.split("\0").filter(Boolean) ?? [];
   const lines: string[] = [];
   // .graphkit/ holds kit outputs (runs, evidence) — state noise, never source;
   // excluded so writing a marker never invalidates the fingerprint it records.
-  for (const rel of [...new Set([...changed, ...untracked])].filter((r) => !r.startsWith(".graphkit/")).sort()) {
+  for (const rel of [...new Set(dirty)].filter((r) => !r.startsWith(".graphkit/")).sort()) {
     const p = join(cwd, rel);
     try {
       const st = statSync(p);

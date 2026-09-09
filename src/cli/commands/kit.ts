@@ -10,8 +10,9 @@ import { fail, ok } from "../output.js";
 export type KitTarget = "claude" | "cursor";
 
 // The kit source ships inside the npm package: <package-root>/kits/<target>/
-// Resolve relative to this module, not process.cwd().
-function kitSourceDir(targetId: TargetId = "claude"): string {
+// Resolve relative to this module, not process.cwd(). Exported for `gk doctor`,
+// which probes the same resolution `init` will do (and for templatesDir).
+export function kitSourceDir(targetId: TargetId = "claude"): string {
   const t = getTarget(targetId);
   const here = dirname(fileURLToPath(import.meta.url));
   const kitName = t.kitDirName;
@@ -215,6 +216,13 @@ function assertValidTarget(opts: { target?: string }) {
   }
 }
 
+// Human success line for init/new: what was installed, where, for which
+// target, and the next step in the agent. --json keeps the ok(result) envelope.
+function installedLine(installDir: string, target: string, count: number, created?: string): string {
+  const prefix = created ? `created ${created} — ` : "";
+  return `${prefix}installed ${count} entries into ${installDir}/ (target ${target}) — run /gk:status in your agent`;
+}
+
 export function registerKitCommands(cli: CAC) {
   cli
     .command("init", "Install the GraphKit kit into the current project")
@@ -225,7 +233,11 @@ export function registerKitCommands(cli: CAC) {
       assertValidTarget(opts);
       try {
         const result = installKit(process.cwd(), opts.force, opts.target);
-        console.log(JSON.stringify(ok(result)));
+        console.log(
+          opts.json
+            ? JSON.stringify(ok(result))
+            : installedLine(getTarget(opts.target as TargetId).installDir, opts.target, result.installed.length),
+        );
       } catch (e) {
         console.log(JSON.stringify(fail("INIT_FAILED", String(e))));
         process.exit(1);
@@ -241,14 +253,25 @@ export function registerKitCommands(cli: CAC) {
       if (!opts.dir) {
         console.log(JSON.stringify(fail("MISSING_DIR", "--dir is required")));
         process.exit(1);
+        return;
       }
       assertValidTarget(opts);
       if (existsSync(opts.dir) && readdirSync(opts.dir).length > 0) {
         console.log(JSON.stringify(fail("DIR_NOT_EMPTY", `Directory ${opts.dir} exists and is not empty`)));
         process.exit(1);
+        return;
       }
       mkdirSync(opts.dir, { recursive: true });
       const result = installKit(opts.dir, false, opts.target);
-      console.log(JSON.stringify(ok({ created: opts.dir, ...result })));
+      console.log(
+        opts.json
+          ? JSON.stringify(ok({ created: opts.dir, ...result }))
+          : installedLine(
+              getTarget(opts.target as TargetId).installDir,
+              opts.target,
+              result.installed.length,
+              opts.dir,
+            ),
+      );
     });
 }

@@ -1,11 +1,14 @@
 # Axis Backlogs — merged, ranked
 
-> **Status (2026-09-08):** surveyed at `329e4fa`, but R1–R3 shipped in `fae84c0`
-> (`classifyQuestion`/`routeAndRetrieve` in `src/cbm/route.ts`). R4 completed in the
-> current round — `--limit`/`--depth` flags on `gk graph search|ask|trace|query`.
-> Still open: R5 (`file_path`/`start_line`/`end_line` on `TraceHop`), R6 (Cypher
-> templates — half done: the dead-code anti-join exists, templates don't), R7
-> (single shaped-result code path).
+> **Status (2026-09-09):** R1–R3 shipped in `fae84c0`; R4 in round 1. Round 2
+> (`improvement/efficiency-quality-round2`) completes the queue: R5
+> (`TraceHop.file_path`/`start_line`/`end_line` + hop-fallback fix), R6
+> (`gk graph query --template dead-code|callers-of|symbol-set` + `--templates`),
+> R7 (single `CBM_ACTIONS` dispatch path in `graph.ts`). **Axis-retrieve queue is
+> empty.** Deferred, not ranked live: R8 (offline rg fallback retriever on
+> `CBM_UNAVAILABLE` — makes `gk graph ask` work without a local CBM build; L,
+> anchor accuracy unproven), `gk completions`, install one-liner, persistent
+> recall index, consolidate double-scan.
 
 Surveyed at commit `329e4fa` on branch `autoresearch/aug14`.
 Per-axis, single clean ranked queue, deduped from scout local backlogs (R1-R7 / I1-I5 / E1-E5)

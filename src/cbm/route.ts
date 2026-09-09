@@ -1,4 +1,6 @@
 import type { CbmClient } from "./client.js";
+import type { TraceHop } from "./contract.js";
+import { runTemplate } from "./templates.js";
 
 // Deterministic question-kind routing: classify the question, then retrieve
 // through the primitive that can actually answer it — search alone cannot see
@@ -124,8 +126,8 @@ export interface RoutedResult {
   question: string;
   search: TrimHitOut[];
   structural?: {
-    callers?: { fn: string; file: string }[];
-    callees?: { fn: string; file: string }[];
+    callers?: { fn: string; file: string; line?: number }[];
+    callees?: { fn: string; file: string; line?: number }[];
     isolated?: { name: string; file: string; line: number }[];
     snippets?: { n: string; src: string }[];
   };
@@ -186,47 +188,35 @@ export async function routeAndRetrieve(
     const direction = kind === "callers" ? "inbound" : kind === "deps" ? "outbound" : "both";
     const t = await client
       .call("trace_path", { function_name: seed, project, depth: opts?.depth ?? 3, direction })
-      .then((r) =>
-        unwrap<{
-          callers?: { name: string; qualified_name: string }[];
-          callees?: { name: string; qualified_name: string }[];
-        }>(r),
-      )
-      .catch(() => ({ callers: [], callees: [] }));
-    const hop = (h?: { name: string; qualified_name: string }[]) =>
-      // parent candidate: "...graph.registerGraphCommands" -> "src/cli/commands/graph.ts";
-      // the fn-as-directory candidate (".../graph/registerGraphCommands.ts") is wrong
-      (h ?? []).map((x) => ({ fn: x.name, file: deriveFiles(x.qualified_name).pop() ?? "" }));
+      .then((r) => unwrap<{ callers?: TraceHop[]; callees?: TraceHop[] }>(r))
+      .catch(() => ({ callers: [], callees: [] }) as { callers?: TraceHop[]; callees?: TraceHop[] });
+    const hop = (h?: TraceHop[]) =>
+      (h ?? []).map((x) => {
+        // R5: server-provided anchors win verbatim; otherwise derive from the
+        // qualified name. The tail segment names a FILE when it is all-lowercase
+        // ("proj.src.cli.commands.graph" → src/cli/commands/graph.ts, not
+        // commands.ts; "proj.src.index" → src/index.ts, not src.ts) and a
+        // function (camelCase) when it isn't — then the parent path is the file.
+        const files = deriveFiles(x.qualified_name);
+        const lastSeg = x.qualified_name.split(".").pop() ?? "";
+        const file =
+          x.file_path ?? (files.length === 0 ? "" : /^[a-z0-9_-]+$/.test(lastSeg) ? files[0] : files[files.length - 1]);
+        return {
+          fn: x.name,
+          file,
+          // line only when the server carried it — output stays byte-identical otherwise
+          ...(x.start_line !== undefined ? { line: x.start_line } : {}),
+        };
+      });
     out.structural = { callers: hop(t.callers), callees: hop(t.callees) };
   }
 
   if (kind === "deadcode") {
-    // CBM Cypher has no NOT (n)--() anti-pattern; anti-join client-side:
-    // all Variables minus Variables with outgoing edges = isolated declarations.
-    const all = await client
-      .call("query_graph", {
-        query: "MATCH (n:Variable) RETURN n.name, n.file_path, n.start_line ORDER BY n.file_path LIMIT 500",
-        project,
-      })
-      .then((r) => unwrap<{ rows: unknown[][] }>(r))
-      .catch(() => ({ rows: [] as unknown[][] }));
-    const withEdges = await client
-      .call("query_graph", {
-        query: "MATCH (n:Variable)-[r]->(m) RETURN DISTINCT n.name",
-        project,
-      })
-      .then((r) => unwrap<{ rows: unknown[][] }>(r))
-      .catch(() => ({ rows: [] as unknown[][] }));
-    const linked = new Set(withEdges.rows.map((r) => String(r[0])));
-    out.structural = {
-      isolated: all.rows
-        .filter((r) => !linked.has(String(r[0])) && /\.(ts|js|cjs|mjs)$/.test(String(r[1])))
-        // even alphanumeric sort — src-first bias buried scripts/ vars (_GK_BIN
-        // at idx 73); even sort keeps them reachable at slice 25 (idx 23)
-        .sort((a, b) => String(a[1]).localeCompare(String(b[1])))
-        .slice(0, 25)
-        .map((r) => ({ name: String(r[0]), file: String(r[1]), line: Number(r[2]) })),
-    };
+    // dead-code anti-join lives in templates.ts (single source of truth, shared
+    // with `gk graph query --template dead-code`); cap stays at the measured 25.
+    out.structural = (await runTemplate(client, "dead-code", undefined, project, 25)) as NonNullable<
+      RoutedResult["structural"]
+    >;
   }
 
   // source bodies of top seeds: answers live inside function bodies (constants,

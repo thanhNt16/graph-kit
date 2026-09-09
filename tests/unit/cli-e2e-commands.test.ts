@@ -206,11 +206,81 @@ describe("CLI end-to-end: inventory registration", () => {
     expect(Array.isArray(parsed.data.mcpServers)).toBe(true);
   });
 
+  test("inventory default output is a human table, not JSON", () => {
+    const { stdout, code } = runCli(["inventory", "--target", "claude"], cwd);
+    expect(code).toBe(0);
+    expect(() => JSON.parse(stdout)).toThrow();
+    expect(stdout).toContain("target: claude");
+    expect(stdout).toContain("code-reviewer");
+    expect(stdout).toContain("agents (1)");
+    expect(stdout).toContain("tools (20)");
+    expect(stdout).toContain("warnings: none");
+  });
+
   test("inventory rejects an invalid target", () => {
     const { stdout, code } = runCli(["inventory", "--target", "vscode"], cwd);
     expect(code).toBe(1);
     const parsed = JSON.parse(stdout);
     expect(parsed.status).toBe("fail");
     expect(parsed.error.code).toBe("BAD_TARGET");
+  });
+});
+
+describe("CLI end-to-end: kit init/new human + --json", () => {
+  let root: string;
+
+  beforeEach(() => {
+    root = join(tmpdir(), `gk-kit-cli-${process.pid}-${Date.now()}`);
+    mkdirSync(root, { recursive: true });
+  });
+
+  afterEach(() => {
+    process.exitCode = 0; // fail() sets process.exitCode=1 — reset so bun:test exits 0
+    rmSync(root, { recursive: true, force: true });
+  });
+
+  test("init default prints the installed-entries line, not JSON", () => {
+    const { stdout, code } = runCli(["init"], root);
+    expect(code).toBe(0);
+    expect(() => JSON.parse(stdout)).toThrow();
+    expect(stdout).toMatch(/^installed \d+ entries into \.claude\/ \(target claude\) — run \/gk:status in your agent$/);
+    expect(existsSync(join(root, ".claude", "skills"))).toBe(true);
+  });
+
+  test("init --json keeps the ok(result) envelope", () => {
+    const { stdout, code } = runCli(["init", "--json"], root);
+    expect(code).toBe(0);
+    const parsed = JSON.parse(stdout);
+    expect(parsed.status).toBe("ok");
+    expect(Array.isArray(parsed.data.installed)).toBe(true);
+    expect(parsed.data.installed.length).toBeGreaterThan(0);
+  });
+
+  test("new default prints the created + installed line", () => {
+    const dir = join(root, "fresh"); // absolute: fs ops use the real cwd, only process.cwd is stubbed
+    const { stdout, code } = runCli(["new", "--dir", dir], root);
+    expect(code).toBe(0);
+    expect(() => JSON.parse(stdout)).toThrow();
+    expect(stdout).toContain(`created ${dir} — installed `);
+    expect(stdout).toContain("entries into .claude/ (target claude) — run /gk:status in your agent");
+  });
+
+  test("new --json keeps the created + installed envelope", () => {
+    const dir = join(root, "fresh2");
+    const { stdout, code } = runCli(["new", "--dir", dir, "--json"], root);
+    expect(code).toBe(0);
+    const parsed = JSON.parse(stdout);
+    expect(parsed.status).toBe("ok");
+    expect(parsed.data.created).toBe(dir);
+    expect(Array.isArray(parsed.data.installed)).toBe(true);
+  });
+
+  test("new missing --dir fails with MISSING_DIR (JSON fail envelope in both modes)", () => {
+    const human = runCli(["new"], root);
+    expect(human.code).toBe(1);
+    expect(JSON.parse(human.stdout).error.code).toBe("MISSING_DIR");
+    const json = runCli(["new", "--json"], root);
+    expect(json.code).toBe(1);
+    expect(JSON.parse(json.stdout).error.code).toBe("MISSING_DIR");
   });
 });

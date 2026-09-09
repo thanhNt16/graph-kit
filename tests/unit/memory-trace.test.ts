@@ -117,6 +117,32 @@ describe("gk memory trace", () => {
     expect(touchMemory(cwd, "nope")).toBeNull();
   });
 
+  test("touchMemory coerces legacy string tags — reinforcement no longer silently nulls (regression)", () => {
+    // Pre-fix: `tags: "decay"` failed MemoryFileSchema (tags must be an array),
+    // so touchMemory skipped the entry and returned null — legacy store entries
+    // never got use_count reinforcement and decay expired them like unused ones.
+    writeMemory(cwd, "legacy.md", { id: "legacy", salience: 0.5, expired: false, valid_from: NOW, tags: "decay" });
+    const t = touchMemory(cwd, "legacy", NOW);
+    expect(t).not.toBeNull();
+    expect(t?.use_count).toBe(2);
+    expect(t?.last_used_at).toBe(NOW);
+    const rewritten = readFileSync(join(cwd, ".graphkit", "memory", "legacy.md"), "utf-8");
+    expect(rewritten).toContain("use_count: 2");
+    expect(rewritten).toContain(`last_used_at: ${NOW}`);
+    // the rewritten (now array-tagged) entry still parses for the decay pass
+    expect(traceMemory(cwd, NOW).total).toBe(1);
+  });
+
+  test("touchMemory reinforces subfolder entries through the same walk", () => {
+    mkdirSync(join(cwd, ".graphkit", "memory", "patterns"), { recursive: true });
+    writeFileSync(
+      join(cwd, ".graphkit", "memory", "patterns", "p1.md"),
+      `---\nid: pattern-p1\ntype: pattern\nsalience: 0.9\n---\nseq\n`,
+    );
+    const t = touchMemory(cwd, "pattern-p1", NOW);
+    expect(t?.use_count).toBe(2);
+  });
+
   test("trace pass appends one audit JSONL row per memory, append-only", () => {
     writeMemory(cwd, "a.md", { id: "a", salience: 0.5, expired: false, valid_from: NOW, tags: "[]" });
     writeMemory(cwd, "b.md", {

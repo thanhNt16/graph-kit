@@ -1,5 +1,5 @@
 import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import type { CAC } from "cac";
 import YAML from "yaml";
 import { CBM_UNAVAILABLE_MSG, type CbmClient, createCbmClient } from "../../cbm/client.js";
@@ -7,8 +7,9 @@ import { indexProject } from "../../cbm/index.js";
 import { actRScore, shouldExpire } from "../../eval/forgetting.js";
 import { atomicWrite } from "../../fs.js";
 import { consolidate } from "../../memory/consolidate.js";
-import { expandedRecall } from "../../memory/recall-expanded.js";
-import { MemoryConfig, MemoryFileSchema } from "../../schemas/memory.schema.js";
+import { parseMemoryFile, walkMemoryStore } from "../../memory/frontmatter.js";
+import { type ExpandedHit, expandedRecall } from "../../memory/recall-expanded.js";
+import { MemoryConfig } from "../../schemas/memory.schema.js";
 import { subcommandsFor } from "../command-registry.js";
 import { fail, ok } from "../output.js";
 
@@ -100,39 +101,12 @@ export function traceMemory(
   for (const file of entries) {
     const path = join(memDir, file);
     const raw = readFileSync(path, "utf-8");
-    // Strict schema parse before rewrites; malformed entries are counted but skipped.
-    const m = raw.match(/^---\n([\s\S]*?)\n---/);
-    if (!m) continue;
-    let fm: Record<string, unknown>;
-    try {
-      const parsedYaml = YAML.parse(m[1]);
-      fm = (parsedYaml && typeof parsedYaml === "object" ? parsedYaml : {}) as Record<string, unknown>;
-    } catch {
-      // Syntax-broken frontmatter (e.g. `tags: [unclosed`) follows the same
-      // malformed convention as a schema miss below: dropped, not counted,
-      // never fatal — one bad file must not kill the whole decay pass.
-      continue;
-    }
-    const legacyTags = Array.isArray(fm.tags)
-      ? fm.tags
-      : typeof fm.tags === "string"
-        ? (() => {
-            try {
-              const parsed = YAML.parse(fm.tags);
-              return Array.isArray(parsed) ? parsed : [];
-            } catch {
-              return [];
-            }
-          })()
-        : [];
-    const validated = MemoryFileSchema.safeParse({
-      ...fm,
-      tags: legacyTags,
-      id: typeof fm.id === "string" && fm.id.trim() ? fm.id : file.replace(/\.md$/, ""),
-      type: typeof fm.type === "string" && fm.type.trim() ? fm.type : "knowledge",
-    });
-    if (!validated.success) continue;
-    Object.assign(fm, validated.data);
+    // Strict schema parse before rewrites; malformed entries are counted but
+    // skipped. Shared reader (frontmatter.ts): legacy string tags coerced,
+    // id/type defaulted — the single coercion rule for the whole store.
+    const parsed = parseMemoryFile(raw, file.replace(/\.md$/, ""));
+    if (!parsed) continue;
+    const fm = parsed.fm as unknown as Record<string, unknown>;
     report.total++;
 
     if (fm.superseded_by) {
@@ -166,7 +140,7 @@ export function traceMemory(
       fm.status = "deprecated";
       // F6: in-place rewrite of a file the user may read — atomic, so a crash
       // mid-decay leaves the previous frontmatter intact.
-      atomicWrite(path, `---\n${YAML.stringify(fm)}---\n${raw.slice(m[0].length)}`);
+      atomicWrite(path, `---\n${YAML.stringify(fm)}---\n${parsed.body}`);
       report.expired++;
       report.newly_expired++;
       report.memories.push({ id: String(fm.id ?? file), score, state: "expired", action: "newly-expired" });
@@ -189,52 +163,95 @@ export function traceMemory(
 
 // Reinforcement: recall that surfaces a memory must bump its use_count and
 // last_used_at, or ACT-R decay expires the entire store uniformly (~day 10 for
-// neutral memories) regardless of recall value. Called by gk-recall survivors.
+// neutral memories) regardless of recall value. Called by gk-recall survivors
+// and standalone `gk memory touch`.
 export function touchMemory(
   cwd: string,
   id: string,
   now = new Date().toISOString(),
 ): { id: string; file: string; use_count: number; last_used_at: string } | null {
   const memDir = join(cwd, ".graphkit", "memory");
-  if (!existsSync(memDir)) return null;
   // Root plus one sublevel (patterns/, suggestions/) — subfolder entries must
   // get use_count reinforcement too, or decay eventually evicts every pattern.
-  const candidates: Array<{ file: string; path: string }> = [];
-  for (const de of readdirSync(memDir, { withFileTypes: true })) {
-    if (de.isFile() && de.name.endsWith(".md")) candidates.push({ file: de.name, path: join(memDir, de.name) });
-    else if (de.isDirectory() && !de.name.startsWith(".")) {
-      for (const f of readdirSync(join(memDir, de.name), { withFileTypes: true })) {
-        if (f.isFile() && f.name.endsWith(".md"))
-          candidates.push({ file: f.name, path: join(memDir, de.name, f.name) });
-      }
-    }
-  }
-  for (const { file, path } of candidates) {
-    const raw = readFileSync(path, "utf-8");
-    const m = raw.match(/^---\n([\s\S]*?)\n---/);
-    if (!m) continue;
-    let fm: Record<string, unknown>;
-    try {
-      fm = (YAML.parse(m[1]) ?? {}) as Record<string, unknown>;
-    } catch {
-      // Syntax-broken frontmatter: skip — same malformed convention as trace.
-      continue;
-    }
-    if (String(fm.id ?? "") !== id && file.replace(/\.md$/, "") !== id) continue;
+  // walkMemoryStore applies the same legacy-tags coercion as traceMemory, so a
+  // `tags: "foo"` store entry is reinforced instead of silently dropped.
+  for (const entry of walkMemoryStore(memDir)) {
+    if (entry.id !== id) continue;
+    const fm = entry.fm as unknown as Record<string, unknown>;
     const useCount = (typeof fm.use_count === "number" ? fm.use_count : 1) + 1;
     fm.use_count = useCount;
     fm.last_used_at = now;
-    const validated = MemoryFileSchema.safeParse({
-      ...fm,
-      id: typeof fm.id === "string" && fm.id.trim() ? fm.id : file.replace(/\.md$/, ""),
-      type: typeof fm.type === "string" && fm.type.trim() ? fm.type : "knowledge",
-    });
-    if (!validated.success) continue;
     // F6: reinforcement rewrite is atomic — decay reads these files concurrently.
-    atomicWrite(path, `---\n${YAML.stringify(validated.data)}---\n${raw.slice(m[0].length)}`);
-    return { id: String(fm.id ?? id), file, use_count: useCount, last_used_at: now };
+    atomicWrite(entry.path, `---\n${YAML.stringify(entry.fm)}---\n${entry.body}`);
+    return { id: entry.id, file: entry.file, use_count: useCount, last_used_at: now };
   }
   return null;
+}
+
+// O(k) reinforcement for recall: expandedRecall already knows each hit's
+// store-relative path, so read exactly that one file instead of rescanning the
+// whole store per hit (k hits ⇒ k reads, not k × store scans).
+export function touchMemoryByPath(
+  cwd: string,
+  relPath: string,
+  id: string,
+  now = new Date().toISOString(),
+): { id: string; file: string; use_count: number; last_used_at: string } | null {
+  const path = join(cwd, ".graphkit", "memory", relPath);
+  let raw: string;
+  try {
+    raw = readFileSync(path, "utf-8");
+  } catch {
+    return null; // vanish mid-recall is a skip, not a failure
+  }
+  const parsed = parseMemoryFile(raw, basename(relPath).replace(/\.md$/, ""));
+  if (!parsed || parsed.fm.id !== id) return null;
+  const fm = parsed.fm as unknown as Record<string, unknown>;
+  const useCount = (typeof fm.use_count === "number" ? fm.use_count : 1) + 1;
+  fm.use_count = useCount;
+  fm.last_used_at = now;
+  atomicWrite(path, `---\n${YAML.stringify(parsed.fm)}---\n${parsed.body}`);
+  return { id: parsed.fm.id, file: relPath, use_count: useCount, last_used_at: now };
+}
+
+// ponytail: DI seam for tests — lets the recall suite observe that k hits issue
+// exactly k single-file reinforcements. Restore via _resetTouchSeam.
+let _touchByPath: typeof touchMemoryByPath = touchMemoryByPath;
+/** @internal test seam — inject a counting/wrapping touch implementation. */
+export function _setTouchSeam(fn: typeof touchMemoryByPath) {
+  _touchByPath = fn;
+}
+/** @internal test seam — restore the real single-file touch. */
+export function _resetTouchSeam() {
+  _touchByPath = touchMemoryByPath;
+}
+
+// First ~80 chars of a hit's body, whitespace-collapsed, for the human renderer.
+function snippet(body: string, max = 80): string {
+  const flat = body.trim().replace(/\s+/g, " ");
+  return flat.length > max ? `${flat.slice(0, max)}…` : flat;
+}
+
+function recallHitBody(memDir: string, hit: ExpandedHit): string {
+  try {
+    return parseMemoryFile(readFileSync(join(memDir, hit.path), "utf-8"), hit.id)?.body ?? "";
+  } catch {
+    return ""; // unreadable hit body degrades to an empty snippet, never a crash
+  }
+}
+
+// Human default for `gk memory recall`: one short line per hit (id, score,
+// salience, body snippet). `--json` prints the machine envelope instead.
+export function renderRecallHits(memDir: string, query: string, results: ExpandedHit[], linked: number): string {
+  if (results.length === 0) return `no memories matched "${query}"`;
+  const width = Math.max(...results.map((r) => r.id.length));
+  const lines = results.map(
+    (h) =>
+      `  ${h.id.padEnd(width)}  score ${h.score.toFixed(2)}  salience ${h.salience.toFixed(2)}${
+        h.linked ? "  [linked]" : ""
+      }  ${snippet(recallHitBody(memDir, h))}`,
+  );
+  return [`recall "${query}" — ${results.length} hit(s), ${linked} linked`, ...lines].join("\n");
 }
 
 export function registerMemoryCommands(cli: CAC) {
@@ -311,7 +328,7 @@ Subcommands: ${subcommandsFor("memory")}\n\nOptions:\n  --project <project>  CBM
         } catch {
           /* no graph.yaml — default topk */
         }
-        let results: Array<{ id: string; file: string; salience: number; linked: boolean }> = [];
+        let results: ExpandedHit[] = [];
         let linked = 0;
         try {
           const stats = expandedRecall(memDir, query, topk);
@@ -328,8 +345,10 @@ Subcommands: ${subcommandsFor("memory")}\n\nOptions:\n  --project <project>  CBM
         }
         // Reinforcement reads/writes the same store as expandedRecall above —
         // a failure routes through the same fail() contract, not a raw throw.
+        // O(k): each hit is touched by its known path (one read per hit), not
+        // by rescanning the store.
         try {
-          for (const h of results) touchMemory(process.cwd(), h.id);
+          for (const h of results) _touchByPath(process.cwd(), h.path, h.id);
         } catch (e) {
           console.log(
             JSON.stringify(
@@ -339,7 +358,11 @@ Subcommands: ${subcommandsFor("memory")}\n\nOptions:\n  --project <project>  CBM
           process.exit(1);
           return;
         }
-        console.log(JSON.stringify(ok({ query, top_k: results.length, results, linked, recall_topk: topk })));
+        if (opts.json) {
+          console.log(JSON.stringify(ok({ query, top_k: results.length, results, linked, recall_topk: topk })));
+          return;
+        }
+        console.log(renderRecallHits(memDir, query, results, linked));
         return;
       }
       if (subcommand !== "index") {

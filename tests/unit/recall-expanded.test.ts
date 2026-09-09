@@ -35,6 +35,22 @@ describe("expanded recall", () => {
     expect(r.results.every((h) => h.linked === false)).toBe(true);
   });
 
+  test("hits carry the store-relative path for single-file reinforcement", () => {
+    entry(memDir, "auth.md", { id: "auth", type: "knowledge", salience: 0.5 }, "oauth token rotation notes\n");
+    entry(
+      memDir,
+      "patterns/p1.md",
+      { id: "pattern-p1", type: "pattern", salience: 1.0 },
+      "oauth refresh sequence seen often\n",
+    );
+    const r = expandedRecall(memDir, "oauth", 5, "2026-09-03T00:00:00.000Z");
+    expect(r.results.find((h) => h.id === "auth")?.path).toBe("auth.md");
+    expect(r.results.find((h) => h.id === "pattern-p1")?.path).toBe("patterns/p1.md");
+    // score = keyword overlap × salience, what the ranker ranked on
+    expect(r.results.find((h) => h.id === "pattern-p1")?.score).toBeCloseTo(1.0);
+    expect(r.results.find((h) => h.id === "auth")?.score).toBeCloseTo(0.5);
+  });
+
   test("link neighbors fill remaining slots below direct hits", () => {
     entry(
       memDir,
