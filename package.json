@@ -16,8 +16,9 @@
     "check:parity": "bun run scripts/check-cli-parity.ts",
     "prepack": "bun run build",
     "check-changelog": "bun run scripts/check-changelog.ts",
-    "ci:local": "bun run typecheck && bun run lint && bun run build && bun test && bun run cbm:parity && bun run check-changelog",
-    "eval:memory": "bun run scripts/memory-recall-eval.ts"
+    "ci:local": "bun run typecheck && bun run lint && bun run build && bun test && bun run cbm:parity && bun run check-changelog && bun run check:parity && bun run scripts/gen-cli-manifest.ts && git diff --exit-code cli-manifest.json",
+    "eval:memory": "bun run scripts/memory-recall-eval.ts",
+    "perf": "bun run scripts/perf-runtime.ts"
   },
   "files": [
     "kits/",

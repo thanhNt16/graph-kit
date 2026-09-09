@@ -22,15 +22,16 @@ bun test
 | `bun run lint` | `biome check .` — formatter + linter, no config debates |
 | `bun test` | the full unit suite |
 | `bun run build` | bundle `src/index.ts` → `dist/` |
-| `bun run ci:local` | typecheck + lint + build + test + cbm:parity + check-changelog |
+| `bun run ci:local` | typecheck + lint + build + test + cbm:parity + check-changelog + check:parity + manifest drift guard — the same steps CI runs |
 | `bun run check:parity` | built `dist/index.js` exposes exactly the commands in `cli-manifest.json` |
 | `bun run cbm:parity` | CBM contract fixtures against `src/cbm/contract.ts` |
 | `bun run check-changelog` | CHANGELOG.md structure gate |
-| `bun run eval:memory` | memory recall eval (`hit_rate`, `validity_violations`) |
+| `bun run eval:memory` | manual eval (not a gate): memory recall metrics (`hit_rate`, `validity_violations`) |
+| `bun run perf` | runtime perf harness — sizes a synthetic memory store, times recall/fingerprint/CLI; informational, no thresholds |
 
 ## The pre-push gate
 
-`bun run ci:local` is THE gate — it is what CI runs. If it passes locally, CI passes. Run it before every push; no exceptions for "small" changes.
+`bun run ci:local` is THE gate — it runs the exact steps CI runs (typecheck, lint, build, test, cbm:parity, check-changelog, check:parity, and the `cli-manifest.json` drift guard), so if it passes locally, CI passes. Run it before every push; no exceptions for "small" changes.
 
 Changing the CLI surface (new command, new flag)? Add it to `CLI_COMMANDS` in `src/cli/command-registry.ts`, then run `bun run scripts/gen-cli-manifest.ts` — CI fails on manifest drift (`git diff --exit-code cli-manifest.json`).
 
