@@ -76,7 +76,7 @@ export const CLI_COMMANDS: { path: string; description: string; options: string[
   {
     path: "memory recall",
     description: "Query .graphkit/memory (keyword×salience + validity filters); reinforces survivors",
-    options: ["--json"],
+    options: ["--explain", "--html", "--origin <origin>", "--json"],
   },
   {
     path: "memory consolidate",
