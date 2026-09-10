@@ -40,6 +40,16 @@ gk run resume <run-id> --force      # override the graph-drift guard
 
 A node is **satisfied** only if its last trace line is `ok` and every recorded evidence key maps to a non-empty `<evidence_dir>/<key>.md`. Satisfied upstreams are skipped; their evidence is attached to pending nodes as `refs`. The derived graph is saved as `<date>-<name>-resume.yaml` and activated; the new run records `resumes: <parent>` (visible in `gk run status` as `resumes_chain`). Graph edits since the run started are refused with `RESUME_GRAPH_DRIFT` — commit the graph change and start a fresh run instead, or pass `--force` consciously.
 
+## gk run round
+
+Durable round tracking for top-level `loops:` groups — call once after each pass over the span:
+
+```bash
+gk run round <group-index>   # append the round journal line; JSON reports the stop decision
+```
+
+The response's `stop_reason` is `no_progress` (identical failing fingerprint `no_progress_limit` times), `max_rounds` (budget exhausted), or `null` (keep looping). Round counts and no-progress streaks live in the run's journal — record every round even when you already know you're stopping.
+
 ## Boundary
 
 This skill drives the Workflow tool; it does not itself implement the graph topology. If the workflow fails, surface the failure — do not retry outside the graph's declared loop config.

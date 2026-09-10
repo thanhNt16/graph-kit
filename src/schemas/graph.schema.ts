@@ -10,34 +10,43 @@ const NodeRef = z.enum(["opus", "sonnet", "haiku", "fable"]);
 //     - no_write: true
 const ConstraintValue = z.record(z.string(), z.union([z.string(), z.number(), z.boolean()]));
 
-const RefSchema = z.object({
-  path: z.string(),
-  purpose: z.string(),
-});
+const RefSchema = z
+  .object({
+    path: z.string(),
+    purpose: z.string(),
+  })
+  .strict();
 
-const LoopConfig = z.object({
-  enabled: z.boolean().default(false),
-  stop_when: z.string().optional(),
-  max_rounds: z.number().int().min(1).default(3),
-  exit_condition: z.string().optional(),
-});
-const AdvisorConfig = z.object({
-  model: NodeRef.default("fable"),
-  after_failed_rounds: z.number().int().min(1).default(1),
-  max_calls: z.number().int().min(1).default(1),
-});
+const LoopConfig = z
+  .object({
+    enabled: z.boolean().default(false),
+    stop_when: z.string().optional(),
+    max_rounds: z.number().int().min(1).default(3),
+    exit_condition: z.string().optional(),
+  })
+  .strict();
+const AdvisorConfig = z
+  .object({
+    model: NodeRef.default("fable"),
+    after_failed_rounds: z.number().int().min(1).default(1),
+    max_calls: z.number().int().min(1).default(1),
+  })
+  .strict();
 
-const FanOutConfig = z.object({
-  briefs_from: z.string().min(1),
-  template: z.string().min(1).default("{brief.body}"),
-});
+const FanOutConfig = z
+  .object({
+    briefs_from: z.string().min(1),
+    template: z.string().min(1).default("{brief.body}"),
+  })
+  .strict();
 
 export const LoopGroupSchema = z
-  .object({
+  .strictObject({
     nodes: z.array(z.string().min(1)).min(1),
     max_rounds: z.number().int().min(1),
     stop_when: z.string().min(1).optional(),
     gate_evidence: z.array(z.string().min(1)).min(1).optional(),
+    no_progress_limit: z.number().int().min(2).optional(),
   })
   .refine((data) => Boolean(data.stop_when || data.gate_evidence), {
     message: "At least one of stop_when or gate_evidence must be provided",
@@ -62,6 +71,7 @@ const NodeDefSchema = z
     advisor: AdvisorConfig.optional(),
     fan_out: FanOutConfig.optional(),
   })
+  .strict()
   .superRefine((n, ctx) => {
     if (n.advisor && !n.loop?.enabled) {
       ctx.addIssue({
@@ -72,30 +82,38 @@ const NodeDefSchema = z
     }
   });
 
-const LimitsSchema = z.object({
-  max_workers: z.number().int().positive().optional(),
-  max_iterations: z.number().int().positive().optional(),
-  max_findings: z.number().int().positive().optional(),
-  budget_tokens: z.number().int().positive().optional(),
-});
+const LimitsSchema = z
+  .object({
+    max_workers: z.number().int().positive().optional(),
+    max_iterations: z.number().int().positive().optional(),
+    max_findings: z.number().int().positive().optional(),
+    budget_tokens: z.number().int().positive().optional(),
+  })
+  .strict();
 
-const EvidenceSchema = z.object({
-  required_keys: z.array(z.string()),
-  format: z.enum(["markdown", "json"]).default("markdown"),
-  criteria: z.array(z.string()).optional(),
-  freshness: z.enum(["report", "strict"]).default("report"),
-});
+const EvidenceSchema = z
+  .object({
+    required_keys: z.array(z.string()),
+    format: z.enum(["markdown", "json"]).default("markdown"),
+    criteria: z.array(z.string()).optional(),
+    freshness: z.enum(["report", "strict"]).default("report"),
+  })
+  .strict();
 
-const HookRef = z.object({
-  on_node_complete: z.array(z.string()).default([]),
-  on_fanout_dispatch: z.array(z.string()).default([]),
-  on_graph_complete: z.array(z.string()).default([]),
-});
+const HookRef = z
+  .object({
+    on_node_complete: z.array(z.string()).default([]),
+    on_fanout_dispatch: z.array(z.string()).default([]),
+    on_graph_complete: z.array(z.string()).default([]),
+  })
+  .strict();
 
-const OutputSchema = z.object({
-  evidence_dir: z.string().default(".graphkit/evidence/"),
-  report: z.string().default(".graphkit/reports/{name}.md"),
-});
+const OutputSchema = z
+  .object({
+    evidence_dir: z.string().default(".graphkit/evidence/"),
+    report: z.string().default(".graphkit/reports/{name}.md"),
+  })
+  .strict();
 
 const TopologyName = z.enum([
   "diamond",
@@ -162,6 +180,7 @@ const GraphSchema = z
     })),
     loops: z.array(LoopGroupSchema).optional(),
   })
+  .strict()
   .superRefine((graph, ctx) => {
     const nodes = graph.nodes as Record<string, NodeDef>;
     const names = new Set(Object.keys(nodes));

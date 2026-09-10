@@ -12,6 +12,7 @@ import {
   readRunMeta,
   startRun,
 } from "../../memory/ledger.js";
+import { recordRound } from "../../memory/loops.js";
 import { resumeRun } from "../../memory/resume.js";
 import { GraphSchema } from "../../schemas/graph.schema.js";
 import { subcommandsFor } from "../command-registry.js";
@@ -77,7 +78,12 @@ export function registerRunCommands(cli: CAC) {
             // falling back to cwd/graph.yaml for legacy runs without a recorded path.
             const graphPath = opts.graph ?? activeRunGraph(cwd) ?? join(cwd, "graph.yaml");
             const parsed = GraphSchema.safeParse(YAML.parse(readFileSync(graphPath, "utf-8")));
-            const advisor = parsed.success ? parsed.data.nodes[String(node)]?.advisor : undefined;
+            if (!parsed.success) {
+              const issues = parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; ");
+              console.log(JSON.stringify(fail("SCHEMA_INVALID", issues)));
+              return;
+            }
+            const advisor = parsed.data.nodes[String(node)]?.advisor;
             if (!advisor) {
               console.log(JSON.stringify(fail("BAD_ADVISOR", `node "${node}" has no advisor config in ${graphPath}`)));
               return;
@@ -140,6 +146,28 @@ export function registerRunCommands(cli: CAC) {
                 ok(resumeRun(cwd, String(target), { fromNode: opts.fromNode, dryRun: opts.dryRun, force: opts.force })),
               ),
             );
+          } catch (e) {
+            process.exitCode = 1;
+            const { code, message } = errCode(e);
+            console.log(JSON.stringify(fail(code, message)));
+          }
+          return;
+        }
+        if (subcommand === "round") {
+          const arg = Array.isArray(args) ? args[0] : args;
+          const idx = Number(arg);
+          if (arg == null || arg === "") {
+            process.exitCode = 1;
+            console.log(JSON.stringify(fail("MISSING_ARG", "round requires a loop-group index")));
+            return;
+          }
+          if (!Number.isInteger(idx) || idx < 0) {
+            process.exitCode = 1;
+            console.log(JSON.stringify(fail("BAD_ARG", "round requires an integer loop-group index >= 0")));
+            return;
+          }
+          try {
+            console.log(JSON.stringify(ok(recordRound(cwd, idx))));
           } catch (e) {
             process.exitCode = 1;
             const { code, message } = errCode(e);

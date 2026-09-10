@@ -8,16 +8,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 ### Added
+- `loops[].no_progress_limit` (schema, min 2) + `gk run round <group>` — durable per-group round journal (`.graphkit/runs/<id>/rounds/<group>.jsonl`); fingerprints node statuses + evidence bytes per round so `no_progress_limit` consecutive identical failing rounds exhaust the loop early (stop reason `no_progress` alongside `gate`/`judged`/`exhausted`)
 - `criteria/` registry + `evidence.criteria` id list + `evidence.freshness: report|strict` in graph.yaml; `criteria-keys`/`criteria-file` validation
 - `gk evidence add` — content-addressed artifacts with provenance markers (`EVIDENCE_KEY_NOT_DECLARED` / `EVIDENCE_FILE_MISSING` / `EVIDENCE_TOO_LARGE`)
 - Gate/status per-key freshness (`fresh|stale|unknown`); strict mode BLOCKs on stale required keys
 - `gk evidence report` — criterion-first markdown + `--html` self-contained page (SVG never inlined, all content escaped)
 - `gk run start` stamps the repo fingerprint into the run ledger
 - Archify diagram suite (`docs/diagrams/`): system architecture, execution workflow, run-resume lifecycle, and all eleven topologies as standalone explorables (inline SVG, trace motion, dark/light). Gallery linked from the docs landing page.
+- Resume reconciliation lineage check: evidence markers must belong to the run's `resumes:` ancestor chain (or be hand-written/no-run markers) to satisfy a node; evidence overwritten by an unrelated run leaves the node pending and is reported in the new `foreign_evidence` result field. Marker frontmatter parsing now tolerates CRLF line endings.
 
 ### Changed
 - **Pages landing page rewritten version-free** (`docs/graphkit.html`, renamed from `graphkit-v0.2-report.html`): features ordered as a workflow — lifecycle → install → 11 topologies → per-node binding & validation → dual runtimes → evidence & gates → run ledger & resume → memory & CBM bridge → host table → CLI. All version badges, "shipped in X.Y" labels, dated sections, roadmap, and historical demo/story sections removed. `pages.yml` redirect updated.
 - **Landing page visual pass**: topology cards now carry animated SVG diagrams (traveling signal dots via SMIL `animateMotion`, node pulse, edge dash-flow, hover gradient glow, scroll-driven reveal under `@supports`, `prefers-reduced-motion` fallback; zero JS). "Comprehensive Command Reference" gains "The gk Lifecycle" — a 6-stage orchestration flow diagram (install → compose → validate → execute → evidence & gate → close out) with animated connectors, MERGE/BLOCK/RESUME verdict chips, and a BLOCK→resume loop-back lane — plus per-stage session-skill chips and a 13-card "Session Skills" grid.
+- **Strict graph.yaml schemas**: unknown top-level, node, and nested-config fields now fail validation with the offending key named (`Unrecognized key: "…"` in `SCHEMA_INVALID` issues) instead of being silently stripped. `constraints` records and inputs/metadata stay open by design. All bundled scaffolds, gallery templates, and examples re-validated clean.
 
 ## [0.3.8] - 2026-09-05
 ### Fixed

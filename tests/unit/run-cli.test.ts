@@ -45,6 +45,7 @@ describe("gk run CLI", () => {
     expect(paths).toContain("run node");
     expect(paths).toContain("run end");
     expect(paths).toContain("run status");
+    expect(paths).toContain("run round");
   });
 
   test("executes run start, status, node, end lifecycle", () => {
@@ -216,6 +217,35 @@ describe("gk run CLI", () => {
     }
   });
 
+  test("run node --advisor-fired on graph with unknown key fails SCHEMA_INVALID", () => {
+    const cwd = join(tmpdir(), `gk-run-badkey-${process.pid}-${Date.now()}`);
+    mkdirSync(cwd, { recursive: true });
+    try {
+      writeFileSync(
+        join(cwd, "graph.yaml"),
+        [
+          "apiVersion: graphkit.dev/v2",
+          "kind: Graph",
+          "metadata:",
+          "  name: typo-graph",
+          "polic_ref: true",
+          "topology: diamond",
+          "nodes:",
+          "  exec:",
+          "    agent: haiku",
+          "    objective: do the thing",
+          "    advisor: { model: opus }",
+        ].join("\n"),
+      );
+      const fired = JSON.parse(runCli(["run", "node", "exec", "--advisor-fired", "1"], cwd).stdout);
+      expect(fired.status).toBe("fail");
+      expect(fired.error.code).toBe("SCHEMA_INVALID");
+      expect(fired.error.message).toContain("polic_ref");
+    } finally {
+      rmSync(cwd, { recursive: true, force: true });
+    }
+  });
+
   test("run status includes advisor_events count", () => {
     const cwd = join(tmpdir(), `gk-run-status-${process.pid}-${Date.now()}`);
     mkdirSync(cwd, { recursive: true });
@@ -334,6 +364,62 @@ describe("gk run CLI", () => {
       const parsed = JSON.parse(runCli(["run", "status", "--json"], cwd).stdout);
       expect(parsed.status).toBe("ok");
       expect(parsed.data.resumes_chain).toEqual(["20260904-110000-demo", r1.id]);
+    } finally {
+      rmSync(cwd, { recursive: true, force: true });
+    }
+  });
+
+  test("run round records rounds and reports no_progress exhaustion", () => {
+    const cwd = join(tmpdir(), `gk-run-round-${process.pid}-${Date.now()}`);
+    mkdirSync(cwd, { recursive: true });
+    try {
+      writeFileSync(
+        join(cwd, "graph.yaml"),
+        [
+          "apiVersion: graphkit.dev/v2",
+          "kind: Graph",
+          "metadata:",
+          "  name: round-graph",
+          "topology: diamond",
+          "nodes:",
+          "  implement:",
+          "    agent: haiku",
+          "    objective: write code",
+          "  test:",
+          "    agent: haiku",
+          "    objective: run tests",
+          "loops:",
+          "  - nodes: [implement, test]",
+          "    max_rounds: 4",
+          "    stop_when: tests pass",
+          "    no_progress_limit: 2",
+        ].join("\n"),
+      );
+      JSON.parse(runCli(["run", "start"], cwd).stdout);
+      for (let i = 0; i < 2; i++) {
+        runCli(["run", "node", "implement", "--status", "fail"], cwd);
+        runCli(["run", "node", "test", "--status", "fail"], cwd);
+      }
+      const r1 = JSON.parse(runCli(["run", "round", "0"], cwd).stdout);
+      expect(r1.status).toBe("ok");
+      expect(r1.data).toMatchObject({ round: 1, repeated: 1, no_progress_exhausted: false, stop_reason: null });
+      runCli(["run", "node", "implement", "--status", "fail"], cwd);
+      runCli(["run", "node", "test", "--status", "fail"], cwd);
+      const r2 = JSON.parse(runCli(["run", "round", "0"], cwd).stdout);
+      expect(r2.data).toMatchObject({ round: 2, repeated: 2, no_progress_exhausted: true, stop_reason: "no_progress" });
+    } finally {
+      rmSync(cwd, { recursive: true, force: true });
+    }
+  });
+
+  test("run round rejects bad group index", () => {
+    const cwd = join(tmpdir(), `gk-run-round-bad-${process.pid}-${Date.now()}`);
+    mkdirSync(cwd, { recursive: true });
+    try {
+      JSON.parse(runCli(["run", "start"], cwd).stdout);
+      const res = runCli(["run", "round", "x"], cwd);
+      expect(res.code).toBe(1);
+      expect(JSON.parse(res.stdout).error.code).toBe("BAD_ARG");
     } finally {
       rmSync(cwd, { recursive: true, force: true });
     }

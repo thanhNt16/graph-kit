@@ -241,9 +241,10 @@ loops:
     max_rounds: 5                 # required; ≥ 1 hard cap
     stop_when: "all tests pass"   # LLM-judged; required unless gate_evidence
     gate_evidence: [test-report]  # optional deterministic machine gate
+    no_progress_limit: 2          # optional; fail early after N identical failing rounds
 ```
 
-The hybrid stop ladder runs after each round: first the deterministic `gate_evidence` check (every listed `<evidence_dir>/<key>.md` exists and is non-whitespace), then the orchestrator-judged `stop_when` text; otherwise another round, capped hard at `max_rounds`. Exhaustion fails the run, recording rounds executed and the stop reason (`gate` / `judged` / `exhausted`). Validation enforces node existence, wave-span contiguity, non-overlapping groups, `max_rounds ≥ 1`, a stop condition being present, and every `gate_evidence` key declared on a node inside the span. Per-node `loop:` stays unchanged and orthogonal.
+After each round the orchestrator runs `gk run round <group-index>`, which appends a durable journal line (`.graphkit/runs/<id>/rounds/<group>.jsonl`) and derives a fingerprint from the group's per-node last statuses plus the sha256 of every evidence key written that round — identical failing state therefore fingerprints identically without trusting orchestrator prose. The hybrid stop ladder then runs: first the deterministic `gate_evidence` check (every listed `<evidence_dir>/<key>.md` exists and is non-whitespace), then the orchestrator-judged `stop_when` text; otherwise another round, capped hard at `max_rounds`. With `no_progress_limit: N`, `N` consecutive rounds sharing one fingerprint exhaust the loop early with stop reason `no_progress`. Exhaustion fails the run, recording rounds executed and the stop reason (`gate` / `judged` / `no_progress` / `exhausted`). Validation enforces node existence, wave-span contiguity, non-overlapping groups, `max_rounds ≥ 1`, a stop condition being present, and every `gate_evidence` key declared on a node inside the span. Per-node `loop:` stays unchanged and orthogonal.
 
 ## Boundary
 
@@ -293,7 +294,16 @@ $ gk status            # human-readable
 $ gk status --json     # machine-readable: run, round, coverage, verdict
 ```
 
-No active run prints a stable "no run" summary and exits 0 — safe to call from scripts and CI.
+### `gk run round`
+
+Durable round tracking for loop groups — call after each pass over a `loops:` span:
+
+```bash
+$ gk run round 0
+{"status":"ok","data":{"run":"...","group":0,"round":2,"fingerprint":"9f2c…","repeated":2,"no_progress_limit":2,"no_progress_exhausted":true,"max_rounds":4,"stop_reason":"no_progress"}}
+```
+
+Appends to the run's round journal (`rounds/<group>.jsonl`), fingerprints per-node statuses + evidence bytes for the rounds's window, and reports the ladder decision: `stop_reason` `no_progress` (identical failing state `no_progress_limit` times), `max_rounds` (budget exhausted), or `null` (keep looping). Exit 0 even when exhausted — the JSON is the decision; the orchestrator fails the run.
 
 ### `gk run resume`
 
@@ -344,7 +354,7 @@ and re-dispatches the node at its original tier. Escalations are recorded via `g
 --advisor-fired <round>` into the run's `advisor.jsonl`; `gk run status` reports the count;
 `gk memory consolidate` surfaces `advisor-repeat` patterns ("raise tier or loosen stop_when").
 
-### Fan-out execution
+- Loop semantics: for single nodes (`node.loop`), `max_rounds` is the only mechanical bound while `stop_when` is prompt-advisory; for multi-node groups (`loops:`), orchestrators follow the **hybrid stop ladder** via `gk run round` (deterministic `gate_evidence` check first, then LLM-judged `stop_when`, hard capped at `max_rounds`, early `no_progress` exhaustion with `no_progress_limit`), with graph-failure on exhaustion.
 
 A node may declare `fan_out: {briefs_from, template}`. The referenced upstream node writes
 `briefs.json` (array of `{id, title, body}`) into its evidence; the fan-out node dispatches one

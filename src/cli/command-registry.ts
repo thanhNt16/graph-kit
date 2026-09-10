@@ -140,6 +140,11 @@ export const CLI_COMMANDS: { path: string; description: string; options: string[
     options: ["--from-node <id>", "--dry-run", "--force", "--json"],
   },
   {
+    path: "run round",
+    description: "Record a completed loop-group round; fingerprint detects no-progress",
+    options: ["--json"],
+  },
+  {
     path: "suggest",
     description: "Show ranked workflow suggestions from memory",
     options: ["--dismiss <id>", "--all", "--json"],

@@ -187,20 +187,20 @@ loops:
     max_rounds: 5                 # required; ≥ 1 hard cap
     stop_when: "all tests pass"   # LLM-judged; required unless gate_evidence
     gate_evidence: [test-report]  # optional deterministic machine gate
+    no_progress_limit: 2          # optional; fail early after N identical failing rounds
 ```
 
 **Execution:** waves are computed once from the DAG. Walk waves normally; when you reach a loop group's head wave, enter the loop:
 
 1. **Run a round** = one pass over the span's waves, dispatching normally. Round N outputs feed round N+1 node contexts.
-2. **Hybrid stop ladder** — after each round, check in order:
+2. **Record the round**: `gk run round <group-index>` after each pass — it appends a durable journal line and fingerprints the round's node statuses + evidence bytes. Do not skip it: round counts and no-progress detection come from this journal, not your memory.
+3. **Hybrid stop ladder** — check in order:
    1. `gate_evidence` set and every listed `<evidence_dir>/<key>.md` exists and is non-whitespace → **stop: success** (deterministic, shell-testable).
    2. Else `stop_when` present → judge the previous round's node outputs against the text yourself (same LLM-read pattern as curator `INJECTION:` parsing). Satisfied → **stop: success**.
-   3. Else dispatch the next round.
-3. **Evidence:** latest round wins — overwrite `<evidence_dir>/<key>.md` in place; never accumulate rounds.
-4. **Exhaustion:** `max_rounds` reached without satisfaction → the loop fails and, per graph-stop rules, the whole run stops. Report rounds executed, last-round outputs, and which condition was being checked.
-5. **Run report:** record rounds completed and stop reason per loop — `gate` | `judged` | `exhausted`.
-
-Per-node `loop:` keeps its existing behavior and is orthogonal — a node inside a group may still carry its own internal loop.
+   3. Else read the `gk run round` response: `stop_reason: "no_progress"` (identical failing fingerprint `no_progress_limit` times) or `"max_rounds"` → **stop: fail the loop**; `null` → dispatch the next round.
+4. **Evidence:** latest round wins — overwrite `<evidence_dir>/<key>.md` in place; never accumulate rounds.
+5. **Exhaustion:** a failure stop (`no_progress` or `max_rounds`) → the loop fails and, per graph-stop rules, the whole run stops. Report rounds executed, last-round outputs, and which condition was being checked.
+6. **Run report:** record rounds completed and stop reason per loop — `gate` | `judged` | `no_progress` | `exhausted`.
 
 ## Why this is effective
 

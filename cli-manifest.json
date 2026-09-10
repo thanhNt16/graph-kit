@@ -327,6 +327,13 @@
       ]
     },
     {
+      "name": "run round",
+      "description": "Record a completed loop-group round; fingerprint detects no-progress",
+      "options": [
+        "--json"
+      ]
+    },
+    {
       "name": "suggest",
       "description": "Show ranked workflow suggestions from memory",
       "options": [
