@@ -1,6 +1,6 @@
 // tests/integration/ledger-consolidate.test.ts
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import YAML from "yaml";
@@ -82,6 +82,21 @@ describe("ledger → consolidate", () => {
     const second = consolidate(cwd, "2026-09-03T12:00:00.000Z");
     expect(second.patterns).toBe(first.patterns);
     expect(readdirSync(join(cwd, ".graphkit", "memory", "patterns")).length).toBe(first.patterns);
+  });
+
+  // C3: an unchanged pass used to rewrite every generated file (mtime churn
+  // even when bytes matched). Skip-identical writes keep mtimes stable.
+  test("unchanged second pass leaves generated files' mtimes untouched", () => {
+    fakeRun(1);
+    fakeRun(2);
+    fakeRun(3);
+    consolidate(cwd, "2026-09-03T12:00:00.000Z");
+    const patternsDir = join(cwd, ".graphkit", "memory", "patterns");
+    const before = new Map(readdirSync(patternsDir).map((f) => [f, statSync(join(patternsDir, f)).mtimeMs]));
+    consolidate(cwd, "2026-09-03T12:00:00.000Z");
+    for (const [file, mtimeMs] of before) {
+      expect(statSync(join(patternsDir, file)).mtimeMs).toBe(mtimeMs);
+    }
   });
 
   test("written pattern and suggestion files re-parse through their schemas", () => {

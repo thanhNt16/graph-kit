@@ -59,10 +59,16 @@ export function buildLinks(memDir: string, now = new Date().toISOString()): Link
     for (const target of e.wikilinks) if (known.has(target)) add(e.id, target);
   }
 
-  // Shared entity mention → derived edge.
+  // Shared entity mention → derived edge. Entity lists grow by push — the old
+  // `[...arr, id]` spread copied the accumulated array on every insert (O(m²)
+  // per entity before any edge exists).
   const byEntity = new Map<string, string[]>();
   for (const e of entries) {
-    for (const ent of e.entities) byEntity.set(ent, [...(byEntity.get(ent) ?? []), e.id]);
+    for (const ent of e.entities) {
+      const ids = byEntity.get(ent);
+      if (ids) ids.push(e.id);
+      else byEntity.set(ent, [e.id]);
+    }
   }
   for (const ids of byEntity.values()) {
     if (ids.length < 2) continue;
@@ -80,8 +86,10 @@ export function buildLinks(memDir: string, now = new Date().toISOString()): Link
 }
 
 export function writeLinks(memDir: string, graph: LinkGraph): void {
-  // F6: derived graph is rewritten in place — atomic, readers never see a torn JSON.
-  atomicWrite(join(memDir, ".links.json"), `${JSON.stringify(graph, null, 2)}\n`);
+  // F6: derived graph is rewritten in place — atomic, readers never see a torn
+  // JSON. Compact (not pretty) — the file is re-parsed on every recall and
+  // disposable/rebuildable by contract, so byte size beats human diffing.
+  atomicWrite(join(memDir, ".links.json"), `${JSON.stringify(graph)}\n`);
 }
 
 export function readLinks(memDir: string): LinkGraph {

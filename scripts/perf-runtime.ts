@@ -2,10 +2,15 @@
  * Runtime perf harness — informational only: no thresholds, no CI wiring.
  *
  * Generates size-tiered synthetic memory stores (50/200/1000/5000 entries) in a
- * temp dir, then times:
+ * temp dir — each with a populated .links.json so link expansion and the store
+ * re-parse are on the timed path — then times:
  *   1. `expandedRecall` over the synthetic store (src/memory/recall-expanded.ts)
- *   2. `fingerprint` inside this git repo cwd (src/evidence/fingerprint.ts)
- *   3. end-to-end `node dist/index.js memory recall <query>` (skipped with a
+ *   2. `buildLinks` over the same store (the full walk+parse that dominates
+ *      `gk memory consolidate`)
+ *   3. `fingerprint` inside this git repo cwd (src/evidence/fingerprint.ts)
+ *   4. startup floor: bare `node -e ''` vs `node dist/index.js --version` —
+ *      the flat bundle-parse+init tax every CLI invocation pays
+ *   5. end-to-end `node dist/index.js memory recall <query>` (skipped with a
  *      note when dist/index.js is missing — this script never builds)
  *
  * Run: `bun run perf`
@@ -16,12 +21,14 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { fingerprint } from "../src/evidence/fingerprint.js";
 import { expandedRecall } from "../src/memory/recall-expanded.js";
+import { buildLinks, writeLinks } from "../src/memory/links.js";
 
 const SIZES = [50, 200, 1000, 5000];
 const QUERY = "diagram pipeline";
-const RECALL_ITERS = 5; // + 1 warmup
+const RECALL_ITERS = 9; // + 1 warmup
 const FINGERPRINT_ITERS = 5; // + 1 warmup
 const CLI_ITERS = 3;
+const STARTUP_ITERS = 5;
 
 function timeOp(fn: () => void): number {
   const start = performance.now();
@@ -46,7 +53,9 @@ function memoryEntry(i: number): string {
   return `---\nid: mem-${String(i).padStart(5, "0")}\ntype: knowledge\nsalience: ${0.3 + ((i % 7) * 0.1).toFixed(2)}\n---\n\n${body}\n`;
 }
 
-/** Synthetic store at <root>/.graphkit/memory (root + patterns/ sublevel). */
+/** Synthetic store at <root>/.graphkit/memory (root + patterns/ sublevel),
+ *  with a populated .links.json — real post-consolidate stores carry one, and
+ *  link expansion is part of every recall. */
 function generateStore(root: string, n: number): string {
   const memDir = join(root, ".graphkit", "memory");
   mkdirSync(join(memDir, "patterns"), { recursive: true });
@@ -55,6 +64,7 @@ function generateStore(root: string, n: number): string {
     // ~1 in 5 entries lives in the patterns/ sublevel, like consolidate leaves.
     writeFileSync(i % 5 === 4 ? join(memDir, "patterns", name) : join(memDir, name), memoryEntry(i));
   }
+  writeLinks(memDir, buildLinks(memDir));
   return memDir;
 }
 
@@ -74,12 +84,24 @@ function main(): void {
     const fpMs = meanMs(() => fingerprint(repoRoot), FINGERPRINT_ITERS);
     console.log(`\nfingerprint (repo cwd): ${fpMs.toFixed(2)} ms/op (${FINGERPRINT_ITERS} ops + 1 warmup)`);
 
-    const rows: Array<{ n: number; recall: number; cli: number | null }> = [];
+    // Startup floor: the flat bundle-parse + module-init tax every invocation
+    // pays before any command work — it explains most of the small-store CLI
+    // column (the delta between the cli row and the in-process recall row).
+    if (cliAvailable) {
+      const bare = meanMs(() => spawnSync("node", ["-e", ""], { encoding: "utf8" }), STARTUP_ITERS);
+      const version = meanMs(() => spawnSync("node", [distCli, "--version"], { encoding: "utf8" }), STARTUP_ITERS);
+      console.log(
+        `startup floor: node -e '' ${bare.toFixed(1)} ms · node dist/index.js --version ${version.toFixed(1)} ms`,
+      );
+    }
+
+    const rows: Array<{ n: number; recall: number; walk: number; cli: number | null }> = [];
     for (const n of SIZES) {
       const storeDir = join(tmpRoot, `store-${n}`);
       generateStore(storeDir, n);
       const memDir = join(storeDir, ".graphkit", "memory");
       const recall = meanMs(() => expandedRecall(memDir, QUERY), RECALL_ITERS);
+      const walk = meanMs(() => buildLinks(memDir), RECALL_ITERS);
 
       let cli: number | null = null;
       if (cliAvailable) {
@@ -95,17 +117,17 @@ function main(): void {
         if (times.length === CLI_ITERS) cli = times.reduce((a, b) => a + b, 0) / times.length;
         else console.log(`note: CLI memory recall failed for n=${n} — skipping that cell`);
       }
-      rows.push({ n, recall, cli });
+      rows.push({ n, recall, walk, cli });
     }
 
     const cliCol = cliAvailable && rows.every((r) => r.cli !== null);
     console.log(
       cliCol
-        ? `\n${"n".padStart(6)}  ${"expandedRecall (ms/op)".padStart(22)}  ${"cli memory recall (ms/op)".padStart(24)}`
-        : `\n${"n".padStart(6)}  ${"expandedRecall (ms/op)".padStart(22)}`,
+        ? `\n${"n".padStart(6)}  ${"expandedRecall (ms/op)".padStart(22)}  ${"buildLinks (ms/op)".padStart(18)}  ${"cli memory recall (ms/op)".padStart(24)}`
+        : `\n${"n".padStart(6)}  ${"expandedRecall (ms/op)".padStart(22)}  ${"buildLinks (ms/op)".padStart(18)}`,
     );
     for (const r of rows) {
-      const line = `${String(r.n).padStart(6)}  ${r.recall.toFixed(2).padStart(22)}`;
+      const line = `${String(r.n).padStart(6)}  ${r.recall.toFixed(2).padStart(22)}  ${r.walk.toFixed(2).padStart(18)}`;
       console.log(cliCol ? `${line}  ${(r.cli as number).toFixed(2).padStart(24)}` : line);
     }
     console.log(`\nstore: ${tmpRoot} (removed on exit) · query: "${QUERY}" · informational only, no thresholds`);

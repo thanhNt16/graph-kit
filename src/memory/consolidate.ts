@@ -76,9 +76,17 @@ export function suggestionsFor(patterns: Pattern[]): SuggestionDraft[] {
 }
 
 function writeEntry(dir: string, file: string, frontmatter: Record<string, unknown>, body: string) {
-  // F6: generated entries rewrite in place on every consolidate pass — atomic,
-  // so a crash can never leave a half-written pattern/suggestion behind.
-  atomicWrite(join(dir, file), `---\n${YAML.stringify(frontmatter)}---\n${body}`);
+  const path = join(dir, file);
+  const next = `---\n${YAML.stringify(frontmatter)}---\n${body}`;
+  // Skip-identical: consolidate rewrites every generated file per pass, which
+  // bumped mtimes even when nothing changed (churn for freshness readers and a
+  // mkdir+write+rename per file). One read replaces the write when bytes match.
+  // With stable mtimes, the buildLinks walk below is the pass's single store
+  // parse instead of parse-after-rewrite.
+  if (existsSync(path) && readFileSync(path, "utf-8") === next) return;
+  // F6: generated entries rewrite in place — atomic, so a crash can never
+  // leave a half-written pattern/suggestion behind.
+  atomicWrite(path, next);
 }
 
 /** Delete generated files in `dir` whose basename is not in `keep`. Hand-written
