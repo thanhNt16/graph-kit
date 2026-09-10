@@ -14,7 +14,7 @@ import {
   startRun,
 } from "../../memory/ledger.js";
 import { resumeRun } from "../../memory/resume.js";
-import { subcommandsFor } from "../command-registry.js";
+import { subcommandHelpFor, subcommandsFor } from "../command-registry.js";
 import { fail, ok } from "../output.js";
 
 function errCode(e: unknown): { code: string; message: string; details?: Record<string, unknown> } {
@@ -64,6 +64,7 @@ function renderRunStatus(
 export function registerRunCommands(cli: CAC) {
   cli
     .command("run [subcommand] [args...]", `Run ledger commands\nSubcommands: ${subcommandsFor("run")}`)
+    .example(subcommandHelpFor("run"))
     .option("--graph <path>", "graph.yaml path (default: ./graph.yaml)")
     .option("--status <status>", "node: ok|fail — end: merged|blocked|failed")
     .option("--advisor-fired <round>", "record advisor firing for a node")

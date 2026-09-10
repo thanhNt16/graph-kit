@@ -139,24 +139,26 @@ describe("gk gate command", () => {
     expect(parsed.data.manifest.design.sha256).toBe(createHash("sha256").update("approved\n").digest("hex"));
   });
 
-  test("BLOCK: exits 1 with GATE_BLOCK fail envelope", () => {
+  test("BLOCK default mode: human verdict table + repair hint, exit 1", () => {
     writeFileSync(join(tmp, "graph.yaml"), MINIMAL_GRAPH);
     // No evidence file created
     const result = runCli(["gate", join(tmp, "graph.yaml")], tmp);
     expect(result.code).toBe(1);
-    const parsed = JSON.parse(result.stdout);
-    expect(parsed.status).toBe("fail");
-    expect(parsed.error.code).toBe("GATE_BLOCK");
-    expect(parsed.error.details.missing).toContain("design");
+    expect(result.stdout).toContain("VERDICT: BLOCK");
+    expect(result.stdout).toContain("design");
+    expect(result.stdout).toContain("Missing: design");
+    expect(result.stdout).toContain(".graphkit/evidence/"); // repair path names the dir
+    expect(result.stdout).not.toContain("sha256"); // manifest stays machine-only
   });
 
-  test("BLOCK --json keeps the same fail envelope as default mode", () => {
+  test("BLOCK --json keeps the GATE_BLOCK fail envelope for scripts", () => {
     writeFileSync(join(tmp, "graph.yaml"), MINIMAL_GRAPH);
     const result = runCli(["gate", "--json", join(tmp, "graph.yaml")], tmp);
     expect(result.code).toBe(1);
     const parsed = JSON.parse(result.stdout);
     expect(parsed.status).toBe("fail");
     expect(parsed.error.code).toBe("GATE_BLOCK");
+    expect(parsed.error.details.missing).toContain("design");
   });
 
   test("default file is graph.yaml in cwd", () => {

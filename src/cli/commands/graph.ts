@@ -14,7 +14,7 @@ import { GraphKitError } from "../../errors.js";
 import { getTopologyConfigKeys, TOPOLOGY_NAMES, type TopologyName } from "../../schemas/topology/index.js";
 import { getActiveGraphId, listSessionGraphs, loadActiveGraph, setActiveGraphId } from "../../store/index.js";
 import { renderAscii } from "../ascii.js";
-import { subcommandsFor } from "../command-registry.js";
+import { subcommandHelpFor, subcommandsFor } from "../command-registry.js";
 import { graphTemplate } from "../graph-templates.js";
 import { fail, ok } from "../output.js";
 import { renderSvg } from "../svg.js";
@@ -280,6 +280,7 @@ export function registerGraphCommands(cli: CAC) {
 
   cli
     .command("graph [subcommand] [args...]", `Graph lifecycle commands\nSubcommands: ${subcommandsFor("graph")}`)
+    .example(subcommandHelpFor("graph"))
     .option("--json", "JSON output")
     // Group-level like --json: consumed by the CBM subcommands that take the
     // knob (search/ask → limit, ask/trace → depth), silently ignored elsewhere.
@@ -344,7 +345,11 @@ export function registerGraphCommands(cli: CAC) {
             if (opts.json) {
               console.log(JSON.stringify(ok({ sessions, active })));
             } else if (sessions.length === 0) {
-              console.log("no session graphs — run `gk init-graph` or `gk template materialize`");
+              // Both hints must be real surfaces: `gk template materialize` is a
+              // CLI command, /gk:init-graph is the agent session skill.
+              console.log(
+                "no session graphs — materialize one with `gk template materialize <name> --use`, or run /gk:init-graph in your agent",
+              );
             } else {
               const idW = Math.max("id".length, ...sessions.map((s) => s.id.length));
               const nameW = Math.max("name".length, ...sessions.map((s) => s.name.length));
@@ -448,13 +453,12 @@ export function registerGraphCommands(cli: CAC) {
         } else if (subcommand === "new") {
           const topology = Array.isArray(args) ? args[0] : args;
           if (!topology || !TOPOLOGY_NAMES.includes(topology as TopologyName)) {
-            console.log(
-              JSON.stringify(
-                fail("UNKNOWN_TOPOLOGY", `"${topology ?? ""}" is not a canonical topology`, {
-                  available: TOPOLOGY_NAMES,
-                }),
-              ),
-            );
+            // Lead with the usage line when the arg is absent — the operator
+            // copy-pastes the fix, not a complaint about an empty string.
+            const message = topology
+              ? `"${topology}" is not a canonical topology`
+              : "usage: gk graph new <topology> — e.g. `gk graph new diamond`";
+            console.log(JSON.stringify(fail("UNKNOWN_TOPOLOGY", message, { available: TOPOLOGY_NAMES })));
             process.exit(1);
             return;
           }

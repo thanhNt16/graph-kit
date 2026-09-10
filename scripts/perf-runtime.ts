@@ -20,8 +20,8 @@ import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { fingerprint } from "../src/evidence/fingerprint.js";
-import { expandedRecall } from "../src/memory/recall-expanded.js";
 import { buildLinks, writeLinks } from "../src/memory/links.js";
+import { expandedRecall } from "../src/memory/recall-expanded.js";
 
 const SIZES = [50, 200, 1000, 5000];
 const QUERY = "diagram pipeline";

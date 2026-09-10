@@ -333,7 +333,7 @@ export function registerInventoryCommands(cli: CAC) {
       "--target <target>",
       `Kit target: ${listTargets()
         .map((t) => t.id)
-        .join(" | ")} (default: claude)`,
+        .join(" | ")}`,
       {
         default: "claude",
       },

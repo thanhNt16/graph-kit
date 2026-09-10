@@ -114,13 +114,25 @@ export function registerGateCommand(cli: CAC) {
         );
         const stale = Object.keys(freshness).filter((k) => freshness[k] === "stale" && scorecard[k] === "ok");
         if (verdict !== "MERGE") {
-          // A block is a failure: fail envelope JSON-on-stdout in both modes
-          // (scripts parse it for `missing`), exit 1 via fail().
-          console.log(
-            JSON.stringify(
-              fail("GATE_BLOCK", "evidence gate blocked merge", { missing, stale, scorecard, freshness, manifest }),
-            ),
-          );
+          // A block is a failure — exit 1 either way. Human mode gets the same
+          // verdict table as a merge plus the concrete repair path; --json
+          // keeps the full machine envelope (scripts parse it for `missing`).
+          if (opts.json) {
+            console.log(
+              JSON.stringify(
+                fail("GATE_BLOCK", "evidence gate blocked merge", { missing, stale, scorecard, freshness, manifest }),
+              ),
+            );
+          } else {
+            const lines = [renderGate({ verdict, scorecard, freshness })];
+            if (missing.length > 0) {
+              lines.push(
+                "",
+                `Missing: ${missing.join(", ")} — produce ${graph.outputs.evidence_dir}<key>.md, then rerun \`gk gate\``,
+              );
+            }
+            console.log(lines.join("\n"));
+          }
           process.exit(1);
           return;
         }

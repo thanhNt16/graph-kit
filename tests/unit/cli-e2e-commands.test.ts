@@ -243,7 +243,9 @@ describe("CLI end-to-end: kit init/new human + --json", () => {
     const { stdout, code } = runCli(["init"], root);
     expect(code).toBe(0);
     expect(() => JSON.parse(stdout)).toThrow();
-    expect(stdout).toMatch(/^installed \d+ entries into \.claude\/ \(target claude\) — run \/gk:status in your agent$/);
+    expect(stdout).toMatch(
+      /^installed \d+ entries into \.claude\/ \(target claude\) — next: `gk graph new diamond > graph\.yaml`, then `gk validate`$/,
+    );
     expect(existsSync(join(root, ".claude", "skills"))).toBe(true);
   });
 
@@ -262,7 +264,7 @@ describe("CLI end-to-end: kit init/new human + --json", () => {
     expect(code).toBe(0);
     expect(() => JSON.parse(stdout)).toThrow();
     expect(stdout).toContain(`created ${dir} — installed `);
-    expect(stdout).toContain("entries into .claude/ (target claude) — run /gk:status in your agent");
+    expect(stdout).toContain("entries into .claude/ (target claude) — next: `gk graph new diamond > graph.yaml`");
   });
 
   test("new --json keeps the created + installed envelope", () => {

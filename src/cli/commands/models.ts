@@ -3,6 +3,7 @@ import { dirname, join } from "node:path";
 import type { CAC } from "cac";
 import type { Tier } from "../../targets/index.js";
 import { isValidTarget, listTargets, resolveModel } from "../../targets/index.js";
+import { subcommandHelpFor } from "../command-registry.js";
 import { fail, ok } from "../output.js";
 
 function overridesPath(cwd: string, target: string): string {
@@ -36,6 +37,7 @@ export function registerModelsCommands(cli: CAC): void {
   // dispatches. Use one `models` command with subcommand dispatch (like memory).
   cli
     .command("models [subcommand] [args...]", "Per-target model mapping commands")
+    .example(subcommandHelpFor("models"))
     .option("--map <k=v,...>", "comma-separated model=override pairs")
     .option("--json", "JSON output")
     .action((subcommand: string | undefined, args: string | string[] | undefined, opts: { map?: string }) => {

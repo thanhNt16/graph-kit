@@ -217,10 +217,12 @@ function assertValidTarget(opts: { target?: string }) {
 }
 
 // Human success line for init/new: what was installed, where, for which
-// target, and the next step in the agent. --json keeps the ok(result) envelope.
+// target, and the next step. The next step names CLI commands — they are the
+// only surface identical on every host (the /gk:* skill spellings differ).
+// --json keeps the ok(result) envelope.
 function installedLine(installDir: string, target: string, count: number, created?: string): string {
   const prefix = created ? `created ${created} — ` : "";
-  return `${prefix}installed ${count} entries into ${installDir}/ (target ${target}) — run /gk:status in your agent`;
+  return `${prefix}installed ${count} entries into ${installDir}/ (target ${target}) — next: \`gk graph new diamond > graph.yaml\`, then \`gk validate\``;
 }
 
 export function registerKitCommands(cli: CAC) {

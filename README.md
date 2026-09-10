@@ -56,11 +56,15 @@ gk can bridge to the codebase-memory-mcp (CBM) MCP server for indexing and code-
 
 ## Install
 
-### GitHub release
+### One-liner (macOS / Linux)
 
-Each build on `main` publishes a new patch release (e.g. `v0.2.9`) with binaries and auto-generated changelogs. Install the latest for your platform:
+```bash
+curl -fsSL https://raw.githubusercontent.com/thanhNt16/graph-kit/main/scripts/install.sh | sh
+```
 
-**macOS Apple Silicon** (no sudo — installs into your home dir):
+Detects your platform, downloads the matching release, and swaps it in atomically — no sudo (installs into `~/.local/bin`), no stale-file overlays. Pin a version with `GK_VERSION=v0.3.8`, choose a dir with `GK_BIN_DIR=/usr/local/bin`. `curl | sh` runs a script you can [read first](scripts/install.sh); prefer to stay manual? Use the tarball:
+
+**Manual tarball** (macOS Apple Silicon shown; see [releases](https://github.com/thanhNt16/graph-kit/releases/latest) for other platforms):
 
 ```bash
 mkdir -p ~/.local/bin && rm -rf ~/.local/bin/gk ~/.local/bin/share
@@ -70,17 +74,8 @@ curl -fsSL https://github.com/thanhNt16/graph-kit/releases/latest/download/gk-da
 
 > The tarball holds `gk` plus a `share/gk/kits/` tree; `gk` finds its kits beside itself, so any writable dir on `PATH` works. Ensure `~/.local/bin` is on `PATH` (`echo $PATH | tr : '\n' | grep .local/bin`) — add `export PATH="$HOME/.local/bin:$PATH"` to your shell rc if missing.
 > Clearing the two paths first matters: `tar -xz` overlays and never removes files a newer release dropped.
-
-System-wide instead (needs sudo, and every upgrade needs it again):
-
-```bash
-curl -fsSL https://github.com/thanhNt16/graph-kit/releases/latest/download/gk-darwin-arm64.tar.gz \
-  | sudo tar -xz -C /usr/local/bin
-```
-
-> `releases/latest` always resolves to the newest version tag. `/usr/local/bin` is on `PATH` and is not SIP-protected.
 > ⚠️ Do **not** install to `/usr/bin` — it is SIP-protected on macOS; extraction fails with `Operation not permitted` even with `sudo`.
-> ⚠️ If you install to both, whichever dir comes first on `PATH` wins. `which -a gk` shows every copy; stale ones are silently shadowed, not upgraded.
+> ⚠️ If you install to both `~/.local/bin` and a system dir, whichever comes first on `PATH` wins. `which -a gk` shows every copy; stale ones are silently shadowed, not upgraded.
 
 Verify:
 
@@ -245,14 +240,10 @@ loops:
 
 The hybrid stop ladder runs after each round: first the deterministic `gate_evidence` check (every listed `<evidence_dir>/<key>.md` exists and is non-whitespace), then the orchestrator-judged `stop_when` text; otherwise another round, capped hard at `max_rounds`. Exhaustion fails the run, recording rounds executed and the stop reason (`gate` / `judged` / `exhausted`). Validation enforces node existence, wave-span contiguity, non-overlapping groups, `max_rounds ≥ 1`, a stop condition being present, and every `gate_evidence` key declared on a node inside the span. Per-node `loop:` stays unchanged and orthogonal.
 
-## Boundary
-
 ## CLI reference
 
 ```text
-$ gk --help
-
-  gk/0.3.0
+$ gk --help  (output abbreviated — run it yourself for the current list)
 
   Usage:
     $ gk <command> [options]
@@ -363,7 +354,7 @@ Before reporting a graph run complete, produce one non-whitespace file per decla
 gk gate graph.yaml
 ```
 
-`gk gate` reads each required key `k` as `<evidence_dir>/<k>.md` and prints a deterministic MERGE/BLOCK verdict with a per-key scorecard and sha256 manifest. Exit 0 means `MERGE`; a missing or whitespace-only key yields `BLOCK` with exit 1 — repair or redispatch only the producer of that key, then rerun the gate. Compiled workflows do not invoke the gate automatically; it is the orchestrator's final step.
+`gk gate` reads each required key `k` as `<evidence_dir>/<k>.md` and prints a deterministic MERGE/BLOCK verdict with a per-key scorecard and sha256 manifest (`--json`). Exit 0 means `MERGE`; a missing or whitespace-only key yields `BLOCK` with exit 1 — repair or redispatch only the producer of that key, then rerun the gate. Every fail envelope's error `code` is documented in the [error code catalog](docs/error-codes.md). Compiled workflows do not invoke the gate automatically; it is the orchestrator's final step.
 
 ### Criteria registry, provenance, freshness
 

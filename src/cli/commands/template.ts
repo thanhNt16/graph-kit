@@ -17,6 +17,7 @@ import {
   type TemplateValues,
 } from "../../schemas/template.schema.js";
 import { saveSessionGraph, setActiveGraphId } from "../../store/index.js";
+import { subcommandHelpFor } from "../command-registry.js";
 import { fail, ok } from "../output.js";
 
 // ponytail: DI seam mirroring graph.ts — lets tests simulate a rename failure
@@ -384,6 +385,7 @@ export function registerTemplateCommands(cli: CAC) {
   // command with action-based subcommand dispatch, mirroring `graph`.
   cli
     .command("template [subcommand] [args...]", "Package, list, inspect, and materialize reusable GraphTemplates")
+    .example(subcommandHelpFor("template"))
     .option("--name <name>", "Template name (required for pack)")
     .option("--global", "Write to the user-global store")
     .option("--force", "Overwrite an existing template")

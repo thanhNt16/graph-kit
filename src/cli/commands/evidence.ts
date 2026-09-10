@@ -4,13 +4,14 @@ import type { CAC } from "cac";
 import { GraphKitError } from "../../errors.js";
 import { buildViews, renderHtml, renderMarkdown } from "../../evidence/report.js";
 import { addEvidence, maxBytesFromConfig } from "../../evidence/store.js";
-import { subcommandsFor } from "../command-registry.js";
+import { subcommandHelpFor, subcommandsFor } from "../command-registry.js";
 import { fail, ok } from "../output.js";
 import { loadGraph } from "./graph.js";
 
 export function registerEvidenceCommand(cli: CAC) {
   cli
     .command("evidence [subcommand] [args...]", `Evidence commands\nSubcommands: ${subcommandsFor("evidence")}`)
+    .example(subcommandHelpFor("evidence"))
     .option("--key <k>", "add: evidence key")
     .option("--node <n>", "add: producing node id")
     .option("--note <text>", "add: free-text provenance note")

@@ -1,4 +1,4 @@
-import { appendFileSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import type { CAC } from "cac";
 import YAML from "yaml";
@@ -10,7 +10,7 @@ import { consolidate } from "../../memory/consolidate.js";
 import { type ParsedMemoryFile, parseMemoryFile, walkMemoryStore } from "../../memory/frontmatter.js";
 import { type ExpandedHit, expandedRecall } from "../../memory/recall-expanded.js";
 import { MemoryConfig } from "../../schemas/memory.schema.js";
-import { subcommandsFor } from "../command-registry.js";
+import { subcommandHelpFor, subcommandsFor } from "../command-registry.js";
 import { fail, ok } from "../output.js";
 
 // ponytail: DI seam for tests — avoids spawning the real CBM server.
@@ -262,6 +262,7 @@ export function registerMemoryCommands(cli: CAC) {
   // dispatches. Use one `memory` command with subcommand dispatch (like graph).
   cli
     .command("memory [subcommand] [args...]", `Memory commands\nSubcommands: ${subcommandsFor("memory")}`)
+    .example(subcommandHelpFor("memory"))
     .option("--project <project>", "CBM project name (default: graph.yaml memory.project or graph-kit-memory)")
     .option("--json", "JSON output")
     .action(async (subcommand, _args, opts) => {
@@ -366,6 +367,14 @@ Subcommands: ${subcommandsFor("memory")}\n\nOptions:\n  --project <project>  CBM
         if (opts.json) {
           console.log(
             JSON.stringify(ok({ query, top_k: results.length, results, linked, recall_topk: topk, malformed })),
+          );
+          return;
+        }
+        // Distinguish "empty store" from "no match" — the two read identically
+        // otherwise and send the operator hunting for a ranking bug.
+        if (!existsSync(memDir)) {
+          console.log(
+            `no memory store yet — .graphkit/memory/ is created by graph runs (\`gk run start\`) or \`gk memory consolidate\``,
           );
           return;
         }

@@ -170,3 +170,40 @@ export function subcommandsFor(group: string): string {
     .map((c) => c.path.split(" ")[1])
     .join(" ");
 }
+
+/**
+ * One line per subcommand (name + description) for a group's `--help` Examples
+ * section. cac's help omits command descriptions, so `gk graph --help` used to
+ * show LESS than bare `gk graph` — this makes the documented discovery route
+ * the richest one.
+ */
+export function subcommandHelpFor(group: string): string {
+  const leaves = CLI_COMMANDS.filter((c) => c.path.startsWith(`${group} `));
+  const nameW = Math.max(...leaves.map((c) => c.path.length));
+  return leaves.map((c) => `$ gk ${c.path.padEnd(nameW)}  ${c.description.split("\n")[0]}`).join("\n");
+}
+
+/** Levenshtein distance, small-n — "did you mean" support for CLI typos. */
+function editDistance(a: string, b: string): number {
+  const prev = Array.from({ length: b.length + 1 }, (_, j) => j);
+  for (let i = 1; i <= a.length; i++) {
+    const cur = [i];
+    for (let j = 1; j <= b.length; j++) {
+      cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+    }
+    prev.length = 0;
+    prev.push(...cur);
+  }
+  return prev[b.length];
+}
+
+/** Closest known top-level command for a mistyped one, or null when nothing is close. */
+export function suggestCommand(input: string): string | null {
+  const names = [...new Set(CLI_COMMANDS.map((c) => c.path.split(" ")[0]))];
+  let best: { name: string; d: number } | null = null;
+  for (const name of names) {
+    const d = editDistance(input.toLowerCase(), name);
+    if (!best || d < best.d) best = { name, d };
+  }
+  return best && best.d <= 2 ? best.name : null;
+}
