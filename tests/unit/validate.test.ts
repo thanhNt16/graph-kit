@@ -188,4 +188,17 @@ describe("validateGraph structural checks", () => {
       expect(validateGraph(g, PROJECT_ROOT)).toContainEqual(expect.objectContaining({ check: "evidence-key-path" }));
     });
   }
+  // A3: node-declared evidence gets the same basename rule — an
+  // agent-authored `nodes.x.evidence: ["../../evil"]` must be a finding.
+  test("rejects non-basename node evidence key", () => {
+    const g = GraphSchema.parse({
+      ...baseGraph,
+      topology: "diamond",
+      topology_config: undefined,
+      nodes: { scouter: { ...baseGraph.nodes.scouter, evidence: ["../../evil"] } },
+    });
+    expect(validateGraph(g, PROJECT_ROOT)).toContainEqual(
+      expect.objectContaining({ check: "evidence-key-path", path: "nodes.scouter.evidence" }),
+    );
+  });
 });

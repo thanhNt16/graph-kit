@@ -3,9 +3,11 @@ import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { type CAC, cac } from "cac";
+import { basename } from "node:path";
 import { registerExecuteCommand } from "../../src/cli/commands/execute.js";
 import { registerStatusCommand } from "../../src/cli/commands/status.js";
 import { registerVisualizeCommand } from "../../src/cli/commands/visualize.js";
+import { appendNode, startRun } from "../../src/memory/ledger.js";
 
 function runCli(args: string[], cwd: string, register: (cli: CAC) => void) {
   const cli = cac("gk");
@@ -74,6 +76,33 @@ describe("gk status", () => {
     expect(result.output).toContain("run: demo");
     expect(result.output).toContain("round:");
     expect(result.output).toContain("coverage: 1/1 keys ok");
+    expect(result.output).toContain("verdict: MERGE");
+  });
+
+  // A4: the ledger is authoritative for identity — a real `gk run start` run
+  // must report its run id, not the sidecar's stale "name" (was "unknown").
+  test("ledger-started run reports its run id, round derived from the trace", () => {
+    writeFileSync(
+      join(root, "graph.yaml"),
+      `apiVersion: graphkit.dev/v2\nkind: Graph\nmetadata:\n  name: demo\ntopology: diamond\nnodes:\n  a:\n    agent: reviewer\n    objective: test\n    depend_on: []\n    evidence: [design]\nevidence:\n  required_keys: [design]\n`,
+    );
+    mkdirSync(join(root, ".graphkit", "evidence"), { recursive: true });
+    writeFileSync(join(root, ".graphkit", "evidence", "design.md"), "done\n");
+    const { id } = startRun(root, join(root, "graph.yaml"));
+    appendNode(root, {
+      node: "a",
+      wave: 2,
+      agent: "reviewer",
+      model: null,
+      status: "ok",
+      evidence: ["design"],
+      duration_ms: null,
+      notes: null,
+    });
+    const result = runCli(["status"], root, registerStatusCommand);
+    expect(result.code).toBe(0);
+    expect(result.output).toContain(`run: ${id}`);
+    expect(result.output).toContain("round: 3"); // highest wave + 1
     expect(result.output).toContain("verdict: MERGE");
   });
 });

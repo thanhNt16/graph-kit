@@ -12,6 +12,13 @@ export interface Finding {
 
 export type Graph = z.infer<typeof GraphSchema>;
 
+// Evidence keys map 1:1 to files under the evidence dir — anything that is not
+// a portable basename can escape it (`../x`, `a/b`, absolute paths). Shared by
+// validateGraph (finding) and addEvidence (hard stop).
+export function isValidEvidenceKey(key: string): boolean {
+  return key.length > 0 && key !== "." && key !== ".." && !/[\\/]/.test(key);
+}
+
 // Agent names resolve to kebab-case filenames: "Software Architect" → software-architect.md
 export function agentFileName(agent: string): string {
   return `${agent.toLowerCase().replace(/[^a-z0-9]+/g, "-")}.md`;
@@ -90,14 +97,23 @@ export function validateGraph(graph: Graph, projectRoot: string): Finding[] {
     }
   }
 
-  // 4. Evidence keys must be portable basenames; gate maps them directly to files
-  for (const key of graph.evidence.required_keys) {
-    if (key.length === 0 || key === "." || key === ".." || /[\\/]/.test(key)) {
-      findings.push({
-        check: "evidence-key-path",
-        path: "evidence.required_keys",
-        message: `Evidence key "${key}" must be a non-empty basename without path separators`,
-      });
+  // 4. Evidence keys must be portable basenames; gate/addEvidence map them
+  // directly to files. Applied to required keys AND node-produced keys — an
+  // agent-authored `nodes.x.evidence: ["../../evil"]` must fail validation,
+  // not write outside the evidence dir at `gk evidence add` time.
+  const evidenceKeyFindings: { keys: string[]; path: string }[] = [
+    { keys: graph.evidence.required_keys, path: "evidence.required_keys" },
+    ...Object.entries(graph.nodes).map(([id, n]) => ({ keys: n.evidence, path: `nodes.${id}.evidence` })),
+  ];
+  for (const { keys, path } of evidenceKeyFindings) {
+    for (const key of keys) {
+      if (!isValidEvidenceKey(key)) {
+        findings.push({
+          check: "evidence-key-path",
+          path,
+          message: `Evidence key "${key}" must be a non-empty basename without path separators`,
+        });
+      }
     }
   }
 

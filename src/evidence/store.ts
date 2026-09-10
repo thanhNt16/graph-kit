@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { appendFileSync, copyFileSync, existsSync, mkdirSync, readFileSync, statSync } from "node:fs";
 import { basename, extname, join } from "node:path";
-import type { Graph } from "../compiler/validate.js";
+import { type Graph, isValidEvidenceKey } from "../compiler/validate.js";
 import { GraphKitError } from "../errors.js";
 import { atomicWrite } from "../fs.js";
 import { activeRun } from "../memory/ledger.js";
@@ -38,6 +38,19 @@ export function addEvidence(
       `Evidence key "${opts.key}" is not required by the graph nor produced by any node`,
       {
         hint: "Declare it in evidence.required_keys or nodes.<id>.evidence in graph.yaml",
+      },
+    );
+  }
+  // Containment: keys join directly into evidence-dir paths. validateGraph
+  // flags non-basename keys, but `gk evidence add` loads the graph without
+  // validating — so the write path enforces it too, regardless of where the
+  // key was declared (node evidence was never checked before).
+  if (!isValidEvidenceKey(opts.key)) {
+    throw new GraphKitError(
+      "EVIDENCE_KEY_INVALID",
+      `Evidence key "${opts.key}" must be a non-empty basename without path separators`,
+      {
+        hint: "Use a plain key like \"report\" — it becomes <evidence_dir>/<key>.md",
       },
     );
   }

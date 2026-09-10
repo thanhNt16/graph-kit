@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { appendNode, endRun, startRun } from "../../src/memory/ledger.js";
@@ -346,5 +346,35 @@ describe("resumeRun derived-graph gate", () => {
   test("run-not-found resolves before RUN_ACTIVE", () => {
     startRun(cwd, join(cwd, "graph.yaml"), "2026-09-04T10:00:00.000Z");
     expect(() => resumeRun(cwd, "20990101-000000-demo")).toThrow(/RESUME_RUN_NOT_FOUND/);
+  });
+});
+
+// A7: parseable-but-wrong trace lines used to crash reconciliation with an
+// opaque RUN_ERROR TypeError, and corrupt meta.json escaped as raw SyntaxError.
+describe("shape validation at the resume boundary (A7)", () => {
+  test("malformed trace lines are skipped and counted, not fatal", () => {
+    const { id } = startRun(cwd, join(cwd, "graph.yaml"), "2026-09-04T10:00:00.000Z");
+    traceOk(cwd, "a", ["a-out"]);
+    appendFileSync(
+      join(cwd, ".graphkit", "runs", id, "trace.jsonl"),
+      `${JSON.stringify({ node: "b", status: "ok" })}\nnot even json\n`,
+    );
+    writeEvidence(cwd, "a-out");
+    const rec = reconcileRun(cwd, id);
+    expect(rec.skippedTraceLines).toBe(2);
+    expect(rec.satisfied).toEqual(["a"]); // b stays pending — its line is untrusted
+    expect(rec.pending).toContain("b");
+  });
+
+  test("corrupt meta.json throws RUN_META_CORRUPT, not a SyntaxError", () => {
+    const { id } = startRun(cwd, join(cwd, "graph.yaml"), "2026-09-04T10:00:00.000Z");
+    endRun(cwd, "failed");
+    writeFileSync(join(cwd, ".graphkit", "runs", id, "meta.json"), "{corrupt");
+    try {
+      reconcileRun(cwd, id);
+      throw new Error("expected a throw");
+    } catch (e) {
+      expect((e as Error).message).toContain("RUN_META_CORRUPT");
+    }
   });
 });

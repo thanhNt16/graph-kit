@@ -214,8 +214,42 @@ export function readAdvisorEvents(cwd: string, id: string): AdvisorEvent[] {
   return readJsonl<AdvisorEvent>(join(runsDir(cwd), id, "advisor.jsonl"));
 }
 
+// Every trace consumer destructures node/status/evidence/wave — a parseable
+// but wrong line (`{"node":"a","status":"ok"}` with no evidence array) used to
+// crash resume reconciliation inside evidenceOnDisk with an opaque TypeError.
+// Shape-validate at the read boundary instead: skip and count.
+export function isValidTraceLine(l: unknown): l is TraceLine {
+  const t = l as Partial<TraceLine> | null;
+  return (
+    typeof t?.node === "string" &&
+    (t?.status === "ok" || t?.status === "fail") &&
+    Array.isArray(t?.evidence) &&
+    t.evidence.every((k) => typeof k === "string")
+  );
+}
+
+export function readTraceStats(cwd: string, id: string): { lines: TraceLine[]; skipped: number } {
+  const file = join(runsDir(cwd), id, "trace.jsonl");
+  if (!existsSync(file)) return { lines: [], skipped: 0 };
+  // Owns the split (unlike readJsonl) so torn lines count as skipped too —
+  // a partially-written audit trail must be visible, not silently truncated.
+  const lines: TraceLine[] = [];
+  let skipped = 0;
+  for (const l of readFileSync(file, "utf-8").split("\n")) {
+    if (!l.trim()) continue;
+    try {
+      const parsed = JSON.parse(l) as unknown;
+      if (isValidTraceLine(parsed)) lines.push(parsed);
+      else skipped += 1;
+    } catch {
+      skipped += 1; // torn line rather than abort the whole scan
+    }
+  }
+  return { lines, skipped };
+}
+
 export function readTrace(cwd: string, id: string): TraceLine[] {
-  return readJsonl<TraceLine>(join(runsDir(cwd), id, "trace.jsonl"));
+  return readTraceStats(cwd, id).lines;
 }
 
 export function readRunIndex(cwd: string): RunIndexLine[] {
@@ -242,7 +276,12 @@ export function endRun(cwd: string, status: RunIndexLine["status"], now = new Da
   const dir = activeRun(cwd);
   if (!dir) throw new GraphKitError("NO_ACTIVE_RUN", "NO_ACTIVE_RUN: nothing to end");
   const id = basename(dir);
-  const meta = JSON.parse(readFileSync(join(dir, "meta.json"), "utf-8"));
+  // Claim the end by removing the pointer FIRST: two concurrent `gk run end`
+  // both used to pass the activeRun() check and double-append to index.jsonl.
+  // Removing the pointer costs at most a lost summary on a crash between here
+  // and the append; double-appending corrupted the ledger permanently.
+  rmSync(activeFile(cwd), { force: true });
+  const meta = readRunMeta(cwd, id);
   const trace = readTrace(cwd, id);
 
   const summary: RunIndexLine = {
@@ -268,7 +307,6 @@ export function endRun(cwd: string, status: RunIndexLine["status"], now = new Da
     ].join("\n"),
   );
   atomicWrite(join(dir, "run.md"), md);
-  rmSync(activeFile(cwd), { force: true });
   return summary;
 }
 
@@ -295,5 +333,13 @@ export function readRunMeta(cwd: string, id: string): RunMeta {
   const file = join(runsDir(cwd), id, "meta.json");
   if (!/^\d{8}-\d{6}-[\w.-]+$/.test(id) || !existsSync(file))
     throw new GraphKitError("RESUME_RUN_NOT_FOUND", `RESUME_RUN_NOT_FOUND: no run "${id}" under ${runsDir(cwd)}`);
-  return JSON.parse(readFileSync(file, "utf-8")) as RunMeta;
+  try {
+    return JSON.parse(readFileSync(file, "utf-8")) as RunMeta;
+  } catch {
+    // Corrupt meta previously surfaced as a raw SyntaxError inside RUN_ERROR.
+    throw new GraphKitError(
+      "RUN_META_CORRUPT",
+      `RUN_META_CORRUPT: ${file} is not valid JSON — repair or remove the run dir before resuming`,
+    );
+  }
 }

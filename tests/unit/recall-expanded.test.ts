@@ -80,6 +80,45 @@ describe("expanded recall", () => {
     expect(r.results.every((h) => h.linked === false)).toBe(true); // both direct: no room for linked
   });
 
+  // A2: link expansion used to pull from the UNFILTERED doc list, so an
+  // expired or superseded memory could resurface (and get reinforced) as a
+  // [linked] hit — the documented filters must apply to neighbors too.
+  test("expired neighbor reachable only via links never surfaces", () => {
+    entry(memDir, "auth.md", { id: "auth", type: "knowledge", salience: 1.0 }, "oauth\nsee [[oldnote]]\n");
+    entry(
+      memDir,
+      "oldnote.md",
+      { id: "oldnote", type: "knowledge", salience: 1.0, expired: true },
+      "outdated advice\n",
+    );
+    writeFileSync(
+      join(memDir, ".links.json"),
+      JSON.stringify({ generated_at: "2026-09-03T00:00:00.000Z", links: { auth: ["oldnote"] } }),
+    );
+    const r = expandedRecall(memDir, "oauth", 5, "2026-09-03T00:00:00.000Z");
+    expect(r.results.map((h) => h.id)).toEqual(["auth"]);
+  });
+
+  test("superseded neighbor reachable only via links never surfaces", () => {
+    entry(memDir, "auth.md", { id: "auth", type: "knowledge", salience: 1.0 }, "oauth\nsee [[v1]]\n");
+    entry(memDir, "v1.md", { id: "v1", type: "knowledge", salience: 1.0, superseded_by: "v2" }, "stale policy\n");
+    entry(memDir, "v2.md", { id: "v2", type: "knowledge", salience: 1.0 }, "current policy\n");
+    writeFileSync(
+      join(memDir, ".links.json"),
+      JSON.stringify({ generated_at: "2026-09-03T00:00:00.000Z", links: { auth: ["v1"] } }),
+    );
+    const r = expandedRecall(memDir, "oauth", 5, "2026-09-03T00:00:00.000Z");
+    expect(r.results.map((h) => h.id)).toEqual(["auth"]); // v1 dropped; v2 not a link neighbor
+  });
+
+  test("malformed store entries are counted in the result", () => {
+    entry(memDir, "auth.md", { id: "auth", type: "knowledge", salience: 0.5 }, "oauth notes\n");
+    writeFileSync(join(memDir, "broken.md"), "---\ntags: [unclosed\n---\nbody");
+    const r = expandedRecall(memDir, "oauth", 5, "2026-09-03T00:00:00.000Z");
+    expect(r.malformed).toBe(1);
+    expect(r.results.map((h) => h.id)).toEqual(["auth"]);
+  });
+
   test("empty store returns empty", () => {
     expect(expandedRecall(memDir, "anything", 5, "2026-09-03T00:00:00.000Z").results).toEqual([]);
   });

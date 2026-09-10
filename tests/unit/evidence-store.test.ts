@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { createHash } from "node:crypto";
-import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import YAML from "yaml";
@@ -92,6 +92,21 @@ describe("addEvidence", () => {
     expect(thrownCode(() => addEvidence(cwd, graph(), { file: join(cwd, "x"), key: "bogus" }))).toBe(
       "EVIDENCE_KEY_NOT_DECLARED",
     );
+  });
+
+  // A3: keys join directly into evidence-dir paths. A declared traversal key
+  // (node evidence was never basename-checked) used to write outside the dir.
+  test("declared traversal key → EVIDENCE_KEY_INVALID, nothing written outside the evidence dir", () => {
+    writeFileSync(
+      join(cwd, "graph.yaml"),
+      graphYaml.replace("evidence: [api-response]", 'evidence: ["../../evil", "sub/dir", ".."]'),
+    );
+    writeFileSync(join(cwd, "x"), "x");
+    for (const key of ["../../evil", "sub/dir", ".."]) {
+      expect(thrownCode(() => addEvidence(cwd, graph(), { file: join(cwd, "x"), key }))).toBe("EVIDENCE_KEY_INVALID");
+    }
+    expect(existsSync(join(cwd, "evil.md"))).toBe(false);
+    expect(existsSync(join(cwd, "sub"))).toBe(false);
   });
 
   test("missing file → EVIDENCE_FILE_MISSING; oversize → EVIDENCE_TOO_LARGE", () => {

@@ -6,7 +6,7 @@ import type { Graph } from "../compiler/validate.js";
 import { GraphKitError } from "../errors.js";
 import { GraphSchema, type LoopGroup } from "../schemas/graph.schema.js";
 import { saveSessionGraph, setActiveGraphId } from "../store/index.js";
-import { activeRun, readRunMeta, readTrace, startRun, type TraceLine } from "./ledger.js";
+import { activeRun, readRunMeta, readTrace, readTraceStats, startRun, type TraceLine } from "./ledger.js";
 
 export interface ResumeResult {
   resumed: boolean;
@@ -16,6 +16,8 @@ export interface ResumeResult {
   pending: string[];
   satisfied: string[];
   skipped: Array<{ node: string; reason: string }>;
+  /** trace lines dropped by the shape guard (see isValidTraceLine) */
+  skipped_trace_lines?: number;
 }
 
 export function resumeRun(
@@ -28,15 +30,37 @@ export function resumeRun(
   if (active)
     throw new GraphKitError("RUN_ACTIVE", `RUN_ACTIVE: run already active at ${active}; run \`gk run end\` first`);
   if (rec.pending.length === 0)
-    return { resumed: false, reason: "NOTHING_TO_RESUME", pending: [], satisfied: rec.satisfied, skipped: rec.skipped };
+    return {
+      resumed: false,
+      reason: "NOTHING_TO_RESUME",
+      pending: [],
+      satisfied: rec.satisfied,
+      skipped: rec.skipped,
+      skipped_trace_lines: rec.skippedTraceLines,
+    };
   if (opts.dryRun)
-    return { resumed: false, reason: "DRY_RUN", pending: rec.pending, satisfied: rec.satisfied, skipped: rec.skipped };
+    return {
+      resumed: false,
+      reason: "DRY_RUN",
+      pending: rec.pending,
+      satisfied: rec.satisfied,
+      skipped: rec.skipped,
+      skipped_trace_lines: rec.skippedTraceLines,
+    };
   const derived = deriveResumeGraph(rec, runId);
   validateDerivedGraph(derived);
   const session = saveSessionGraph(derived, derived.metadata.name, cwd);
   setActiveGraphId(session.id, cwd);
   const run = startRun(cwd, session.path, new Date().toISOString(), runId);
-  return { resumed: true, session, run, pending: rec.pending, satisfied: rec.satisfied, skipped: rec.skipped };
+  return {
+    resumed: true,
+    session,
+    run,
+    pending: rec.pending,
+    satisfied: rec.satisfied,
+    skipped: rec.skipped,
+    skipped_trace_lines: rec.skippedTraceLines,
+  };
 }
 
 export interface Reconciliation {
@@ -48,6 +72,7 @@ export interface Reconciliation {
   satisfied: string[];
   pending: string[];
   skipped: Array<{ node: string; reason: string }>;
+  skippedTraceLines: number;
 }
 function parseGraph(path: string): Graph {
   const parsed = GraphSchema.safeParse(YAML.parse(readFileSync(path, "utf-8")));
@@ -96,7 +121,8 @@ export function reconcileRun(
       `RESUME_BAD_FROM_NODE: --from-node "${opts.fromNode}" is not a node of ${meta.graph_path}`,
     );
   const last = new Map<string, TraceLine>();
-  for (const line of readTrace(cwd, runId)) last.set(line.node, line);
+  const { lines: traceLines, skipped: skippedTraceLines } = readTraceStats(cwd, runId);
+  for (const line of traceLines) last.set(line.node, line);
   const evidenceDir = graph.outputs?.evidence_dir ?? ".graphkit/evidence/";
   const satisfied = new Set<string>();
   for (const name of names) {
@@ -124,6 +150,7 @@ export function reconcileRun(
     satisfied: [...satisfied].filter((n) => !pending.includes(n)).sort(),
     pending: pending.sort(),
     skipped,
+    skippedTraceLines,
   };
 }
 

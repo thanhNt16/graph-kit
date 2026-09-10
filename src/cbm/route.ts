@@ -1,4 +1,4 @@
-import type { CbmClient } from "./client.js";
+import { isCbmUnavailable, type CbmClient } from "./client.js";
 import type { TraceHop } from "./contract.js";
 import { runTemplate } from "./templates.js";
 
@@ -13,8 +13,10 @@ export type QueryKind = "callers" | "dataflow" | "deadcode" | "wheredef" | "deps
 const RULES: [RegExp, QueryKind][] = [
   [/declared but never|never (?:read|used|referenced)|\bdead\b|\bunused\b/, "deadcode"],
   [/\b(?:who|which)\b.*\bcalls?\b|\bcallers?\b/, "callers"],
-  [/\bhow\b.*\b(?:does|do|are|is)\b|\btrace\b|\bfrom\b.*\bto\b|data.?flow/, "dataflow"],
+  // wheredef before dataflow: "how do I find where X is defined" contains both
+  // signatures, and the where-defined intent is the more specific one.
   [/\bwhere\b.*\b(?:defined|implemented)\b/, "wheredef"],
+  [/\bhow\b.*\b(?:does|do|are|is)\b|\btrace\b|\bfrom\b.*\bto\b|data.?flow/, "dataflow"],
 ];
 
 export function classifyQuestion(q: string): QueryKind {
@@ -98,14 +100,37 @@ export function symbols(q: string): string[] {
 }
 
 // whole-question text is a poor BM25 query; strip function words + de-nominalize
-// ("validation" -> "validate", "compilation" -> "compile")
+// ("compilation" -> "compile"). The blanket `-ation → -e` rule only works when
+// the stem already ends in the verb's -e/-z (compil+e, authoriz+e); everywhere
+// else it mangles the token ("validation" → "valide", "implementation" →
+// "implemente" — BM25-dead). Map the common wrong cases explicitly; unknown
+// nouns keep the measured default rather than inventing stems.
+const ATION_EXCEPTIONS: Record<string, string> = {
+  validation: "validate",
+  implementation: "implement",
+  representation: "represent",
+  interpretation: "interpret",
+  generation: "generate",
+  operation: "operate",
+  information: "inform",
+  registration: "register",
+  documentation: "document",
+  transformation: "transform",
+  authentication: "authenticate",
+  verification: "verify",
+  classification: "classify",
+  identification: "identify",
+  notification: "notify",
+  qualification: "qualify",
+  simplification: "simplify",
+};
 export function contentTokens(q: string): string {
   return q
     .toLowerCase()
     .replace(/[^a-z0-9_ ]/g, " ")
     .split(/\s+/)
     .filter((t) => t.length > 1 && !STOP.has(t))
-    .map((t) => t.replace(/ation$/, "e"))
+    .map((t) => ATION_EXCEPTIONS[t] ?? t.replace(/ation$/, "e"))
     .join(" ");
 }
 
@@ -153,6 +178,16 @@ export interface RouteOpts {
   depth?: number;
 }
 
+// Per-query failures fail open to `fallback` (a flaky bridge answer is still
+// usable), but a dead bridge must surface as CBM_UNAVAILABLE — swallowing it
+// printed `ok` with empty results, indistinguishable from an empty index.
+function failOpen<T>(fallback: T): (e: unknown) => T {
+  return (e: unknown) => {
+    if (isCbmUnavailable(e)) throw e;
+    return fallback;
+  };
+}
+
 export async function routeAndRetrieve(
   client: CbmClient,
   question: string,
@@ -168,7 +203,7 @@ export async function routeAndRetrieve(
     client
       .call("search_graph", { query, project, limit: opts?.limit ?? 8 })
       .then(hit)
-      .catch(() => [] as TrimHit[]);
+      .catch(failOpen([] as TrimHit[]));
   // identifier query first (exact symbol match), token query as fallback/merge
   const symQ = symbols(question).join(" ");
   const [symHits, tokHits] = await Promise.all([
@@ -189,7 +224,7 @@ export async function routeAndRetrieve(
     const t = await client
       .call("trace_path", { function_name: seed, project, depth: opts?.depth ?? 3, direction })
       .then((r) => unwrap<{ callers?: TraceHop[]; callees?: TraceHop[] }>(r))
-      .catch(() => ({ callers: [], callees: [] }) as { callers?: TraceHop[]; callees?: TraceHop[] });
+      .catch(failOpen({ callers: [], callees: [] } as { callers?: TraceHop[]; callees?: TraceHop[] }));
     const hop = (h?: TraceHop[]) =>
       (h ?? []).map((x) => {
         // R5: server-provided anchors win verbatim; otherwise derive from the
@@ -232,7 +267,7 @@ export async function routeAndRetrieve(
           client
             .call("get_code_snippet", { qualified_name: h.q, project })
             .then((r) => unwrap<{ name: string; source: string }>(r))
-            .catch(() => undefined),
+            .catch(failOpen(undefined as { name: string; source: string } | undefined)),
         ),
     );
     const snippets = snips

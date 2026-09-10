@@ -7,7 +7,7 @@ import { indexProject } from "../../cbm/index.js";
 import { actRScore, shouldExpire } from "../../eval/forgetting.js";
 import { atomicWrite } from "../../fs.js";
 import { consolidate } from "../../memory/consolidate.js";
-import { parseMemoryFile, walkMemoryStore } from "../../memory/frontmatter.js";
+import { parseMemoryFile, walkMemoryStore, type ParsedMemoryFile } from "../../memory/frontmatter.js";
 import { type ExpandedHit, expandedRecall } from "../../memory/recall-expanded.js";
 import { MemoryConfig } from "../../schemas/memory.schema.js";
 import { subcommandsFor } from "../command-registry.js";
@@ -91,32 +91,28 @@ export function traceMemory(
 ): MemoryTraceReport {
   const memDir = join(cwd, ".graphkit", "memory");
   const report: MemoryTraceReport = { total: 0, live: 0, expired: 0, newly_expired: 0, superseded: 0, memories: [] };
-  // Reserved names are workflows' indexes, not memory entries.
-  const files = existsSync(memDir) ? readdirSync(memDir) : [];
-  const entries = files.filter((f) => f.endsWith(".md") && f !== "index.md" && f !== "log.md");
-  if (!existsSync(memDir) || entries.length === 0) return report;
+  // Root plus one sublevel (patterns/, suggestions/) — decay must see the whole
+  // store or it eventually evicts every pattern while patterns never age out.
+  // walkMemoryStore applies the same legacy-tags coercion as before and drops
+  // malformed entries silently (the store-wide convention).
+  const entries = walkMemoryStore(memDir, { skip: ["index.md", "log.md"] });
+  if (entries.length === 0) return report;
 
   const expireActive = opts?.expire_policy !== "manual";
 
-  for (const file of entries) {
-    const path = join(memDir, file);
-    const raw = readFileSync(path, "utf-8");
-    // Strict schema parse before rewrites; malformed entries are counted but
-    // skipped. Shared reader (frontmatter.ts): legacy string tags coerced,
-    // id/type defaulted — the single coercion rule for the whole store.
-    const parsed = parseMemoryFile(raw, file.replace(/\.md$/, ""));
-    if (!parsed) continue;
-    const fm = parsed.fm as unknown as Record<string, unknown>;
+  for (const entry of entries) {
+    const path = entry.path;
+    const fm = entry.fm as unknown as Record<string, unknown>;
     report.total++;
 
     if (fm.superseded_by) {
       report.superseded++;
-      report.memories.push({ id: String(fm.id ?? file), score: 0, state: "superseded", action: "superseded" });
+      report.memories.push({ id: String(fm.id ?? entry.file), score: 0, state: "superseded", action: "superseded" });
       continue;
     }
 
     const tags = Array.isArray(fm.tags) ? fm.tags.length : 0;
-    const links = (raw.match(/\[\[[^\]]+\]\]/g) ?? []).length;
+    const links = (entry.raw.match(/\[\[[^\]]+\]\]/g) ?? []).length;
     // ponytail: connectivity heuristic — floor 0.5 with no signal, tags+wikilinks
     // normalized at 3 above that; monotonic so adding a tag never lowers a score.
     // Upgrade to real graph degree if memory entries ever get CBM-indexed edges.
@@ -140,16 +136,16 @@ export function traceMemory(
       fm.status = "deprecated";
       // F6: in-place rewrite of a file the user may read — atomic, so a crash
       // mid-decay leaves the previous frontmatter intact.
-      atomicWrite(path, `---\n${YAML.stringify(fm)}---\n${parsed.body}`);
+      atomicWrite(path, `---\n${YAML.stringify(fm)}---\n${entry.body}`);
       report.expired++;
       report.newly_expired++;
-      report.memories.push({ id: String(fm.id ?? file), score, state: "expired", action: "newly-expired" });
+      report.memories.push({ id: String(fm.id ?? entry.file), score, state: "expired", action: "newly-expired" });
     } else if (wasExpired) {
       report.expired++;
-      report.memories.push({ id: String(fm.id ?? file), score, state: "expired", action: "already-expired" });
+      report.memories.push({ id: String(fm.id ?? entry.file), score, state: "expired", action: "already-expired" });
     } else {
       report.live++;
-      report.memories.push({ id: String(fm.id ?? file), score, state: "live", action: "kept" });
+      report.memories.push({ id: String(fm.id ?? entry.file), score, state: "live", action: "kept" });
     }
   }
   appendFileSync(
@@ -159,6 +155,24 @@ export function traceMemory(
       .join("\n")}\n`,
   );
   return report;
+}
+
+// The reinforcement invariant both touch paths share: bump use_count + set
+// last_used_at, rewrite atomically (F6 — decay reads these files concurrently).
+// One body so the two locators can't drift again (they already had mismatched
+// id guards once); the single zod-mutation cast lives here, not at call sites.
+function reinforceEntry(
+  relFile: string,
+  path: string,
+  parsed: ParsedMemoryFile,
+  now: string,
+): { id: string; file: string; use_count: number; last_used_at: string } {
+  const fm = parsed.fm as unknown as Record<string, unknown>;
+  const useCount = (typeof fm.use_count === "number" ? fm.use_count : 1) + 1;
+  fm.use_count = useCount;
+  fm.last_used_at = now;
+  atomicWrite(path, `---\n${YAML.stringify(parsed.fm)}---\n${parsed.body}`);
+  return { id: String(fm.id), file: relFile, use_count: useCount, last_used_at: now };
 }
 
 // Reinforcement: recall that surfaces a memory must bump its use_count and
@@ -177,13 +191,7 @@ export function touchMemory(
   // `tags: "foo"` store entry is reinforced instead of silently dropped.
   for (const entry of walkMemoryStore(memDir)) {
     if (entry.id !== id) continue;
-    const fm = entry.fm as unknown as Record<string, unknown>;
-    const useCount = (typeof fm.use_count === "number" ? fm.use_count : 1) + 1;
-    fm.use_count = useCount;
-    fm.last_used_at = now;
-    // F6: reinforcement rewrite is atomic — decay reads these files concurrently.
-    atomicWrite(entry.path, `---\n${YAML.stringify(entry.fm)}---\n${entry.body}`);
-    return { id: entry.id, file: entry.file, use_count: useCount, last_used_at: now };
+    return reinforceEntry(entry.file, entry.path, entry, now);
   }
   return null;
 }
@@ -206,12 +214,7 @@ export function touchMemoryByPath(
   }
   const parsed = parseMemoryFile(raw, basename(relPath).replace(/\.md$/, ""));
   if (!parsed || parsed.fm.id !== id) return null;
-  const fm = parsed.fm as unknown as Record<string, unknown>;
-  const useCount = (typeof fm.use_count === "number" ? fm.use_count : 1) + 1;
-  fm.use_count = useCount;
-  fm.last_used_at = now;
-  atomicWrite(path, `---\n${YAML.stringify(parsed.fm)}---\n${parsed.body}`);
-  return { id: parsed.fm.id, file: relPath, use_count: useCount, last_used_at: now };
+  return reinforceEntry(relPath, path, parsed, now);
 }
 
 // ponytail: DI seam for tests — lets the recall suite observe that k hits issue
@@ -330,10 +333,12 @@ Subcommands: ${subcommandsFor("memory")}\n\nOptions:\n  --project <project>  CBM
         }
         let results: ExpandedHit[] = [];
         let linked = 0;
+        let malformed = 0;
         try {
           const stats = expandedRecall(memDir, query, topk);
           results = stats.results;
           linked = stats.linked;
+          malformed = stats.malformed;
         } catch (e) {
           console.log(
             JSON.stringify(
@@ -359,7 +364,7 @@ Subcommands: ${subcommandsFor("memory")}\n\nOptions:\n  --project <project>  CBM
           return;
         }
         if (opts.json) {
-          console.log(JSON.stringify(ok({ query, top_k: results.length, results, linked, recall_topk: topk })));
+          console.log(JSON.stringify(ok({ query, top_k: results.length, results, linked, recall_topk: topk, malformed })));
           return;
         }
         console.log(renderRecallHits(memDir, query, results, linked));

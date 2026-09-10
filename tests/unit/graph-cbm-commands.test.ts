@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { cac } from "cac";
+import { CBM_UNAVAILABLE_MSG } from "../../src/cbm/client.js";
 
 // --- Mutable refs — the seam reads these at call time ---
 let fakeCallFn: ((tool: string, args: Record<string, unknown>) => Promise<unknown>) | undefined;
@@ -188,6 +189,23 @@ describe("gk graph CBM subcommands", () => {
     const parsed = JSON.parse(sink.join("\n"));
     expect(parsed.status).toBe("fail");
     expect(parsed.error.code).toBe("CBM_UNAVAILABLE");
+  });
+
+  test("ask on a dead bridge fails honestly, not ok-with-zero-hits", async () => {
+    // route.ts used to swallow the fatal bridge rejection into empty results —
+    // an empty `ok` payload is indistinguishable from a real empty index.
+    fakeCallFn = async () => {
+      throw new Error(CBM_UNAVAILABLE_MSG);
+    };
+    fakeCloseFn = async () => {};
+
+    runCli(["graph", "ask", "Who calls validateGraph in production code?"]);
+    await new Promise((r) => setTimeout(r, 50));
+
+    const parsed = JSON.parse(sink.join("\n"));
+    expect(parsed.status).toBe("fail");
+    expect(parsed.error.code).toBe("CBM_UNAVAILABLE");
+    expect(process.exitCode).toBe(1);
   });
 
   test("client.close called after successful search", async () => {

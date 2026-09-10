@@ -18,21 +18,29 @@ export function _resetRenameSeam() {
   wRename = renameSync;
 }
 
-/** Atomic write: sibling temp file + rename; cleanup temp on rename failure. */
+/**
+ * Atomic write: sibling temp file + rename; cleanup temp on any failure
+ * (including the write itself — ENOSPC/EACCES used to escape as a raw errno
+ * and strand the temp file). Temp name is pid-scoped: safe across processes
+ * (last-writer-wins via rename); within one process, writers to the same
+ * target are expected to serialize.
+ */
 export function atomicWrite(filePath: string, data: string): void {
   const dir = dirname(filePath);
   mkdirSync(dir, { recursive: true });
   const tmp = `${filePath}.${process.pid}.tmp`;
-  writeFileSync(tmp, data, "utf-8");
   try {
+    writeFileSync(tmp, data, "utf-8");
     wRename(tmp, filePath);
   } catch (e) {
     try {
-      // cleanup on failure; ignore errors — temp file may have been created elsewhere
+      // cleanup on failure; ignore errors — temp file may never have existed
       if (existsSync(tmp)) unlinkSync(tmp);
     } catch {
       /* best-effort cleanup */
     }
-    throw new GraphKitError("WRITE_FAILED", `Failed to write ${filePath}: ${String(e)}`);
+    throw new GraphKitError("WRITE_FAILED", `Failed to write ${filePath}: ${String(e)}`, {
+      errno: (e as NodeJS.ErrnoException)?.code ?? null,
+    });
   }
 }

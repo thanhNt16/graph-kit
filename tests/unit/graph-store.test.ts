@@ -134,11 +134,18 @@ describe("Session Graph Store", () => {
       expect.unreachable("loadActiveGraph must throw");
     } catch (e) {
       if (e instanceof GraphKitError) {
-        expect(e.code).toBe("INVALID_SESSION_ID");
+        // A9: the pointer reader rejects a malformed id with a remediation
+        // hint (ACTIVE_POINTER_CORRUPT) before it can reach any path join.
+        expect(e.code).toBe("ACTIVE_POINTER_CORRUPT");
       } else {
         throw e;
       }
     }
+  });
+
+  it("garbage active pointer fails with a defined error, not silent pass-through (A9)", () => {
+    writeFileSync(join(TEST_DIR, ".graphkit", "active"), "\x00torn write", "utf-8");
+    expect(() => loadActiveGraph(TEST_DIR)).toThrow(/ACTIVE_POINTER_CORRUPT/);
   });
 
   it("setActiveGraphId refuses unknown ids", () => {

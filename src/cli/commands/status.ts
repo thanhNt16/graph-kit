@@ -1,7 +1,8 @@
 import { existsSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import type { CAC } from "cac";
 import { GraphKitError } from "../../errors.js";
+import { activeRun, readRunMeta, readTrace } from "../../memory/ledger.js";
 import { fail, ok } from "../output.js";
 import { type GateResult, gateGraph } from "./gate.js";
 import { loadGraph } from "./graph.js";
@@ -48,21 +49,61 @@ export function registerStatusCommand(cli: CAC) {
         const cwd = process.cwd();
         const runsDir = join(cwd, ".graphkit", "runs");
         const activeMarker = join(runsDir, ".active");
+        // The ledger is authoritative: a run started by `gk run start` carries
+        // its identity (id/graph/started_at) in the run dir's meta.json — the
+        // agent-authored current.json sidecar never updates it, so name used
+        // to read "unknown" for every real run.
+        const ledgerDir = activeRun(cwd);
 
-        // No active run → stable success exit 0.
-        if (!existsSync(activeMarker)) {
+        // No active run → stable success exit 0. A ledger run wins; an
+        // agent-authored .active without a valid run dir still counts as
+        // running (sidecar data below), matching the pre-ledger contract.
+        if (!ledgerDir && !existsSync(activeMarker)) {
           const data: StatusData = { running: false, run: null, coverage: null };
           console.log(opts.json ? JSON.stringify(ok(data)) : renderStatus(data));
           return;
         }
 
-        // Read current.json (best-effort).
-        const currentPath = join(runsDir, "current.json");
-        let run: StatusData["run"] = null;
+        const run: NonNullable<StatusData["run"]> = {};
+        const ledgerId = ledgerDir ? basename(ledgerDir) : null;
+        if (ledgerId) {
+          run.name = ledgerId;
+          try {
+            run.started_at = readRunMeta(cwd, ledgerId).started_at;
+          } catch {
+            /* dangling pointer — render the id alone */
+          }
+        }
+
+        // Agent state sidecar (best-effort): round + constraints are authored
+        // by the executing agent; name/started_at only when the ledger has no
+        // run dir for the pointer.
         try {
-          run = JSON.parse(readFileSync(currentPath, "utf-8"));
+          const sidecar = JSON.parse(readFileSync(join(runsDir, "current.json"), "utf-8")) as Record<
+            string,
+            unknown
+          >;
+          if (typeof sidecar.round === "number") run.round = sidecar.round;
+          if (sidecar.constraints && typeof sidecar.constraints === "object") {
+            run.constraints = sidecar.constraints as Record<string, unknown>;
+          }
+          if (!ledgerId && typeof sidecar.name === "string") run.name = sidecar.name;
+          if (!ledgerId && typeof sidecar.started_at === "string") run.started_at = sidecar.started_at;
         } catch {
-          // .active exists but current.json missing — still running.
+          // no sidecar — ledger data only
+        }
+
+        // Round fallback when the agent hasn't authored one: highest completed
+        // wave + 1, the same derivation `gk run status` prints.
+        if (run.round === undefined && ledgerId) {
+          try {
+            const waves = readTrace(cwd, ledgerId)
+              .map((t) => t.wave)
+              .filter((w): w is number => w != null);
+            run.round = waves.length ? Math.max(...waves) + 1 : 0;
+          } catch {
+            /* no trace yet — round stays unset */
+          }
         }
 
         // Gate evidence coverage via existing loadGraph + gateGraph.

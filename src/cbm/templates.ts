@@ -1,5 +1,5 @@
 import { GraphKitError } from "../errors.js";
-import type { CbmClient } from "./client.js";
+import { isCbmUnavailable, type CbmClient } from "./client.js";
 
 // Named query templates over the CBM graph — runners, not raw Cypher strings.
 // The CBM dialect is unverifiable while the npm package 404s, so only proven
@@ -24,6 +24,15 @@ function unwrap<T>(res: unknown): T {
 
 const QUERY_GRAPH = "query_graph";
 
+// Per-query rejections fail open (same semantics as route.ts); a dead bridge
+// rethrows — "isolated: []" from a corpse client reads as a real answer.
+function failOpen<T>(fallback: T): (e: unknown) => T {
+  return (e: unknown) => {
+    if (isCbmUnavailable(e)) throw e;
+    return fallback;
+  };
+}
+
 export const QUERY_TEMPLATES: Record<string, QueryTemplate> = {
   "dead-code": {
     description: "Variables declared but never referenced by any edge (isolated declarations)",
@@ -36,14 +45,14 @@ export const QUERY_TEMPLATES: Record<string, QueryTemplate> = {
           project,
         })
         .then((r) => unwrap<{ rows: unknown[][] }>(r))
-        .catch(() => ({ rows: [] as unknown[][] }));
+        .catch(failOpen({ rows: [] as unknown[][] }));
       const withEdges = await client
         .call(QUERY_GRAPH, {
           query: "MATCH (n:Variable)-[r]->(m) RETURN DISTINCT n.name",
           project,
         })
         .then((r) => unwrap<{ rows: unknown[][] }>(r))
-        .catch(() => ({ rows: [] as unknown[][] }));
+        .catch(failOpen({ rows: [] as unknown[][] }));
       const linked = new Set(withEdges.rows.map((r) => String(r[0])));
       const cap = Number.isInteger(limit) && limit > 0 ? limit : 25;
       return {
@@ -70,7 +79,7 @@ export const QUERY_TEMPLATES: Record<string, QueryTemplate> = {
           project,
         })
         .then((r) => unwrap<{ rows: unknown[][] }>(r))
-        .catch(() => ({ rows: [] as unknown[][] }));
+        .catch(failOpen({ rows: [] as unknown[][] }));
       const callers = res.rows
         .filter((r) => String(r[2]) === arg)
         .map((r) => ({ name: String(r[0]), file: String(r[1]), line: Number(r[3]) }));
@@ -88,7 +97,7 @@ export const QUERY_TEMPLATES: Record<string, QueryTemplate> = {
           project,
         })
         .then((r) => unwrap<{ rows: unknown[][] }>(r))
-        .catch(() => ({ rows: [] as unknown[][] }));
+        .catch(failOpen({ rows: [] as unknown[][] }));
       const toSym = (r: unknown[]) => ({ name: String(r[0]), file: String(r[1]), line: Number(r[3]) });
       const declaredRows = res.rows.filter((r) => String(r[1]) === arg);
       const declaredNames = new Set(declaredRows.map((r) => String(r[0])));

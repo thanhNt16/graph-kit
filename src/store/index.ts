@@ -3,6 +3,7 @@ import { join } from "node:path";
 import YAML from "yaml";
 import type { Graph } from "../compiler/validate.js";
 import { GraphKitError } from "../errors.js";
+import { atomicWrite } from "../fs.js";
 import { GraphSchema } from "../schemas/graph.schema.js";
 
 const EXT = ".yaml";
@@ -83,7 +84,9 @@ export function setActiveGraphId(id: string, baseDir: string = process.cwd()): v
       available: listSessionGraphs(baseDir).map((g) => g.id),
     });
   }
-  writeFileSync(activeFile(baseDir), `${id}\n`, "utf-8");
+  // F6: the pointer is read by every concurrent gk process — atomic like the
+  // runs pointer, so a crash mid-write can't truncate it to a garbage id.
+  atomicWrite(activeFile(baseDir), `${id}\n`);
 }
 
 export function getActiveGraphId(baseDir: string = process.cwd()): string | null {
@@ -91,7 +94,20 @@ export function getActiveGraphId(baseDir: string = process.cwd()): string | null
   const file = activeFile(baseDir);
   if (!existsSync(file)) return null;
   const id = readFileSync(file, "utf-8").trim();
-  return id === "" ? null : id;
+  if (id === "") return null;
+  // A torn/garbage pointer (pre-atomicWrite crash, hand edit) must fail loudly
+  // with a remediation path, not flow into path joins as an opaque id.
+  if (!SESSION_ID_RE.test(id)) {
+    throw new GraphKitError(
+      "ACTIVE_POINTER_CORRUPT",
+      `ACTIVE_POINTER_CORRUPT: active pointer file is corrupt ("${id.slice(0, 60)}" is not a session graph id)`,
+      {
+        file,
+        hint: "Run `gk graph switch <id>` (or `gk graph list` to pick one) to rewrite it",
+      },
+    );
+  }
+  return id;
 }
 
 export function listSessionGraphs(

@@ -98,10 +98,43 @@ interface AnyEntry {
   body: string;
 }
 
-function pushEntry(out: AnyEntry[], file: string, path: string, fallbackId: string, schema?: z.ZodType): void {
+function walkStore(
+  memDir: string,
+  opts?: { skip?: string[]; schema?: z.ZodType },
+): { entries: AnyEntry[]; malformed: number } {
+  let root: Dirent[];
+  try {
+    root = readdirSync(memDir, { withFileTypes: true });
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code;
+    if (code === "ENOENT" || code === "ENOTDIR") return { entries: [], malformed: 0 };
+    throw error;
+  }
+  const skip = new Set(opts?.skip ?? []);
+  const entries: AnyEntry[] = [];
+  let malformed = 0;
+  for (const de of root) {
+    if (de.isFile() && de.name.endsWith(".md") && !skip.has(de.name)) {
+      if (pushEntry(entries, de.name, join(memDir, de.name), de.name.replace(/\.md$/, ""), opts?.schema))
+        malformed += 1;
+    } else if (de.isDirectory() && !de.name.startsWith(".")) {
+      const sub = join(memDir, de.name);
+      for (const f of readdirSync(sub, { withFileTypes: true })) {
+        if (f.isFile() && f.name.endsWith(".md") && !skip.has(f.name)) {
+          const rel = `${de.name}/${f.name}`;
+          if (pushEntry(entries, rel, join(sub, f.name), f.name.replace(/\.md$/, ""), opts?.schema)) malformed += 1;
+        }
+      }
+    }
+  }
+  return { entries, malformed };
+}
+
+/** Returns true when the file was malformed (dropped, counted — never fatal). */
+function pushEntry(out: AnyEntry[], file: string, path: string, fallbackId: string, schema?: z.ZodType): boolean {
   const raw = readFileSync(path, "utf-8");
   const parsed = schema ? parseMemoryFile(raw, fallbackId, schema) : parseMemoryFile(raw, fallbackId);
-  if (!parsed) return; // malformed: dropped, never fatal
+  if (!parsed) return true; // malformed: dropped, never fatal
   out.push({
     id: String((parsed.fm as Record<string, unknown>).id),
     file,
@@ -110,33 +143,7 @@ function pushEntry(out: AnyEntry[], file: string, path: string, fallbackId: stri
     fm: parsed.fm,
     body: parsed.body,
   });
-}
-
-function walkStore(memDir: string, opts?: { skip?: string[]; schema?: z.ZodType }): AnyEntry[] {
-  let root: Dirent[];
-  try {
-    root = readdirSync(memDir, { withFileTypes: true });
-  } catch (error) {
-    const code = (error as NodeJS.ErrnoException).code;
-    if (code === "ENOENT" || code === "ENOTDIR") return [];
-    throw error;
-  }
-  const skip = new Set(opts?.skip ?? []);
-  const out: AnyEntry[] = [];
-  for (const de of root) {
-    if (de.isFile() && de.name.endsWith(".md") && !skip.has(de.name)) {
-      pushEntry(out, de.name, join(memDir, de.name), de.name.replace(/\.md$/, ""), opts?.schema);
-    } else if (de.isDirectory() && !de.name.startsWith(".")) {
-      const sub = join(memDir, de.name);
-      for (const f of readdirSync(sub, { withFileTypes: true })) {
-        if (f.isFile() && f.name.endsWith(".md") && !skip.has(f.name)) {
-          const rel = `${de.name}/${f.name}`;
-          pushEntry(out, rel, join(sub, f.name), f.name.replace(/\.md$/, ""), opts?.schema);
-        }
-      }
-    }
-  }
-  return out;
+  return false;
 }
 
 /**
@@ -150,5 +157,14 @@ export function walkMemoryStore<Z extends z.ZodType = typeof MemoryFileSchema>(
   memDir: string,
   opts?: { skip?: string[]; schema?: Z },
 ): MemoryStoreEntry<Z>[] {
-  return walkStore(memDir, opts) as MemoryStoreEntry<Z>[];
+  return walkStore(memDir, opts).entries as MemoryStoreEntry<Z>[];
+}
+
+/** Same walk, plus the malformed-drop count (the gk-recall contract reports it). */
+export function walkMemoryStoreStats<Z extends z.ZodType = typeof MemoryFileSchema>(
+  memDir: string,
+  opts?: { skip?: string[]; schema?: Z },
+): { entries: MemoryStoreEntry<Z>[]; malformed: number } {
+  const { entries, malformed } = walkStore(memDir, opts);
+  return { entries: entries as MemoryStoreEntry<Z>[], malformed };
 }

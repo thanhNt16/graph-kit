@@ -17,6 +17,18 @@ export interface CbmClientOpts {
 // resolves we surface one honest, actionable return contract instead.
 export const CBM_UNAVAILABLE_MSG = `CBM bridge unavailable: @graphkit/codebase-memory-mcp is not published (npm 404). Point CBM_CMD / CBM_ARGS at a local codebase-memory-mcp build, or skip graph index|search|ask|trace|query and memory index.`;
 
+// Typed fatal-bridge failure so callers can distinguish "bridge down" from a
+// per-query miss — ask/route must rethrow it, not fail-open into "zero hits".
+export class CbmUnavailableError extends Error {}
+
+export function isCbmUnavailable(e: unknown): boolean {
+  return e instanceof CbmUnavailableError || (e instanceof Error && e.message.includes(CBM_UNAVAILABLE_MSG));
+}
+
+function unavailable(detail: string): CbmUnavailableError {
+  return new CbmUnavailableError(`${CBM_UNAVAILABLE_MSG}${detail}`);
+}
+
 export function createCbmClient(opts?: CbmClientOpts): CbmClient {
   const cmd = opts?.cmd ?? process.env.CBM_CMD ?? "npx";
   const args =
@@ -29,7 +41,7 @@ export function createCbmClient(opts?: CbmClientOpts): CbmClient {
   });
 
   let idCounter = 0;
-  let fatal: Error | null = null;
+  let fatal: CbmUnavailableError | null = null;
   const pending = new Map<number, { resolve: (v: unknown) => void; reject: (e: Error) => void }>();
   // Buffer stderr (instead of draining) so the tail is included in the
   // CBM_UNAVAILABLE message — the user sees WHY the bridge died.
@@ -68,7 +80,7 @@ export function createCbmClient(opts?: CbmClientOpts): CbmClient {
   // Child failed to spawn (e.g. npx ENOENT / npm 404) — fail every pending call.
   child.on("error", (err) => {
     sawExit = true; // spawn failure: there is no child, no exit event will ever come
-    fatal = new Error(`${CBM_UNAVAILABLE_MSG}\nspawn ${cmd} failed: ${err.message}`);
+    fatal = unavailable(`\nspawn ${cmd} failed: ${err.message}`);
     rejectAll(fatal);
   });
 
@@ -80,7 +92,7 @@ export function createCbmClient(opts?: CbmClientOpts): CbmClient {
     if (!fatal) {
       const withoutDetail = started ? `\n${cmd} exited unexpectedly.` : `\n${cmd} exited before handshake.`;
       const detail = stderrBuf.trim() !== "" ? `\nstderr tail: ${stderrBuf.trim()}` : withoutDetail;
-      fatal = new Error(`${CBM_UNAVAILABLE_MSG}${detail}`);
+      fatal = unavailable(detail);
     }
     if (fatal) rejectAll(fatal);
     rl.close();
@@ -107,7 +119,7 @@ export function createCbmClient(opts?: CbmClientOpts): CbmClient {
       child.stdin!.write(msg, (err) => {
         if (err) {
           pending.delete(id);
-          reject(new Error(`${CBM_UNAVAILABLE_MSG}\nstdin write failed: ${err.message}`));
+          reject(unavailable(`\nstdin write failed: ${err.message}`));
         }
       });
     });

@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import type { CbmClient } from "../../src/cbm/client.js";
-import { classifyQuestion, deriveFiles, routeAndRetrieve } from "../../src/cbm/route.js";
+import { CbmUnavailableError, type CbmClient } from "../../src/cbm/client.js";
+import { classifyQuestion, contentTokens, deriveFiles, routeAndRetrieve } from "../../src/cbm/route.js";
 
 describe("classifyQuestion", () => {
   test("routes the five kinds", () => {
@@ -10,6 +10,23 @@ describe("classifyQuestion", () => {
     expect(classifyQuestion("Find a source variable declared but never read elsewhere.")).toBe("deadcode");
     expect(classifyQuestion("Where is the main graph validation function defined?")).toBe("wheredef");
     expect(classifyQuestion("What does renderAscii depend on for graph input?")).toBe("deps");
+  });
+
+  test("wheredef outranks dataflow when both signatures match (A6)", () => {
+    // contains "how do" (dataflow) AND "where … defined" (wheredef) — the
+    // specific intent must win, not the first-registered broad rule.
+    expect(classifyQuestion("How do I find where loadGraph is defined?")).toBe("wheredef");
+  });
+});
+
+describe("contentTokens nominalization (A6)", () => {
+  test("blanket -ation→-e stems keep working", () => {
+    expect(contentTokens("validation and compilation steps")).toBe("validate compile steps");
+  });
+
+  test("implementation stems to a real word, not the BM25-dead 'implemente'", () => {
+    expect(contentTokens("the implementation detail of fingerprint")).toBe("implement detail fingerprint");
+    expect(contentTokens("representation of the wave plan")).toBe("represent wave plan");
   });
 });
 
@@ -133,5 +150,51 @@ describe("routeAndRetrieve hop coordinates (R5)", () => {
     const out = await routeAndRetrieve(client, q);
     expect(out.structural?.callers?.[0]).toEqual({ fn: "fnTail", file: "src/cli/commands/graph.ts" });
     expect(out.structural?.callers?.[0]).not.toHaveProperty("line");
+  });
+});
+
+// A dead bridge must surface as CBM_UNAVAILABLE, never fail-open into "zero
+// hits" — an empty ok result is indistinguishable from a real empty index.
+describe("routeAndRetrieve fatal-bridge honesty", () => {
+  const deadClient = (): CbmClient =>
+    ({
+      call: async () => Promise.reject(new CbmUnavailableError("CBM bridge unavailable: dead bridge")),
+      close: async () => {},
+    }) as unknown as CbmClient;
+
+  test("ask rejects with the fatal error (search stage)", async () => {
+    expect(routeAndRetrieve(deadClient(), "Who calls validateGraph?")).rejects.toBeInstanceOf(CbmUnavailableError);
+  });
+
+  test("ask rejects with the fatal error (trace stage — search fakes a hit)", async () => {
+    let n = 0;
+    const client = {
+      call: async (tool: string) => {
+        if (tool === "search_graph" && n++ === 0)
+          return {
+            results: [
+              {
+                name: "validateGraph",
+                qualified_name: "proj.src.compiler.validate.validateGraph",
+                file_path: "src/compiler/validate.ts",
+                label: "Function",
+                start_line: 20,
+              },
+            ],
+          };
+        throw new CbmUnavailableError("CBM bridge unavailable: dead bridge");
+      },
+      close: async () => {},
+    } as unknown as CbmClient;
+    expect(routeAndRetrieve(client, "Who calls validateGraph?")).rejects.toBeInstanceOf(CbmUnavailableError);
+  });
+
+  test("plain per-query failures still fail open to empty results", async () => {
+    const client = {
+      call: async () => Promise.reject(new Error("boom")),
+      close: async () => {},
+    } as unknown as CbmClient;
+    const out = await routeAndRetrieve(client, "Who calls validateGraph?");
+    expect(out.search).toEqual([]);
   });
 });

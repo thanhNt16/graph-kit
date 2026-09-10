@@ -10,7 +10,7 @@ import {
   rankByOverlap,
   termsOf,
 } from "../eval/memory-recall.js";
-import { walkMemoryStore } from "./frontmatter.js";
+import { walkMemoryStoreStats } from "./frontmatter.js";
 import { readLinks } from "./links.js";
 
 export interface ExpandedHit extends RecallHit {
@@ -25,6 +25,8 @@ export interface ExpandedRecall {
   results: ExpandedHit[];
   linked: number;
   scanned: number;
+  /** entries dropped by the malformed convention — reported in the CLI envelope */
+  malformed: number;
 }
 
 const LINK_PENALTY = 0.5; // linked-not-keyword ranks below any direct hit
@@ -32,7 +34,8 @@ const LINK_PENALTY = 0.5; // linked-not-keyword ranks below any direct hit
 export function expandedRecall(memDir: string, query: string, k = 5, now = new Date().toISOString()): ExpandedRecall {
   const docs: MemoryDoc[] = [];
   const where = new Map<string, string>(); // id → store-relative file path
-  for (const entry of walkMemoryStore(memDir, { skip: ["index.md", "log.md"] })) {
+  const { entries, malformed } = walkMemoryStoreStats(memDir, { skip: ["index.md", "log.md"] });
+  for (const entry of entries) {
     docs.push({
       id: entry.id,
       file: entry.file,
@@ -45,6 +48,7 @@ export function expandedRecall(memDir: string, query: string, k = 5, now = new D
     });
     where.set(entry.id, entry.file);
   }
+  const byId = new Map(docs.map((d) => [d.id, d]));
 
   const direct = applyRecallFilters(rankByOverlap(query, docs), now) as MemoryDoc[];
   const qTerms = queryTerms(query);
@@ -58,13 +62,17 @@ export function expandedRecall(memDir: string, query: string, k = 5, now = new D
   }));
 
   // Link expansion: neighbors of direct hits fill leftover slots, penalized.
+  // Neighbors pass the SAME validity/supersede filters as direct hits — pulling
+  // from the unfiltered doc list resurfaced (and then reinforced) expired or
+  // superseded memories through the back door.
+  const validIds = new Set(applyRecallFilters(docs, now).map((d) => d.id));
   const graph = readLinks(memDir);
   const seen = new Set(hits.map((h) => h.id));
   let linked = 0;
   outer: for (const hit of [...hits]) {
     for (const n of graph.links[hit.id] ?? []) {
-      if (seen.has(n)) continue;
-      const doc = docs.find((d) => d.id === n);
+      if (seen.has(n) || !validIds.has(n)) continue;
+      const doc = byId.get(n);
       if (!doc) continue; // neighbor must exist as a loaded doc to be returnable
       if (hits.length >= k) break outer;
       hits.push({
@@ -80,5 +88,5 @@ export function expandedRecall(memDir: string, query: string, k = 5, now = new D
     }
   }
 
-  return { results: hits, linked, scanned: docs.length };
+  return { results: hits, linked, scanned: docs.length, malformed };
 }
