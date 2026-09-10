@@ -1,433 +1,349 @@
 # GraphKit
 
+> **The execution and evidence plane for AI coding agents.**
+
+[![npm version](https://img.shields.io/npm/v/graphkit-gk.svg)](https://www.npmjs.com/package/graphkit-gk)
+[![npm downloads](https://img.shields.io/npm/dt/graphkit-gk.svg)](https://www.npmjs.com/package/graphkit-gk)
 [![CI](https://github.com/thanhNt16/graph-kit/actions/workflows/ci.yml/badge.svg)](https://github.com/thanhNt16/graph-kit/actions/workflows/ci.yml)
 [![Release](https://github.com/thanhNt16/graph-kit/actions/workflows/release.yml/badge.svg)](https://github.com/thanhNt16/graph-kit/releases/latest)
 [![GitHub Pages](https://img.shields.io/badge/docs-pages-2ea043?logo=githubpages)](https://thanhnt16.github.io/graph-kit/)
 [![Tests](https://img.shields.io/badge/tests-575_passing-2ea043)](https://github.com/thanhNt16/graph-kit/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-> **11 topologies · 5 targets · 8 agents · 13 skills (claude) · 575 tests · zero-model runtime**
+GraphKit gives Claude Code, Cursor, OpenCode, Codex CLI, and Pi one deterministic execution and verification layer: 11 canonical topologies, wave-ordered subagent dispatch, worktree-isolated parallel edits, machine-checked evidence gates, and durable resume across crashes.
 
-GraphKit is a graph engineering kit for AI coding agents (Claude Code, Cursor, OpenCode, Codex CLI, and pi). It installs agents, skills, hooks, and rules that let you define, validate, compile, and execute graph-structured agent workflows — with a run ledger, checkpoint resume, and project memory.
+- **Deterministic execution graphs** — `graph.yaml` compiles multi-agent coordination into static, wave-ordered DAGs instead of trusting LLM ad-hoc routing
+- **Evidence gates over agent prose** — `gk gate` checks machine-evaluated criteria, provenance, and freshness before admitting completion; prose is never proof
+- **Conflict-safe parallel worktrees** — run concurrent agent edits in isolated git worktrees with barrier merges (`/gk:execute --worktree`)
+- **Bounded loops with no-progress limits** — `loops[].no_progress_limit` fingerprints round outputs and stops repetitive failing cycles before burning budgets
+- **Crash & resume without zero restarts** — durable run ledger reconciles satisfied nodes and resumes child runs with ancestor provenance
+- **One kit across every coding agent** — `gk init` configures host-native agents, skills, hooks, and rules for 5 target IDEs and CLIs
 
-**TOC** — [What it is](#what-it-is) · [Install](#install) · [Quickstart](#quickstart) · [Host support](#host-support) · [Define a graph](#define-a-graph) · [Session skills](#session-skills) · [Topologies](#eleven-topologies) · [Per-node binding](#per-node-binding) · [Loop groups](#loop-groups) · [CLI reference](#cli-reference) · [Project memory](#project-memory) · [CBM boundary](#cbm-boundary) · [Diagrams](#diagrams) · [Docs site](https://thanhnt16.github.io/graph-kit/)
+The future is many AI coding agents. GraphKit is the layer that makes their execution deterministic, isolated, and verified.
 
-> **Changelog**: [CHANGELOG.md](CHANGELOG.md) documents all feature releases.
-> **Worktree merge protocol**: [docs/worktree-merge-protocol.md](docs/worktree-merge-protocol.md) details conflict-safe concurrent agent editing.
+Run `npm i -g graphkit-gk && gk init` and your project gets:
 
-## What it is
+| What you need | What GraphKit provides |
+|---|---|
+| Deterministic coordination | 11 canonical topologies compiled into wave-ordered DAGs |
+| Verified completion | Machine-checked evidence gates (`gk gate`, `gk evidence`) |
+| Bounded recovery | Hard loop limits, `stop_when` ladders, and `no_progress_limit` early exhaustion |
+| Crash resilience | Checkpoint reconciliation and partial-graph resume (`gk run resume`) |
+| Isolated parallel edits | Git worktree isolation per write node with wave barrier merges |
+| Multi-host support | One kit configuring Claude Code, Cursor, OpenCode, Codex, and Pi |
+| Visual architecture | Standalone Archify HTML diagrams, SVG, and Excalidraw exports |
 
-- A **kit template** per target — `claude/`, `cursor/`, `opencode/`, `codex/`, `pi/` — each with 8 agents, skills, hooks (or their host-native equivalent), and rules in the target's native format
-- A **compiler** (`gk`) that turns a `graph.yaml` into a runnable workflow
-- **Two runtimes**: Claude Code's Workflow tool (`/gk:run`) or direct subagent dispatch (`/gk:execute`, works on every target)
+---
 
-gk never invokes a model, spawns an agent, or reads an API key. It validates and compiles only.
+## Who this is for
 
-This is a **graph engineering kit** ([Simmons — *We Are Entering the Graph Engineering Phase*](https://www.drjoshcsimmons.com/writing/we-are-entering-the-graph-engineering-phase)): it compiles the coordination that LLM-choreographed alternatives delegate to a language model into a deterministic workflow file ([TURION — multi-agent orchestration infrastructure in production](https://turion.ai/blog/multi-agent-orchestration-infrastructure-production/)). Budgets are the safety story — `constraints` and loop `max_rounds` cap the blast radius where swarm-style setups have incurred runaway costs ([Edgeless Lab](https://edgelesslab.com/blog/swarm-tried-to-bankrupt-itself/)). Per-node binding replaces the state-schema tax competitors pay: every node carries its own model tier, tools, skills, and constraints instead of a shared typed state ([Orange ITS — LangGraph review](https://www.orange-its.ch/en/insights/langgraph-review), [Kalvium — LangGraph vs LangChain in production](https://www.kalviumlabs.ai/blog/langgraph-vs-langchain-production/)).
+Developers whose AI coding workflows have outgrown single chat prompts into multi-step, multi-agent systems:
 
-## Diagrams
+- An agent says "All tests pass and the feature is done!" — but tests were never actually run, or failed in silence
+- Parallel subagents edit the same files at the same time and overwrite each other's changes
+- A retry loop runs 10 times making the exact same error, burning tokens with zero progress
+- A multi-step workflow crashes on step 4 of 5 and forces you to restart from step 1
+- You have to maintain different rules, prompt templates, and configs across Claude Code, Cursor, Codex, OpenCode, and Pi
 
-`/gk:visualize` renders graph.yaml as a self-contained HTML diagram via [archify](https://github.com/tt-a1i/archify) — pan/zoom, search, guided views, no server:
+Before GraphKit, multi-agent workflows are improvised, brittle, and unverified. After GraphKit, agents follow compiled execution waves, produce auditable evidence, and respect hard budget bounds.
 
-- **Archify HTML** (default) — the skill reads `gk graph waves`, authors a typed archify IR (waves become columns, model tiers become lanes), validates it at showcase quality, and delivers `.graphkit/diagrams/{name}.html`. One file: shareable, attachable to a PR
-- **Install on first use** — the skill asks before running `npx -y skills add tt-a1i/archify -g`; decline or no network falls back to SVG
-- **Other modes** — `--ascii` (instant, in-session), `--svg` (fast export), `--excalidraw` (editable)
+| Without GraphKit | With GraphKit |
+|---|---|
+| Agent prose is accepted as proof of completion | `gk gate` requires machine-verified evidence artifacts |
+| Parallel agents collide and produce git merge conflicts | Agents run in isolated worktrees; wave barriers merge cleanly |
+| Retries loop endlessly on identical errors | `no_progress_limit` stops loops after consecutive identical failures |
+| Crashed runs restart from step 1, re-billing work | `gk run resume` reconciles satisfied nodes and resumes from checkpoint |
+| LLMs improvise edges and invent ad-hoc steps | Static wave-ordered DAG compiled from validated YAML |
+| Hand-written configs per agent tool | `gk init` configures all 5 hosts from one canonical kit |
 
-## Project memory
+---
 
-`gk memory` keeps cross-run project memory in `.graphkit/memory/` — salience-ranked recall with validity/supersede filters, ACT-R decay, and a full audit trail:
+## Start in 30 seconds
 
-```bash
-gk memory recall "diagram output"   # top-k relevant memories (auto-touches)
-gk memory touch <id>             # reinforce a memory
-gk memory trace                  # decay pass + consolidation audit log
-```
-
-Memory files retain GraphKit's existing frontmatter and add OKF-compatible fields: `generated`, `recorded_at`, `status`, and `sources`. This is additive compatibility, not OKF conformance; see the [current OKF specification](https://github.com/GoogleCloudPlatform/open-knowledge-format/blob/main/SPEC.md). Unknown fields survive rewrites. Capture identity is `basename + sha1(source + body)[:8]`: identical re-captures are idempotent, while changed content creates a new file and supersedes the old one (`valid_to`, `superseded_by`, `status: deprecated`) rather than overwriting it.
-
-The reader is strict at the filesystem boundary: malformed entries are dropped and counted in `malformed`; unreadable memory directories return `MEMORY_DIR_UNREADABLE` and fail, while a missing directory is treated as empty. Memory-augmented workflows use one terminal `INJECTION: <reminder>` / `INJECTION: null` contract on both execution paths. Curator cadence counts completed action-node executions, not curator calls. `recall_topk`, `expire_policy: manual`, and `null_intervention_allowed` are honored from graph configuration. Curator behavior is parity-tested across Claude Code, Cursor, OpenCode, Codex, and pi; Codex uses `workspace-write` so it can persist memory.
-
-Deterministic checks: `bun test` — **575 pass, 0 fail**; `bun run eval:memory` — `hit_rate: 1`, `validity_violations: []`, `malformed: 14` / `malformed_expected: 14`; `bun run typecheck` passes. These are fixture and behavior checks, not benchmark-superiority claims. The [@0xwast3 memory-engineering article](https://x.com/0xwast3/status/2084625810112032849) is third-party evidence only; its `status: conflicted` and three-month capture criterion are follow-up scope, not shipped behavior.
-
-## CBM boundary
-
-gk can bridge to the codebase-memory-mcp (CBM) MCP server for indexing and code-graph queries (`gk graph index|search|ask|trace|query`, `gk memory index`). gk owns no graph database — CBM is the authority. This keeps gk a workflow compiler, not a re-implementation of CBM's LSP-backed indexer.
-
-**The CBM bridge is currently unavailable**: `@graphkit/codebase-memory-mcp` is not yet published (npm 404). Until it is, those commands fail with code `CBM_UNAVAILABLE` and exit 1 unless you point `CBM_CMD`/`CBM_ARGS` at a local codebase-memory-mcp build. `gk memory recall|touch` (file-based) are unaffected and keep working.
-
-## Install
-
-### One-command install (recommended)
-
-Auto-detects `bun` / `npm` for a fast ~1-second install (380 KB). Falls back to the standalone binary tarball if neither is found:
+### 1. Install `gk`
 
 ```bash
+# Via npm or bun (~1-second install, 380 KB)
+npm install -g graphkit-gk
+# or
+bun add -g graphkit-gk
+
+# Or one-line installer (auto-detects bun/npm; falls back to standalone binary)
 curl -fsSL https://raw.githubusercontent.com/thanhNt16/graph-kit/main/install.sh | sh
 ```
 
-### Via npm / bun
+### 2. Initialize your project
 
 ```bash
-bun add -g graphkit-gk
-# or
-npm install -g graphkit-gk
+cd your-project
+
+# Install kit into your IDE / CLI of choice:
+gk init                             # → .claude/   (Claude Code)
+gk init --target cursor             # → .cursor/   (Cursor)
+gk init --target opencode           # → .opencode/ (OpenCode)
+gk init --target codex              # → .codex/    (Codex CLI)
+gk init --target pi                 # → .omp/      (Pi / OMP)
+
+# Scaffold an execution graph from the template gallery:
+gk template materialize audit-pr --use
+
+# Gate-check the graph against 9 static DAG rules:
+gk validate
+
+# Instant terminal preview:
+gk graph ascii
 ```
 
-### Standalone binary (zero prerequisites)
+Here's what lands in your repository:
 
-**macOS Apple Silicon**:
-
-```bash
-mkdir -p ~/.local/bin && rm -rf ~/.local/bin/gk ~/.local/bin/share
-curl -fsSL https://github.com/thanhNt16/graph-kit/releases/latest/download/gk-darwin-arm64.tar.gz \
-  | tar -xz -C ~/.local/bin
+```text
+your-project/
+├── graph.yaml                       # active workflow DAG
+├── .graphkit/
+│   ├── runs/                        # durable run ledger, traces, and loop journals
+│   ├── evidence/                    # content-addressed evidence artifacts & markers
+│   ├── memory/                      # salience-ranked cross-session project memory
+│   └── diagrams/                    # generated Archify HTML diagrams
+└── .claude/                         # or .cursor/, .omp/, .opencode/, .codex/
+    ├── agents/                      # 8 specialized role agents (architect, reviewer...)
+    ├── skills/                      # 13 session skills (brainstorm, execute, gate...)
+    └── rules/                       # host-native constraints & guardrails
 ```
 
-> The tarball holds `gk` plus a `share/gk/kits/` tree; `gk` finds its kits beside itself, so any writable dir on `PATH` works. Ensure `~/.local/bin` is on `PATH` (`echo $PATH | tr : '\n' | grep .local/bin`) — add `export PATH="$HOME/.local/bin:$PATH"` to your shell rc if missing.
-> Clearing the two paths first matters: `tar -xz` overlays and never removes files a newer release dropped.
+---
 
-System-wide instead (needs sudo, and every upgrade needs it again):
+## A workflow, end-to-end (The Diamond Pattern)
 
-```bash
-curl -fsSL https://github.com/thanhNt16/graph-kit/releases/latest/download/gk-darwin-arm64.tar.gz \
-  | sudo tar -xz -C /usr/local/bin
+```text
+You:    /gk:execute
+
+Graph:  Wave 0 (Scout):
+        software-architect audits the target module in read-only mode.
+        Produces: .graphkit/evidence/scout-report.md
+
+        Wave 1 (Parallel Fan-Out):
+        Worker A audits authentication security in worktree-A.
+        Worker B audits database query performance in worktree-B.
+        Both run concurrently without git conflicts.
+        Produces: .graphkit/evidence/security.md, .graphkit/evidence/perf.md
+
+        Wave Barrier:
+        Worktree branches merge back to main. Any conflict halts before synthesis.
+
+        Wave 2 (Synthesize):
+        lead-engineer consolidates findings into a unified fix proposal.
+        Produces: .graphkit/evidence/summary.md
+
+You:    gk gate graph.yaml
+
+Gate:   [PASS] scout-report.md (fresh, non-empty, sha256: 4e8a...)
+        [PASS] security.md     (fresh, non-empty, sha256: d19c...)
+        [PASS] perf.md         (fresh, non-empty, sha256: 82ab...)
+        [PASS] summary.md      (fresh, non-empty, sha256: f012...)
+        
+        VERDICT: MERGE (exit 0)
 ```
 
-> `releases/latest` always resolves to the newest version tag. `/usr/local/bin` is on `PATH` and is not SIP-protected.
-> ⚠️ Do **not** install to `/usr/bin` — it is SIP-protected on macOS; extraction fails with `Operation not permitted` even with `sudo`.
-> ⚠️ If you install to both, whichever dir comes first on `PATH` wins. `which -a gk` shows every copy; stale ones are silently shadowed, not upgraded.
+---
 
-Verify:
+## What changes in agent behavior
 
-```bash
-gk --version
-```
+| Failure mode | GraphKit mechanism |
+|---|---|
+| Agent claims "Done!" with broken tests | `gk gate` blocks completion without declared machine-checked evidence files |
+| Agents overwrite each other's code | `--worktree` runs write-nodes in isolated worktrees with wave barrier merges |
+| Retries loop indefinitely burning budget | `no_progress_limit` fingerprints failed rounds and exits early on identical errors |
+| Agent improvises steps outside the plan | Topology compiler enforces strict wave sequence; edges cannot be bypassed |
+| Context gets stuffed with outdated facts | Salience-ranked project memory (`gk memory recall`) retrieves only relevant context |
+| Crashed run requires full restart | `gk run resume` keeps verified predecessor outputs and re-executes only pending nodes |
+| Host tool permissions elevated in secret | Per-node `constraints` (`no_write`, `no_exec`, `tools_allowlist`) restrict agent capabilities |
 
-Install the kit into a project:
+---
 
-```bash
-gk init
-```
+## Eleven canonical topologies
 
-Or scaffold a new project:
+Workflows compile from eleven proven topological patterns:
 
-```bash
-gk new --dir my-project
-```
+| Topology | Shape | Best for |
+|---|---|---|
+| **diamond** | fan-out → reduce → synthesize | Code audits, architecture reviews, research sweeps |
+| **classify-and-act** | route one input to one handler | Bug triage, ticket routing, specialized handling |
+| **adversarial-verification** | produce → refute → adjudicate | Security audits, mission-critical changes, fact-checking |
+| **loop-until-done** | scout → work → dedup until clean | Lint sweeps, migration passes, deprecation cleanup |
+| **generate-and-filter** | generate many → evaluate → keep top K | API naming, design variations, prompt optimization |
+| **tournament** | pairwise bracket elimination | Model comparison, prompt benchmark evals |
+| **memory-augmented** | wrap any graph with recall + curation | Complex multi-turn tasks requiring institutional memory |
+| **sdd** | brainstorm → plan → parallel workers → review → test | Subagent-driven feature development |
+| **superpowers** | brainstorm → plan → workers → test loop | Rapid prototyping with tight feedback cycles |
+| **research-and-build** | scout → research → plan → build → review | Research-first exploratory features |
+| **custom** | arbitrary DAG via `depend_on` | Specialized team workflows and hybrid compositions |
 
-Upgrading the binary does not touch installed projects — re-run `gk init` in each project to refresh agents/skills/hooks to the new kit. Kit files always overwrite; user config (`.gk.json`) is preserved. `gk init --force` wipes and reinstalls clean.
+---
 
-## Quickstart
+## Core capabilities
 
-```bash
-gk init                                   # install kit into .claude/
-gk graph new diamond > graph.yaml         # scaffold a graph
-gk validate graph.yaml                    # gate-check
-gk graph ascii graph.yaml                 # instant in-terminal preview
-```
+### 1. Evidence gates (`gk gate`)
 
-Then in a Claude Code session: `/gk:visualize` to see it, `/gk:execute` to run it wave by wave.
-
-## Host support
-
-GraphKit targets five hosts. Pass `--target <id>` to install the host-flavored kit instead of `.claude/`:
-
-```bash
-gk init --target cursor      # also: opencode | codex | pi (installs `.omp/`, runs under OMP)
-gk new --dir my-project --target opencode   # scaffold fresh
-```
-
-The `gk` CLI is identical across targets — `validate`, `graph new/ascii/svg/waves` all work the same. The kit differs:
-
-| | Claude Code (`claude`) | Cursor (`cursor`) | OpenCode (`opencode`) | Codex CLI (`codex`) | pi (`pi`) |
-|---|---|---|---|---|---|
-| Rules | `.claude/rules/*.md` | `.cursor/rules/*.mdc` (Cursor frontmatter) | `AGENTS.md` sections appended by init | `AGENTS.md` section (+ spawn protocol) | `AGENTS.md` section |
-| Agents | `.claude/agents/*.md` | `.cursor/agents/*.md` (+ `readonly`, `is_background`) | `.opencode/agent/*.md` (frontmatter) | `.codex/agents/*.toml` | `.omp/agents/*.md` (prompt fragments) |
-| Skills | `.claude/skills/*/SKILL.md` | `.cursor/skills/*/SKILL.md` | `.opencode/skill/*/SKILL.md` | `.agents/skills/*/SKILL.md` (sibling dir, read natively by Codex) | `.omp/skills/*/SKILL.md` |
-| Hooks | `.claude/settings.json` + `hooks/*.cjs` | `.cursor/hooks.json` (lowercase events) + `hooks/*.cjs` | TS plugin at `.opencode/plugins/gk.ts` | none — guards folded into `AGENTS.md` + skill checklists | TS extension `.omp/extensions/gk-subagent.ts` |
-| Execution | `/gk:run` (Workflow tool) + `/gk:execute` | **`/gk:execute` only** (Task tool) | `/gk:execute` (Task-tool dispatch, wave barrier between waves) | `/gk:execute` (spawn-prompt driven; **wave barrier is instruction-enforced, not tool-enforced**) | `/skill:gk-execute` via the `gk_dispatch_agent` extension (**requires `omp` on PATH**) |
-
-Cursor has no Workflow tool, so the compile→run path is omitted there too — `/gk:execute` is the sole execution path on every non-Claude target. It reads `gk graph waves --json` and dispatches subagents wave by wave (parallel within a wave). Two host-specific caveats:
-
-- **Codex** spawns agents via prompt instructions rather than a subagent tool. The wave barrier ("wait for all results before continuing") is enforced by instruction, not by the host — a weaker guarantee than Task-tool hosts.
-- **pi** installs into `.omp/` and runs under [OMP (Oh My Pi)](https://github.com/can1357/oh-my-pi) — OMP is pi-based and loads `.omp/` natively. Subagents and hooks come from the installed `gk_dispatch_agent` extension, which shells out to `omp -p`. The `omp` binary must be on your `PATH`.
-
-`gk inventory --target <id>` reports installed agents/skills/hooks/commands for any target — names only, no credentials/tokens.
-
-## Define a graph
-
-Create `graph.yaml` with a topology, node bindings, and inputs:
+Before marking a workflow complete, the orchestrator evaluates declared evidence:
 
 ```yaml
-apiVersion: graphkit.dev/v2
-kind: Graph
-metadata:
-  name: my-review
-topology: diamond
-inputs:
-  repo_path:
-    type: string
-    required: true
-nodes:
-  scouter:
-    agent: software-architect
-    model: opus
-    objective: Identify files to review
-    depend_on: []
-  worker:
-    agent: code-reviewer
-    model: sonnet
-    depend_on: [scouter]
-  synthesizer:
-    agent: software-architect
-    model: opus
-    depend_on: [worker]
 evidence:
-  required_keys: [report]
+  required_keys: [unit-tests, security-audit]
+  criteria: [unit-tests, security-audit] # criteria/<id>.md
+  freshness: strict                     # strict | report
 ```
 
-## Session skills
+```bash
+# Add content-addressed artifact with cryptographic provenance:
+gk evidence add test-results.json --key unit-tests --node test-runner
 
-Inside a Claude Code or Cursor session (after `gk init`):
+# Run deterministic gate evaluation:
+gk gate graph.yaml
+# → Exit 0: MERGE (all keys exist, non-empty, fresh)
+# → Exit 1: BLOCK (missing keys, whitespace-only, or stale under strict mode)
 
-- `/gk:init-graph --template diamond` — generate a **session graph** (from a topology preset **or a packaged GraphTemplate**, with capability suggestions); writes `.graphkit/graphs/<date>-<slug>.yaml` and sets the active pointer
-- `/gk:template` — package a validated graph.yaml as a reusable `GraphTemplate v1` (`gk template pack|list|show`)
-- `/gk:brainstorm` — refine nodes, model tiers, loops, constraints
-- `/gk:visualize` — archify HTML diagram (default) or `--ascii` / `--svg` / `--excalidraw`
-- `/gk:validate` — gate-check before compile
-- `/gk:compile` — graph.yaml → .workflow.js (Claude Code only)
-- `/gk:run` — execute via Claude Code Workflows (Claude Code only)
-- `/gk:execute` — execute by dispatching subagents directly (all targets; **sole path outside Claude Code**). `--worktree` mode: write nodes run as worktree-isolated background agents (Claude Code's `/batch` technique, graph as the decomposition — parallel nodes can't collide, merge is the wave barrier)
-- `/gk:eval` — score evidence / memory against rubrics
-- `/gk:recall` — query the codebase-memory graph
-- `/gk:evidence` — report what the graph produced
-- `/gk:status` — current run state
-
-Templates resolve in order: `<project>/.graphkit/templates/` ⇒ `~/.graphkit/templates/` ⇒ the bundled gallery (`audit-pr`, `refactor-module`, `bench-eval`, `doc-sweep`); `gk template list` reports an `origin` column (`project` | `global` | `gallery`) showing which store won. Materialize any of them into an immutable session graph with `gk template materialize <name> --params '{"task":"…"}' [--use]` (`--use` sets the active pointer), then browse sessions with `gk graph list|switch|show`. `gk inventory` reports installed agents/skills/tools/MCP servers for the active target — names only, no credentials/tokens. See [docs/templates-and-viewer.md](docs/templates-and-viewer.md) for template storage, parameter reference, the smart `/gk:init-graph` flow, and the archify diagram mode.
-
-## Eleven topologies
-
-| Topology | Shape | Use |
-|----------|-------|-----|
-| diamond | fan-out → reduce → synthesize | reviews, research, migrations |
-| classify-and-act | route one input to one handler | triage, routing |
-| adversarial-verification | produce → refute → adjudicate | security, fact-check |
-| loop-until-done | scout → work → dedup until dry | discovery, sweeps |
-| generate-and-filter | generate many → keep best K | naming, ideation |
-| tournament | pairwise elimination | ranking, evals |
-| memory-augmented | wrap any graph with recall + curator | long-context work |
-| custom | arbitrary DAG via `depend_on` | any shape you define |
-| sdd | brainstorm → plan → parallel workers → review → test | subagent-driven dev |
-| superpowers | brainstorm → plan → workers → test loop | brainstorm/plan/execute |
-| research-and-build | scout → research → plan → build → review | research-first features |
-
-Topologies compose: a diamond's fan-out can embed an adversarial-verification subgraph, or use `custom` to mix patterns (diamond + per-node loops).
-
-## Per-node binding
-
-Each node carries its own model tier, tools, skills, refs, constraints, and optional internal loop:
-
-```yaml
-nodes:
-  scouter:
-    agent: software-architect
-    model: opus
-    tools: [Read, Glob, Grep]
-    refs:
-      - path: docs/standards.md
-        purpose: checklist
-    loop:
-      enabled: true
-      max_rounds: 3
-      stop_when: evidence found
-    constraints:
-      no_write: true
+# Generate self-contained HTML evidence report:
+gk evidence report --html
 ```
 
-`depend_on` controls parallelism: empty = start immediately, shared = parallel, multiple = barrier.
+### 2. Bounded loops & no-progress exhaustion
 
-## Loop groups
-
-Beyond per-node `loop:`, graphs can repeat a **contiguous wave span** — e.g. implement → test cycles — via a top-level `loops:` array:
+Avoid runaway loops when agents get stuck on the same failing state:
 
 ```yaml
 loops:
-  - nodes: [implement, test]      # required; wave-contiguous span (validated)
-    max_rounds: 5                 # required; ≥ 1 hard cap
-    stop_when: "all tests pass"   # LLM-judged; required unless gate_evidence
-    gate_evidence: [test-report]  # optional deterministic machine gate
-    no_progress_limit: 2          # optional; fail early after N identical failing rounds
+  - nodes: [implement, run-tests]
+    max_rounds: 5
+    stop_when: "all unit tests pass"
+    gate_evidence: [unit-tests]
+    no_progress_limit: 2 # stop early if 2 consecutive rounds fail identically
 ```
 
-After each round the orchestrator runs `gk run round <group-index>`, which appends a durable journal line (`.graphkit/runs/<id>/rounds/<group>.jsonl`) and derives a fingerprint from the group's per-node last statuses plus the sha256 of every evidence key written that round — identical failing state therefore fingerprints identically without trusting orchestrator prose. The hybrid stop ladder then runs: first the deterministic `gate_evidence` check (every listed `<evidence_dir>/<key>.md` exists and is non-whitespace), then the orchestrator-judged `stop_when` text; otherwise another round, capped hard at `max_rounds`. With `no_progress_limit: N`, `N` consecutive rounds sharing one fingerprint exhaust the loop early with stop reason `no_progress`. Exhaustion fails the run, recording rounds executed and the stop reason (`gate` / `judged` / `no_progress` / `exhausted`). Validation enforces node existence, wave-span contiguity, non-overlapping groups, `max_rounds ≥ 1`, a stop condition being present, and every `gate_evidence` key declared on a node inside the span. Per-node `loop:` stays unchanged and orthogonal.
+After each iteration, `gk run round <group-index>` fingerprints node statuses and evidence sha256 digests. If the state matches `no_progress_limit` times in a row, the loop exhausts immediately with `stop_reason: "no_progress"` — saving tokens and signaling human intervention.
 
-## Boundary
+### 3. Checkpoint resume (`gk run resume`)
+
+If a run fails or crashes mid-way, resume without restarting from scratch:
+
+```bash
+# Preview what would be reused vs re-executed:
+gk run resume <run-id> --dry-run
+
+# Reconcile evidence, prune completed nodes, and run remaining work:
+gk run resume <run-id>
+```
+
+Satisfied nodes retain their verified evidence markers and attach to downstream nodes as read-only references (`refs`).
+
+### 4. Interactive architecture diagrams (`/gk:visualize`)
+
+Render your `graph.yaml` as an explorable, standalone HTML diagram via [Archify](https://github.com/tt-a1i/archify):
+
+```bash
+# In your agent session:
+/gk:visualize
+
+# Or export from CLI:
+gk graph ascii graph.yaml    # in-terminal ASCII
+gk graph svg graph.yaml      # vector SVG export
+```
+
+HTML diagrams include animated signal trace motion, wave columns, model tier lanes, pan/zoom, and dark/light themes.
+
+### 5. Cross-session project memory (`gk memory`)
+
+Store and retrieve project decisions, recurring bug patterns, and conventions without polluting prompt context:
+
+```bash
+# Search salience-ranked memories (ACT-R decay curve):
+gk memory recall "database migration conventions"
+
+# Reinforce a memory when applied:
+gk memory touch <memory-id>
+
+# Run background consolidation pass:
+gk memory consolidate
+```
+
+---
+
+## Works across coding agents
+
+One `gk init` command configures all five host targets:
+
+| Host | Init target | Rule format | Agents | Skills | Execution path |
+|---|---|---|---|---|---|
+| **Claude Code** | `gk init` | `.claude/rules/` | `.claude/agents/` | `.claude/skills/` | `/gk:run` (Workflow tool) & `/gk:execute` |
+| **Cursor** | `gk init --target cursor` | `.cursor/rules/*.mdc` | `.cursor/agents/` | `.cursor/skills/` | `/gk:execute` (Task tool dispatch) |
+| **OpenCode** | `gk init --target opencode` | `AGENTS.md` | `.opencode/agent/` | `.opencode/skill/` | `/gk:execute` (Task tool dispatch) |
+| **Codex CLI** | `gk init --target codex` | `AGENTS.md` | `.codex/agents/` | `.agents/skills/` | `/gk:execute` (Spawn-prompt driven) |
+| **Pi (OMP)** | `gk init --target pi` | `AGENTS.md` | `.omp/agents/` | `.omp/skills/` | `/skill:gk-execute` (`gk_dispatch_agent`) |
+
+---
+
+## How is this different?
+
+| | Static rules files (`CLAUDE.md`, `.cursorrules`) | LLM Swarm / Agent Frameworks | GraphKit |
+|---|---|---|---|
+| **Execution structure** | Unstructured prompts | Non-deterministic agent-to-agent chatter | Deterministic, wave-ordered DAGs |
+| **Completion proof** | Agent declares "done" | Agent conversation finishes | Cryptographically-hashed evidence gate |
+| **Parallel safety** | Blind edits in working tree | Unchecked file collisions | Git worktree isolation per write node |
+| **Loop control** | Ad-hoc prompt instructions | Often unbound; risk runaway costs | Hard `max_rounds` + `no_progress_limit` |
+| **Recovery** | Restart session from zero | State lost on crash | Reconciled checkpoint resume |
+| **Runtime footprint** | None | Heavy cloud SDKs / daemon | Zero-model local CLI compiler |
+
+---
+
+## What this isn't
+
+- **Not an LLM model runner.** GraphKit never invokes models directly or bills API tokens; execution runs through your host coding agent.
+- **Not a black-box cloud service.** GraphKit is 100% local, MIT-licensed, and inspectable. Your graphs, runs, and memories live in git-friendly plain files in `.graphkit/`.
+- **Not an unconstrained autonomous swarm.** Nodes cannot schedule arbitrary successors, spawn unsanctioned tools, or edit their own execution topology.
+- **Not a replacement for your editor.** GraphKit enhances Claude Code, Cursor, OpenCode, Codex, and Pi — giving them the coordination layer they lack.
+
+---
 
 ## CLI reference
 
 ```text
 $ gk --help
 
-  gk/0.3.0
+  gk/0.3.21
 
   Usage:
     $ gk <command> [options]
 
   Commands:
-    init                             Install the GraphKit kit into the current project
-    new                              Scaffold a new project with the GraphKit kit
-    gate [file]                      Deterministic evidence gate: MERGE/BLOCK over required evidence keys
-    validate [file]                  Validate a graph.yaml
-    compile [file]                   Compile graph.yaml to a .workflow.js script
-    graph [subcommand] [args...]     Graph lifecycle commands
-                                     Subcommands: list switch show topologies inspect new ascii svg waves index search ask trace query
-    memory [subcommand] [args...]    Memory commands
-                                     Subcommands: index trace touch recall consolidate
-    models [subcommand] [args...]    Per-target model mapping commands
-    template [subcommand] [args...]  Package, list, inspect, and materialize reusable GraphTemplates
-    inventory                        Inventory installed agents, skills, tools, and MCP servers
-    status                           Summarize active graph run and evidence coverage
-    execute [file]                   Execute a graph.yaml (not yet implemented)
-    visualize [file]                 Visualize a graph.yaml (not yet implemented)
-    run [subcommand] [args...]       Run ledger commands
-                                     Subcommands: start node end status resume
-    suggest                          Show ranked workflow suggestions from memory
-
-  Options:
-    -v, --version  Display version number
-    -h, --help     Display this message
+    init                             Install GraphKit into the current project
+    new                              Scaffold a new project with GraphKit
+    gate [file]                      Deterministic evidence gate: MERGE/BLOCK
+    validate [file]                  Validate graph.yaml against 9 static rules
+    compile [file]                   Compile graph.yaml to .workflow.js (Claude)
+    graph [subcommand]               Graph operations (ascii, svg, waves, new...)
+    evidence [subcommand]            Evidence management (add, report)
+    run [subcommand]                 Run ledger (start, node, round, resume, end)
+    template [subcommand]            Template gallery (list, materialize, pack)
+    memory [subcommand]              Project memory (recall, touch, consolidate)
+    inventory                        List installed agents, skills, and tools
+    status                           Active run metadata and evidence coverage
 ```
 
-Use `gk <command> --help` for per-command details.
-
-### `gk status`
-
-`gk status` summarizes the active graph run without touching state — it reads `.graphkit/runs/.active` (written by `gk run start`) and reports the run's metadata, current round, and required vs. produced evidence keys:
-
-```bash
-$ gk status            # human-readable
-$ gk status --json     # machine-readable: run, round, coverage, verdict
-```
-
-### `gk run round`
-
-Durable round tracking for loop groups — call after each pass over a `loops:` span:
-
-```bash
-$ gk run round 0
-{"status":"ok","data":{"run":"...","group":0,"round":2,"fingerprint":"9f2c…","repeated":2,"no_progress_limit":2,"no_progress_exhausted":true,"max_rounds":4,"stop_reason":"no_progress"}}
-```
-
-Appends to the run's round journal (`rounds/<group>.jsonl`), fingerprints per-node statuses + evidence bytes for the rounds's window, and reports the ladder decision: `stop_reason` `no_progress` (identical failing state `no_progress_limit` times), `max_rounds` (budget exhausted), or `null` (keep looping). Exit 0 even when exhausted — the JSON is the decision; the orchestrator fails the run.
-
-### `gk run resume`
-
-Resume a failed or interrupted run from its checkpoint — no restart from zero:
-
-```bash
-$ gk run resume <run-id>            # reconcile → derive pending-only graph → start child run
-$ gk run resume <run-id> --dry-run  # preview reconciliation, write nothing
-$ gk run resume <run-id> --from-node scan   # redo scan + dependents
-```
-
-A node counts as satisfied only if its last trace line passed **and** every declared evidence key exists on disk; dependents of failures reopen, satisfied upstreams drop out and their evidence reattaches as `refs`. The derived graph is validated against the compiler's structural rules (`RESUME_DERIVED_INVALID` — nothing written) before activation; the graph is drift-guarded by sha256 (`RESUME_GRAPH_DRIFT`, `--force` to override). The child run carries `resumes:` provenance — `gk run status` prints the full chain.
-
-### `gk execute` / `gk visualize`
-
-Both are pointer stubs for tools that are implemented inside the kits (the `/gk:execute` and `/gk:visualize` skills), not in the CLI binary:
-
-```bash
-$ gk execute graph.yaml    # NOT_IMPLEMENTED — use /gk:execute skill or compile
-$ gk visualize graph.yaml  # NOT_IMPLEMENTED — use /gk:visualize skill
-```
-
-They exit 1 with `NOT_IMPLEMENTED` and a hint pointing at the skill that does the real work.
-
-gk is the compiler, not a runtime. It never invokes a model, spawns an agent, or reads an API key. Execution is delegated to the host: Claude Code's Workflow tool (`/gk:run`) or native subagent dispatch (`/gk:execute`, all targets).
-
-## Execution contracts
-
-Node constraints are enforced mechanically only on pi (via `gk_dispatch_agent`); on claude, cursor, codex, and opencode they are prompt-advisory — the skill passes them into each node's dispatch prompt, but the host does not filter tools.
-
-| Constraint | Enforcement | Shell | Honest label |
-|---|---|---|---|
-| `tools_allowlist` | mechanical, pi `gk_dispatch_agent` | per list | real |
-| `no_write` | mechanical tool filter, **Bash retained** | yes | best-effort (`echo >`, `git commit`, `curl \| sh` possible) |
-| `no_exec` | mechanical tool filter, shell removed | no | hard no-mutation |
-
-- `no_write` is best-effort: the tool filter keeps the shell in the allowlist, so a node can still mutate the filesystem through Bash. Treat it as a prompt-level guard, not a sandbox.
-- `no_exec` removes Bash and overrides any `tools_allowlist` (`no_exec` > `tools_allowlist` > `no_write` on pi); it is advisory on the other four hosts.
-- Loop semantics: for single nodes (`node.loop`), `max_rounds` is the only mechanical bound while `stop_when` is prompt-advisory; for multi-node groups (`loops:`), orchestrators follow the **hybrid stop ladder** (deterministic `gate_evidence` check first, then LLM-judged `stop_when`, hard capped at `max_rounds` with graph-failure on exhaustion).
-
-### Advisor escalation
-
-A looping node may declare `advisor: {model, after_failed_rounds, max_calls}`. When a node's
-failed-round streak reaches `after_failed_rounds` and `max_calls` hasn't been exhausted (within
-`loop.max_rounds`), the host's execute-skill dispatches a read-only advisor subagent at
-`advisor.model` (default `fable`), appends its guidance to the node's objective (`## Advisor guidance`),
-and re-dispatches the node at its original tier. Escalations are recorded via `gk run node <id>
---advisor-fired <round>` into the run's `advisor.jsonl`; `gk run status` reports the count;
-`gk memory consolidate` surfaces `advisor-repeat` patterns ("raise tier or loosen stop_when").
-
-- Loop semantics: for single nodes (`node.loop`), `max_rounds` is the only mechanical bound while `stop_when` is prompt-advisory; for multi-node groups (`loops:`), orchestrators follow the **hybrid stop ladder** via `gk run round` (deterministic `gate_evidence` check first, then LLM-judged `stop_when`, hard capped at `max_rounds`, early `no_progress` exhaustion with `no_progress_limit`), with graph-failure on exhaustion.
-
-A node may declare `fan_out: {briefs_from, template}`. The referenced upstream node writes
-`briefs.json` (array of `{id, title, body}`) into its evidence; the fan-out node dispatches one
-parallel host subagent per brief at the node's own tier (`template` rendered per brief, default
-`{brief.body}`), barriers on all briefs, and consolidates their outputs. Briefs are data, never
-edges — the wave topology stays static. `briefs_from` must be a reachable predecessor
-(`depend_on` closure). A missing or malformed `briefs.json` counts as a failed round; an empty
-array is ok ("no briefs").
-
-## Evidence gate
-
-Before reporting a graph run complete, produce one non-whitespace file per declared evidence key at `<graph.outputs.evidence_dir>/<key>.md`, then run:
-
-```bash
-gk gate graph.yaml
-```
-
-`gk gate` reads each required key `k` as `<evidence_dir>/<k>.md` and prints a deterministic MERGE/BLOCK verdict with a per-key scorecard and sha256 manifest. Exit 0 means `MERGE`; a missing or whitespace-only key yields `BLOCK` with exit 1 — repair or redispatch only the producer of that key, then rerun the gate. Compiled workflows do not invoke the gate automatically; it is the orchestrator's final step.
-
-### Criteria registry, provenance, freshness
-
-Declare what each key *means* in a criteria registry at the repo root, reference it from the graph, and make freshness load-bearing:
-
-```yaml
-evidence:
-  required_keys: [api-response]
-  criteria: [api-response]      # ids → criteria/<id>.md
-  freshness: report             # report (default) | strict
-```
-
-```bash
-echo '---
-kind: json
 ---
-GET /users returns 200' > criteria/api-response.md
-gk evidence add resp.json --key api-response --node probe   # content-addressed blob + provenance marker
-gk evidence report --html      # criterion-first report → .graphkit/reports/<name>-evidence.html
-```
 
-`gk evidence add` copies the artifact to `<evidence_dir>/<key>/<sha256><ext>` and rewrites `<key>.md` with frontmatter provenance (run id, node, repo fingerprint head+tree, sha256, bytes, note); undeclared keys, missing files, and oversize artifacts fail with `EVIDENCE_KEY_NOT_DECLARED` / `EVIDENCE_FILE_MISSING` / `EVIDENCE_TOO_LARGE`. `gk gate` (and `gk status`) report per-key freshness `fresh|stale|unknown`; with `freshness: strict`, a stale required key BLOCKs the merge. The HTML report is self-contained: base64 `<img>` for screenshots (SVG linked, never inlined), escaped `<pre>` for text/JSON, zero scripts.
+## Documentation & resources
 
-## Memory
-
-gk remembers every run and improves suggestions over time — all deterministic, no model calls.
+- **Live Documentation Site:** [thanhnt16.github.io/graph-kit](https://thanhnt16.github.io/graph-kit/)
+- **Changelog:** [CHANGELOG.md](./CHANGELOG.md)
+- **Worktree Merge Protocol:** [docs/worktree-merge-protocol.md](./docs/worktree-merge-protocol.md)
+- **Interactive Diagram Gallery:** [docs/diagrams/](./docs/diagrams/)
 
 ```bash
-gk run start --graph graph.yaml # begin a run (fails if one is active)
-gk run node <id> --status ok --wave 0 --agent <agent>
-gk run node <id> --advisor-fired <round> [--streak <n>]  # record advisor escalation
-gk run end --status merged  # append to .graphkit/runs/index.jsonl
-gk memory consolidate       # derive patterns, suggestions, .links.json, index.md
-gk suggest                  # ranked suggestions (--json, --dismiss <id>)
-gk memory recall <query>    # searches root + patterns/ + suggestions/, joins links
+# Build from source
+git clone https://github.com/thanhNt16/graph-kit.git
+cd graph-kit
+bun install && bun run ci:local
 ```
 
-Runs append episodic traces under `.graphkit/runs/<id>/` (`trace.jsonl`, `run.md`).
-Consolidation counts repeated node sequences, evidence co-occurrence, recurring
-failures, and graph reuse (salience = count with a 14-day half-life), writes
-`.graphkit/memory/patterns/*.md` and `suggestions/*.md`, and rebuilds the derived
-link graph. The bundled `dream` template (`gk template list`) dispatches agents to
-propose deeper consolidations as a unified diff into `.graphkit/inbox/` — applied
-only by a human via `git apply`.
+## License
+
+MIT © [thanhNt16](https://github.com/thanhNt16)
