@@ -1,5 +1,5 @@
 {
-  "name": "@graphkit/gk",
+  "name": "graphkit-gk",
   "version": "0.3.0",
   "type": "module",
   "bin": {

@@ -6,15 +6,15 @@ set -eu
 
 install_npm() {
   if command -v bun >/dev/null 2>&1; then
-    echo "Installing @graphkit/gk via bun ..."
-    if bun add -g @graphkit/gk 2>&1; then
+    echo "Installing graphkit-gk via bun ..."
+    if bun add -g graphkit-gk 2>&1; then
       return 0
     fi
     echo "bun add failed; falling back to npm/binary ..." >&2
   fi
   if command -v npm >/dev/null 2>&1; then
-    echo "Installing @graphkit/gk via npm ..."
-    if npm install -g @graphkit/gk 2>&1; then
+    echo "Installing graphkit-gk via npm ..."
+    if npm install -g graphkit-gk 2>&1; then
       return 0
     fi
     echo "npm install failed; falling back to binary ..." >&2
