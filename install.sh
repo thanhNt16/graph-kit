@@ -20,7 +20,7 @@ mkdir -p "$BIN"
 rm -rf "$BIN/gk" "$BIN/share"
 
 echo "Installing graph-kit ($ASSET) to $BIN ..."
-curl -fsSL "https://github.com/thanhNt16/graph-kit/releases/latest/download/$ASSET" | tar -xz -C "$BIN"
+curl -# -fL "https://github.com/thanhNt16/graph-kit/releases/latest/download/$ASSET" | tar -xz -C "$BIN"
 
 case ":$PATH:" in
   *":$BIN:"*) ;;
