@@ -19,6 +19,7 @@
     "eval:memory": "bun run scripts/memory-recall-eval.ts"
   },
   "files": [
+    "dist/",
     "kits/",
     "templates/gallery"
   ],

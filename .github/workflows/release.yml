@@ -116,10 +116,12 @@ jobs:
         run: |
           node -e "const fs=require('fs');const f='package.json';const p=JSON.parse(fs.readFileSync(f,'utf8'));p.version=process.env.NEXT.slice(1);fs.writeFileSync(f,JSON.stringify(p,null,2)+'\n')"
           echo "package.json -> ${NEXT#v}"
-      # Prepack builds dist/index.js (1MB bundle); files: kits/ + templates/gallery
-      # ride along. 685KB tgz total — ~30x smaller than the standalone tarballs.
+      # Prepack builds dist/index.js (1MB bundle); files: dist/ + kits/ +
+      # templates/gallery ride along. ~1MB tgz total — 20-40x smaller than
+      # the standalone tarballs. npm failure must not block the GitHub release.
       - name: Publish to npm
         run: npm publish --access public
+        continue-on-error: true
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
       - name: Publish release
