@@ -6,7 +6,9 @@ import { CBM_UNAVAILABLE_MSG, type CbmClient, createCbmClient } from "../../cbm/
 import { indexProject } from "../../cbm/index.js";
 import { actRScore, shouldExpire } from "../../eval/forgetting.js";
 import { consolidate } from "../../memory/consolidate.js";
+import { explainRecall, type RecallExplanation } from "../../memory/explain-recall.js";
 import { expandedRecall } from "../../memory/recall-expanded.js";
+import { renderRecallAscii, renderRecallHtml } from "../../memory/render-recall.js";
 import { MemoryConfig, MemoryFileSchema } from "../../schemas/memory.schema.js";
 import { subcommandsFor } from "../command-registry.js";
 import { fail, ok } from "../output.js";
@@ -226,6 +228,9 @@ export function registerMemoryCommands(cli: CAC) {
     .command("memory [subcommand] [args...]", `Memory commands\nSubcommands: ${subcommandsFor("memory")}`)
     .option("--project <project>", "CBM project name (default: graph.yaml memory.project or graph-kit-memory)")
     .option("--json", "JSON output")
+    .option("--explain", "Explain recall scoring and filter decisions (read-only)")
+    .option("--html", "With --explain: render the explanation as a standalone HTML report")
+    .option("--origin <origin>", "Origin marker for the recall capture log (e.g. cli, curator, agent)")
     .action(async (subcommand, _args, opts) => {
       if (!subcommand) {
         // Bare `gk memory` prints usage and exits 0 — a documented surface, not an error.
@@ -275,12 +280,50 @@ Subcommands: ${subcommandsFor("memory")}\n\nOptions:\n  --project <project>  CBM
         } catch {
           /* no graph.yaml — default topk */
         }
+        if (opts.explain) {
+          // Explain mode is a read-only lens: no touchMemory reinforcement, no
+          // .recall-log.jsonl capture — inspecting scoring must not move it.
+          let exp: RecallExplanation;
+          try {
+            exp = explainRecall(memDir, query, topk);
+          } catch (e) {
+            console.log(
+              JSON.stringify(
+                fail("MEMORY_DIR_UNREADABLE", `memory store unreadable: ${String((e as Error)?.message ?? e)}`),
+              ),
+            );
+            process.exit(1);
+            return;
+          }
+          if (opts.json) {
+            console.log(JSON.stringify(ok(exp)));
+            return;
+          }
+          if (opts.html) {
+            const qSlug =
+              query
+                .toLowerCase()
+                .replace(/[^a-z0-9]+/g, "-")
+                .replace(/^-+|-+$/g, "") || "query";
+            const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+            const relDir = join(".graphkit", "memory", "recalls");
+            mkdirSync(join(process.cwd(), relDir), { recursive: true });
+            const relPath = join(relDir, `recall-${qSlug}-${stamp}.html`);
+            writeFileSync(join(process.cwd(), relPath), renderRecallHtml(exp));
+            console.log(relPath);
+            return;
+          }
+          console.log(renderRecallAscii(exp));
+          return;
+        }
         let results: Array<{ id: string; file: string; salience: number; linked: boolean }> = [];
         let linked = 0;
+        let scanned = 0;
         try {
           const stats = expandedRecall(memDir, query, topk);
           results = stats.results;
           linked = stats.linked;
+          scanned = stats.scanned;
         } catch (e) {
           console.log(
             JSON.stringify(
@@ -291,6 +334,21 @@ Subcommands: ${subcommandsFor("memory")}\n\nOptions:\n  --project <project>  CBM
           return;
         }
         for (const h of results) touchMemory(process.cwd(), h.id);
+        // Capture log: one JSONL row per real recall (never with --explain) so
+        // downstream tooling can replay retrieval decisions.
+        mkdirSync(memDir, { recursive: true });
+        appendFileSync(
+          join(memDir, ".recall-log.jsonl"),
+          `${JSON.stringify({
+            ts: new Date().toISOString(),
+            query,
+            k: topk,
+            origin: typeof opts.origin === "string" && opts.origin ? opts.origin : "cli",
+            top: results.map((h) => ({ id: h.id, salience: h.salience })),
+            injected: true,
+            scanned,
+          })}\n`,
+        );
         console.log(JSON.stringify(ok({ query, top_k: results.length, results, linked, recall_topk: topk })));
         return;
       }
