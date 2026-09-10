@@ -1,4 +1,4 @@
-import { isCbmUnavailable, type CbmClient } from "./client.js";
+import { type CbmClient, isCbmUnavailable } from "./client.js";
 import type { TraceHop } from "./contract.js";
 import { runTemplate } from "./templates.js";
 

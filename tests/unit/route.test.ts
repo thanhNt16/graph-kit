@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { CbmUnavailableError, type CbmClient } from "../../src/cbm/client.js";
+import { type CbmClient, CbmUnavailableError } from "../../src/cbm/client.js";
 import { classifyQuestion, contentTokens, deriveFiles, routeAndRetrieve } from "../../src/cbm/route.js";
 
 describe("classifyQuestion", () => {

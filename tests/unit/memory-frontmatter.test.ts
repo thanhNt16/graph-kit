@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { parseMemoryFile, walkMemoryStore } from "../../src/memory/frontmatter.js";
+import { parseMemoryFile, splitFrontmatter, walkMemoryStore } from "../../src/memory/frontmatter.js";
 
 const raw = (fm: string, body = "notes\n") => `---\n${fm}---\n${body}`;
 
@@ -107,5 +107,27 @@ describe("walkMemoryStore", () => {
 
   test("missing store directory returns []", () => {
     expect(walkMemoryStore(join(memDir, "absent"))).toEqual([]);
+  });
+});
+
+// B1: the split regex used to be \n-only — a CRLF-authored file (Windows
+// checkout with autocrlf) registered as "no frontmatter" and silently dropped
+// out of every store pass.
+describe("splitFrontmatter CRLF tolerance (B1)", () => {
+  test("parses CRLF frontmatter + body", () => {
+    const raw = "---\r\nid: win\r\ntype: knowledge\r\n---\r\nbody line\r\n";
+    const split = splitFrontmatter(raw);
+    expect(split).not.toBeNull();
+    expect(split!.fmText).toContain("id: win");
+  });
+
+  test("CRLF memory file survives parseMemoryFile and the store walk", () => {
+    const parsed = parseMemoryFile("---\r\nid: win\r\ntype: knowledge\r\n---\r\nbody\n", "win");
+    expect(parsed).not.toBeNull();
+    expect(parsed!.fm.id).toBe("win");
+  });
+
+  test("no frontmatter still returns null", () => {
+    expect(splitFrontmatter("just text\n")).toBeNull();
   });
 });

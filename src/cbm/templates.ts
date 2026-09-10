@@ -1,5 +1,5 @@
 import { GraphKitError } from "../errors.js";
-import { isCbmUnavailable, type CbmClient } from "./client.js";
+import { type CbmClient, isCbmUnavailable } from "./client.js";
 
 // Named query templates over the CBM graph — runners, not raw Cypher strings.
 // The CBM dialect is unverifiable while the npm package 404s, so only proven

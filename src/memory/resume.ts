@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import YAML from "yaml";
+import { loadGraph } from "../compiler/loader.js";
 import type { Graph } from "../compiler/validate.js";
 import { GraphKitError } from "../errors.js";
 import { GraphSchema, type LoopGroup } from "../schemas/graph.schema.js";
@@ -75,13 +75,10 @@ export interface Reconciliation {
   skippedTraceLines: number;
 }
 function parseGraph(path: string): Graph {
-  const parsed = GraphSchema.safeParse(YAML.parse(readFileSync(path, "utf-8")));
-  if (!parsed.success)
-    throw new GraphKitError(
-      "RESUME_GRAPH_INVALID",
-      `RESUME_GRAPH_INVALID: recorded graph ${path} no longer parses: ${parsed.error.issues[0]?.message}`,
-    );
-  return parsed.data;
+  // Shared loader: a recorded graph that no longer parses surfaces as
+  // SCHEMA_INVALID with issue details (was a bespoke RESUME_GRAPH_INVALID
+  // carrying only the first issue's message).
+  return loadGraph(path);
 }
 function evidenceOnDisk(cwd: string, evidenceDir: string, keys: string[]): boolean {
   return keys.every((k) => {
@@ -200,8 +197,8 @@ export function validateDerivedGraph(derived: Graph): void {
   }
   // Compiler rule 6: memory-augmented graphs must keep their curator node.
   if (derived.topology === "memory-augmented") {
-    const tc = derived.topology_config as Record<string, any>;
-    const curatorNode = tc?.memory?.curator_node ?? "curator";
+    const mem = (derived.topology_config as Record<string, unknown>)?.memory as { curator_node?: string } | undefined;
+    const curatorNode = mem?.curator_node ?? "curator";
     if (!derived.nodes[curatorNode]) {
       throw new GraphKitError(
         "RESUME_DERIVED_INVALID",

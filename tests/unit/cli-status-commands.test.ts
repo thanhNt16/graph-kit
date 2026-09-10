@@ -3,7 +3,6 @@ import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { type CAC, cac } from "cac";
-import { basename } from "node:path";
 import { registerExecuteCommand } from "../../src/cli/commands/execute.js";
 import { registerStatusCommand } from "../../src/cli/commands/status.js";
 import { registerVisualizeCommand } from "../../src/cli/commands/visualize.js";

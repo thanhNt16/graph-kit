@@ -1,7 +1,6 @@
-import { readFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import type { CAC } from "cac";
-import YAML from "yaml";
+import { loadGraph } from "../../compiler/loader.js";
 import { GraphKitError } from "../../errors.js";
 import {
   activeRun,
@@ -15,7 +14,6 @@ import {
   startRun,
 } from "../../memory/ledger.js";
 import { resumeRun } from "../../memory/resume.js";
-import { GraphSchema } from "../../schemas/graph.schema.js";
 import { subcommandsFor } from "../command-registry.js";
 import { fail, ok } from "../output.js";
 
@@ -116,8 +114,10 @@ export function registerRunCommands(cli: CAC) {
             // run started with `--graph sub/x.yaml` needs no repeated flag; explicit --graph wins,
             // falling back to cwd/graph.yaml for legacy runs without a recorded path.
             const graphPath = opts.graph ?? activeRunGraph(cwd) ?? join(cwd, "graph.yaml");
-            const parsed = GraphSchema.safeParse(YAML.parse(readFileSync(graphPath, "utf-8")));
-            const advisor = parsed.success ? parsed.data.nodes[String(node)]?.advisor : undefined;
+            // Shared loader: a broken graph.yaml surfaces as
+            // GRAPH_FILE_NOT_FOUND/SCHEMA_INVALID via errCode, not as a
+            // misleading BAD_ADVISOR for an unrelated read failure.
+            const advisor = loadGraph(graphPath).nodes[String(node)]?.advisor;
             if (!advisor) {
               console.log(JSON.stringify(fail("BAD_ADVISOR", `node "${node}" has no advisor config in ${graphPath}`)));
               return;

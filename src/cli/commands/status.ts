@@ -79,10 +79,7 @@ export function registerStatusCommand(cli: CAC) {
         // by the executing agent; name/started_at only when the ledger has no
         // run dir for the pointer.
         try {
-          const sidecar = JSON.parse(readFileSync(join(runsDir, "current.json"), "utf-8")) as Record<
-            string,
-            unknown
-          >;
+          const sidecar = JSON.parse(readFileSync(join(runsDir, "current.json"), "utf-8")) as Record<string, unknown>;
           if (typeof sidecar.round === "number") run.round = sidecar.round;
           if (sidecar.constraints && typeof sidecar.constraints === "object") {
             run.constraints = sidecar.constraints as Record<string, unknown>;

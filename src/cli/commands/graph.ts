@@ -2,7 +2,7 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import type { CAC } from "cac";
 import YAML from "yaml";
-import { CBM_UNAVAILABLE_MSG, type CbmClient, createCbmClient } from "../../cbm/client.js";
+import { CBM_UNAVAILABLE_MSG, type CbmClient, createCbmClient, isCbmUnavailable } from "../../cbm/client.js";
 import type { QueryResult, SearchResult, TraceResult } from "../../cbm/contract.js";
 import { indexProject } from "../../cbm/index.js";
 import { routeAndRetrieve } from "../../cbm/route.js";
@@ -60,10 +60,7 @@ function parsePositiveInt(value: unknown): number | undefined | null {
 // always exits with the honest CBM_CMD/CBM_ARGS guidance — never a bare errno.
 function cbmFailure(e: unknown): ReturnType<typeof fail> {
   const msg = String((e as Error)?.message ?? e);
-  return fail(
-    "CBM_UNAVAILABLE",
-    msg.includes("@graphkit/codebase-memory-mcp") ? msg : `${CBM_UNAVAILABLE_MSG}\n${msg}`,
-  );
+  return fail("CBM_UNAVAILABLE", isCbmUnavailable(e) ? msg : `${CBM_UNAVAILABLE_MSG}\n${msg}`);
 }
 
 // R7: the four CBM subcommands as data — one dispatch table, one runner. The

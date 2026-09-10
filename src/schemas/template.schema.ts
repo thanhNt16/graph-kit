@@ -1,8 +1,12 @@
 import { z } from "zod";
+import { GraphKitError } from "../errors.js";
 import { GraphSchema } from "./graph.schema.js";
 
 // Template names are stable CLI identifiers and must not permit path traversal.
 export const TEMPLATE_NAME_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+// One message built from the regex source — three call sites used to carry
+// hand-copied copies that could drift from the pattern.
+export const TEMPLATE_NAME_MSG = `Template name must match ${TEMPLATE_NAME_RE.source}`;
 
 // Parameter names are lower camel case or kebab-case.
 const PARAM_LOWER_CAMEL_RE = /^[a-z][a-zA-Z0-9]*$/;
@@ -74,7 +78,7 @@ export const GraphTemplateSchema = z
     apiVersion: z.literal("graphkit.dev/v1"),
     kind: z.literal("GraphTemplate"),
     metadata: z.object({
-      name: z.string().regex(TEMPLATE_NAME_RE, "Template name must match ^[a-z0-9]+(?:-[a-z0-9]+)*$"),
+      name: z.string().regex(TEMPLATE_NAME_RE, TEMPLATE_NAME_MSG),
       description: z.string().min(1),
       version: z.number().int().nonnegative(),
     }),
@@ -168,7 +172,9 @@ function resolveValue(key: string, template: GraphTemplate, values: TemplateValu
   const base = jsonForm ? key.slice(0, -5) : key;
   let value: unknown = base in values ? values[base] : template.parameters[base]?.default;
   if (value === undefined) {
-    throw new Error(`Missing value for required parameter "${base}"`);
+    // Typed at the source: callers used to re-derive PARAM_INVALID from a raw
+    // Error's message text.
+    throw new GraphKitError("PARAM_INVALID", `Missing value for required parameter "${base}"`);
   }
   if (jsonForm && typeof value === "string") {
     value = JSON.parse(value);

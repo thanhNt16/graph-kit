@@ -1,4 +1,5 @@
 import YAML from "yaml";
+import { splitFrontmatter } from "../memory/frontmatter.js";
 import type { Fingerprint } from "./fingerprint.js";
 
 export type Freshness = "fresh" | "stale" | "unknown";
@@ -37,11 +38,11 @@ export function renderMarker(meta: MarkerMeta, body: string): string {
 }
 
 export function parseMarker(content: string): MarkerMeta | null {
-  const m = content.match(/^---\n([\s\S]*?)\n---/);
-  if (!m) return null;
+  const split = splitFrontmatter(content);
+  if (!split) return null;
   let raw: Record<string, unknown>;
   try {
-    raw = (YAML.parse(m[1]) ?? {}) as Record<string, unknown>;
+    raw = (YAML.parse(split.fmText) ?? {}) as Record<string, unknown>;
   } catch {
     return null;
   }

@@ -80,6 +80,21 @@ describe("criteria schema + validation", () => {
     expect(validateGraph(missing, cwd).some((f) => f.check === "criteria-file" && f.message.includes("id"))).toBe(true);
   });
 
+  // B1: a corrupt criteria registry file used to throw out of validateGraph —
+  // the validator must never die on the files it audits.
+  test("criteria-file with broken YAML is a finding, not a crash", () => {
+    writeFileSync(join(cwd, "criteria", "api-response.md"), "---\nkind: [unclosed\n---\nbody\n");
+    const g = parseGraph({ required_keys: ["api-response"], criteria: ["api-response"] });
+    const findings = validateGraph(g, cwd);
+    expect(findings.some((f) => f.check === "criteria-file" && f.message.includes("unparseable"))).toBe(true);
+  });
+
+  test("criteria-file with CRLF frontmatter parses (B1)", () => {
+    writeFileSync(join(cwd, "criteria", "api-response.md"), "---\r\nkind: json\r\n---\r\nGET /users returns 200\r\n");
+    const g = parseGraph({ required_keys: ["api-response"], criteria: ["api-response"] });
+    expect(validateGraph(g, cwd).filter((f) => f.check === "criteria-file")).toEqual([]);
+  });
+
   test("loadCriteria: kind default, body is description, never throws", () => {
     writeFileSync(join(cwd, "criteria", "a.md"), "---\nkind: screenshot\n---\nshot of the thing\n");
     writeFileSync(join(cwd, "criteria", "b.md"), "just a body\n");

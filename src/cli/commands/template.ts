@@ -12,6 +12,7 @@ import {
   type GraphTemplate,
   GraphTemplateSchema,
   materializeTemplate as substituteTemplate,
+  TEMPLATE_NAME_MSG,
   TEMPLATE_NAME_RE,
   type TemplateValues,
 } from "../../schemas/template.schema.js";
@@ -153,7 +154,7 @@ export function runTemplatePack(opts: {
 }): PackResult {
   try {
     if (!TEMPLATE_NAME_RE.test(opts.name)) {
-      return fail("BAD_TEMPLATE_NAME", `Template name must match ^[a-z0-9]+(?:-[a-z0-9]+)*$`, { name: opts.name });
+      return fail("BAD_TEMPLATE_NAME", TEMPLATE_NAME_MSG, { name: opts.name });
     }
     const template = opts.input ? templateFromInput(opts.input) : templateFromSource(opts.file, opts.name);
     const dir = opts.global ? globalTemplatesDir(opts.home) : localTemplatesDir(opts.cwd);
@@ -286,7 +287,7 @@ export function materializeTemplate(
     throw new GraphKitError("BAD_PARAMS", "Params must be a JSON object", { params });
   }
   if (!TEMPLATE_NAME_RE.test(name)) {
-    throw new GraphKitError("BAD_TEMPLATE_NAME", `Template name must match ${TEMPLATE_NAME_RE.source}`, {
+    throw new GraphKitError("BAD_TEMPLATE_NAME", TEMPLATE_NAME_MSG, {
       name,
     });
   }
@@ -337,7 +338,7 @@ export function materializeTemplate(
 export function runTemplateShow(opts: { cwd: string; home: string; name: string }): ShowResult {
   try {
     if (!TEMPLATE_NAME_RE.test(opts.name)) {
-      return fail("BAD_TEMPLATE_NAME", `Template name must match ^[a-z0-9]+(?:-[a-z0-9]+)*$`, { name: opts.name });
+      return fail("BAD_TEMPLATE_NAME", TEMPLATE_NAME_MSG, { name: opts.name });
     }
     const resolved = resolveTemplate(opts.cwd, opts.home, opts.name);
     if (!resolved) {

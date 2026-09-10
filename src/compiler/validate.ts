@@ -2,6 +2,7 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import YAML from "yaml";
 import type { z } from "zod";
+import { splitFrontmatter } from "../memory/frontmatter.js";
 import type { GraphSchema } from "../schemas/graph.schema.js";
 
 export interface Finding {
@@ -155,8 +156,20 @@ export function validateGraph(graph: Graph, projectRoot: string): Finding[] {
         message: `Criterion "${id}" has no registry file at criteria/${id}.md`,
       });
     } else {
-      const head = readFileSync(file, "utf-8").match(/^---\n([\s\S]*?)\n---/);
-      const fmId = head ? YAML.parse(head[1])?.id : undefined;
+      // Broken criteria YAML is a finding, not a crash — gk validate must
+      // never die on the files it audits.
+      let fmId: unknown;
+      try {
+        const split = splitFrontmatter(readFileSync(file, "utf-8"));
+        fmId = split ? (YAML.parse(split.fmText)?.id as unknown) : undefined;
+      } catch {
+        fmId = undefined;
+        findings.push({
+          check: "criteria-file",
+          path: `criteria/${id}.md`,
+          message: `Registry file criteria/${id}.md has unparseable frontmatter YAML`,
+        });
+      }
       if (fmId !== undefined && fmId !== id) {
         findings.push({
           check: "criteria-file",
@@ -169,7 +182,9 @@ export function validateGraph(graph: Graph, projectRoot: string): Finding[] {
 
   // 6. memory-augmented topology contract
   if (graph.topology === "memory-augmented") {
-    const tc = graph.topology_config as Record<string, any>;
+    // topology_config is a free-form record by design (hosts extend it); the
+    // fields this rule reads get a narrow local view instead of `any`.
+    const tc = graph.topology_config as Record<string, unknown>;
     const inner = tc?.inner;
     if (!inner || typeof inner !== "object" || !("template" in inner)) {
       findings.push({
@@ -178,7 +193,7 @@ export function validateGraph(graph: Graph, projectRoot: string): Finding[] {
         message: "memory-augmented requires topology_config.inner.template (a base topology)",
       });
     }
-    const mem = tc?.memory as Record<string, any> | undefined;
+    const mem = tc?.memory as { curator_node?: string } | undefined;
     const curatorNode = mem?.curator_node ?? "curator";
     if (!graph.nodes[curatorNode]) {
       findings.push({
@@ -191,8 +206,8 @@ export function validateGraph(graph: Graph, projectRoot: string): Finding[] {
 
   // 7. eval-gate node role contract
   for (const [id, node] of Object.entries(graph.nodes)) {
-    if ((node as any).role === "eval-gate") {
-      if (!(node as any).eval) {
+    if (node.role === "eval-gate") {
+      if (!node.eval) {
         findings.push({
           check: "eval-gate-config",
           path: `nodes.${id}.eval`,

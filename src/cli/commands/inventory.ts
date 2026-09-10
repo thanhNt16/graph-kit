@@ -3,6 +3,8 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import type { CAC } from "cac";
 import YAML from "yaml";
+import { GraphKitError } from "../../errors.js";
+import { splitFrontmatter } from "../../memory/frontmatter.js";
 import { getTarget, isValidTarget, listTargets } from "../../targets/index.js";
 import type { TargetId } from "../../targets/types.js";
 import { fail, ok } from "../output.js";
@@ -106,11 +108,12 @@ const MCP_TOOL_KEY = "tools";
 const MCP_MAX_TOOLS = 64;
 
 function parseFrontmatterModel(content: string): { model?: string; name?: string } {
-  const match = content.match(/^---\n([\s\S]*?)\n---/);
-  if (!match) return {};
+  // Shared splitter (CRLF-tolerant) — same parse primitive as the memory store.
+  const split = splitFrontmatter(content);
+  if (!split) return {};
   let data: Record<string, unknown>;
   try {
-    data = YAML.parse(match[1]) ?? {};
+    data = YAML.parse(split.fmText) ?? {};
   } catch {
     return { model: undefined, name: undefined };
   }
@@ -232,7 +235,9 @@ export function runInventory(opts: { cwd?: string; target?: string; userDir?: st
     const valid = listTargets()
       .map((t) => t.id)
       .join(", ");
-    throw new Error(`Invalid target: ${requested}. Must be one of: ${valid}`);
+    // Typed: the CLI action has a parallel BAD_TARGET fail path — one error
+    // surface, not a raw Error here and an envelope there.
+    throw new GraphKitError("BAD_TARGET", `Invalid target: ${requested}. Must be one of: ${valid}`);
   }
   const target = requested as TargetId;
   const desc = getTarget(target);

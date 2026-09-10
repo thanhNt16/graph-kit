@@ -50,7 +50,7 @@ export function addEvidence(
       "EVIDENCE_KEY_INVALID",
       `Evidence key "${opts.key}" must be a non-empty basename without path separators`,
       {
-        hint: "Use a plain key like \"report\" — it becomes <evidence_dir>/<key>.md",
+        hint: 'Use a plain key like "report" — it becomes <evidence_dir>/<key>.md',
       },
     );
   }

@@ -1,13 +1,13 @@
-import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { appendFileSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import type { CAC } from "cac";
 import YAML from "yaml";
-import { CBM_UNAVAILABLE_MSG, type CbmClient, createCbmClient } from "../../cbm/client.js";
+import { CBM_UNAVAILABLE_MSG, type CbmClient, createCbmClient, isCbmUnavailable } from "../../cbm/client.js";
 import { indexProject } from "../../cbm/index.js";
 import { actRScore, shouldExpire } from "../../eval/forgetting.js";
 import { atomicWrite } from "../../fs.js";
 import { consolidate } from "../../memory/consolidate.js";
-import { parseMemoryFile, walkMemoryStore, type ParsedMemoryFile } from "../../memory/frontmatter.js";
+import { type ParsedMemoryFile, parseMemoryFile, walkMemoryStore } from "../../memory/frontmatter.js";
 import { type ExpandedHit, expandedRecall } from "../../memory/recall-expanded.js";
 import { MemoryConfig } from "../../schemas/memory.schema.js";
 import { subcommandsFor } from "../command-registry.js";
@@ -364,7 +364,9 @@ Subcommands: ${subcommandsFor("memory")}\n\nOptions:\n  --project <project>  CBM
           return;
         }
         if (opts.json) {
-          console.log(JSON.stringify(ok({ query, top_k: results.length, results, linked, recall_topk: topk, malformed })));
+          console.log(
+            JSON.stringify(ok({ query, top_k: results.length, results, linked, recall_topk: topk, malformed })),
+          );
           return;
         }
         console.log(renderRecallHits(memDir, query, results, linked));
@@ -387,12 +389,7 @@ Subcommands: ${subcommandsFor("memory")}\n\nOptions:\n  --project <project>  CBM
       } catch (e) {
         const msg = String((e as Error)?.message ?? e);
         console.log(
-          JSON.stringify(
-            fail(
-              "CBM_UNAVAILABLE",
-              msg.includes("@graphkit/codebase-memory-mcp") ? msg : `${CBM_UNAVAILABLE_MSG}\n${msg}`,
-            ),
-          ),
+          JSON.stringify(fail("CBM_UNAVAILABLE", isCbmUnavailable(e) ? msg : `${CBM_UNAVAILABLE_MSG}\n${msg}`)),
         );
         process.exit(1);
       }

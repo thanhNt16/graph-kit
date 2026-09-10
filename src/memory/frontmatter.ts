@@ -45,6 +45,20 @@ function legacyTags(value: unknown): string[] {
 }
 
 /**
+ * Split raw text into frontmatter + body at the `---` fences. CRLF-tolerant:
+ * a Windows-checkout memory/criteria/marker file must parse, not silently
+ * register as "no frontmatter" and drop out of every store pass. Returns null
+ * when no frontmatter block is present. The one split rule for the repo —
+ * memory entries, agent frontmatter, criteria registry files, and evidence
+ * markers all share it.
+ */
+export function splitFrontmatter(raw: string): { fmText: string; body: string } | null {
+  const m = raw.match(/^---\r?\n([\s\S]*?)\r?\n---/);
+  if (!m) return null;
+  return { fmText: m[1], body: raw.slice(m[0].length) };
+}
+
+/**
  * Parse one memory file: frontmatter match → YAML → legacy tags coercion →
  * id/type defaults → schema validation. Returns null on any malformation
  * (missing frontmatter, broken YAML, schema miss) — callers drop and continue,
@@ -66,11 +80,11 @@ export function parseMemoryFile(
   fallbackId: string,
   schema?: z.ZodType,
 ): ParsedMemoryFile<z.ZodType> | null {
-  const m = raw.match(/^---\n([\s\S]*?)\n---/);
-  if (!m) return null;
+  const split = splitFrontmatter(raw);
+  if (!split) return null;
   let fm: Record<string, unknown>;
   try {
-    const parsedYaml = YAML.parse(m[1]);
+    const parsedYaml = YAML.parse(split.fmText);
     // Syntax-broken frontmatter (e.g. `tags: [unclosed`) follows the same
     // malformed convention as a schema miss below: dropped, never fatal —
     // one bad file must not kill a whole store pass.
@@ -85,7 +99,7 @@ export function parseMemoryFile(
     type: typeof fm.type === "string" && fm.type.trim() ? fm.type : "knowledge",
   });
   if (!validated.success) return null;
-  return { fm: validated.data, body: raw.slice(m[0].length) };
+  return { fm: validated.data, body: split.body };
 }
 
 /** Schema-agnostic walker entry: fm is whatever the caller's schema produced. */
