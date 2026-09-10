@@ -258,12 +258,20 @@ Store and retrieve project decisions, recurring bug patterns, and conventions wi
 # Search salience-ranked memories (ACT-R decay curve):
 gk memory recall "database migration conventions"
 
+# Debug why a memory ranked (or was filtered out) — read-only, no reinforcement:
+gk memory recall "database migration" --explain
+
+# Generate an interactive HTML recall diagnosis (.graphkit/diagrams/):
+gk memory recall "database migration" --explain --html
+
 # Reinforce a memory when applied:
 gk memory touch <memory-id>
 
 # Run background consolidation pass:
 gk memory consolidate
 ```
+
+`--explain` prints a diagnostic table (term overlap, salience math, link penalties, `expired`/`superseded`/`outranked` verdicts) without side effects. `--html` (requires `--explain`) additionally writes a standalone dual-theme report to `.graphkit/diagrams/recall-<query>-<timestamp>.html`. Real recalls append JSONL rows to `.graphkit/memory/.recall-log.jsonl`, tagged with `--origin` (default `cli`), for planned-vs-actual retrieval comparison.
 
 ---
 
