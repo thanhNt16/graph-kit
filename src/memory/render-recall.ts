@@ -1,5 +1,14 @@
 import type { RecallExplanation } from "./explain-recall.js";
 
+function escapeHtml(str: string): string {
+  return str
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
+}
+
 export function renderRecallAscii(exp: RecallExplanation): string {
   const lines: string[] = [];
   lines.push(
@@ -31,14 +40,29 @@ export function renderRecallAscii(exp: RecallExplanation): string {
     lines.push(`REJECTED (top ${exp.rejected_top_n.length})`);
     for (const r of exp.rejected_top_n) {
       const idStr = r.id.padEnd(10, " ");
-      const statusStr = (r.status === "filtered" ? "FILTERED" : "OUTRANKED").padEnd(10, " ");
+      let statusStr = "REJECTED";
       let detail = r.reason ?? "";
-      if (r.reason === "superseded" && r.superseded_by) {
-        detail = `superseded by ${r.superseded_by}`;
-      } else if (r.reason === "outranked") {
-        detail = `score ${r.final_score.toFixed(3)} < cutoff`;
+
+      switch (r.reason) {
+        case "superseded":
+          statusStr = "FILTERED";
+          detail = r.superseded_by ? `superseded by ${r.superseded_by}` : "superseded";
+          break;
+        case "expired":
+        case "not_yet_valid":
+          statusStr = "FILTERED";
+          detail = r.reason;
+          break;
+        case "outranked":
+          statusStr = "OUTRANKED";
+          detail = `score ${r.final_score.toFixed(3)} < cutoff`;
+          break;
+        case "zero_overlap":
+          statusStr = "ZERO_OVERLAP";
+          detail = "no term overlap with query";
+          break;
       }
-      lines.push(`  ${idStr} ${statusStr} ${detail}`);
+      lines.push(`  ${idStr} ${statusStr.padEnd(13, " ")} ${detail}`);
     }
   }
 
@@ -52,15 +76,15 @@ export function renderRecallHtml(exp: RecallExplanation, historyLogs: unknown[] 
     .map((h, i) => {
       const widthPct = Math.min(100, Math.round((h.final_score / maxScore) * 100));
       const badge = h.linked_via
-        ? `<span class="badge linked">linked via ${h.linked_via} (0.5x)</span>`
+        ? `<span class="badge linked">linked via ${escapeHtml(h.linked_via)} (${h.linked_penalty ?? 0.5}x)</span>`
         : `<span class="badge hit">direct match</span>`;
 
       return `
       <div class="hit-card ${h.linked_via ? "linked-card" : ""}">
         <div class="hit-header">
           <span class="rank">#${i + 1}</span>
-          <span class="hit-id">${h.id}</span>
-          <span class="hit-file">${h.file}</span>
+          <span class="hit-id">${escapeHtml(h.id)}</span>
+          <span class="hit-file">${escapeHtml(h.file)}</span>
           ${badge}
           <span class="score-label">Score: <strong>${h.final_score.toFixed(3)}</strong> (sal: ${h.raw_salience.toFixed(2)})</span>
         </div>
@@ -68,7 +92,7 @@ export function renderRecallHtml(exp: RecallExplanation, historyLogs: unknown[] 
           <div class="score-bar-fill" style="width: ${widthPct}%;"></div>
         </div>
         <div class="matched-terms">
-          Matched terms: ${h.matched_terms.map((t) => `<span class="term-tag">${t}</span>`).join(" ") || "<em>none</em>"}
+          Matched terms: ${h.matched_terms.map((t) => `<span class="term-tag">${escapeHtml(t)}</span>`).join(" ") || "<em>none</em>"}
         </div>
       </div>`;
     })
@@ -76,15 +100,19 @@ export function renderRecallHtml(exp: RecallExplanation, historyLogs: unknown[] 
 
   const rejectedHtml = exp.rejected_top_n
     .map((r) => {
-      let detail = r.reason ?? "";
+      let detail = escapeHtml(r.reason ?? "");
       if (r.reason === "superseded" && r.superseded_by) {
-        detail = `superseded by <code>${r.superseded_by}</code>`;
+        detail = `superseded by <code>${escapeHtml(r.superseded_by)}</code>`;
+      } else if (r.reason === "outranked") {
+        detail = `score ${r.final_score.toFixed(3)} &lt; cutoff`;
+      } else if (r.reason === "zero_overlap") {
+        detail = "no term overlap with query";
       }
       return `
       <tr>
-        <td><code>${r.id}</code></td>
-        <td>${r.file}</td>
-        <td><span class="badge ${r.status}">${r.status.toUpperCase()}</span></td>
+        <td><code>${escapeHtml(r.id)}</code></td>
+        <td>${escapeHtml(r.file)}</td>
+        <td><span class="badge ${escapeHtml(r.status)}">${escapeHtml(r.status.toUpperCase())}</span></td>
         <td>${detail}</td>
       </tr>`;
     })
@@ -94,19 +122,36 @@ export function renderRecallHtml(exp: RecallExplanation, historyLogs: unknown[] 
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <title>Memory Recall Explain — ${exp.query}</title>
+  <title>Memory Recall Explain — ${escapeHtml(exp.query)}</title>
   <meta name="generator" content="GraphKit Archify">
   <style>
     :root {
-      --bg: #0d1117;
-      --card-bg: #161b22;
-      --border: #30363d;
-      --text: #c9d1d9;
-      --accent: #58a6ff;
-      --accent-bar: #238636;
-      --linked-bar: #8957e5;
-      --warn: #d29922;
-      --err: #f85149;
+      --bg: #020617;
+      --card-bg: #0f172a;
+      --border: #1e293b;
+      --text: #ffffff;
+      --text-muted: #94a3b8;
+      --accent: #38bdf8;
+      --accent-bar: #34d399;
+      --linked-bar: #a78bfa;
+      --score-bg: #1e293b;
+      --warn: #fbbf24;
+      --err: #fb7185;
+    }
+    @media (prefers-color-scheme: light) {
+      :root {
+        --bg: #f8fafc;
+        --card-bg: #ffffff;
+        --border: #e2e8f0;
+        --text: #0f172a;
+        --text-muted: #64748b;
+        --accent: #0284c7;
+        --accent-bar: #059669;
+        --linked-bar: #7c3aed;
+        --score-bg: #e2e8f0;
+        --warn: #d97706;
+        --err: #e11d48;
+      }
     }
     body {
       background: var(--bg);
@@ -116,8 +161,9 @@ export function renderRecallHtml(exp: RecallExplanation, historyLogs: unknown[] 
       padding: 24px;
     }
     .container { max-width: 960px; margin: 0 auto; }
-    h1 { margin-top: 0; font-size: 1.5rem; color: #fff; }
-    .meta { color: #8b949e; font-size: 0.9rem; margin-bottom: 24px; }
+    h1 { margin-top: 0; font-size: 1.5rem; color: var(--text); }
+    h2 { color: var(--text); }
+    .meta { color: var(--text-muted); font-size: 0.9rem; margin-bottom: 24px; }
     .hit-card {
       background: var(--card-bg);
       border: 1px solid var(--border);
@@ -128,29 +174,29 @@ export function renderRecallHtml(exp: RecallExplanation, historyLogs: unknown[] 
     .linked-card { border-style: dashed; }
     .hit-header { display: flex; gap: 12px; align-items: center; margin-bottom: 8px; font-size: 0.95rem; }
     .rank { font-weight: bold; color: var(--accent); }
-    .hit-id { font-family: monospace; color: #fff; }
-    .hit-file { color: #8b949e; font-size: 0.85rem; }
+    .hit-id { font-family: monospace; color: var(--text); }
+    .hit-file { color: var(--text-muted); font-size: 0.85rem; }
     .score-label { margin-left: auto; font-family: monospace; }
-    .score-bar-bg { background: #21262d; border-radius: 4px; height: 8px; width: 100%; margin: 8px 0; overflow: hidden; }
+    .score-bar-bg { background: var(--score-bg); border-radius: 4px; height: 8px; width: 100%; margin: 8px 0; overflow: hidden; }
     .score-bar-fill { background: var(--accent-bar); height: 100%; }
     .linked-card .score-bar-fill { background: var(--linked-bar); }
-    .matched-terms { font-size: 0.85rem; color: #8b949e; margin-top: 4px; }
-    .term-tag { background: #1f6feb33; color: var(--accent); border: 1px solid #1f6feb66; padding: 2px 6px; border-radius: 4px; font-family: monospace; }
+    .matched-terms { font-size: 0.85rem; color: var(--text-muted); margin-top: 4px; }
+    .term-tag { background: rgba(56, 189, 248, 0.15); color: var(--accent); border: 1px solid rgba(56, 189, 248, 0.35); padding: 2px 6px; border-radius: 4px; font-family: monospace; }
     .badge { font-size: 0.75rem; padding: 2px 6px; border-radius: 4px; text-transform: uppercase; font-weight: bold; }
-    .badge.hit { background: #23863633; color: #3fb950; border: 1px solid #23863666; }
-    .badge.linked { background: #8957e533; color: #bc8cff; border: 1px solid #8957e566; }
-    .badge.filtered { background: #f8514933; color: var(--err); border: 1px solid #f8514966; }
-    .badge.rejected { background: #d2992233; color: var(--warn); border: 1px solid #d2992266; }
+    .badge.hit { background: rgba(52, 211, 153, 0.15); color: var(--accent-bar); border: 1px solid rgba(52, 211, 153, 0.35); }
+    .badge.linked { background: rgba(167, 139, 250, 0.15); color: var(--linked-bar); border: 1px solid rgba(167, 139, 250, 0.35); }
+    .badge.filtered { background: rgba(251, 113, 133, 0.15); color: var(--err); border: 1px solid rgba(251, 113, 133, 0.35); }
+    .badge.rejected { background: rgba(251, 191, 36, 0.15); color: var(--warn); border: 1px solid rgba(251, 191, 36, 0.35); }
     table { width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 0.9rem; }
     th, td { text-align: left; padding: 8px; border-bottom: 1px solid var(--border); }
-    th { color: #8b949e; }
+    th { color: var(--text-muted); }
   </style>
 </head>
 <body>
   <div class="container">
     <h1>Memory Recall Diagnosis</h1>
     <div class="meta">
-      Query: <strong>"${exp.query}"</strong> | Top-K: ${exp.k} | Scanned: ${exp.scanned_count} docs | Time: ${exp.now}
+      Query: <strong>"${escapeHtml(exp.query)}"</strong> | Top-K: ${exp.k} | Scanned: ${exp.scanned_count} docs | Time: ${escapeHtml(exp.now)}
     </div>
 
     <h2>Hits</h2>

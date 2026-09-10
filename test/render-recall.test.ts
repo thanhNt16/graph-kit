@@ -49,6 +49,15 @@ describe("renderRecall", () => {
         status: "filtered" as const,
         reason: "expired" as const,
       },
+      {
+        id: "mem-0a1b",
+        file: "unrelated.md",
+        matched_terms: [],
+        raw_salience: 0.1,
+        final_score: 0,
+        status: "rejected" as const,
+        reason: "zero_overlap" as const,
+      },
     ],
   };
 
@@ -61,6 +70,8 @@ describe("renderRecall", () => {
     expect(ascii).toContain("linked via mem-a1b2");
     expect(ascii).toContain("REJECTED");
     expect(ascii).toContain("superseded by mem-a1b2");
+    expect(ascii).toContain("ZERO_OVERLAP");
+    expect(ascii).toContain("no term overlap with query");
   });
 
   it("renders standalone self-contained HTML page", () => {
@@ -70,5 +81,27 @@ describe("renderRecall", () => {
     expect(html).toContain("knowledge/token-ttl.md");
     expect(html).toContain("mem-a1b2");
     expect(html).toContain("Archify");
+    expect(html).toContain("prefers-color-scheme: light");
+    expect(html).toContain("#020617");
+    expect(html).toContain("#f8fafc");
+  });
+
+  it("escapes special HTML characters in content", () => {
+    const unsafeExp = {
+      ...sampleExplanation,
+      query: '<script>alert("xss")</script> & "quote"',
+      hits: [
+        {
+          ...sampleExplanation.hits[0],
+          id: "mem<safe>",
+          file: "path/to/<xss>.md",
+        },
+      ],
+    };
+    const html = renderRecallHtml(unsafeExp);
+    expect(html).not.toContain('<script>alert("xss")</script>');
+    expect(html).toContain("&lt;script&gt;alert(&quot;xss&quot;)&lt;/script&gt; &amp; &quot;quote&quot;");
+    expect(html).toContain("mem&lt;safe&gt;");
+    expect(html).toContain("path/to/&lt;xss&gt;.md");
   });
 });
