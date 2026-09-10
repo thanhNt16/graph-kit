@@ -53,7 +53,7 @@ describe("gk memory recall CLI (explain, html, capture log)", () => {
 
   it("--explain --html writes the standalone report and prints its path", async () => {
     const out = await $`bun run ${CLI} memory recall "JWT token" --explain --html`.cwd(CWD).text();
-    const match = out.match(/\.graphkit\/memory\/recalls\/recall-[^\s]+\.html/);
+    const match = out.match(/\.graphkit\/diagrams\/recall-[^\s]+\.html/);
     expect(match).not.toBeNull();
     const htmlPath = join(CWD, match![0]);
     expect(existsSync(htmlPath)).toBe(true);
@@ -93,5 +93,14 @@ describe("gk memory recall CLI (explain, html, capture log)", () => {
     const first = JSON.parse(lines[0]);
     expect(first.origin).toBe("cli");
     expect(first.top[0].id).toBe("mem-auth");
+  });
+
+  it("bare --html without --explain fails with INVALID_OPTION", async () => {
+    const out = await $`bun run ${CLI} memory recall "JWT token" --html`.cwd(CWD).nothrow().text();
+    const parsed = JSON.parse(out);
+    expect(parsed.status).toBe("fail");
+    expect(parsed.error.code).toBe("INVALID_OPTION");
+    expect(parsed.error.message).toContain("--html requires --explain");
+    expect(existsSync(LOG)).toBe(false);
   });
 });

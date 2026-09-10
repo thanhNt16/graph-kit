@@ -236,7 +236,8 @@ export function registerMemoryCommands(cli: CAC) {
         // Bare `gk memory` prints usage and exits 0 — a documented surface, not an error.
         console.log(
           `gk memory — memory lifecycle commands\n\nUsage:\n  gk memory <subcommand> [args...]\n
-Subcommands: ${subcommandsFor("memory")}\n\nOptions:\n  --project <project>  CBM project name\n  --json               JSON output`,
+Subcommands: ${subcommandsFor("memory")}\n\nOptions:\n  --project <project>  CBM project name\n  --json               JSON output\n
+Recall options:\n  --explain            Explain recall scoring and filter decisions (read-only)\n  --html               With --explain: render a standalone HTML report to .graphkit/diagrams/\n  --origin <origin>    Origin marker for the recall capture log (e.g. cli, curator, agent)`,
         );
         return;
       }
@@ -264,6 +265,11 @@ Subcommands: ${subcommandsFor("memory")}\n\nOptions:\n  --project <project>  CBM
         const query = Array.isArray(_args) ? _args.join(" ") : _args;
         if (!query) {
           console.log(JSON.stringify(fail("MISSING_ARG", "recall requires a query")));
+          process.exit(1);
+          return;
+        }
+        if (opts.html && !opts.explain) {
+          console.log(JSON.stringify(fail("INVALID_OPTION", "--html requires --explain")));
           process.exit(1);
           return;
         }
@@ -306,7 +312,7 @@ Subcommands: ${subcommandsFor("memory")}\n\nOptions:\n  --project <project>  CBM
                 .replace(/[^a-z0-9]+/g, "-")
                 .replace(/^-+|-+$/g, "") || "query";
             const stamp = new Date().toISOString().replace(/[:.]/g, "-");
-            const relDir = join(".graphkit", "memory", "recalls");
+            const relDir = join(".graphkit", "diagrams");
             mkdirSync(join(process.cwd(), relDir), { recursive: true });
             const relPath = join(relDir, `recall-${qSlug}-${stamp}.html`);
             writeFileSync(join(process.cwd(), relPath), renderRecallHtml(exp));
