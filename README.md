@@ -56,11 +56,15 @@ gk can bridge to the codebase-memory-mcp (CBM) MCP server for indexing and code-
 
 ## Install
 
-### GitHub release
+One command — detects macOS Apple Silicon / Linux x64, installs to `~/.local/bin` (no sudo), checks `PATH`, and verifies:
 
-Each build on `main` publishes a new patch release (e.g. `v0.2.9`) with binaries and auto-generated changelogs. Install the latest for your platform:
+```bash
+curl -fsSL https://raw.githubusercontent.com/thanhNt16/graph-kit/main/install.sh | sh
+```
 
-**macOS Apple Silicon** (no sudo — installs into your home dir):
+Prefer to do it manually? Each build on `main` publishes a new patch release with binaries and auto-generated changelogs.
+
+**macOS Apple Silicon**:
 
 ```bash
 mkdir -p ~/.local/bin && rm -rf ~/.local/bin/gk ~/.local/bin/share

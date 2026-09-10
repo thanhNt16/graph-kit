@@ -151,7 +151,7 @@
     <a class="btn btn-primary" href="#quickstart">Get started</a>
     <a class="btn btn-ghost" href="https://github.com/thanhNt16/graph-kit">View on GitHub</a>
   </div>
-  <div class="hero-install"><code>curl -fsSL https://github.com/thanhNt16/graph-kit/releases/latest/download/gk-darwin-arm64.tar.gz | sudo tar -xz -C /usr/local/bin</code></div>
+  <div class="hero-install"><code>curl -fsSL https://raw.githubusercontent.com/thanhNt16/graph-kit/main/install.sh | sh</code></div>
   <div class="hero-stats">
     <div class="stat"><div class="stat-num">11</div><div class="stat-label">Canonical Topologies</div></div>
     <div class="stat"><div class="stat-num">5</div><div class="stat-label">Supported Host Targets</div></div>
@@ -220,13 +220,8 @@
   <div class="install-grid">
     <div class="code-block">
       <div class="code-header"><div class="code-dot" style="background:#f85149"></div><div class="code-dot" style="background:#d29922"></div><div class="code-dot" style="background:#3fb950"></div> 1. Install Prebuilt Binary</div>
-      <div class="code-body"><span class="cmt"># macOS Apple Silicon</span>
-curl -fsSL https://github.com/thanhNt16/graph-kit/releases/latest/download/gk-darwin-arm64.tar.gz \
-  | sudo tar -xz -C /usr/local/bin
-
-<span class="cmt"># Linux x64</span>
-curl -fsSL https://github.com/thanhNt16/graph-kit/releases/latest/download/gk-linux-x64.tar.gz \
-  | sudo tar -xz -C /usr/local/bin
+      <div class="code-body"><span class="cmt"># One command — macOS Apple Silicon &amp; Linux x64</span>
+curl -fsSL https://raw.githubusercontent.com/thanhNt16/graph-kit/main/install.sh | sh
 
 gk --version</div>
     </div>
