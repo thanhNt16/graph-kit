@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 ### Added
 - One-command installer (`install.sh` in repo root): OS/arch detection, installs to `~/.local/bin` without sudo, clears stale files before extraction, PATH check, `gk --version` verification. `curl -fsSL https://raw.githubusercontent.com/thanhNt16/graph-kit/main/install.sh | sh`
+- npm package `graphkit-gk` published on every release (`npm publish` in release.yml via `NPM_TOKEN` secret); `bun add -g graphkit-gk` / `npm i -g graphkit-gk` installs a ~380 KB JS bundle — 30-100x smaller than the standalone binary tarballs. (`@graphkit` scope was taken; unscoped `graphkit-gk` chosen, binary stays `gk`.)
+- `install.sh` fast path: prefers `bun add -g` / `npm i -g` (~1-2 s) when a runtime exists, falls back to the standalone tarball otherwise (`GRAPHKIT_INSTALL=binary` forces the tarball).
 - `loops[].no_progress_limit` (schema, min 2) + `gk run round <group>` — durable per-group round journal (`.graphkit/runs/<id>/rounds/<group>.jsonl`); fingerprints node statuses + evidence bytes per round so `no_progress_limit` consecutive identical failing rounds exhaust the loop early (stop reason `no_progress` alongside `gate`/`judged`/`exhausted`)
 - `criteria/` registry + `evidence.criteria` id list + `evidence.freshness: report|strict` in graph.yaml; `criteria-keys`/`criteria-file` validation
 - `gk evidence add` — content-addressed artifacts with provenance markers (`EVIDENCE_KEY_NOT_DECLARED` / `EVIDENCE_FILE_MISSING` / `EVIDENCE_TOO_LARGE`)

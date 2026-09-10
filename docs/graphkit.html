@@ -227,15 +227,13 @@ gk --version</div>
     </div>
 
     <div class="code-block">
-      <div class="code-header"><div class="code-dot" style="background:#f85149"></div><div class="code-dot" style="background:#d29922"></div><div class="code-dot" style="background:#3fb950"></div> 2. Or Build From Source (Bun)</div>
-      <div class="code-body"><span class="cmt"># Clone and build</span>
-git clone https://github.com/thanhNt16/graph-kit.git
-cd graph-kit
-bun install &amp;&amp; bun run build:bin
+      <div class="code-header"><div class="code-dot" style="background:#f85149"></div><div class="code-dot" style="background:#d29922"></div><div class="code-dot" style="background:#3fb950"></div> 2. Or Install via npm / bun</div>
+      <div class="code-body"><span class="cmt"># ~1-second install (380 KB)</span>
+bun add -g graphkit-gk
+<span class="cmt"># or</span>
+npm install -g graphkit-gk
 
-<span class="cmt"># Move executable to PATH</span>
-cp dist/gk /usr/local/bin/gk
-chmod +x /usr/local/bin/gk</div>
+gk --version</div>
     </div>
   </div>
 

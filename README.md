@@ -56,13 +56,23 @@ gk can bridge to the codebase-memory-mcp (CBM) MCP server for indexing and code-
 
 ## Install
 
-One command — detects macOS Apple Silicon / Linux x64, installs to `~/.local/bin` (no sudo), checks `PATH`, and verifies:
+### One-command install (recommended)
+
+Auto-detects `bun` / `npm` for a fast ~1-second install (380 KB). Falls back to the standalone binary tarball if neither is found:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/thanhNt16/graph-kit/main/install.sh | sh
 ```
 
-Prefer to do it manually? Each build on `main` publishes a new patch release with binaries and auto-generated changelogs.
+### Via npm / bun
+
+```bash
+bun add -g graphkit-gk
+# or
+npm install -g graphkit-gk
+```
+
+### Standalone binary (zero prerequisites)
 
 **macOS Apple Silicon**:
 
