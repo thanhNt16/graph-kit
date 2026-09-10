@@ -406,7 +406,7 @@ only by a human via `git apply`.
 git clone https://github.com/thanhNt16/graph-kit && cd graph-kit
 bun install        # Bun only — the version is pinned in .bun-version
 bun test           # full unit suite, no network needed
-bun run ci:local   # THE pre-push gate — the exact steps CI runs: typecheck + lint + build + test + cbm:parity + check-changelog + check:parity + manifest drift guard
+bun run ci:local   # THE pre-push gate — the exact steps CI runs: typecheck + lint + build + test + cbm:parity + eval:memory + check-changelog + check:parity + manifest drift guard
 bun run perf       # runtime perf harness (informational, no thresholds)
 ```
 

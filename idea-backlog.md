@@ -1,14 +1,23 @@
 # Axis Backlogs — merged, ranked
 
-> **Status (2026-09-09):** R1–R3 shipped in `fae84c0`; R4 in round 1. Round 2
-> (`improvement/efficiency-quality-round2`) completes the queue: R5
-> (`TraceHop.file_path`/`start_line`/`end_line` + hop-fallback fix), R6
-> (`gk graph query --template dead-code|callers-of|symbol-set` + `--templates`),
-> R7 (single `CBM_ACTIONS` dispatch path in `graph.ts`). **Axis-retrieve queue is
-> empty.** Deferred, not ranked live: R8 (offline rg fallback retriever on
-> `CBM_UNAVAILABLE` — makes `gk graph ask` work without a local CBM build; L,
-> anchor accuracy unproven), `gk completions`, install one-liner, persistent
-> recall index, consolidate double-scan.
+> **Status (2026-09-10, round 3):** R1–R7 all shipped (R1–R3 in `fae84c0`, R4 in
+> round 1, R5–R7 in round 2). Round 3 (`improvement/efficiency-quality-round3`)
+> cleared the honesty-bug class the backlog's metric framing surfaced late:
+> `ask` swallowing a dead bridge as "zero hits", linked recall resurfacing
+> expired memories, `status` reading an agent-authored sidecar, root-only decay,
+> evidence-key traversal, resume TypeErrors on malformed trace lines, plus the
+> memory-path perf batch (O(1) link expansion, non-quadratic `buildLinks`,
+> skip-identical consolidate writes, honest perf harness). **Axis-retrieve queue
+> remains empty.** Deferred, not ranked live: R8 (offline rg fallback retriever
+> on `CBM_UNAVAILABLE` — phase 0, the honest-error fix, shipped in round 3; the
+> retriever itself is L with a full mini-design in the round-3 brainstorm notes),
+> persistent recall index `.recall-index.json` (L — stat-keyed invalidation
+> contract designed, own round), lazy action bodies + `--splitting` bundle
+> (M-L), E1–E5 memory-hygiene clamps (M — E1's NaN/future-timestamp guard is the
+> one to land first), `gk completions` (M), central human renderer for all fail
+> envelopes (M, contract change), wave-computation extraction (M, three
+> implementations → one), coverage-floor gate (S-M).
+
 
 Surveyed at commit `329e4fa` on branch `autoresearch/aug14`.
 Per-axis, single clean ranked queue, deduped from scout local backlogs (R1-R7 / I1-I5 / E1-E5)

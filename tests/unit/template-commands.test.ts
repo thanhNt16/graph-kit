@@ -94,6 +94,25 @@ describe("gk template pack", () => {
     expect(existsSync(join(cwd, ".graphkit", "templates", ".."))).toBe(false);
   });
 
+  // E4: the from-source intake previously had zero coverage for its
+  // SOURCE_INVALID paths — garbage YAML through the CLI went unasserted.
+  test("malformed YAML source → SOURCE_INVALID", () => {
+    writeFileSync(join(cwd, "broken.yaml"), "key: [unclosed\n  :::oops");
+    const res = runTemplatePack({ cwd, home, file: join(cwd, "broken.yaml"), name: "broken" });
+    expect(res.status).toBe("fail");
+    expect(res.error.code).toBe("SOURCE_INVALID");
+    expect(res.error.message).toContain("not valid YAML");
+  });
+
+  test("schema-invalid source → SOURCE_INVALID with issue details", () => {
+    const bad = DIAMOND.replace("    agent: code-reviewer\n", ""); // node without agent → schema miss
+    writeFileSync(join(cwd, "bad.yaml"), bad);
+    const res = runTemplatePack({ cwd, home, file: join(cwd, "bad.yaml"), name: "bad" });
+    expect(res.status).toBe("fail");
+    expect(res.error.code).toBe("SOURCE_INVALID");
+    expect(res.error.message).toContain("schema");
+  });
+
   test("rejects a name with uppercase / underscores", () => {
     const res = runTemplatePack({
       cwd,

@@ -198,3 +198,37 @@ describe("routeAndRetrieve fatal-bridge honesty", () => {
     expect(out.search).toEqual([]);
   });
 });
+
+// E4: the get_code_snippet branch of ask was uncovered — source bodies are
+// how "how does X work" questions get their answer-bearing content.
+describe("routeAndRetrieve snippet stage", () => {
+  test("get_code_snippet source surfaces as structural.snippets", async () => {
+    const client = {
+      call: async (tool: string) => {
+        if (tool === "search_graph")
+          return {
+            results: [
+              {
+                name: "loadGraph",
+                qualified_name: "proj.src.compiler.loader.loadGraph",
+                file_path: "src/compiler/loader.ts",
+                label: "Function",
+                start_line: 10,
+              },
+            ],
+          };
+        if (tool === "trace_path") return { callers: [], callees: [] };
+        if (tool === "get_code_snippet")
+          return { name: "loadGraph", source: "export function loadGraph(file: string) { return parsed; }" };
+        return {};
+      },
+      close: async () => {},
+    } as unknown as CbmClient;
+    // dataflow kind: runs the snippet stage (not deadcode/callers)
+    const out = await routeAndRetrieve(client, "How does loadGraph work?");
+    expect(out.kind).toBe("dataflow");
+    expect(out.structural?.snippets).toEqual([
+      { n: "loadGraph", src: "export function loadGraph(file: string) { return parsed; }" },
+    ]);
+  });
+});
