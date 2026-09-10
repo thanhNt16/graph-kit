@@ -69,7 +69,7 @@ export function renderRecallAscii(exp: RecallExplanation): string {
   return lines.join("\n");
 }
 
-export function renderRecallHtml(exp: RecallExplanation, _historyLogs: unknown[] = []): string {
+export function renderRecallHtml(exp: RecallExplanation): string {
   const maxScore = Math.max(1, ...exp.hits.map((h) => h.final_score));
 
   const hitsHtml = exp.hits

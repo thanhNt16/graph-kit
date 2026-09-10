@@ -306,17 +306,24 @@ Recall options:\n  --explain            Explain recall scoring and filter decisi
             return;
           }
           if (opts.html) {
-            const qSlug =
-              query
-                .toLowerCase()
-                .replace(/[^a-z0-9]+/g, "-")
-                .replace(/^-+|-+$/g, "") || "query";
-            const stamp = new Date().toISOString().replace(/[:.]/g, "-");
-            const relDir = join(".graphkit", "diagrams");
-            mkdirSync(join(process.cwd(), relDir), { recursive: true });
-            const relPath = join(relDir, `recall-${qSlug}-${stamp}.html`);
-            writeFileSync(join(process.cwd(), relPath), renderRecallHtml(exp));
-            console.log(relPath);
+            // Spec §6: a failed report write must never block the CLI pipeline —
+            // degrade to the ASCII rendering with a stderr warning, exit 0.
+            try {
+              const qSlug =
+                query
+                  .toLowerCase()
+                  .replace(/[^a-z0-9]+/g, "-")
+                  .replace(/^-+|-+$/g, "") || "query";
+              const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+              const relDir = join(".graphkit", "diagrams");
+              mkdirSync(join(process.cwd(), relDir), { recursive: true });
+              const relPath = join(relDir, `recall-${qSlug}-${stamp}.html`);
+              writeFileSync(join(process.cwd(), relPath), renderRecallHtml(exp));
+              console.log(relPath);
+            } catch (e) {
+              console.error(`warning: failed to write HTML report: ${String((e as Error)?.message ?? e)}`);
+              console.log(renderRecallAscii(exp));
+            }
             return;
           }
           console.log(renderRecallAscii(exp));

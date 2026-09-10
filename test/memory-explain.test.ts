@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { explainRecall } from "../src/memory/explain-recall.js";
+import { expandedRecall } from "../src/memory/recall-expanded.js";
 
 const TEST_DIR = join(process.cwd(), ".tmp-test-explain-memory");
 
@@ -133,5 +134,72 @@ describe("explainRecall", () => {
     expect(explanation.hits).toEqual([]);
     expect(explanation.rejected_top_n).toEqual([]);
     expect(explanation.scanned_count).toBe(0);
+  });
+
+  it("inherits the superseded doc's rank slot, matching expandedRecall", () => {
+    writeFileSync(
+      join(TEST_DIR, "a.md"),
+      `---\nid: mem-a\nsalience: 0.9\nsuperseded_by: mem-b\n---\nAuth token refresh workflow.`,
+    );
+    writeFileSync(join(TEST_DIR, "b.md"), `---\nid: mem-b\nsalience: 0.9\nstatus: stable\n---\nAuth legacy.`);
+    writeFileSync(
+      join(TEST_DIR, "c.md"),
+      `---\nid: mem-c\nsalience: 0.9\nstatus: stable\n---\nAuth token migration guide.`,
+    );
+
+    const explanation = explainRecall(TEST_DIR, "auth token refresh", 1, "2026-09-10T00:00:00Z");
+
+    // mem-b inherits mem-a's top rank slot even though mem-c overlaps more terms.
+    expect(explanation.hits.length).toBe(1);
+    expect(explanation.hits[0].id).toBe("mem-b");
+
+    const aDoc = explanation.rejected_top_n.find((d) => d.id === "mem-a");
+    expect(aDoc?.status).toBe("filtered");
+    expect(aDoc?.reason).toBe("superseded");
+    expect(aDoc?.superseded_by).toBe("mem-b");
+
+    const cDoc = explanation.rejected_top_n.find((d) => d.id === "mem-c");
+    expect(cDoc?.status).toBe("rejected");
+    expect(cDoc?.reason).toBe("outranked");
+
+    const actual = expandedRecall(TEST_DIR, "auth token refresh", 1, "2026-09-10T00:00:00Z");
+    expect(actual.results.map((r) => r.id)).toEqual(explanation.hits.map((h) => h.id));
+  });
+
+  it("matches expandedRecall ordering across a mixed store", () => {
+    writeFileSync(
+      join(TEST_DIR, "d1.md"),
+      `---\nid: d1\nsalience: 0.9\nvalid_to: 2026-01-01T00:00:00Z\n---\nDeploy pipeline rollback steps.`,
+    );
+    writeFileSync(
+      join(TEST_DIR, "d2.md"),
+      `---\nid: d2\nsalience: 0.9\nsuperseded_by: d3\n---\nDeploy pipeline hooks.`,
+    );
+    writeFileSync(join(TEST_DIR, "d3.md"), `---\nid: d3\nsalience: 0.2\nstatus: stable\n---\nDeploy pipeline gates.`);
+    writeFileSync(
+      join(TEST_DIR, "d4.md"),
+      `---\nid: d4\nsalience: 0.6\nstatus: stable\n---\nDeploy pipeline smoke tests.`,
+    );
+    writeFileSync(join(TEST_DIR, "d5.md"), `---\nid: d5\nsalience: 0.5\nstatus: stable\n---\nDeploy pipeline canary.`);
+    writeFileSync(
+      join(TEST_DIR, "d6.md"),
+      `---\nid: d6\nsalience: 0.99\nstatus: stable\n---\nUnrelated content entirely.`,
+    );
+    writeFileSync(
+      join(TEST_DIR, ".links.json"),
+      JSON.stringify({ generated_at: "2026-09-10T00:00:00Z", links: { d3: ["d6"] } }),
+    );
+
+    const explanation = explainRecall(TEST_DIR, "deploy pipeline", 3, "2026-09-10T00:00:00Z");
+
+    // d3 inherits d2's rank slot (2nd-highest), so hits are d3, d4, d5.
+    expect(explanation.hits.map((h) => h.id)).toEqual(["d3", "d4", "d5"]);
+
+    const actual = expandedRecall(TEST_DIR, "deploy pipeline", 3, "2026-09-10T00:00:00Z");
+    expect(actual.results.map((r) => r.id)).toEqual(explanation.hits.map((h) => h.id));
+
+    expect(explanation.rejected_top_n.find((d) => d.id === "d1")?.reason).toBe("expired");
+    expect(explanation.rejected_top_n.find((d) => d.id === "d2")?.reason).toBe("superseded");
+    expect(explanation.rejected_top_n.find((d) => d.id === "d6")?.reason).toBe("zero_overlap");
   });
 });

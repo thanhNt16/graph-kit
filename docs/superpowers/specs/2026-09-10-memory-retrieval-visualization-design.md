@@ -89,16 +89,17 @@ Appended on *actual* recall executions (when `--explain` is absent):
 {
   "ts": "2026-09-10T14:22:01.123Z",
   "query": "auth token expiry",
-  "query_terms": ["auth", "token", "expiry"],
   "k": 5,
   "origin": "curator",
-  "hits": [
-    { "id": "mem-a1b2", "salience": 0.14, "score": 0.42, "linked": false },
-    { "id": "mem-e5f6", "salience": 0.07, "score": 0.035, "linked": true }
+  "top": [
+    { "id": "mem-a1b2", "salience": 0.14 }
   ],
+  "injected": true,
   "scanned": 23
 }
 ```
+
+`top` carries `{ id, salience }` per returned hit; `injected` is always `true` for CLI-originated recalls. Scores and link flags are intentionally omitted — reconstruct them from the memory store at replay time if needed.
 
 ---
 

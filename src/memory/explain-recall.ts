@@ -1,6 +1,6 @@
 import { existsSync, readdirSync } from "node:fs";
 import { join } from "node:path";
-import { dropInvalid, loadMemories, type MemoryDoc, resolveSuperseded } from "../eval/memory-recall.js";
+import { applyRecallFilters, loadMemories, type MemoryDoc, rankByOverlap } from "../eval/memory-recall.js";
 import { readLinks } from "./links.js";
 
 export type ExplainDocStatus = "hit" | "filtered" | "rejected";
@@ -67,71 +67,55 @@ export function explainRecall(memDir: string, query: string, k = 5, now = new Da
     return { doc, matched, score };
   });
 
-  // Track validity drops
-  const validMap = new Map(dropInvalid(docs, now).map((d) => [d.id, d]));
-  const resolvedMap = new Map(resolveSuperseded(Array.from(validMap.values())).map((d) => [d.id, d]));
-
-  // Sort overlapping docs descending by score
-  const overlapping = scored.filter((s) => s.score > 0).sort((a, b) => b.score - a.score);
+  // Mirror the retriever's actual ordering: rankByOverlap → applyRecallFilters.
+  // resolveSuperseded runs over the ranked list, so a successor inherits the
+  // superseded doc's rank slot — classify hits against the survivor sequence,
+  // not per-doc membership checks.
+  const overlapping = rankByOverlap(query, docs);
+  const scoreOf = new Map(scored.map((s) => [s.doc.id, s]));
+  const survivors = applyRecallFilters(overlapping, now);
+  const slotOf = new Map(survivors.map((d, i) => [d.id, i]));
 
   const directHits: DocExplain[] = [];
   const rejectedOrFiltered: DocExplain[] = [];
 
-  for (const item of overlapping) {
-    const { doc, matched, score } = item;
+  for (const doc of survivors) {
     const relFile = where.get(doc.id) ?? doc.file;
-
-    // Check expiry / validity
-    if (!validMap.has(doc.id)) {
-      const isNotYetValid = Boolean(doc.valid_from && Date.parse(doc.valid_from) > Date.parse(now));
-      rejectedOrFiltered.push({
-        id: doc.id,
-        file: relFile,
-        matched_terms: matched,
-        raw_salience: doc.salience,
-        final_score: score,
-        status: "filtered",
-        reason: isNotYetValid ? "not_yet_valid" : "expired",
-      });
-      continue;
-    }
-
-    // Check supersede
-    if (!resolvedMap.has(doc.id)) {
-      rejectedOrFiltered.push({
-        id: doc.id,
-        file: relFile,
-        matched_terms: matched,
-        raw_salience: doc.salience,
-        final_score: score,
-        status: "filtered",
-        reason: "superseded",
-        superseded_by: doc.superseded_by,
-      });
-      continue;
-    }
-
-    // Survives filters
+    const { matched, score } = scoreOf.get(doc.id) ?? { matched: [] as string[], score: 0 };
+    const base = {
+      id: doc.id,
+      file: relFile,
+      matched_terms: matched,
+      raw_salience: doc.salience,
+      final_score: score,
+    };
     if (directHits.length < k) {
-      directHits.push({
-        id: doc.id,
-        file: relFile,
-        matched_terms: matched,
-        raw_salience: doc.salience,
-        final_score: score,
-        status: "hit",
-      });
+      directHits.push({ ...base, status: "hit" });
     } else {
-      rejectedOrFiltered.push({
-        id: doc.id,
-        file: relFile,
-        matched_terms: matched,
-        raw_salience: doc.salience,
-        final_score: score,
-        status: "rejected",
-        reason: "outranked",
-      });
+      rejectedOrFiltered.push({ ...base, status: "rejected", reason: "outranked" });
     }
+  }
+
+  for (const doc of overlapping) {
+    if (slotOf.has(doc.id)) continue;
+    const relFile = where.get(doc.id) ?? doc.file;
+    const { matched, score } = scoreOf.get(doc.id) ?? { matched: [] as string[], score: 0 };
+    // dropInvalid ran before resolveSuperseded, so validity failures classify
+    // first; everything else was superseded and its rank slot went to the
+    // successor, which surfaces in the survivor ordering above.
+    const notYet = Boolean(doc.valid_from && Date.parse(doc.valid_from) > Date.parse(now));
+    const invalid =
+      doc.expired === true || notYet || Boolean(doc.valid_to && Date.parse(doc.valid_to) < Date.parse(now));
+    rejectedOrFiltered.push({
+      id: doc.id,
+      file: relFile,
+      matched_terms: matched,
+      raw_salience: doc.salience,
+      final_score: score,
+      status: "filtered",
+      reason: invalid ? (notYet ? "not_yet_valid" : "expired") : "superseded",
+      superseded_by: doc.superseded_by,
+    });
   }
 
   // Link expansion for leftover slots
