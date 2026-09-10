@@ -1,21 +1,11 @@
 import { existsSync, readdirSync } from "node:fs";
 import { join } from "node:path";
-import {
-  dropInvalid,
-  loadMemories,
-  type MemoryDoc,
-  resolveSuperseded,
-} from "../eval/memory-recall.js";
+import { dropInvalid, loadMemories, type MemoryDoc, resolveSuperseded } from "../eval/memory-recall.js";
 import { readLinks } from "./links.js";
 
 export type ExplainDocStatus = "hit" | "filtered" | "rejected";
 
-export type ExplainRejectReason =
-  | "zero_overlap"
-  | "expired"
-  | "not_yet_valid"
-  | "superseded"
-  | "outranked";
+export type ExplainRejectReason = "zero_overlap" | "expired" | "not_yet_valid" | "superseded" | "outranked";
 
 export interface DocExplain {
   id: string;
@@ -54,12 +44,7 @@ function recallDirs(memDir: string): Array<{ dir: string; prefix: string }> {
   return dirs;
 }
 
-export function explainRecall(
-  memDir: string,
-  query: string,
-  k = 5,
-  now = new Date().toISOString(),
-): RecallExplanation {
+export function explainRecall(memDir: string, query: string, k = 5, now = new Date().toISOString()): RecallExplanation {
   const docs: MemoryDoc[] = [];
   const where = new Map<string, string>();
 
@@ -87,9 +72,7 @@ export function explainRecall(
   const resolvedMap = new Map(resolveSuperseded(Array.from(validMap.values())).map((d) => [d.id, d]));
 
   // Sort overlapping docs descending by score
-  const overlapping = scored
-    .filter((s) => s.score > 0)
-    .sort((a, b) => b.score - a.score);
+  const overlapping = scored.filter((s) => s.score > 0).sort((a, b) => b.score - a.score);
 
   const directHits: DocExplain[] = [];
   const rejectedOrFiltered: DocExplain[] = [];
@@ -184,9 +167,7 @@ export function explainRecall(
   }
 
   // Zero-overlap docs that are high salience can be added to rejected if needed
-  const zeroOverlap = scored
-    .filter((s) => s.score === 0)
-    .sort((a, b) => b.doc.salience - a.doc.salience);
+  const zeroOverlap = scored.filter((s) => s.score === 0).sort((a, b) => b.doc.salience - a.doc.salience);
 
   for (const item of zeroOverlap) {
     if (rejectedOrFiltered.length >= 10) break;
