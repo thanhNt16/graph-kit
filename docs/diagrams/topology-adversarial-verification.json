@@ -7,20 +7,12 @@
     "animation": "trace",
     "quality_profile": "showcase",
     "output": "docs/diagrams/topology-adversarial-verification.html",
-    "viewBox": [
-      1000,
-      680
-    ],
+    "viewBox": [1000, 680],
     "views": [
       {
         "id": "main",
         "label": "Shape",
-        "focus": [
-          "produce",
-          "refute",
-          "adjudicate",
-          "verdict"
-        ],
+        "focus": ["produce", "refute", "adjudicate", "verdict"],
         "note": "A challenger attacks the producer's draft; the adjudicator weighs both and rules."
       }
     ]
@@ -43,12 +35,7 @@
       "label": "Outcome"
     }
   ],
-  "mainPath": [
-    "produce",
-    "refute",
-    "adjudicate",
-    "verdict"
-  ],
+  "mainPath": ["produce", "refute", "adjudicate", "verdict"],
   "nodes": [
     {
       "id": "produce",
@@ -118,11 +105,7 @@
     {
       "dot": "rose",
       "title": "Use when",
-      "items": [
-        "Security review",
-        "Fact-checking",
-        "High-stakes claims need a second voice"
-      ]
+      "items": ["Security review", "Fact-checking", "High-stakes claims need a second voice"]
     },
     {
       "dot": "emerald",

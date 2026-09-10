@@ -26,10 +26,31 @@
   ],
   "mainPath": ["brainstorm", "plan", "worker-a", "test", "ship"],
   "nodes": [
-    { "id": "brainstorm", "lane": "ideate", "col": 0, "type": "frontend", "label": "Brainstorm", "sublabel": "explore intent" },
+    {
+      "id": "brainstorm",
+      "lane": "ideate",
+      "col": 0,
+      "type": "frontend",
+      "label": "Brainstorm",
+      "sublabel": "explore intent"
+    },
     { "id": "plan", "lane": "spec", "col": 1, "type": "frontend", "label": "Plan", "sublabel": "write plan.md" },
-    { "id": "worker-a", "lane": "impl1", "col": 2, "type": "backend", "label": "Worker 1", "sublabel": "execute skills" },
-    { "id": "worker-b", "lane": "impl2", "col": 2, "type": "backend", "label": "Worker 2", "sublabel": "execute skills" },
+    {
+      "id": "worker-a",
+      "lane": "impl1",
+      "col": 2,
+      "type": "backend",
+      "label": "Worker 1",
+      "sublabel": "execute skills"
+    },
+    {
+      "id": "worker-b",
+      "lane": "impl2",
+      "col": 2,
+      "type": "backend",
+      "label": "Worker 2",
+      "sublabel": "execute skills"
+    },
     { "id": "test", "lane": "verify", "col": 3, "type": "security", "label": "Test", "sublabel": "TDD gate" },
     { "id": "ship", "lane": "release", "col": 4, "type": "backend", "label": "Ship", "sublabel": "PR merged" }
   ],
@@ -39,7 +60,15 @@
     { "id": "e3", "from": "plan", "to": "worker-b", "role": "branch" },
     { "id": "e4", "from": "worker-a", "to": "test", "role": "main" },
     { "id": "e5", "from": "worker-b", "to": "test", "role": "main" },
-    { "id": "e6", "from": "test", "to": "worker-a", "label": "fail → fix", "variant": "dashed", "role": "error", "labelDx": -52 },
+    {
+      "id": "e6",
+      "from": "test",
+      "to": "worker-a",
+      "label": "fail → fix",
+      "variant": "dashed",
+      "role": "error",
+      "labelDx": -52
+    },
     { "id": "e7", "from": "test", "to": "worker-b", "variant": "dashed", "role": "error" },
     { "id": "e8", "from": "test", "to": "ship", "label": "pass", "variant": "emphasis", "role": "main" }
   ],

@@ -7,20 +7,12 @@
     "animation": "trace",
     "quality_profile": "showcase",
     "output": "docs/diagrams/topology-diamond.html",
-    "viewBox": [
-      1000,
-      660
-    ],
+    "viewBox": [1000, 660],
     "views": [
       {
         "id": "main",
         "label": "Shape",
-        "focus": [
-          "intake",
-          "reviews",
-          "reduce",
-          "synth"
-        ],
+        "focus": ["intake", "reviews", "reduce", "synth"],
         "note": "One brief fans out to parallel workers; every verdict reduces into a single synthesis."
       }
     ]
@@ -43,12 +35,7 @@
       "label": "Migrations"
     }
   ],
-  "mainPath": [
-    "intake",
-    "reviews",
-    "reduce",
-    "synth"
-  ],
+  "mainPath": ["intake", "reviews", "reduce", "synth"],
   "nodes": [
     {
       "id": "intake",

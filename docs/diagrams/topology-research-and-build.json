@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
- "diagram_type": "workflow",
+  "diagram_type": "workflow",
   "meta": {
     "title": "Research and Build Topology",
     "animation": "trace",
@@ -16,14 +16,25 @@
       }
     ]
   },
-  "lanes": [
-    { "id": "research", "label": "Research" },
-    { "id": "build", "label": "Build" }
-  ],
+  "lanes": [{ "id": "research", "label": "Research" }, { "id": "build", "label": "Build" }],
   "mainPath": ["scout", "research", "plan", "build", "review"],
   "nodes": [
-    { "id": "scout", "lane": "research", "col": 0, "type": "messagebus", "label": "Scout", "sublabel": "fast, read-only" },
-    { "id": "research", "lane": "build", "col": 1, "type": "database", "label": "Research", "sublabel": "synthesize sources" },
+    {
+      "id": "scout",
+      "lane": "research",
+      "col": 0,
+      "type": "messagebus",
+      "label": "Scout",
+      "sublabel": "fast, read-only"
+    },
+    {
+      "id": "research",
+      "lane": "build",
+      "col": 1,
+      "type": "database",
+      "label": "Research",
+      "sublabel": "synthesize sources"
+    },
     { "id": "plan", "lane": "research", "col": 2, "type": "frontend", "label": "Plan", "sublabel": "write plan.md" },
     { "id": "build", "lane": "build", "col": 3, "type": "backend", "label": "Build", "sublabel": "implement tasks" },
     { "id": "review", "lane": "research", "col": 4, "type": "security", "label": "Review", "sublabel": "quality gate" }
