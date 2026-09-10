@@ -3,6 +3,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import YAML from "yaml";
 import type { Graph } from "../compiler/validate.js";
+import { parseMarker } from "../evidence/marker.js";
 import { GraphSchema, type LoopGroup } from "../schemas/graph.schema.js";
 import { saveSessionGraph, setActiveGraphId } from "../store/index.js";
 import { activeRun, readRunMeta, readTrace, startRun, type TraceLine } from "./ledger.js";
@@ -14,6 +15,7 @@ export interface ResumeResult {
   run?: { id: string; dir: string };
   pending: string[];
   satisfied: string[];
+  foreign_evidence: Array<{ node: string; key: string; marker_run_id: string }>;
   skipped: Array<{ node: string; reason: string }>;
 }
 
@@ -26,15 +28,37 @@ export function resumeRun(
   const active = activeRun(cwd);
   if (active) throw new Error(`RUN_ACTIVE: run already active at ${active}; run \`gk run end\` first`);
   if (rec.pending.length === 0)
-    return { resumed: false, reason: "NOTHING_TO_RESUME", pending: [], satisfied: rec.satisfied, skipped: rec.skipped };
+    return {
+      resumed: false,
+      reason: "NOTHING_TO_RESUME",
+      pending: [],
+      satisfied: rec.satisfied,
+      foreign_evidence: rec.foreign_evidence,
+      skipped: rec.skipped,
+    };
   if (opts.dryRun)
-    return { resumed: false, reason: "DRY_RUN", pending: rec.pending, satisfied: rec.satisfied, skipped: rec.skipped };
+    return {
+      resumed: false,
+      reason: "DRY_RUN",
+      pending: rec.pending,
+      satisfied: rec.satisfied,
+      foreign_evidence: rec.foreign_evidence,
+      skipped: rec.skipped,
+    };
   const derived = deriveResumeGraph(rec, runId);
   validateDerivedGraph(derived);
   const session = saveSessionGraph(derived, derived.metadata.name, cwd);
   setActiveGraphId(session.id, cwd);
   const run = startRun(cwd, session.path, new Date().toISOString(), runId);
-  return { resumed: true, session, run, pending: rec.pending, satisfied: rec.satisfied, skipped: rec.skipped };
+  return {
+    resumed: true,
+    session,
+    run,
+    pending: rec.pending,
+    satisfied: rec.satisfied,
+    foreign_evidence: rec.foreign_evidence,
+    skipped: rec.skipped,
+  };
 }
 
 export interface Reconciliation {
@@ -46,6 +70,7 @@ export interface Reconciliation {
   satisfied: string[];
   pending: string[];
   skipped: Array<{ node: string; reason: string }>;
+  foreign_evidence: Array<{ node: string; key: string; marker_run_id: string }>;
 }
 function parseGraph(path: string): Graph {
   const parsed = GraphSchema.safeParse(YAML.parse(readFileSync(path, "utf-8")));
@@ -60,6 +85,20 @@ function evidenceOnDisk(cwd: string, evidenceDir: string, keys: string[]): boole
     const p = join(cwd, evidenceDir, `${k}.md`);
     return existsSync(p) && readFileSync(p, "utf-8").trim().length > 0;
   });
+}
+/** runId plus its ancestor chain (meta.json `resumes` links), cycle-guarded. */
+function resumeChain(cwd: string, runId: string): Set<string> {
+  const chain = new Set<string>();
+  let cursor: string | null = runId;
+  while (cursor && !chain.has(cursor)) {
+    chain.add(cursor);
+    try {
+      cursor = readRunMeta(cwd, cursor).resumes ?? null;
+    } catch {
+      cursor = null;
+    }
+  }
+  return chain;
 }
 export function reconcileRun(
   cwd: string,
@@ -89,10 +128,21 @@ export function reconcileRun(
   const last = new Map<string, TraceLine>();
   for (const line of readTrace(cwd, runId)) last.set(line.node, line);
   const evidenceDir = graph.outputs?.evidence_dir ?? ".graphkit/evidence/";
+  const chain = resumeChain(cwd, runId);
   const satisfied = new Set<string>();
+  const foreign_evidence: Array<{ node: string; key: string; marker_run_id: string }> = [];
   for (const name of names) {
     const line = last.get(name);
-    if (line?.status === "ok" && evidenceOnDisk(cwd, evidenceDir, line.evidence)) satisfied.add(name);
+    if (line?.status !== "ok" || !evidenceOnDisk(cwd, evidenceDir, line.evidence)) continue;
+    let foreign = false;
+    for (const key of line.evidence) {
+      const marker = parseMarker(readFileSync(join(cwd, evidenceDir, `${key}.md`), "utf-8"));
+      if (marker?.run_id && !chain.has(marker.run_id)) {
+        foreign_evidence.push({ node: name, key, marker_run_id: marker.run_id });
+        foreign = true;
+      }
+    }
+    if (!foreign) satisfied.add(name);
   }
   const pending = opts.fromNode != null ? [opts.fromNode] : names.filter((n) => !satisfied.has(n));
   for (let grew = true; grew; ) {
@@ -114,6 +164,7 @@ export function reconcileRun(
     evidenceDir,
     satisfied: [...satisfied].filter((n) => !pending.includes(n)).sort(),
     pending: pending.sort(),
+    foreign_evidence,
     skipped,
   };
 }

@@ -22,3 +22,32 @@ describe("scaffolds validate clean", () => {
     });
   }
 });
+
+// Strict schemas: unknown keys must fail loudly instead of being stripped
+// silently — a template author's typo has to name the offending key.
+describe("strict schema rejects unknown keys", () => {
+  test("unknown top-level key rejected, key named in issue", () => {
+    const doc = YAML.parse(graphTemplate("diamond"));
+    doc.polic_ref = true;
+    const parsed = GraphSchema.safeParse(doc);
+    expect(parsed.success).toBe(false);
+    if (!parsed.success) {
+      expect(parsed.error.issues.some((i) => i.code === "unrecognized_keys" && i.message.includes("polic_ref"))).toBe(
+        true,
+      );
+    }
+  });
+
+  test("unknown key inside a node rejected, key named with node path", () => {
+    const doc = YAML.parse(graphTemplate("diamond"));
+    const firstNode = Object.keys(doc.nodes)[0];
+    doc.nodes[firstNode].requried = true;
+    const parsed = GraphSchema.safeParse(doc);
+    expect(parsed.success).toBe(false);
+    if (!parsed.success) {
+      // loadGraph surfaces `path: message` — the CLI diagnostic must name the key
+      const surfaced = parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`);
+      expect(surfaced.some((s) => s === `nodes.${firstNode}: Unrecognized key: "requried"`)).toBe(true);
+    }
+  });
+});

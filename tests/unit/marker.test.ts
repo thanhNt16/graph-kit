@@ -24,6 +24,11 @@ describe("marker", () => {
     expect(parseMarker("# Just markdown\n")).toBeNull();
   });
 
+  test("parses CRLF frontmatter", () => {
+    const md = renderMarker(meta, "body").replace(/\n/g, "\r\n");
+    expect(parseMarker(md)).toEqual(meta);
+  });
+
   test("freshness: fresh / stale / unknown", () => {
     const cur = { head: "a".repeat(40), tree: "b".repeat(64) };
     expect(freshnessOf(meta, cur)).toBe("fresh");

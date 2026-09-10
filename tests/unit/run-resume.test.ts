@@ -37,6 +37,10 @@ afterEach(() => rmSync(cwd, { recursive: true, force: true }));
 function writeEvidence(dir: string, key: string, text = "content\n") {
   writeFileSync(join(dir, ".graphkit", "evidence", `${key}.md`), text);
 }
+function writeMarker(dir: string, key: string, runId: string | null, text = "content\n") {
+  const fm = [`key: ${key}`, ...(runId ? [`run_id: ${runId}`] : []), "node: x"].join("\n");
+  writeFileSync(join(dir, ".graphkit", "evidence", `${key}.md`), `---\n${fm}\n---\n\n${text}`);
+}
 function traceOk(dir: string, node: string, evidence: string[]) {
   appendNode(dir, { node, wave: 0, agent: "x", model: null, status: "ok", evidence, duration_ms: 10, notes: null });
 }
@@ -122,6 +126,41 @@ describe("reconcileRun", () => {
     const { id } = startRun(cwd, join(cwd, "graph.yaml"), "2026-09-04T10:00:00.000Z");
     endRun(cwd, "failed", "2026-09-04T10:05:00.000Z");
     expect(() => reconcileRun(cwd, id, { fromNode: "zzz" })).toThrow(/RESUME_BAD_FROM_NODE/);
+  });
+  test("marker run_id from ancestor run (resumes chain) satisfies the node", () => {
+    const { id: parent } = startRun(cwd, join(cwd, "graph.yaml"), "2026-09-04T09:00:00.000Z");
+    endRun(cwd, "failed", "2026-09-04T09:05:00.000Z");
+    writeMarker(cwd, "a-out", parent);
+    const { id: child } = startRun(cwd, join(cwd, "graph.yaml"), "2026-09-04T10:00:00.000Z", parent);
+    traceOk(cwd, "a", ["a-out"]);
+    endRun(cwd, "failed", "2026-09-04T10:05:00.000Z");
+    const rec = reconcileRun(cwd, child);
+    expect(rec.satisfied).toEqual(["a"]);
+    expect(rec.foreign_evidence).toEqual([]);
+  });
+  test("marker run_id from unrelated run: node pending + listed in foreign_evidence", () => {
+    const { id: other } = startRun(cwd, join(cwd, "graph.yaml"), "2026-09-04T08:00:00.000Z");
+    endRun(cwd, "failed", "2026-09-04T08:05:00.000Z");
+    const { id } = startRun(cwd, join(cwd, "graph.yaml"), "2026-09-04T10:00:00.000Z");
+    writeMarker(cwd, "a-out", other);
+    traceOk(cwd, "a", ["a-out"]);
+    endRun(cwd, "failed", "2026-09-04T10:05:00.000Z");
+    const rec = reconcileRun(cwd, id);
+    expect(rec.satisfied).toEqual([]);
+    expect(rec.pending).toEqual(["a", "b", "c"]);
+    expect(rec.foreign_evidence).toEqual([{ node: "a", key: "a-out", marker_run_id: other }]);
+    expect(resumeRun(cwd, id, { dryRun: true }).foreign_evidence).toEqual([
+      { node: "a", key: "a-out", marker_run_id: other },
+    ]);
+  });
+  test("marker without run_id satisfies (back-compat)", () => {
+    const { id } = startRun(cwd, join(cwd, "graph.yaml"), "2026-09-04T10:00:00.000Z");
+    writeMarker(cwd, "a-out", null);
+    traceOk(cwd, "a", ["a-out"]);
+    endRun(cwd, "failed", "2026-09-04T10:05:00.000Z");
+    const rec = reconcileRun(cwd, id);
+    expect(rec.satisfied).toEqual(["a"]);
+    expect(rec.foreign_evidence).toEqual([]);
   });
 });
 

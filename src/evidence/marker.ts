@@ -37,7 +37,7 @@ export function renderMarker(meta: MarkerMeta, body: string): string {
 }
 
 export function parseMarker(content: string): MarkerMeta | null {
-  const m = content.match(/^---\n([\s\S]*?)\n---/);
+  const m = content.match(/^---\r?\n([\s\S]*?)\r?\n---/);
   if (!m) return null;
   let raw: Record<string, unknown>;
   try {
