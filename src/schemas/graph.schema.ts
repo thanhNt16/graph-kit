@@ -88,6 +88,9 @@ const EvidenceSchema = z.object({
 
 const HookRef = z.object({
   on_node_complete: z.array(z.string()).default([]),
+  // @deprecated declared-but-unused: no consumer exists (graph.ts waves payload
+  // deliberately does not emit it). Kept so existing graph.yaml files still
+  // validate; drop in v0.4 if no consumer appears.
   on_fanout_dispatch: z.array(z.string()).default([]),
   on_graph_complete: z.array(z.string()).default([]),
 });

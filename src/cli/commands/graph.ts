@@ -10,13 +10,20 @@ import { listTemplates, QUERY_TEMPLATES, runTemplate } from "../../cbm/templates
 import { compileGraph } from "../../compiler/emitter.js";
 import { loadGraph, resolveBareValidateGraph } from "../../compiler/loader.js";
 import { validateGraph } from "../../compiler/validate.js";
+import { computeWaves } from "../../compiler/waves.js";
 import { GraphKitError } from "../../errors.js";
 import { getTopologyConfigKeys, TOPOLOGY_NAMES, type TopologyName } from "../../schemas/topology/index.js";
-import { getActiveGraphId, listSessionGraphs, loadActiveGraph, setActiveGraphId } from "../../store/index.js";
+import {
+  getActiveGraphId,
+  listSessionGraphs,
+  loadActiveGraph,
+  sessionGraphPath,
+  setActiveGraphId,
+} from "../../store/index.js";
 import { renderAscii } from "../ascii.js";
 import { subcommandHelpFor, subcommandsFor } from "../command-registry.js";
 import { graphTemplate } from "../graph-templates.js";
-import { fail, ok } from "../output.js";
+import { fail, ok, renderFindings } from "../output.js";
 import { renderSvg } from "../svg.js";
 import { templatesDir } from "./kit.js";
 
@@ -222,22 +229,32 @@ function printQueryTemplates(json: boolean | undefined): void {
 // Back-compat re-exports: sibling commands (gate/doctor/status/evidence) and
 // tests import loadGraph/graphTemplate from this module — keep the surface
 // stable now that the implementations live in dedicated modules.
-export { graphTemplate, loadGraph, resolveBareValidateGraph };
 
 export function registerGraphCommands(cli: CAC) {
   cli
     .command("validate [file]", "Validate a graph.yaml")
+    .example("$ gk validate graph.yaml")
+    .example("$ gk validate            # active session graph, else ./graph.yaml")
     .option("--json", "JSON output")
-    .action((file) => {
+    .action((file, opts: { json?: boolean }) => {
       try {
         const graph = file ? loadGraph(file) : resolveBareValidateGraph();
         const findings = validateGraph(graph, process.cwd());
         if (findings.length > 0) {
-          console.log(JSON.stringify(fail("VALIDATION_FAILED", "graph has findings", { findings })));
+          if (opts.json) {
+            console.log(JSON.stringify(fail("VALIDATION_FAILED", "graph has findings", { findings })));
+          } else {
+            console.log(`✗ VALIDATION_FAILED — ${findings.length} finding(s)`);
+            console.log(renderFindings(findings));
+          }
           process.exit(1);
           return;
         }
-        console.log(JSON.stringify(ok({ valid: true, topology: graph.topology })));
+        if (opts.json) {
+          console.log(JSON.stringify(ok({ valid: true, topology: graph.topology })));
+        } else {
+          console.log(`validate: ok (topology ${graph.topology})`);
+        }
       } catch (e) {
         console.log(
           JSON.stringify(
@@ -250,6 +267,8 @@ export function registerGraphCommands(cli: CAC) {
 
   cli
     .command("compile [file]", "Compile graph.yaml to a .workflow.js script")
+    .example("$ gk compile graph.yaml")
+    .example("$ gk compile --output custom/workflow.js")
     .option("--output <path>", "Output path (default .claude/workflows/{name}.workflow.js)")
     .option("--json", "JSON output")
     .action((file, opts) => {
@@ -257,7 +276,12 @@ export function registerGraphCommands(cli: CAC) {
         const graph = loadGraph(file ?? join(process.cwd(), "graph.yaml"));
         const findings = validateGraph(graph, process.cwd());
         if (findings.length > 0) {
-          console.log(JSON.stringify(fail("VALIDATION_FAILED", "fix findings before compile", { findings })));
+          if (opts.json) {
+            console.log(JSON.stringify(fail("VALIDATION_FAILED", "fix findings before compile", { findings })));
+          } else {
+            console.log(`✗ VALIDATION_FAILED — ${findings.length} finding(s)`);
+            console.log(renderFindings(findings));
+          }
           process.exit(1);
           return;
         }
@@ -402,16 +426,18 @@ export function registerGraphCommands(cli: CAC) {
         } else if (subcommand === "show") {
           const id = Array.isArray(args) ? args[0] : args;
           try {
-            // Explicit id resolves through listSessionGraphs so user input is never
-            // joined into a path — traversal ids simply never match an entry.
-            const entry = id ? listSessionGraphs().find((s) => s.id === id) : null;
+            // O(1) path resolution: the id is regex-validated inside
+            // sessionGraphPath before any join, so traversal ids resolve to
+            // null exactly like they never matched a list entry. Only the
+            // not-found path pays for the full listSessionGraphs walk.
+            const path = id ? sessionGraphPath(id) : null;
             let raw: string;
             let resolvedId: string;
             let resolvedPath: string;
-            if (entry) {
-              raw = readFileSync(entry.path, "utf-8");
-              resolvedId = entry.id;
-              resolvedPath = entry.path;
+            if (path && id) {
+              raw = readFileSync(path, "utf-8");
+              resolvedId = id;
+              resolvedPath = path;
             } else if (id) {
               throw new GraphKitError("GRAPH_NOT_FOUND", `No session graph with id "${id}"`, {
                 id,
@@ -518,24 +544,12 @@ export function registerGraphCommands(cli: CAC) {
             const hasCurator = curatorName !== null && Object.hasOwn(nodes, curatorName);
             const actionIds = hasCurator ? ids.filter((id) => id !== curatorName) : ids;
 
-            // Kahn's algorithm over action nodes → action waves
-            const completed = new Set<string>();
-            const actionWaves: string[][] = [];
-            while (completed.size < actionIds.length) {
-              const ready = actionIds.filter((id) => {
-                if (completed.has(id)) return false;
-                const deps = nodes[id]?.depend_on || [];
-                return deps.every((d: string) => completed.has(d));
-              });
-              if (ready.length === 0) break;
-              actionWaves.push(ready);
-              ready.forEach((id) => {
-                completed.add(id);
-              });
-            }
-
-            if (completed.size < actionIds.length) {
-              const unresolved = actionIds.filter((id) => !completed.has(id));
+            // Shared Kahn partition (src/compiler/waves.ts) over action nodes.
+            // The curator node is excluded from scheduling and re-inserted as
+            // its own interleave waves below.
+            const actionNodes = Object.fromEntries(actionIds.map((id) => [id, nodes[id]]));
+            const { waves: actionWaves, unresolved } = computeWaves(actionNodes);
+            if (unresolved.length > 0) {
               console.log(
                 JSON.stringify(
                   fail("WAVES_INCOMPLETE", `unresolved nodes after topological sort: ${unresolved.join(", ")}`, {

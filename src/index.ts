@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { cac } from "cac";
 import { suggestCommand } from "./cli/command-registry.js";
+import { registerCompletionsCommand } from "./cli/commands/completions.js";
 import { registerDoctorCommand } from "./cli/commands/doctor.js";
 import { registerEvidenceCommand } from "./cli/commands/evidence.js";
 import { registerExecuteCommand } from "./cli/commands/execute.js";
@@ -32,6 +33,7 @@ registerExecuteCommand(cli);
 registerVisualizeCommand(cli);
 registerRunCommands(cli);
 registerSuggestCommands(cli);
+registerCompletionsCommand(cli);
 cli.help();
 try {
   cli.parse();

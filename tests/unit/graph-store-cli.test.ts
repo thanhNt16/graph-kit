@@ -1,37 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { cac } from "cac";
 import YAML from "yaml";
 import { subcommandsFor } from "../../src/cli/command-registry.js";
 import { registerGraphCommands } from "../../src/cli/commands/graph.js";
+import { createCliHarness } from "../helpers/cli-harness.js";
 
 const TEST_DIR = join(import.meta.dir, ".tmp-store-cli-test");
 const graphsDir = () => join(TEST_DIR, ".graphkit", "graphs");
 const activeFile = () => join(TEST_DIR, ".graphkit", "active");
-
-function runCli(args: string[], cwd: string) {
-  const cli = cac("gk");
-  registerGraphCommands(cli);
-  const logs: string[] = [];
-  const origLog = console.log;
-  console.log = (...a: unknown[]) => logs.push(a.map(String).join(" "));
-  let exitCode = 0;
-  const origExit = process.exit;
-  process.exit = (c?: number) => {
-    exitCode = c ?? 1;
-  };
-  const origCwd = process.cwd;
-  process.cwd = () => cwd;
-  try {
-    cli.parse(["node", "gk", ...args], { run: true });
-  } finally {
-    console.log = origLog;
-    process.exit = origExit;
-    process.cwd = origCwd;
-  }
-  return { stdout: logs.join("\n"), code: exitCode };
-}
 
 function seedGraph(id: string, name: string, task?: string) {
   const doc = {
@@ -67,9 +44,9 @@ describe("gk graph session commands", () => {
   });
 
   it("graph topologies outputs all 11 canonical topologies with descriptions", () => {
-    const { stdout, code } = runCli(["graph", "topologies", "--json"], TEST_DIR);
-    expect(code).toBe(0);
-    const parsed = JSON.parse(stdout);
+    const run = createCliHarness(registerGraphCommands, { cwd: TEST_DIR }).run(["graph", "topologies", "--json"]);
+    expect(run.exit).toBeUndefined();
+    const parsed = JSON.parse(run.stdout);
     expect(parsed.status).toBe("ok");
     expect(parsed.data.topologies).toHaveLength(11);
     const names = parsed.data.topologies.map((t: { name: string }) => t.name);
@@ -79,19 +56,19 @@ describe("gk graph session commands", () => {
   });
 
   it("graph topologies renders human table with name and description", () => {
-    const { stdout, code } = runCli(["graph", "topologies"], TEST_DIR);
-    expect(code).toBe(0);
-    expect(stdout).toContain("diamond");
-    expect(stdout).toContain("description");
+    const run = createCliHarness(registerGraphCommands, { cwd: TEST_DIR }).run(["graph", "topologies"]);
+    expect(run.exit).toBeUndefined();
+    expect(run.stdout).toContain("diamond");
+    expect(run.stdout).toContain("description");
   });
 
   it("graph list --json returns saved session ids and the active pointer", () => {
     seedGraph("2026-08-26-audit-pr", "audit", "review auth module");
     seedGraph("2026-08-26-refactor", "refactor");
     setActive("2026-08-26-audit-pr");
-    const { stdout, code } = runCli(["graph", "list", "--json"], TEST_DIR);
-    expect(code).toBe(0);
-    const parsed = JSON.parse(stdout);
+    const run = createCliHarness(registerGraphCommands, { cwd: TEST_DIR }).run(["graph", "list", "--json"]);
+    expect(run.exit).toBeUndefined();
+    const parsed = JSON.parse(run.stdout);
     expect(parsed.status).toBe("ok");
     const ids = parsed.data.sessions.map((s: { id: string }) => s.id);
     expect(ids).toContain("2026-08-26-audit-pr");
@@ -102,21 +79,21 @@ describe("gk graph session commands", () => {
   it("graph list renders a human table with ids, task, created, and last-run columns", () => {
     seedGraph("2026-08-26-audit-pr", "audit", "audit auth module");
     setActive("2026-08-26-audit-pr");
-    const { stdout, code } = runCli(["graph", "list"], TEST_DIR);
-    expect(code).toBe(0);
-    expect(stdout).toContain("last-run");
-    expect(stdout).toContain("2026-08-26-audit-pr");
-    expect(stdout).toContain("audit");
-    expect(stdout).toContain("audit auth module");
-    expect(stdout).toContain("-");
+    const run = createCliHarness(registerGraphCommands, { cwd: TEST_DIR }).run(["graph", "list"]);
+    expect(run.exit).toBeUndefined();
+    expect(run.stdout).toContain("last-run");
+    expect(run.stdout).toContain("2026-08-26-audit-pr");
+    expect(run.stdout).toContain("audit");
+    expect(run.stdout).toContain("audit auth module");
+    expect(run.stdout).toContain("-");
   });
 
   it("graph list fails with ACTIVE_POINTER_DANGLING when active names a missing file", () => {
     seedGraph("2026-08-26-audit-pr", "audit");
     setActive("2026-08-26-ghost");
-    const { stdout, code } = runCli(["graph", "list", "--json"], TEST_DIR);
-    expect(code).toBe(1);
-    const parsed = JSON.parse(stdout);
+    const run = createCliHarness(registerGraphCommands, { cwd: TEST_DIR }).run(["graph", "list", "--json"]);
+    expect(run.exit).toBe(1);
+    const parsed = JSON.parse(run.stdout);
     expect(parsed.status).toBe("fail");
     expect(parsed.error.code).toBe("ACTIVE_POINTER_DANGLING");
   });
@@ -125,9 +102,14 @@ describe("gk graph session commands", () => {
     seedGraph("2026-08-26-audit-pr", "audit");
     seedGraph("2026-08-26-refactor", "refactor");
     setActive("2026-08-26-refactor");
-    const { stdout, code } = runCli(["graph", "switch", "2026-08-26-audit-pr", "--json"], TEST_DIR);
-    expect(code).toBe(0);
-    const parsed = JSON.parse(stdout);
+    const run = createCliHarness(registerGraphCommands, { cwd: TEST_DIR }).run([
+      "graph",
+      "switch",
+      "2026-08-26-audit-pr",
+      "--json",
+    ]);
+    expect(run.exit).toBeUndefined();
+    const parsed = JSON.parse(run.stdout);
     expect(parsed.status).toBe("ok");
     expect(parsed.data.active).toBe("2026-08-26-audit-pr");
     const { getActiveGraphId } = await import("../../src/store/index.js");
@@ -136,18 +118,28 @@ describe("gk graph session commands", () => {
 
   it("graph switch to a nonexistent id fails with GRAPH_NOT_FOUND", () => {
     seedGraph("2026-08-26-audit-pr", "audit");
-    const { stdout, code } = runCli(["graph", "switch", "2026-01-01-ghost", "--json"], TEST_DIR);
-    expect(code).toBe(1);
-    const parsed = JSON.parse(stdout);
+    const run = createCliHarness(registerGraphCommands, { cwd: TEST_DIR }).run([
+      "graph",
+      "switch",
+      "2026-01-01-ghost",
+      "--json",
+    ]);
+    expect(run.exit).toBe(1);
+    const parsed = JSON.parse(run.stdout);
     expect(parsed.status).toBe("fail");
     expect(parsed.error.code).toBe("GRAPH_NOT_FOUND");
   });
 
   it("graph switch rejects a malformed id with INVALID_SESSION_ID", () => {
     seedGraph("2026-08-26-audit-pr", "audit");
-    const { stdout, code } = runCli(["graph", "switch", "../evil", "--json"], TEST_DIR);
-    expect(code).toBe(1);
-    const parsed = JSON.parse(stdout);
+    const run = createCliHarness(registerGraphCommands, { cwd: TEST_DIR }).run([
+      "graph",
+      "switch",
+      "../evil",
+      "--json",
+    ]);
+    expect(run.exit).toBe(1);
+    const parsed = JSON.parse(run.stdout);
     expect(parsed.status).toBe("fail");
     expect(parsed.error.code).toBe("INVALID_SESSION_ID");
   });
@@ -155,9 +147,9 @@ describe("gk graph session commands", () => {
   it("graph show with no id prints the active graph's YAML", () => {
     seedGraph("2026-08-26-audit-pr", "audit", "review auth module");
     setActive("2026-08-26-audit-pr");
-    const { stdout, code } = runCli(["graph", "show"], TEST_DIR);
-    expect(code).toBe(0);
-    const doc = YAML.parse(stdout);
+    const run = createCliHarness(registerGraphCommands, { cwd: TEST_DIR }).run(["graph", "show"]);
+    expect(run.exit).toBeUndefined();
+    const doc = YAML.parse(run.stdout);
     expect(doc.metadata.name).toBe("audit");
     expect(doc.metadata.task).toBe("review auth module");
   });
@@ -166,18 +158,22 @@ describe("gk graph session commands", () => {
     seedGraph("2026-08-26-audit-pr", "audit");
     seedGraph("2026-08-26-refactor", "refactor");
     setActive("2026-08-26-audit-pr");
-    const { stdout, code } = runCli(["graph", "show", "2026-08-26-refactor"], TEST_DIR);
-    expect(code).toBe(0);
-    const doc = YAML.parse(stdout);
+    const run = createCliHarness(registerGraphCommands, { cwd: TEST_DIR }).run([
+      "graph",
+      "show",
+      "2026-08-26-refactor",
+    ]);
+    expect(run.exit).toBeUndefined();
+    const doc = YAML.parse(run.stdout);
     expect(doc.metadata.name).toBe("refactor");
   });
 
   it("graph show --json returns the parsed graph", () => {
     seedGraph("2026-08-26-audit-pr", "audit");
     setActive("2026-08-26-audit-pr");
-    const { stdout, code } = runCli(["graph", "show", "--json"], TEST_DIR);
-    expect(code).toBe(0);
-    const parsed = JSON.parse(stdout);
+    const run = createCliHarness(registerGraphCommands, { cwd: TEST_DIR }).run(["graph", "show", "--json"]);
+    expect(run.exit).toBeUndefined();
+    const parsed = JSON.parse(run.stdout);
     expect(parsed.status).toBe("ok");
     expect(parsed.data.id).toBe("2026-08-26-audit-pr");
     expect(parsed.data.graph.metadata.name).toBe("audit");
@@ -186,18 +182,18 @@ describe("gk graph session commands", () => {
   it("graph show fails with ACTIVE_POINTER_DANGLING when active names a missing file", () => {
     seedGraph("2026-08-26-audit-pr", "audit");
     setActive("2026-08-26-ghost");
-    const { stdout, code } = runCli(["graph", "show"], TEST_DIR);
-    expect(code).toBe(1);
-    const parsed = JSON.parse(stdout);
+    const run = createCliHarness(registerGraphCommands, { cwd: TEST_DIR }).run(["graph", "show"]);
+    expect(run.exit).toBe(1);
+    const parsed = JSON.parse(run.stdout);
     expect(parsed.status).toBe("fail");
     expect(parsed.error.code).toBe("ACTIVE_POINTER_DANGLING");
   });
 
   it("graph show <id> to an unknown id fails with GRAPH_NOT_FOUND", () => {
     seedGraph("2026-08-26-audit-pr", "audit");
-    const { stdout, code } = runCli(["graph", "show", "2026-01-01-ghost"], TEST_DIR);
-    expect(code).toBe(1);
-    const parsed = JSON.parse(stdout);
+    const run = createCliHarness(registerGraphCommands, { cwd: TEST_DIR }).run(["graph", "show", "2026-01-01-ghost"]);
+    expect(run.exit).toBe(1);
+    const parsed = JSON.parse(run.stdout);
     expect(parsed.status).toBe("fail");
     expect(parsed.error.code).toBe("GRAPH_NOT_FOUND");
   });
@@ -210,9 +206,9 @@ describe("gk graph session commands", () => {
       ["graph", "switch", "2026-08-26-audit-pr", "--json"],
       ["graph", "show"],
     ]) {
-      const { stdout, code } = runCli(args, dir);
-      expect(code).toBe(1);
-      const parsed = JSON.parse(stdout);
+      const run = createCliHarness(registerGraphCommands, { cwd: dir }).run(args);
+      expect(run.exit).toBe(1);
+      const parsed = JSON.parse(run.stdout);
       expect(parsed.status).toBe("fail");
       expect(parsed.error.code).toBe("GRAPHKIT_NOT_INITIALIZED");
     }
@@ -234,9 +230,9 @@ describe("gk graph session commands", () => {
       seedGraph("2026-08-26-audit-pr", "audit");
       setActive("2026-08-26-audit-pr");
       seedRootGraph("root-graph");
-      const { stdout, code } = runCli(["validate", "--json"], TEST_DIR);
-      expect(code).toBe(0);
-      const parsed = JSON.parse(stdout);
+      const run = createCliHarness(registerGraphCommands, { cwd: TEST_DIR }).run(["validate", "--json"]);
+      expect(run.exit).toBeUndefined();
+      const parsed = JSON.parse(run.stdout);
       expect(parsed.status).toBe("ok");
       expect(parsed.data.valid).toBe(true);
     });
@@ -260,9 +256,9 @@ describe("gk graph session commands", () => {
       writeFileSync(join(graphsDir(), "2026-08-26-audit-pr.yaml"), YAML.stringify(doc), "utf-8");
       setActive("2026-08-26-audit-pr");
       seedRootGraph("root-graph");
-      const { stdout, code } = runCli(["validate", "--json"], TEST_DIR);
-      expect(code).toBe(1);
-      const parsed = JSON.parse(stdout);
+      const run = createCliHarness(registerGraphCommands, { cwd: TEST_DIR }).run(["validate", "--json"]);
+      expect(run.exit).toBe(1);
+      const parsed = JSON.parse(run.stdout);
       expect(parsed.status).toBe("fail");
       expect(parsed.error.code).toBe("VALIDATION_FAILED");
       expect(parsed.error.details.findings.map((f: { check: string }) => f.check)).toContain("refs-exist");
@@ -271,18 +267,18 @@ describe("gk graph session commands", () => {
     it("fails with ACTIVE_POINTER_DANGLING when the pointer names a missing graph", () => {
       seedGraph("2026-08-26-audit-pr", "audit");
       setActive("2026-08-26-ghost");
-      const { stdout, code } = runCli(["validate", "--json"], TEST_DIR);
-      expect(code).toBe(1);
-      const parsed = JSON.parse(stdout);
+      const run = createCliHarness(registerGraphCommands, { cwd: TEST_DIR }).run(["validate", "--json"]);
+      expect(run.exit).toBe(1);
+      const parsed = JSON.parse(run.stdout);
       expect(parsed.error.code).toBe("ACTIVE_POINTER_DANGLING");
       expect(parsed.error.details.available).toContain("2026-08-26-audit-pr");
     });
 
     it("falls back to ./graph.yaml when initialized but no active pointer is set", () => {
       seedRootGraph();
-      const { stdout, code } = runCli(["validate", "--json"], TEST_DIR);
-      expect(code).toBe(0);
-      const parsed = JSON.parse(stdout);
+      const run = createCliHarness(registerGraphCommands, { cwd: TEST_DIR }).run(["validate", "--json"]);
+      expect(run.exit).toBeUndefined();
+      const parsed = JSON.parse(run.stdout);
       expect(parsed.status).toBe("ok");
       expect(parsed.data.valid).toBe(true);
     });
@@ -290,9 +286,9 @@ describe("gk graph session commands", () => {
     it("fails with NO_ACTIVE_GRAPH when initialized with neither pointer nor graph.yaml", () => {
       const dir = join(TEST_DIR, "empty-init");
       mkdirSync(join(dir, ".graphkit", "graphs"), { recursive: true });
-      const { stdout, code } = runCli(["validate", "--json"], dir);
-      expect(code).toBe(1);
-      const parsed = JSON.parse(stdout);
+      const run = createCliHarness(registerGraphCommands, { cwd: dir }).run(["validate", "--json"]);
+      expect(run.exit).toBe(1);
+      const parsed = JSON.parse(run.stdout);
       expect(parsed.error.code).toBe("NO_ACTIVE_GRAPH");
     });
 
@@ -301,9 +297,9 @@ describe("gk graph session commands", () => {
       const dir = join(TEST_DIR, "legacy");
       mkdirSync(dir, { recursive: true });
       writeFileSync(join(dir, "graph.yaml"), readFileSync(join(TEST_DIR, "graph.yaml"), "utf-8"), "utf-8");
-      const { stdout, code } = runCli(["validate", "--json"], dir);
-      expect(code).toBe(0);
-      const parsed = JSON.parse(stdout);
+      const run = createCliHarness(registerGraphCommands, { cwd: dir }).run(["validate", "--json"]);
+      expect(run.exit).toBeUndefined();
+      const parsed = JSON.parse(run.stdout);
       expect(parsed.status).toBe("ok");
     });
   });

@@ -10,7 +10,7 @@ import {
   rankByOverlap,
   termsOf,
 } from "../eval/memory-recall.js";
-import { walkMemoryStoreStats } from "./frontmatter.js";
+import { walkMemoryStoreStats } from "../frontmatter.js";
 import { readLinks } from "./links.js";
 
 export interface ExpandedHit extends RecallHit {

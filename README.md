@@ -46,7 +46,7 @@ Memory files retain GraphKit's existing frontmatter and add OKF-compatible field
 
 The reader is strict at the filesystem boundary: malformed entries are dropped and counted in `malformed`; unreadable memory directories return `MEMORY_DIR_UNREADABLE` and fail, while a missing directory is treated as empty. Memory-augmented workflows use one terminal `INJECTION: <reminder>` / `INJECTION: null` contract on both execution paths. Curator cadence counts completed action-node executions, not curator calls. `recall_topk`, `expire_policy: manual`, and `null_intervention_allowed` are honored from graph configuration. Curator behavior is parity-tested across Claude Code, Cursor, OpenCode, Codex, and pi; Codex uses `workspace-write` so it can persist memory.
 
-Deterministic checks: `bun test` and `bun run typecheck` both run inside the `ci:local` gate. `bun run eval:memory` is a **manual eval command**, not a gate: it replays the memory-recall fixtures and prints `hit_rate`, `validity_violations`, and malformed counts for inspection (current fixture run: `hit_rate: 1`, `validity_violations: []`, `malformed: 14` / `malformed_expected: 14`). These are fixture and behavior checks, not benchmark-superiority claims. The [@0xwast3 memory-engineering article](https://x.com/0xwast3/status/2084625810112032849) is third-party evidence only; its `status: conflicted` and three-month capture criterion are follow-up scope, not shipped behavior.
+Deterministic checks: `bun test` and `bun run typecheck` both run inside the `ci:local` gate. `bun run eval:memory` is a deterministic eval that also runs inside the `ci:local` gate: it replays the memory-recall fixtures and prints `hit_rate`, `validity_violations`, and malformed counts for inspection (current fixture run: `hit_rate: 1`, `validity_violations: []`, `malformed: 14` / `malformed_expected: 14`). These are fixture and behavior checks, not benchmark-superiority claims. The [@0xwast3 memory-engineering article](https://x.com/0xwast3/status/2084625810112032849) is third-party evidence only; its `status: conflicted` and three-month capture criterion are follow-up scope, not shipped behavior.
 
 ## CBM boundary
 
@@ -406,7 +406,7 @@ only by a human via `git apply`.
 git clone https://github.com/thanhNt16/graph-kit && cd graph-kit
 bun install        # Bun only — the version is pinned in .bun-version
 bun test           # full unit suite, no network needed
-bun run ci:local   # THE pre-push gate — the exact steps CI runs: typecheck + lint + build + test + cbm:parity + eval:memory + check-changelog + check:parity + manifest drift guard
+bun run ci:local   # THE pre-push gate — the exact steps CI runs: typecheck + lint + test + build + cbm:parity + eval:memory + check-changelog + check:parity + manifest drift guard
 bun run perf       # runtime perf harness (informational, no thresholds)
 ```
 

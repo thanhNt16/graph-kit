@@ -10,6 +10,8 @@ export interface CbmClientOpts {
   cmd?: string;
   args?: string[];
   cwd?: string;
+  /** Per-call response timeout in ms (default 60000, env CBM_TIMEOUT_MS). 0 disables. */
+  callTimeoutMs?: number;
 }
 
 // F3: the CBM package is unpublished (npm 404) and we deliberately do NOT
@@ -30,10 +32,19 @@ function unavailable(detail: string): CbmUnavailableError {
 }
 
 export function createCbmClient(opts?: CbmClientOpts): CbmClient {
+  // Unconfigured bridge: the fallback `npx -y @graphkit/codebase-memory-mcp`
+  // target is unpublished, so spawning it burns ~800ms on a guaranteed npm
+  // E404 before surfacing the error below anyway. Fail in 0ms instead —
+  // explicit CBM_CMD / CBM_ARGS (or opts) still spawn a real bridge.
+  if (opts?.cmd === undefined && opts?.args === undefined && !process.env.CBM_CMD && !process.env.CBM_ARGS) {
+    throw new CbmUnavailableError(CBM_UNAVAILABLE_MSG);
+  }
   const cmd = opts?.cmd ?? process.env.CBM_CMD ?? "npx";
   const args =
     opts?.args ?? (process.env.CBM_ARGS ? process.env.CBM_ARGS.split(" ") : ["-y", "@graphkit/codebase-memory-mcp"]);
   const cwd = opts?.cwd;
+  const envTimeout = Number(process.env.CBM_TIMEOUT_MS);
+  const callTimeoutMs = opts?.callTimeoutMs ?? (Number.isFinite(envTimeout) && envTimeout > 0 ? envTimeout : 60_000);
 
   const child = spawn(cmd, args, {
     cwd,
@@ -109,7 +120,27 @@ export function createCbmClient(opts?: CbmClientOpts): CbmClient {
     if (fatal) return Promise.reject(fatal); // bridge already dead — honest fail, don't write to a corpse
     const id = ++idCounter;
     return new Promise<T>((resolve, reject) => {
-      pending.set(id, { resolve: resolve as (v: unknown) => void, reject });
+      // A wedged-but-alive bridge (accepted the write, never replies) used to
+      // hang the promise forever — only child exit/error rejected. Arm a
+      // per-call timer so the caller gets the standard unavailable envelope.
+      const timer =
+        callTimeoutMs > 0
+          ? setTimeout(() => {
+              pending.delete(id);
+              reject(unavailable(`\ntimeout after ${Math.round(callTimeoutMs / 1000)}s waiting for ${tool} response`));
+            }, callTimeoutMs)
+          : undefined;
+      timer?.unref();
+      pending.set(id, {
+        resolve: (v: unknown) => {
+          if (timer) clearTimeout(timer);
+          resolve(v as T);
+        },
+        reject: (e: Error) => {
+          if (timer) clearTimeout(timer);
+          reject(e);
+        },
+      });
       const msg = `${JSON.stringify({
         jsonrpc: "2.0",
         id,
@@ -119,6 +150,7 @@ export function createCbmClient(opts?: CbmClientOpts): CbmClient {
       child.stdin!.write(msg, (err) => {
         if (err) {
           pending.delete(id);
+          if (timer) clearTimeout(timer);
           reject(unavailable(`\nstdin write failed: ${err.message}`));
         }
       });

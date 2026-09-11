@@ -2,8 +2,9 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import YAML from "yaml";
 import type { z } from "zod";
-import { splitFrontmatter } from "../memory/frontmatter.js";
+import { splitFrontmatter } from "../frontmatter.js";
 import type { GraphSchema } from "../schemas/graph.schema.js";
+import { computeLevels } from "./waves.js";
 
 export interface Finding {
   check: string;
@@ -284,28 +285,9 @@ export function validateGraph(graph: Graph, projectRoot: string): Finding[] {
       // Rule 4: loop_contiguous (topological wave span closure)
       // Every loop-node dependency must either be within the loop group or strictly upstream of its minimum wave.
       if (allNodesExist && loop.nodes.length > 0) {
-        const memoWaves = new Map<string, number>();
-        const visiting = new Set<string>();
-        const computeWave = (nodeId: string): number => {
-          if (memoWaves.has(nodeId)) return memoWaves.get(nodeId)!;
-          if (visiting.has(nodeId)) return 0;
-          visiting.add(nodeId);
-          const deps = graph.nodes[nodeId]?.depend_on ?? [];
-          let maxDepWave = -1;
-          for (const dep of deps) {
-            if (graph.nodes[dep]) {
-              maxDepWave = Math.max(maxDepWave, computeWave(dep));
-            }
-          }
-          visiting.delete(nodeId);
-          const wave = maxDepWave + 1;
-          memoWaves.set(nodeId, wave);
-          return wave;
-        };
-
-        for (const id of Object.keys(graph.nodes)) {
-          computeWave(id);
-        }
+        // Shared longest-path levels (src/compiler/waves.ts) — was a verbatim
+        // inline twin (and ascii.ts had a second copy of the same code).
+        const memoWaves = computeLevels(graph.nodes);
 
         let loopMinWave = Number.POSITIVE_INFINITY;
         for (const nodeName of loop.nodes) {

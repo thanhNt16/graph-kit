@@ -22,7 +22,7 @@ emits them.
 | `MISSING_DIR` | `gk new` requires `--dir` | `gk new --dir my-project` |
 | `MISSING_NAME` | A required name argument is absent | Provide the name (`gk template pack` etc.) |
 | `MISSING_FILE` | A required file argument is absent | Provide the file path |
-| `MISSING_PARAMS` | Required template parameters were not supplied | Pass the listed `--param key=value` pairs |
+| `MISSING_PARAMS` | Required template parameters were not supplied | Pass them as JSON: `--params '{"key":"value"}'` |
 | `BAD_PARAMS` | A parameter value failed validation | Correct the value per the message |
 | `PARAM_INVALID` | A template parameter value is missing or invalid | Supply every required parameter with a valid value |
 | `INVALID_LIMIT` | `--limit` must be a positive integer | Use an integer ≥ 1 |
@@ -38,6 +38,7 @@ emits them.
 | Code | Meaning | Fix |
 |---|---|---|
 | `GRAPH_FILE_NOT_FOUND` | The graph file does not exist | `gk graph new <topology>` to scaffold, or check the path |
+| `YAML_INVALID` | The graph file is not parseable YAML | Fix the syntax at the listed `file:line:column` (unquoted colons, bad indentation, unclosed `[`) |
 | `SCHEMA_INVALID` | graph.yaml failed schema validation | Fix the fields listed in `details.issues` |
 | `VALIDATION_FAILED` | Structural validation produced findings | Fix each finding in `details.findings` |
 | `VALIDATE_ERROR` | The validate command itself failed | See the message; usually a read error |
@@ -50,6 +51,9 @@ emits them.
 | `SUBGRAPH_TEMPLATE_MISSING` | A referenced subgraph template is missing | Register the template or fix the reference |
 | `UNKNOWN_SUBGRAPH` | Referenced subgraph topology is unknown | Use a canonical topology name |
 | `RUN_ERROR` | Generic run-command failure (fallback) | See the message for the underlying error |
+| `MISSING_ARG` | A required argument was not provided | Pass the argument shown in the message |
+| `MAP_INVALID` | A `--map` value is not `k=v` (or `--map` is missing) | Pass comma-separated `model=override` pairs |
+| `OVERRIDES_CORRUPT` | The model-overrides JSON file is not parseable | Fix/delete the file (`gk models <target> reset`), or `--force` to discard |
 
 ## Run ledger / resume
 
@@ -57,12 +61,14 @@ emits them.
 |---|---|---|
 | `RUN_ACTIVE` | A run is already active | `gk run end` first |
 | `NO_ACTIVE_RUN` | No active run for this operation | `gk run start --graph graph.yaml` |
+| `RUN_NOT_FOUND` | Unknown run id passed to `gk run status <id>` | List every run with `gk run list` |
 | `RUN_META_CORRUPT` | The run's meta.json is not valid JSON | Repair or remove the run dir under `.graphkit/runs/` |
-| `RESUME_RUN_NOT_FOUND` | Unknown run id (or a pre-ledger run) | List runs with `gk run status`; use a full run id |
+| `RESUME_RUN_NOT_FOUND` | Unknown run id (or a pre-ledger run) | List runs with `gk run list`; use a full run id |
 | `RESUME_BAD_FROM_NODE` | `--from-node` is not a node of the graph | Use a node id from the graph |
 | `RESUME_GRAPH_DRIFT` | The recorded graph changed since the run started | Rerun `gk init`/graph edits, or `--force` to override |
 | `RESUME_DERIVED_INVALID` | The pending-only derived graph failed validation | Fix the listed issue in the source graph |
 | `WRITE_FAILED` | An atomic write failed (disk, permissions) | Free space / fix permissions; no partial bytes were written |
+| `AGENTS_MD_UNCLOSED` | AGENTS.md kept the graphkit:start marker but lost graphkit:end | Re-add the end marker (or delete the managed section), then rerun `gk init` |
 
 ## Memory
 

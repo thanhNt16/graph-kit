@@ -3,9 +3,9 @@
 // pruning; this module only reads and flips status — one writer per concern.
 import { join } from "node:path";
 import YAML from "yaml";
+import { walkMemoryStore } from "../frontmatter.js";
 import { atomicWrite } from "../fs.js";
 import { SuggestionFileSchema } from "../schemas/memory.schema.js";
-import { walkMemoryStore } from "./frontmatter.js";
 
 export interface SuggestionEntry {
   id: string;

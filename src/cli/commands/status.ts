@@ -1,11 +1,11 @@
 import { existsSync, readFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import type { CAC } from "cac";
+import { loadGraph } from "../../compiler/loader.js";
 import { GraphKitError } from "../../errors.js";
-import { activeRun, readRunMeta, readTrace } from "../../memory/ledger.js";
+import { activeRun, activeRunGraph, deriveRound, readRunMeta, readTrace } from "../../memory/ledger.js";
 import { fail, ok } from "../output.js";
 import { type GateResult, gateGraph } from "./gate.js";
-import { loadGraph } from "./graph.js";
 
 interface StatusData {
   running: boolean;
@@ -43,6 +43,8 @@ export function renderStatus(data: StatusData): string {
 export function registerStatusCommand(cli: CAC) {
   cli
     .command("status", "Summarize active graph run and evidence coverage")
+    .example("$ gk status")
+    .example("$ gk status --json")
     .option("--json", "JSON output")
     .action((opts: { json?: boolean }) => {
       try {
@@ -94,20 +96,22 @@ export function registerStatusCommand(cli: CAC) {
         // wave + 1, the same derivation `gk run status` prints.
         if (run.round === undefined && ledgerId) {
           try {
-            const waves = readTrace(cwd, ledgerId)
-              .map((t) => t.wave)
-              .filter((w): w is number => w != null);
-            run.round = waves.length ? Math.max(...waves) + 1 : 0;
+            run.round = deriveRound(readTrace(cwd, ledgerId));
           } catch {
             /* no trace yet — round stays unset */
           }
         }
 
-        // Gate evidence coverage via existing loadGraph + gateGraph.
+        // Gate evidence coverage via existing loadGraph + gateGraph. Coverage
+        // must score the graph the ACTIVE RUN executes (meta.graph_path — a
+        // resumed run's derived session graph shrinks required_keys to the
+        // pending set), falling back to cwd/graph.yaml only when no run is
+        // recording a path; scoring the parent graph made a satisfied resumed
+        // run report missing keys — a permanent BLOCK it could never clear.
         let coverage: GateResult | null = null;
         let gateError: string | null = null;
         try {
-          const graph = loadGraph(join(cwd, "graph.yaml"));
+          const graph = loadGraph(activeRunGraph(cwd) ?? join(cwd, "graph.yaml"));
           const evidenceDir = join(cwd, graph.outputs.evidence_dir);
           coverage = gateGraph(graph.evidence.required_keys, evidenceDir, { cwd });
         } catch (e) {

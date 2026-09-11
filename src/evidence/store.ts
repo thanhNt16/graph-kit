@@ -74,9 +74,10 @@ export function addEvidence(
 
   const ts = new Date().toISOString();
   const fp = fingerprint(cwd);
+  const run = activeRun(cwd);
   const meta: MarkerMeta = {
     key: opts.key,
-    run_id: activeRun(cwd) ? basename(activeRun(cwd)!) : null,
+    run_id: run ? basename(run) : null,
     node: opts.node ?? null,
     fingerprint_head: fp.head,
     fingerprint_tree: fp.tree,

@@ -185,14 +185,29 @@
     },
     {
       "name": "memory trace",
-      "description": "ACT-R score + expire .graphkit/memory/ entries (decay pass)",
+      "description": "ACT-R score + expire .graphkit/memory/ entries (decay pass, writes unless manual/--dry-run)",
       "options": [
+        "--dry-run",
         "--json"
       ]
     },
     {
       "name": "memory touch",
       "description": "Reinforce a memory (bump use_count/last_used_at) so decay keeps it",
+      "options": [
+        "--json"
+      ]
+    },
+    {
+      "name": "memory list",
+      "description": "List every memory entry (id, status, salience, use_count, file)",
+      "options": [
+        "--json"
+      ]
+    },
+    {
+      "name": "memory show",
+      "description": "Print one memory entry by id",
       "options": [
         "--json"
       ]
@@ -323,8 +338,15 @@
       ]
     },
     {
+      "name": "run list",
+      "description": "List every run (ended, running, interrupted) — the resume front door",
+      "options": [
+        "--json"
+      ]
+    },
+    {
       "name": "run status",
-      "description": "Show the active run directory",
+      "description": "Show run progress (default: the active run; pass a run id for any run)",
       "options": [
         "--json"
       ]
@@ -345,6 +367,13 @@
       "options": [
         "--dismiss <id>",
         "--all",
+        "--json"
+      ]
+    },
+    {
+      "name": "completions",
+      "description": "Print a shell completion script (bash | zsh | fish) generated from the command registry",
+      "options": [
         "--json"
       ]
     }

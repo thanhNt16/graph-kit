@@ -6,7 +6,7 @@
     "gk": "dist/index.js"
   },
   "scripts": {
-    "build": "bun build src/index.ts --target=node --outdir=dist && chmod +x dist/index.js",
+    "build": "bun build src/index.ts --target=node --minify --outdir=dist && chmod +x dist/index.js",
     "build:bin": "bun build --compile src/index.ts --outfile=dist/gk",
     "typecheck": "tsc --noEmit",
     "lint": "biome check .",
@@ -16,7 +16,7 @@
     "check:parity": "bun run scripts/check-cli-parity.ts",
     "prepack": "bun run build",
     "check-changelog": "bun run scripts/check-changelog.ts",
-    "ci:local": "bun run typecheck && bun run lint && bun run build && bun test && bun run cbm:parity && bun run eval:memory && bun run check-changelog && bun run check:parity && bun run scripts/gen-cli-manifest.ts && git diff --exit-code cli-manifest.json",
+    "ci:local": "bun run typecheck && bun run lint && bun test && bun run build && bun run cbm:parity && bun run eval:memory && bun run check-changelog && bun run check:parity && bun run scripts/gen-cli-manifest.ts && git diff --exit-code cli-manifest.json",
     "eval:memory": "bun run scripts/memory-recall-eval.ts",
     "perf": "bun run scripts/perf-runtime.ts"
   },

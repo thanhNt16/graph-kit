@@ -7,6 +7,8 @@ import { fail, ok } from "../output.js";
 export function registerSuggestCommands(cli: CAC) {
   cli
     .command("suggest", "Show ranked workflow suggestions from memory")
+    .example("$ gk suggest")
+    .example("$ gk suggest --all")
     .option("--dismiss <id>", "dismiss a suggestion by id")
     .option("--all", "include dismissed suggestions")
     .option("--json", "JSON output")

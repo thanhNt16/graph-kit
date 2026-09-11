@@ -69,7 +69,7 @@ export function applyRecallFilters(entries: RecallEntry[], now: string): RecallE
 
 import { readdirSync, readFileSync } from "node:fs";
 import { resolve as pathResolve } from "node:path";
-import { parseMemoryFile } from "../memory/frontmatter.js";
+import { parseMemoryFile } from "../frontmatter.js";
 
 export interface MemoryDoc extends RecallEntry {
   salience: number;

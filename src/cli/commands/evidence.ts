@@ -1,12 +1,12 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import type { CAC } from "cac";
+import { loadGraph } from "../../compiler/loader.js";
 import { GraphKitError } from "../../errors.js";
 import { buildViews, renderHtml, renderMarkdown } from "../../evidence/report.js";
 import { addEvidence, maxBytesFromConfig } from "../../evidence/store.js";
 import { subcommandHelpFor, subcommandsFor } from "../command-registry.js";
 import { fail, ok } from "../output.js";
-import { loadGraph } from "./graph.js";
 
 export function registerEvidenceCommand(cli: CAC) {
   cli
@@ -62,9 +62,17 @@ export function registerEvidenceCommand(cli: CAC) {
             const outPath = join(cwd, ".graphkit", "reports", `${graph.metadata.name}-evidence.html`);
             mkdirSync(dirname(outPath), { recursive: true });
             writeFileSync(outPath, renderHtml(graph.metadata.name, views, join(cwd, graph.outputs.evidence_dir)));
-            console.log(JSON.stringify(ok({ written: outPath, keys: views.length })));
-          } else {
+            if (opts.json) {
+              console.log(JSON.stringify(ok({ written: outPath, keys: views.length })));
+            } else {
+              console.log(`wrote ${outPath} (${views.length} key(s))`);
+            }
+          } else if (opts.json) {
             console.log(JSON.stringify(ok({ markdown: renderMarkdown(graph.metadata.name, views), views })));
+          } else {
+            // Human mode prints the report itself — the markdown IS the human
+            // rendering; wrapping it in a JSON blob made it unreadable.
+            console.log(renderMarkdown(graph.metadata.name, views).trimEnd());
           }
         } catch (e) {
           console.log(

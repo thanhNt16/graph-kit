@@ -8,6 +8,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 ### Added
+- **`gk run list`** — every run (ended from `index.jsonl`, plus dir-only `running`/`interrupted` runs), newest first, with resume hints; `gk run status <run-id>` renders any recorded run, not just the active one. The advertised `gk run resume <id>` finally has a discovery front door
+- **`gk memory list` / `gk memory show <id>`** — store inspection (id, status, salience, use_count, file) and raw per-entry print; ids were previously undiscoverable
+- **`gk completions [bash|zsh|fish]`** — static completion scripts generated from the command registry (new subcommands/flags become Tab-completable with no extra edit); covered by the manifest/parity gates
+- **`memory trace --dry-run`** — previews the decay pass (`would-expire` per entry) with zero writes and no audit rows; `expire_policy` from graph.yaml `topology_config.memory` is now honored by the CLI (the schema field existed but never reached the decay pass)
+- `--minify` on the bun build — dist 962KB → 551KB; `node dist/index.js --version` ~68ms → ~60ms
+- CONTRIBUTING gained a repo map and an environment-variable reference table
+
+### Changed
+- `memory trace` reports entries with an unparseable `last_used_at` (`unparseable_dates`, action `unknown-date`) and never auto-expires them — an unknown score is no longer indistinguishable from a low score
+- `gk status` computes evidence coverage against the ACTIVE RUN's recorded graph (`meta.graph_path`), so a resumed run's shrunk required keys no longer report a permanent BLOCK it could never clear
+- `gk validate` success prints `validate: ok (topology …)` in human mode; `VALIDATION_FAILED` findings render as an indented human list in validate/compile/gate (`renderFindings`); `--json` envelopes unchanged
+- Human defaults completed: `run start/node/end`, `memory consolidate`, `evidence report` (prints the markdown itself), and `gk template list` — now the README-promised table with the `origin` column
+- `gk run start` / `run end` / `graph show` reuse shared paths: exclusive run-dir creation, O(1) session-graph lookup instead of parsing every session graph
+- `ci:local` runs tests before the build (fail-fast); same steps otherwise
+
+### Fixed
+- **Silent memory expiry**: one loosely-written `last_used_at` ("recently", any string `Date.parse` rejects) mapped to age `Infinity` → score 0 → auto-expiry rewrite of a healthy memory. Unparseable dates and non-finite score inputs now yield an UNKNOWN score that never triggers expiry
+- **Evidence marker corruption**: marker frontmatter values are YAML-serialized (notes containing `": "`, `#`, or newlines used to emit unparseable markers, silently degrading gate freshness to `unknown`); hostile-note round-trip tests pin it
+- **Arbitrary file read**: `gk evidence report --html` embedded any marker-authored `artifact:` path — traversal, absolute paths, and in-dir symlinks are now contained to the evidence dir (realpath prefix check)
+- **Run-dir TOCTOU**: two same-second `gk run start`s shared one dir and the loser clobbered the winner's meta/trace before dying on the `.active` claim; run dirs are now exclusive-created and claimed before populating, so a RUN_ACTIVE loser leaves no populated orphan
+- **Resume path containment**: trace-authored evidence keys pass `isValidEvidenceKey` before any path join — invalid keys count as unsatisfied (node re-runs) instead of probing `../` paths or emitting them as derived-graph refs
+- **CBM dead-bridge spawn**: unconfigured bridge (no `CBM_CMD`/`CBM_ARGS`) now fails fast with the honest `CBM_UNAVAILABLE` envelope instead of spawning `npx` into a guaranteed npm 404 (~800ms per graph/memory-index command); a wedged-but-alive bridge hits a per-call timeout (`CBM_TIMEOUT_MS`, default 60s) instead of hanging forever
+- `gk template list` no longer bricks on one malformed `.gk.yaml` (per-entry skip + warning, like `graph list`); the usage text no longer lists the phantom `close` subcommand
+- `gk models`: a corrupt overrides file is reported (`OVERRIDES_CORRUPT`) and `set` refuses to erase it without `--force`; overrides write atomically; lowercase `map` error code is now `MAP_INVALID`
+- `gk init` writes `AGENTS.md` atomically; a kept `graphkit:start` with a deleted `graphkit:end` marker fails with `AGENTS_MD_UNCLOSED` + remediation instead of appending a duplicate section
+- `gk memory touch` without an id → `MISSING_ARG`, not `No memory with id "undefined"`
+- `buildLinks` skips entities shared by more than 50 entries — one ubiquitous entity used to add m(m-1)/2 edges (5.8s measured at n=5000); memory-path perf: frontmatter flat-scalar fast-path with YAML.parse fallback (recall/links ~2x at n=50, ~1.6x at n=5000)
+- Docs drift: `MISSING_PARAMS` remediation now names the real `--params '<json>'` flag; README `eval:memory` wording matches its gate status
+
+### Changed
 - **`scripts/install.sh` one-liner** — platform-detecting, atomic-swap installer (`curl -fsSL …/install.sh | sh`); no sudo, no blanket `rm -rf` of the install dir, PATH check printing the exact export line. README Install leads with it (manual tarball kept as fallback)
 - **`docs/error-codes.md`** — every fail-envelope code catalogued with meaning + remediation; `tests/unit/error-codes-doc.test.ts` fails when a code is used in src/ but missing from the catalog, or left stale in it
 - Group `--help` lists subcommands with descriptions (`gk graph --help` now shows more than bare `gk graph`, not less)

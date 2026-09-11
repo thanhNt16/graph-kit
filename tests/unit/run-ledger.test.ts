@@ -171,3 +171,37 @@ describe("run ledger", () => {
     expect(readFileSync(join(second.dir, "run.md"), "utf-8")).toContain(`- resumes: ${first.id}`);
   });
 });
+
+// Round 4: exclusive-create + claim-before-populate.
+describe("startRun concurrency guards (round 4)", () => {
+  let cwd: string;
+  beforeEach(() => {
+    cwd = join(tmpdir(), `gk-ledger-r4-${process.pid}-${Date.now()}`);
+    mkdirSync(join(cwd, ".graphkit", "runs"), { recursive: true });
+    writeFileSync(join(cwd, "graph.yaml"), "metadata:\n  name: demo\ntopology: diamond\n");
+  });
+  afterEach(() => rmSync(cwd, { recursive: true, force: true }));
+
+  test("pre-created candidate dir is skipped (exclusive-create), not populated", () => {
+    // The old existsSync+mkdir(recursive) loop would have written meta/trace
+    // INTO the pre-existing dir — the concurrent-clobber TOCTOU.
+    const pre = join(cwd, ".graphkit", "runs", "20260903-100000-demo");
+    mkdirSync(pre);
+    writeFileSync(join(pre, "foreign.txt"), "do not touch");
+    const r = startRun(cwd, join(cwd, "graph.yaml"), "2026-09-03T10:00:00.000Z");
+    expect(r.id).toBe("20260903-100000-demo-2");
+    expect(existsSync(join(pre, "foreign.txt"))).toBe(true); // untouched
+    expect(existsSync(join(pre, "meta.json"))).toBe(false); // nothing written into it
+    expect(existsSync(join(r.dir, "meta.json"))).toBe(true);
+  });
+
+  test("claim failure (RUN_ACTIVE) leaves no populated orphan dir", () => {
+    // Another process owns the claim; the loser must not leave a dir that
+    // looks like a real (interrupted) run.
+    const otherDir = join(cwd, ".graphkit", "runs", "20260903-090000-other");
+    mkdirSync(otherDir);
+    writeFileSync(join(cwd, ".graphkit", "runs", ".active"), otherDir);
+    expect(() => startRun(cwd, join(cwd, "graph.yaml"), "2026-09-03T10:00:00.000Z")).toThrow(/RUN_ACTIVE/);
+    expect(existsSync(join(cwd, ".graphkit", "runs", "20260903-100000-demo"))).toBe(false);
+  });
+});

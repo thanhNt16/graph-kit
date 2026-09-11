@@ -4,9 +4,8 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { z } from "zod";
-
+import { walkMemoryStore } from "../frontmatter.js";
 import { atomicWrite } from "../fs.js";
-import { walkMemoryStore } from "./frontmatter.js";
 
 export interface LinkGraph {
   generated_at: string;
@@ -17,6 +16,12 @@ const RESERVED = ["index.md", "log.md"];
 const WIKILINK = /\[\[([^\]|]+)(?:\|[^\]]*)?\]\]/g;
 // Entities worth linking on: repo-ish paths and dotted/slashed identifiers.
 const ENTITY = /(?:[\w.-]+\/)+[\w.-]+/g;
+// An entity mentioned by more than this many entries carries no discriminative
+// signal (a ubiquitous `source:` value, a path every entry cites) and would
+// link every pair — O(m²) adds, measured 5.8s at n=5000 for one entity shared
+// by all entries. Skip it: [[wikilinks]] remain the explicit-connectivity
+// channel for hub entities.
+const MAX_ENTITY_SUPPORT = 50;
 
 interface Entry {
   id: string;
@@ -71,7 +76,7 @@ export function buildLinks(memDir: string, now = new Date().toISOString()): Link
     }
   }
   for (const ids of byEntity.values()) {
-    if (ids.length < 2) continue;
+    if (ids.length < 2 || ids.length > MAX_ENTITY_SUPPORT) continue;
     for (let i = 0; i < ids.length; i += 1) for (let j = i + 1; j < ids.length; j += 1) add(ids[i], ids[j]);
   }
 

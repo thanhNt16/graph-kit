@@ -7,6 +7,7 @@ import {
   openSync,
   readdirSync,
   readFileSync,
+  rmdirSync,
   rmSync,
   writeFileSync,
 } from "node:fs";
@@ -129,15 +130,39 @@ export function startRun(
   const raw = readFileSync(resolved, "utf-8");
   const name = safeGraphName(graphName(resolved));
 
+  mkdirSync(runsDir(cwd), { recursive: true });
   const baseId = runId(now, name);
+  let suffix = 2;
   let id = baseId;
   let dir = join(runsDir(cwd), id);
-  let suffix = 2;
-  while (existsSync(dir)) {
-    id = `${baseId}-${suffix++}`;
-    dir = join(runsDir(cwd), id);
+  // Exclusive-create the leaf dir: `existsSync` + `mkdirSync(recursive)` was a
+  // TOCTOU — two same-second starts both passed the check, both populated the
+  // SAME dir, and the loser clobbered the winner's meta/trace before dying on
+  // the .active claim. Plain mkdir on the leaf (parent pre-created) is atomic;
+  // EEXIST bumps the suffix.
+  for (;;) {
+    try {
+      mkdirSync(dir); // leaf only — runsDir exists, so no recursive flag
+      break;
+    } catch (e) {
+      if ((e as NodeJS.ErrnoException)?.code !== "EEXIST") throw e;
+      id = `${baseId}-${suffix++}`;
+      dir = join(runsDir(cwd), id);
+    }
   }
-  mkdirSync(dir, { recursive: true });
+
+  // Claim BEFORE populating: the RUN_ACTIVE loser leaves an empty (removed
+  // below) dir, never overwritten ledger files.
+  try {
+    claimActiveRun(cwd, dir);
+  } catch (e) {
+    try {
+      rmdirSync(dir); // only succeeds while the dir is empty — nothing of ours was written
+    } catch {
+      /* non-empty: leave it for inspection */
+    }
+    throw e;
+  }
 
   writeFileSync(join(dir, "trace.jsonl"), "");
   const meta: Record<string, unknown> = {
@@ -167,7 +192,6 @@ export function startRun(
       "",
     ].join("\n"),
   );
-  claimActiveRun(cwd, dir);
   return { id, dir };
 }
 
@@ -308,6 +332,13 @@ export function endRun(cwd: string, status: RunIndexLine["status"], now = new Da
   );
   atomicWrite(join(dir, "run.md"), md);
   return summary;
+}
+
+/** Highest completed wave + 1 — the one "what round are we in" derivation.
+ *  run status and gk status used to inline this separately and could drift. */
+export function deriveRound(trace: TraceLine[]): number {
+  const waves = trace.map((t) => t.wave).filter((w): w is number => w != null);
+  return waves.length > 0 ? Math.max(...waves) + 1 : 0;
 }
 
 /** Run ids present on disk, oldest first — ids are timestamp-prefixed so lexical == chronological. */

@@ -2,13 +2,14 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { cac } from "cac";
+import type { CAC } from "cac";
 import { registerGraphCommands } from "../../src/cli/commands/graph.js";
 import { registerInventoryCommands } from "../../src/cli/commands/inventory.js";
 import { registerKitCommands } from "../../src/cli/commands/kit.js";
 import { registerMemoryCommands } from "../../src/cli/commands/memory.js";
 import { registerTemplateCommands } from "../../src/cli/commands/template.js";
 import { APP_VERSION } from "../../src/version.js";
+import { createCliHarness } from "../helpers/cli-harness.js";
 
 const DIAMOND = `apiVersion: graphkit.dev/v2
 kind: Graph
@@ -35,38 +36,13 @@ evidence:
   required_keys: [report]
 `;
 
-/** Build the real CLI with every command family registered (mirrors src/index.ts). */
-function fullCli() {
-  const cli = cac("gk").version(APP_VERSION);
+/** Every command family registered, mirroring src/index.ts wiring. */
+function registerAll(cli: CAC) {
   registerKitCommands(cli);
   registerGraphCommands(cli);
   registerMemoryCommands(cli);
   registerTemplateCommands(cli);
   registerInventoryCommands(cli);
-  cli.help();
-  return cli;
-}
-
-function runCli(args: string[], cwd: string) {
-  const cli = fullCli();
-  const logs: string[] = [];
-  const origLog = console.log;
-  console.log = (...a: unknown[]) => logs.push(a.map(String).join(" "));
-  let exitCode = 0;
-  const origExit = process.exit;
-  process.exit = (c?: number) => {
-    exitCode = c ?? 1;
-  };
-  const origCwd = process.cwd;
-  process.cwd = () => cwd;
-  try {
-    cli.parse(["node", "gk", ...args], { run: true });
-  } finally {
-    console.log = origLog;
-    process.exit = origExit;
-    process.cwd = origCwd;
-  }
-  return { stdout: logs.join("\n"), code: exitCode };
 }
 
 describe("CLI end-to-end: template pack/list/show", () => {
@@ -90,9 +66,15 @@ describe("CLI end-to-end: template pack/list/show", () => {
   const graphFile = () => join(cwd, "graph.yaml");
 
   test("template pack writes a .gk.yaml and reports counts", () => {
-    const { stdout, code } = runCli(["template", "pack", graphFile(), "--name", "security-audit"], cwd);
-    expect(code).toBe(0);
-    const parsed = JSON.parse(stdout);
+    const run = createCliHarness(registerAll, { cwd: cwd, version: APP_VERSION }).run([
+      "template",
+      "pack",
+      graphFile(),
+      "--name",
+      "security-audit",
+    ]);
+    expect(run.exit).toBeUndefined();
+    const parsed = JSON.parse(run.stdout);
     expect(parsed.status).toBe("ok");
     expect(parsed.data.name).toBe("security-audit");
     expect(parsed.data.origin).toBe("project");
@@ -101,27 +83,49 @@ describe("CLI end-to-end: template pack/list/show", () => {
   });
 
   test("template pack refuses overwrite without --force", () => {
-    runCli(["template", "pack", graphFile(), "--name", "security-audit"], cwd);
-    const { stdout, code } = runCli(["template", "pack", graphFile(), "--name", "security-audit"], cwd);
-    expect(code).toBe(1);
-    const parsed = JSON.parse(stdout);
+    createCliHarness(registerAll, { cwd: cwd, version: APP_VERSION }).run([
+      "template",
+      "pack",
+      graphFile(),
+      "--name",
+      "security-audit",
+    ]);
+    const run = createCliHarness(registerAll, { cwd: cwd, version: APP_VERSION }).run([
+      "template",
+      "pack",
+      graphFile(),
+      "--name",
+      "security-audit",
+    ]);
+    expect(run.exit).toBe(1);
+    const parsed = JSON.parse(run.stdout);
     expect(parsed.status).toBe("fail");
     expect(parsed.error.code).toBe("TEMPLATE_EXISTS");
   });
 
   test("template pack requires --name", () => {
-    const { stdout, code } = runCli(["template", "pack", graphFile()], cwd);
-    expect(code).toBe(1);
-    const parsed = JSON.parse(stdout);
+    const run = createCliHarness(registerAll, { cwd: cwd, version: APP_VERSION }).run([
+      "template",
+      "pack",
+      graphFile(),
+    ]);
+    expect(run.exit).toBe(1);
+    const parsed = JSON.parse(run.stdout);
     expect(parsed.status).toBe("fail");
     expect(parsed.error.code).toBe("MISSING_NAME");
   });
 
   test("template list reports the packed template", () => {
-    runCli(["template", "pack", graphFile(), "--name", "security-audit"], cwd);
-    const { stdout, code } = runCli(["template", "list"], cwd);
-    expect(code).toBe(0);
-    const parsed = JSON.parse(stdout);
+    createCliHarness(registerAll, { cwd: cwd, version: APP_VERSION }).run([
+      "template",
+      "pack",
+      graphFile(),
+      "--name",
+      "security-audit",
+    ]);
+    const run = createCliHarness(registerAll, { cwd: cwd, version: APP_VERSION }).run(["template", "list", "--json"]);
+    expect(run.exit).toBeUndefined();
+    const parsed = JSON.parse(run.stdout);
     expect(parsed.status).toBe("ok");
     const found = parsed.data.templates.find((t: { name: string }) => t.name === "security-audit");
     expect(found).toBeDefined();
@@ -129,38 +133,68 @@ describe("CLI end-to-end: template pack/list/show", () => {
   });
 
   test("template show resolves the template", () => {
-    runCli(["template", "pack", graphFile(), "--name", "security-audit"], cwd);
-    const { stdout, code } = runCli(["template", "show", "security-audit"], cwd);
-    expect(code).toBe(0);
-    const parsed = JSON.parse(stdout);
+    createCliHarness(registerAll, { cwd: cwd, version: APP_VERSION }).run([
+      "template",
+      "pack",
+      graphFile(),
+      "--name",
+      "security-audit",
+    ]);
+    const run = createCliHarness(registerAll, { cwd: cwd, version: APP_VERSION }).run([
+      "template",
+      "show",
+      "security-audit",
+    ]);
+    expect(run.exit).toBeUndefined();
+    const parsed = JSON.parse(run.stdout);
     expect(parsed.status).toBe("ok");
     expect(parsed.data.origin).toBe("project");
     expect(parsed.data.description).toBe("Parallel security review");
   });
 
   test("template show unknown fails with close matches", () => {
-    runCli(["template", "pack", graphFile(), "--name", "security-audit"], cwd);
-    const { stdout, code } = runCli(["template", "show", "security-audit-t"], cwd);
-    expect(code).toBe(1);
-    const parsed = JSON.parse(stdout);
+    createCliHarness(registerAll, { cwd: cwd, version: APP_VERSION }).run([
+      "template",
+      "pack",
+      graphFile(),
+      "--name",
+      "security-audit",
+    ]);
+    const run = createCliHarness(registerAll, { cwd: cwd, version: APP_VERSION }).run([
+      "template",
+      "show",
+      "security-audit-t",
+    ]);
+    expect(run.exit).toBe(1);
+    const parsed = JSON.parse(run.stdout);
     expect(parsed.status).toBe("fail");
     expect(parsed.error.code).toBe("TEMPLATE_NOT_FOUND");
     expect(parsed.error.details.closeMatches).toContain("security-audit");
   });
 
   test("unknown template subcommand rejected", () => {
-    const { stdout, code } = runCli(["template", "bogus"], cwd);
-    expect(code).toBe(1);
-    const parsed = JSON.parse(stdout);
+    const run = createCliHarness(registerAll, { cwd: cwd, version: APP_VERSION }).run(["template", "bogus"]);
+    expect(run.exit).toBe(1);
+    const parsed = JSON.parse(run.stdout);
     expect(parsed.status).toBe("fail");
     expect(parsed.error.code).toBe("UNKNOWN_TEMPLATE_SUBCOMMAND");
   });
 
   test("packed template materializes + validates (graph.yaml round-trip)", () => {
-    runCli(["template", "pack", graphFile(), "--name", "security-audit"], cwd);
-    const { stdout, code } = runCli(["validate", graphFile()], cwd);
-    expect(code).toBe(0);
-    const parsed = JSON.parse(stdout);
+    createCliHarness(registerAll, { cwd: cwd, version: APP_VERSION }).run([
+      "template",
+      "pack",
+      graphFile(),
+      "--name",
+      "security-audit",
+    ]);
+    const run = createCliHarness(registerAll, { cwd: cwd, version: APP_VERSION }).run([
+      "validate",
+      graphFile(),
+      "--json",
+    ]);
+    expect(run.exit).toBeUndefined();
+    const parsed = JSON.parse(run.stdout);
     expect(parsed.status).toBe("ok");
     expect(parsed.data.valid).toBe(true);
   });
@@ -187,17 +221,22 @@ describe("CLI end-to-end: inventory registration", () => {
   });
 
   test("gk --version prints the APP_VERSION constant", () => {
-    const { stdout, code } = runCli(["--version"], cwd);
-    expect(code).toBe(0);
+    const run = createCliHarness(registerAll, { cwd: cwd, version: APP_VERSION }).run(["--version"]);
+    expect(run.exit).toBeUndefined();
     // cac formats as "gk/<version> <platform>-<arch> node-<runtime>"
-    expect(stdout.trim()).toContain(APP_VERSION);
-    expect(stdout).toMatch(/^gk\//);
+    expect(run.stdout.trim()).toContain(APP_VERSION);
+    expect(run.stdout).toMatch(/^gk\//);
   });
 
   test("inventory --target claude --json returns the output contract", () => {
-    const { stdout, code } = runCli(["inventory", "--target", "claude", "--json"], cwd);
-    expect(code).toBe(0);
-    const parsed = JSON.parse(stdout);
+    const run = createCliHarness(registerAll, { cwd: cwd, version: APP_VERSION }).run([
+      "inventory",
+      "--target",
+      "claude",
+      "--json",
+    ]);
+    expect(run.exit).toBeUndefined();
+    const parsed = JSON.parse(run.stdout);
     expect(parsed.status).toBe("ok");
     expect(parsed.data.target).toBe("claude");
     expect(parsed.data.agents.some((a: { name: string }) => a.name === "code-reviewer")).toBe(true);
@@ -207,20 +246,28 @@ describe("CLI end-to-end: inventory registration", () => {
   });
 
   test("inventory default output is a human table, not JSON", () => {
-    const { stdout, code } = runCli(["inventory", "--target", "claude"], cwd);
-    expect(code).toBe(0);
-    expect(() => JSON.parse(stdout)).toThrow();
-    expect(stdout).toContain("target: claude");
-    expect(stdout).toContain("code-reviewer");
-    expect(stdout).toContain("agents (1)");
-    expect(stdout).toContain("tools (20)");
-    expect(stdout).toContain("warnings: none");
+    const run = createCliHarness(registerAll, { cwd: cwd, version: APP_VERSION }).run([
+      "inventory",
+      "--target",
+      "claude",
+    ]);
+    expect(run.exit).toBeUndefined();
+    expect(() => JSON.parse(run.stdout)).toThrow();
+    expect(run.stdout).toContain("target: claude");
+    expect(run.stdout).toContain("code-reviewer");
+    expect(run.stdout).toContain("agents (1)");
+    expect(run.stdout).toContain("tools (20)");
+    expect(run.stdout).toContain("warnings: none");
   });
 
   test("inventory rejects an invalid target", () => {
-    const { stdout, code } = runCli(["inventory", "--target", "vscode"], cwd);
-    expect(code).toBe(1);
-    const parsed = JSON.parse(stdout);
+    const run = createCliHarness(registerAll, { cwd: cwd, version: APP_VERSION }).run([
+      "inventory",
+      "--target",
+      "vscode",
+    ]);
+    expect(run.exit).toBe(1);
+    const parsed = JSON.parse(run.stdout);
     expect(parsed.status).toBe("fail");
     expect(parsed.error.code).toBe("BAD_TARGET");
   });
@@ -240,19 +287,19 @@ describe("CLI end-to-end: kit init/new human + --json", () => {
   });
 
   test("init default prints the installed-entries line, not JSON", () => {
-    const { stdout, code } = runCli(["init"], root);
-    expect(code).toBe(0);
-    expect(() => JSON.parse(stdout)).toThrow();
-    expect(stdout).toMatch(
+    const run = createCliHarness(registerAll, { cwd: root, version: APP_VERSION }).run(["init"]);
+    expect(run.exit).toBeUndefined();
+    expect(() => JSON.parse(run.stdout)).toThrow();
+    expect(run.stdout).toMatch(
       /^installed \d+ entries into \.claude\/ \(target claude\) — next: `gk graph new diamond > graph\.yaml`, then `gk validate`$/,
     );
     expect(existsSync(join(root, ".claude", "skills"))).toBe(true);
   });
 
   test("init --json keeps the ok(result) envelope", () => {
-    const { stdout, code } = runCli(["init", "--json"], root);
-    expect(code).toBe(0);
-    const parsed = JSON.parse(stdout);
+    const run = createCliHarness(registerAll, { cwd: root, version: APP_VERSION }).run(["init", "--json"]);
+    expect(run.exit).toBeUndefined();
+    const parsed = JSON.parse(run.stdout);
     expect(parsed.status).toBe("ok");
     expect(Array.isArray(parsed.data.installed)).toBe(true);
     expect(parsed.data.installed.length).toBeGreaterThan(0);
@@ -260,29 +307,29 @@ describe("CLI end-to-end: kit init/new human + --json", () => {
 
   test("new default prints the created + installed line", () => {
     const dir = join(root, "fresh"); // absolute: fs ops use the real cwd, only process.cwd is stubbed
-    const { stdout, code } = runCli(["new", "--dir", dir], root);
-    expect(code).toBe(0);
-    expect(() => JSON.parse(stdout)).toThrow();
-    expect(stdout).toContain(`created ${dir} — installed `);
-    expect(stdout).toContain("entries into .claude/ (target claude) — next: `gk graph new diamond > graph.yaml`");
+    const run = createCliHarness(registerAll, { cwd: root, version: APP_VERSION }).run(["new", "--dir", dir]);
+    expect(run.exit).toBeUndefined();
+    expect(() => JSON.parse(run.stdout)).toThrow();
+    expect(run.stdout).toContain(`created ${dir} — installed `);
+    expect(run.stdout).toContain("entries into .claude/ (target claude) — next: `gk graph new diamond > graph.yaml`");
   });
 
   test("new --json keeps the created + installed envelope", () => {
     const dir = join(root, "fresh2");
-    const { stdout, code } = runCli(["new", "--dir", dir, "--json"], root);
-    expect(code).toBe(0);
-    const parsed = JSON.parse(stdout);
+    const run = createCliHarness(registerAll, { cwd: root, version: APP_VERSION }).run(["new", "--dir", dir, "--json"]);
+    expect(run.exit).toBeUndefined();
+    const parsed = JSON.parse(run.stdout);
     expect(parsed.status).toBe("ok");
     expect(parsed.data.created).toBe(dir);
     expect(Array.isArray(parsed.data.installed)).toBe(true);
   });
 
   test("new missing --dir fails with MISSING_DIR (JSON fail envelope in both modes)", () => {
-    const human = runCli(["new"], root);
-    expect(human.code).toBe(1);
+    const human = createCliHarness(registerAll, { cwd: root, version: APP_VERSION }).run(["new"]);
+    expect(human.exit).toBe(1);
     expect(JSON.parse(human.stdout).error.code).toBe("MISSING_DIR");
-    const json = runCli(["new", "--json"], root);
-    expect(json.code).toBe(1);
+    const json = createCliHarness(registerAll, { cwd: root, version: APP_VERSION }).run(["new", "--json"]);
+    expect(json.exit).toBe(1);
     expect(JSON.parse(json.stdout).error.code).toBe("MISSING_DIR");
   });
 });

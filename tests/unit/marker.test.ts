@@ -32,4 +32,27 @@ describe("marker", () => {
     expect(freshnessOf(meta, { head: null, tree: null })).toBe("unknown"); // non-git cwd
     expect(freshnessOf(null, cur)).toBe("unknown"); // legacy marker
   });
+
+  // Round 4: raw `${String(note)}` interpolation emitted invalid YAML for notes
+  // containing ": " or newlines — parseMarker returned null and gate freshness
+  // silently degraded to "unknown" for a key the user just recorded.
+  describe("hostile note round-trip (round 4)", () => {
+    const hostile = [
+      "blocked: needs review",
+      "line one\nline two",
+      "trailing #comment",
+      'already "quoted"',
+      "leading indicator: |block",
+      "emoji 🚀 and unicode — dash",
+      "",
+    ];
+    for (const note of hostile) {
+      test(`note ${JSON.stringify(note)} round-trips`, () => {
+        const md = renderMarker({ ...meta, note }, "body");
+        const parsed = parseMarker(md);
+        expect(parsed).not.toBeNull();
+        expect(parsed?.note).toBe(note); // "" round-trips as ""
+      });
+    }
+  });
 });
