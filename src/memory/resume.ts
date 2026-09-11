@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { loadGraph } from "../compiler/loader.js";
-import type { Graph } from "../compiler/validate.js";
+import { type Graph, isValidEvidenceKey } from "../compiler/validate.js";
 import { GraphKitError } from "../errors.js";
 import { GraphSchema, type LoopGroup } from "../schemas/graph.schema.js";
 import { saveSessionGraph, setActiveGraphId } from "../store/index.js";
@@ -82,6 +82,10 @@ function parseGraph(path: string): Graph {
 }
 function evidenceOnDisk(cwd: string, evidenceDir: string, keys: string[]): boolean {
   return keys.every((k) => {
+    // Trace lines are agent-authored; a key like "../../secrets/x" must count
+    // as UNSATISFIED (redo the node), never be joined into a probe path. Same
+    // trust boundary validateGraph/addEvidence enforce at their edges.
+    if (!isValidEvidenceKey(k)) return false;
     const p = join(cwd, evidenceDir, `${k}.md`);
     return existsSync(p) && readFileSync(p, "utf-8").trim().length > 0;
   });
@@ -232,10 +236,12 @@ export function deriveResumeGraph(rec: Reconciliation, parentRunId: string): Gra
     const upstreamRefs = node.depend_on
       .filter((d) => satisfied.has(d))
       .flatMap((d) =>
-        (lastOk.get(d)?.evidence ?? []).map((k) => ({
-          path: join(rec.evidenceDir, `${k}.md`),
-          purpose: `resumed evidence from node ${d} (run ${parentRunId})`,
-        })),
+        (lastOk.get(d)?.evidence ?? [])
+          .filter(isValidEvidenceKey) // trace-authored keys never become ref paths
+          .map((k) => ({
+            path: join(rec.evidenceDir, `${k}.md`),
+            purpose: `resumed evidence from node ${d} (run ${parentRunId})`,
+          })),
       );
     // fan_out.briefs_from naming a dropped (satisfied) node would dangle — its
     // evidence was already replayed as refs above, so drop the fan_out config.

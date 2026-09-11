@@ -2,7 +2,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import type { CAC } from "cac";
 import { GraphKitError } from "../../errors.js";
-import { activeRun, readRunMeta, readTrace } from "../../memory/ledger.js";
+import { activeRun, activeRunGraph, readRunMeta, readTrace } from "../../memory/ledger.js";
 import { fail, ok } from "../output.js";
 import { type GateResult, gateGraph } from "./gate.js";
 import { loadGraph } from "./graph.js";
@@ -103,11 +103,16 @@ export function registerStatusCommand(cli: CAC) {
           }
         }
 
-        // Gate evidence coverage via existing loadGraph + gateGraph.
+        // Gate evidence coverage via existing loadGraph + gateGraph. Coverage
+        // must score the graph the ACTIVE RUN executes (meta.graph_path — a
+        // resumed run's derived session graph shrinks required_keys to the
+        // pending set), falling back to cwd/graph.yaml only when no run is
+        // recording a path; scoring the parent graph made a satisfied resumed
+        // run report missing keys — a permanent BLOCK it could never clear.
         let coverage: GateResult | null = null;
         let gateError: string | null = null;
         try {
-          const graph = loadGraph(join(cwd, "graph.yaml"));
+          const graph = loadGraph(activeRunGraph(cwd) ?? join(cwd, "graph.yaml"));
           const evidenceDir = join(cwd, graph.outputs.evidence_dir);
           coverage = gateGraph(graph.evidence.required_keys, evidenceDir, { cwd });
         } catch (e) {

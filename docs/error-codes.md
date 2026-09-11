@@ -57,8 +57,9 @@ emits them.
 |---|---|---|
 | `RUN_ACTIVE` | A run is already active | `gk run end` first |
 | `NO_ACTIVE_RUN` | No active run for this operation | `gk run start --graph graph.yaml` |
+| `RUN_NOT_FOUND` | Unknown run id passed to `gk run status <id>` | List every run with `gk run list` |
 | `RUN_META_CORRUPT` | The run's meta.json is not valid JSON | Repair or remove the run dir under `.graphkit/runs/` |
-| `RESUME_RUN_NOT_FOUND` | Unknown run id (or a pre-ledger run) | List runs with `gk run status`; use a full run id |
+| `RESUME_RUN_NOT_FOUND` | Unknown run id (or a pre-ledger run) | List runs with `gk run list`; use a full run id |
 | `RESUME_BAD_FROM_NODE` | `--from-node` is not a node of the graph | Use a node id from the graph |
 | `RESUME_GRAPH_DRIFT` | The recorded graph changed since the run started | Rerun `gk init`/graph edits, or `--force` to override |
 | `RESUME_DERIVED_INVALID` | The pending-only derived graph failed validation | Fix the listed issue in the source graph |

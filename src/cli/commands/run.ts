@@ -8,9 +8,12 @@ import {
   appendAdvisor,
   appendNode,
   endRun,
+  listRunIds,
   readAdvisorEvents,
+  readRunIndex,
   readRunMeta,
   readTrace,
+  readTraceStats,
   startRun,
 } from "../../memory/ledger.js";
 import { resumeRun } from "../../memory/resume.js";
@@ -59,6 +62,24 @@ function renderRunStatus(
     `advisor events: ${data.advisor_events}`,
     `verdict chain: ${data.resumes_chain.join(" <- ")}`,
   ].join("\n");
+}
+
+// resumes: chain walk from a run id back through its parents (guard against a
+// hand-edited cycle).
+function resumesChain(cwd: string, startId: string): string[] {
+  const chain: string[] = [];
+  let cursor: string | null = startId;
+  const guard = new Set<string>();
+  while (cursor && !guard.has(cursor)) {
+    guard.add(cursor);
+    chain.push(cursor);
+    try {
+      cursor = readRunMeta(cwd, cursor).resumes ?? null;
+    } catch {
+      cursor = null;
+    }
+  }
+  return chain;
 }
 
 export function registerRunCommands(cli: CAC) {
@@ -188,22 +209,100 @@ export function registerRunCommands(cli: CAC) {
           }
           return;
         }
+        if (subcommand === "list") {
+          // The front door for `gk run resume <id>`: index.jsonl only knows
+          // ENDED runs, so dir-only runs (active / interrupted) are merged in
+          // from listRunIds — readRunIndex and listRunIds both existed with no
+          // CLI consumer before this.
+          const indexed = readRunIndex(cwd);
+          const byId = new Map(indexed.map((r) => [r.id, r]));
+          const activeId = activeRun(cwd) ? basename(activeRun(cwd)!) : null;
+          const runs = listRunIds(cwd)
+            .reverse() // ids are timestamp-prefixed: lexical == chronological
+            .map((id) => {
+              const row = byId.get(id);
+              if (row) {
+                return {
+                  id,
+                  graph: row.graph,
+                  started_at: row.started_at,
+                  status: row.status as string,
+                  nodes: row.node_count,
+                };
+              }
+              let graph = "unknown";
+              let started_at = "unknown";
+              try {
+                const meta = readRunMeta(cwd, id);
+                graph = meta.graph;
+                started_at = meta.started_at;
+              } catch {
+                /* legacy/litter dir without meta */
+              }
+              return {
+                id,
+                graph,
+                started_at,
+                status: id === activeId ? "running" : "interrupted",
+                nodes: readTraceStats(cwd, id).lines.length,
+              };
+            });
+          if (opts.json) {
+            console.log(JSON.stringify(ok({ total: runs.length, runs })));
+            return;
+          }
+          if (runs.length === 0) {
+            console.log("no runs yet — start one with `gk run start`");
+            return;
+          }
+          console.log(
+            [
+              `run ledger — ${runs.length} run(s), newest first`,
+              ...runs.map(
+                (r) =>
+                  `  ${r.id}  ${r.status.padEnd(11)}  ${r.graph}  ${r.started_at}  nodes ${r.nodes}${
+                    r.status === "interrupted" ? `  (resume: \`gk run resume ${r.id}\`)` : ""
+                  }`,
+              ),
+            ].join("\n"),
+          );
+          return;
+        }
         if (subcommand === "status") {
+          const target = Array.isArray(args) ? args[0] : args;
+          if (target) {
+            // Any recorded run, not just the active one — renderRunStatus
+            // already reads everything through the id.
+            const id = String(target);
+            try {
+              readRunMeta(cwd, id);
+            } catch {
+              console.log(
+                JSON.stringify(fail("RUN_NOT_FOUND", `no run "${id}" under ${join(cwd, ".graphkit", "runs")}`)),
+              );
+              process.exitCode = 1;
+              return;
+            }
+            const dir = join(cwd, ".graphkit", "runs", id);
+            const data = {
+              active: dir,
+              advisor_events: readAdvisorEvents(cwd, id).length,
+              resumes_chain: resumesChain(cwd, id),
+            };
+            if (opts.json) {
+              console.log(JSON.stringify(ok(data)));
+            } else {
+              console.log(renderRunStatus(cwd, data));
+            }
+            return;
+          }
           const dir = activeRun(cwd);
           const advisor_events = dir ? readAdvisorEvents(cwd, basename(dir)).length : 0;
-          const chain: string[] = [];
-          let cursor: string | null = dir ? basename(dir) : null;
-          const guard = new Set<string>();
-          while (cursor && !guard.has(cursor)) {
-            guard.add(cursor);
-            chain.push(cursor);
-            try {
-              cursor = readRunMeta(cwd, cursor).resumes ?? null;
-            } catch {
-              cursor = null;
-            }
-          }
-          const data = { active: dir, advisor_events, resumes_chain: chain };
+          const data = {
+            active: dir,
+            advisor_events,
+            resumes_chain: dir ? resumesChain(cwd, basename(dir)) : [],
+          };
           if (opts.json) {
             console.log(JSON.stringify(ok(data)));
           } else {

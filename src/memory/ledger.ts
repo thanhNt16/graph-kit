@@ -7,6 +7,7 @@ import {
   openSync,
   readdirSync,
   readFileSync,
+  rmdirSync,
   rmSync,
   writeFileSync,
 } from "node:fs";
@@ -129,15 +130,39 @@ export function startRun(
   const raw = readFileSync(resolved, "utf-8");
   const name = safeGraphName(graphName(resolved));
 
+  mkdirSync(runsDir(cwd), { recursive: true });
   const baseId = runId(now, name);
+  let suffix = 2;
   let id = baseId;
   let dir = join(runsDir(cwd), id);
-  let suffix = 2;
-  while (existsSync(dir)) {
-    id = `${baseId}-${suffix++}`;
-    dir = join(runsDir(cwd), id);
+  // Exclusive-create the leaf dir: `existsSync` + `mkdirSync(recursive)` was a
+  // TOCTOU — two same-second starts both passed the check, both populated the
+  // SAME dir, and the loser clobbered the winner's meta/trace before dying on
+  // the .active claim. Plain mkdir on the leaf (parent pre-created) is atomic;
+  // EEXIST bumps the suffix.
+  for (;;) {
+    try {
+      mkdirSync(dir); // leaf only — runsDir exists, so no recursive flag
+      break;
+    } catch (e) {
+      if ((e as NodeJS.ErrnoException)?.code !== "EEXIST") throw e;
+      id = `${baseId}-${suffix++}`;
+      dir = join(runsDir(cwd), id);
+    }
   }
-  mkdirSync(dir, { recursive: true });
+
+  // Claim BEFORE populating: the RUN_ACTIVE loser leaves an empty (removed
+  // below) dir, never overwritten ledger files.
+  try {
+    claimActiveRun(cwd, dir);
+  } catch (e) {
+    try {
+      rmdirSync(dir); // only succeeds while the dir is empty — nothing of ours was written
+    } catch {
+      /* non-empty: leave it for inspection */
+    }
+    throw e;
+  }
 
   writeFileSync(join(dir, "trace.jsonl"), "");
   const meta: Record<string, unknown> = {
@@ -167,7 +192,6 @@ export function startRun(
       "",
     ].join("\n"),
   );
-  claimActiveRun(cwd, dir);
   return { id, dir };
 }
 

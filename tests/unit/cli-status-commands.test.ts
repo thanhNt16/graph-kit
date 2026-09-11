@@ -139,3 +139,41 @@ describe("gk execute/visualize stubs", () => {
     expect(JSON.parse(result.output).error.code).toBe("NOT_IMPLEMENTED");
   });
 });
+
+// Round 4: coverage scores the ACTIVE RUN's recorded graph, not the parent.
+describe("gk status coverage source (round 4)", () => {
+  let root: string;
+  beforeEach(() => {
+    root = join(tmpdir(), `gk-status-r4-${process.pid}-${Date.now()}`);
+    mkdirSync(root, { recursive: true });
+  });
+  afterEach(() => {
+    process.exitCode = 0;
+    rmSync(root, { recursive: true, force: true });
+  });
+
+  test("resumed run scores against the derived session graph (meta.graph_path)", () => {
+    // Parent graph requires [design, extra]; the session graph (what the run
+    // executes, required_keys shrunk to pending) requires only [design]. The
+    // old cwd/graph.yaml scoring reported a permanent missing-key BLOCK the
+    // resumed run could never clear.
+    writeFileSync(
+      join(root, "graph.yaml"),
+      `apiVersion: graphkit.dev/v2\nkind: Graph\nmetadata:\n  name: parent\ntopology: diamond\nnodes:\n  a:\n    agent: reviewer\n    objective: test\n    depend_on: []\n    evidence: [design, extra]\nevidence:\n  required_keys: [design, extra]\n`,
+    );
+    const sessionPath = join(root, "session.yaml");
+    writeFileSync(
+      sessionPath,
+      `apiVersion: graphkit.dev/v2\nkind: Graph\nmetadata:\n  name: parent-resume\ntopology: diamond\nnodes:\n  a:\n    agent: reviewer\n    objective: test\n    depend_on: []\n    evidence: [design]\nevidence:\n  required_keys: [design]\n`,
+    );
+    mkdirSync(join(root, ".graphkit", "evidence"), { recursive: true });
+    writeFileSync(join(root, ".graphkit", "evidence", "design.md"), "done\n");
+    startRun(root, sessionPath); // records graph_path = session.yaml in meta.json
+
+    const result = runCli(["status", "--json"], root, registerStatusCommand);
+    const parsed = JSON.parse(result.output);
+    expect(parsed.data.running).toBe(true);
+    expect(parsed.data.coverage.verdict).toBe("MERGE"); // was BLOCK (missing extra) before
+    expect(Object.keys(parsed.data.coverage.scorecard)).toEqual(["design"]);
+  });
+});

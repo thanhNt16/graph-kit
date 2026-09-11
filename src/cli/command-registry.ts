@@ -152,7 +152,16 @@ export const CLI_COMMANDS: { path: string; description: string; options: string[
     description: "Finalize the active run and append to index.jsonl",
     options: ["--status <status>", "--json"],
   },
-  { path: "run status", description: "Show the active run directory", options: ["--json"] },
+  {
+    path: "run list",
+    description: "List every run (ended, running, interrupted) — the resume front door",
+    options: ["--json"],
+  },
+  {
+    path: "run status",
+    description: "Show run progress (default: the active run; pass a run id for any run)",
+    options: ["--json"],
+  },
   {
     path: "run resume",
     description: "Derive a pending-only session graph from a failed/interrupted run and start a child run",

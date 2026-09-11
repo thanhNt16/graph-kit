@@ -197,7 +197,7 @@ describe("gk run CLI", () => {
     try {
       const res = runCli(["run"], cwd);
       expect(res.stdout).toContain("gk run — run ledger commands");
-      expect(res.stdout).toContain("Subcommands: start node end status");
+      expect(res.stdout).toContain("Subcommands: start node end list status resume");
     } finally {
       rmSync(cwd, { recursive: true, force: true });
     }
@@ -484,5 +484,64 @@ describe("run resume CLI", () => {
     const out = JSON.parse(runCli(["run", "resume", r.id], cwd).stdout);
     expect(out.error.code).toBe("RESUME_GRAPH_DRIFT");
     expect(runCli(["run", "resume", r.id], cwd).code).toBe(1);
+  });
+});
+
+// Round 4: run list (the resume front door) + run status <id>.
+describe("gk run list / run status <id> (round 4)", () => {
+  let cwd: string;
+  beforeEach(() => {
+    cwd = join(tmpdir(), `gk-run-list-${process.pid}-${Date.now()}`);
+    mkdirSync(join(cwd, ".graphkit", "runs"), { recursive: true });
+    writeFileSync(join(cwd, "graph.yaml"), "metadata:\n  name: demo\ntopology: diamond\n");
+  });
+  afterEach(() => rmSync(cwd, { recursive: true, force: true }));
+
+  test("list merges index entries with dir-only runs (ended / running / interrupted)", () => {
+    startRun(cwd, join(cwd, "graph.yaml"), "2026-09-03T10:00:00.000Z");
+    endRun(cwd, "merged", "2026-09-03T11:00:00.000Z");
+    // interrupted: dir + meta, never ended, not active
+    startRun(cwd, join(cwd, "graph.yaml"), "2026-09-03T12:00:00.000Z");
+    rmSync(join(cwd, ".graphkit", "runs", ".active")); // dir-only run → "interrupted"
+
+    const json = JSON.parse(runCli(["run", "list", "--json"], cwd).stdout);
+    expect(json.status).toBe("ok");
+    expect(json.data.total).toBe(2);
+    expect(json.data.runs[0].id).toBe("20260903-120000-demo"); // newest first
+    expect(json.data.runs[0].status).toBe("interrupted");
+    expect(json.data.runs[1].status).toBe("merged");
+
+    // a live run shows as running
+    startRun(cwd, join(cwd, "graph.yaml"), "2026-09-03T13:00:00.000Z");
+    const live = JSON.parse(runCli(["run", "list", "--json"], cwd).stdout);
+    expect(live.data.runs[0].status).toBe("running");
+    const human = runCli(["run", "list"], cwd).stdout;
+    expect(human).toContain("running");
+    expect(human).toContain("interrupted");
+    expect(human).toContain("`gk run resume");
+  });
+
+  test("run status <id> renders a past run; unknown id → RUN_NOT_FOUND envelope", () => {
+    const r = startRun(cwd, join(cwd, "graph.yaml"), "2026-09-03T10:00:00.000Z");
+    appendNode(cwd, {
+      node: "a",
+      wave: 0,
+      agent: null,
+      model: null,
+      status: "ok",
+      evidence: [],
+      duration_ms: 1,
+      notes: null,
+    });
+    endRun(cwd, "merged");
+    const human = runCli(["run", "status", r.id], cwd);
+    expect(human.stdout).toContain(`run: ${r.id}`);
+    expect(human.stdout).toContain("nodes: 1 ok");
+    const json = JSON.parse(runCli(["run", "status", r.id, "--json"], cwd).stdout);
+    expect(json.status).toBe("ok");
+    expect(json.data.active).toContain(r.id);
+    const miss = runCli(["run", "status", "no-such-run", "--json"], cwd);
+    expect(JSON.parse(miss.stdout).error.code).toBe("RUN_NOT_FOUND");
+    expect(miss.code).toBe(1);
   });
 });
