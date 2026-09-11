@@ -1,5 +1,21 @@
 # Axis Backlogs — merged, ranked
 
+> **Status (2026-09-11, round 4):** Round 4 (`improvement/efficiency-quality-round4`) landed the
+> five-lens brainstorm's accepted set: silent-expiry guard (E1 — unparseable dates never auto-expire),
+> marker YAML escaping + artifact containment, run-dir TOCTOU fix, resume key containment, honest
+> status coverage source, `memory trace` expire_policy/--dry-run, `gk run list`/`run status <id>`,
+> `gk memory list/show`, `gk completions`, dead-bridge fast-fail + CBM call timeout, frontmatter
+> fast-path + buildLinks support threshold + minified bundle, template list tolerance, models
+> overrides guard, kit CBM degradation lines, wave-computation extraction (waves.ts — the DFS twins
+> unified; graph.ts's Kahn kept for the pinned intra-wave order), frontmatter lifted to src/,
+> cli-harness migration. **Cleared from the deferred list: E1, wave extraction, `gk completions`,
+> central-renderer narrow slice (human defaults completed for the hot commands). Still deferred:**
+> R8 rg retriever (re-validated as YAGNI — off-mission per program.md), persistent `.recall-index.json`
+> (recall is ms-scale after the fast path), lazy action bodies (minify landed; measure again),
+> E2–E5 clamps (E1 done), full central fail renderer + stderr rerouting + exit-code unification
+> (contract-change round), graph.ts slimming, date-only validity windows (schema drops date-only at
+> parse — entries never enter the store, so the skew class is mostly moot), coverage-floor gate.
+
 > **Status (2026-09-10, round 3):** R1–R7 all shipped (R1–R3 in `fae84c0`, R4 in
 > round 1, R5–R7 in round 2). Round 3 (`improvement/efficiency-quality-round3`)
 > cleared the honesty-bug class the backlog's metric framing surfaced late:

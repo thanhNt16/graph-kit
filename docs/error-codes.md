@@ -22,7 +22,7 @@ emits them.
 | `MISSING_DIR` | `gk new` requires `--dir` | `gk new --dir my-project` |
 | `MISSING_NAME` | A required name argument is absent | Provide the name (`gk template pack` etc.) |
 | `MISSING_FILE` | A required file argument is absent | Provide the file path |
-| `MISSING_PARAMS` | Required template parameters were not supplied | Pass the listed `--param key=value` pairs |
+| `MISSING_PARAMS` | Required template parameters were not supplied | Pass them as JSON: `--params '{"key":"value"}'` |
 | `BAD_PARAMS` | A parameter value failed validation | Correct the value per the message |
 | `PARAM_INVALID` | A template parameter value is missing or invalid | Supply every required parameter with a valid value |
 | `INVALID_LIMIT` | `--limit` must be a positive integer | Use an integer ≥ 1 |
