@@ -12,7 +12,7 @@ import { loadGraph, resolveBareValidateGraph } from "../../compiler/loader.js";
 import { validateGraph } from "../../compiler/validate.js";
 import { GraphKitError } from "../../errors.js";
 import { getTopologyConfigKeys, TOPOLOGY_NAMES, type TopologyName } from "../../schemas/topology/index.js";
-import { getActiveGraphId, listSessionGraphs, loadActiveGraph, setActiveGraphId } from "../../store/index.js";
+import { getActiveGraphId, listSessionGraphs, loadActiveGraph, sessionGraphPath, setActiveGraphId } from "../../store/index.js";
 import { renderAscii } from "../ascii.js";
 import { subcommandHelpFor, subcommandsFor } from "../command-registry.js";
 import { graphTemplate } from "../graph-templates.js";
@@ -402,16 +402,18 @@ export function registerGraphCommands(cli: CAC) {
         } else if (subcommand === "show") {
           const id = Array.isArray(args) ? args[0] : args;
           try {
-            // Explicit id resolves through listSessionGraphs so user input is never
-            // joined into a path — traversal ids simply never match an entry.
-            const entry = id ? listSessionGraphs().find((s) => s.id === id) : null;
+            // O(1) path resolution: the id is regex-validated inside
+            // sessionGraphPath before any join, so traversal ids resolve to
+            // null exactly like they never matched a list entry. Only the
+            // not-found path pays for the full listSessionGraphs walk.
+            const path = id ? sessionGraphPath(id) : null;
             let raw: string;
             let resolvedId: string;
             let resolvedPath: string;
-            if (entry) {
-              raw = readFileSync(entry.path, "utf-8");
-              resolvedId = entry.id;
-              resolvedPath = entry.path;
+            if (path && id) {
+              raw = readFileSync(path, "utf-8");
+              resolvedId = id;
+              resolvedPath = path;
             } else if (id) {
               throw new GraphKitError("GRAPH_NOT_FOUND", `No session graph with id "${id}"`, {
                 id,

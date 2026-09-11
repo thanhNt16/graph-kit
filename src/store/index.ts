@@ -147,6 +147,18 @@ export function listSessionGraphs(
     .sort((a, b) => a.id.localeCompare(b.id));
 }
 
+/**
+ * O(1) session-graph file path by id — for commands that resolve ONE known id
+ * (show/inspect) without paying listSessionGraphs' parse-every-graph walk.
+ * Returns null for malformed ids, mirroring the list path's containment
+ * contract: user input is only ever joined into a path after SESSION_ID_RE.
+ */
+export function sessionGraphPath(id: string, baseDir: string = process.cwd()): string | null {
+  if (!SESSION_ID_RE.test(id)) return null;
+  const path = join(graphsDir(baseDir), `${id}${EXT}`);
+  return existsSync(path) ? path : null;
+}
+
 export function loadActiveGraph(baseDir: string = process.cwd()): { id: string; graph: Graph; path: string } {
   const id = getActiveGraphId(baseDir);
   if (id === null) {

@@ -145,4 +145,71 @@ describe("cbm client", () => {
       new Promise((_, rej) => setTimeout(() => rej(new Error("close() deadlocked on dead child")), 200)),
     ]);
   });
+
+  // --- round 4: no dead-bridge spawn + per-call timeout ---
+
+  test("unconfigured bridge (no opts, no env) throws immediately — no npx spawn on a guaranteed 404", () => {
+    const prevCmd = process.env.CBM_CMD;
+    const prevArgs = process.env.CBM_ARGS;
+    delete process.env.CBM_CMD;
+    delete process.env.CBM_ARGS;
+    try {
+      const t0 = Date.now();
+      expect(() => createCbmClient()).toThrow(/CBM bridge unavailable/);
+      // The old path burned ~800ms spawning `npx -y` into an E404 first.
+      expect(Date.now() - t0).toBeLessThan(50);
+    } finally {
+      if (prevCmd !== undefined) process.env.CBM_CMD = prevCmd;
+      if (prevArgs !== undefined) process.env.CBM_ARGS = prevArgs;
+    }
+  });
+
+  test("CBM_CMD env alone still spawns (explicit config is never refused)", async () => {
+    const prevCmd = process.env.CBM_CMD;
+    const { cmd, args } = fakeServer();
+    process.env.CBM_CMD = cmd;
+    // CBM_ARGS unset → falls back to the npx default args; the fake server
+    // ignores its args, so only the command matters here.
+    delete process.env.CBM_ARGS;
+    const client = createCbmClient({ args });
+    try {
+      process.env.CBM_CMD = prevCmd;
+      const result = await client.call<{ ok: boolean }>("ping", {});
+      expect(result.ok).toBe(true);
+    } finally {
+      await client.close();
+      if (prevCmd !== undefined) process.env.CBM_CMD = prevCmd;
+    }
+  });
+
+  test("a wedged-but-alive bridge times out into the unavailable envelope instead of hanging", async () => {
+    // Server reads stdin forever but never answers — the old code left the
+    // promise pending indefinitely.
+    const script = `process.stdin.resume();`;
+    const client = createCbmClient({ cmd: "node", args: ["-e", script], callTimeoutMs: 100 });
+    try {
+      await client.call("search_graph", {}).then(
+        () => {
+          throw new Error("should have rejected");
+        },
+        (e: Error) => {
+          expect(e.message).toContain("CBM bridge unavailable");
+          expect(e.message).toContain("timeout after 0s");
+        },
+      );
+    } finally {
+      await client.close();
+    }
+  });
+
+  test("a response that arrives before the timeout still resolves", async () => {
+    const { cmd, args } = fakeServer();
+    const client = createCbmClient({ cmd, args, callTimeoutMs: 5000 });
+    try {
+      const result = await client.call<{ ok: boolean }>("ping", {});
+      expect(result.ok).toBe(true);
+    } finally {
+      await client.close();
+    }
+  });
 });

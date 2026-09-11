@@ -44,6 +44,47 @@ function legacyTags(value: unknown): string[] {
   return [];
 }
 
+// YAML 1.2 core scalar resolution, restricted to the forms a flat `key: value`
+// line can carry (see tryParseFlatFrontmatter). Dates stay strings — the yaml
+// package's core schema resolves `2026-09-11` to string too. Dot-leading
+// values (.5, .nan, .inf) are NOT resolved here: the yaml package's exact
+// handling is surprising (.nan → null), so they fall back to YAML.parse.
+function parseFlatScalar(value: string): unknown {
+  if (value === "~" || value === "null" || value === "Null" || value === "NULL") return null;
+  if (value === "true" || value === "True" || value === "TRUE") return true;
+  if (value === "false" || value === "False" || value === "FALSE") return false;
+  if (/^[-+]?\d+$/.test(value)) return Number.parseInt(value, 10);
+  if (/^[-+]?(\d+\.\d*|\d+)([eE][-+]?\d+)?$/.test(value)) return Number.parseFloat(value);
+  return value;
+}
+
+// Flat-scalar fast path: every line must be exactly `key: value` with a value
+// free of YAML-significant characters. The yaml package costs ~69µs per tiny
+// frontmatter file — ~93% of store-walk cost at n=5000 — while curator-authored
+// frontmatter is flat in practice. Any line the whitelist can't prove flat
+// (nesting, flow, quotes, comments, duplicate keys, exotic scalars) returns
+// null and the caller falls back to YAML.parse, so parity holds by
+// construction, not by imitation.
+function tryParseFlatFrontmatter(fmText: string): Record<string, unknown> | null {
+  const fm: Record<string, unknown> = {};
+  for (const rawLine of fmText.split("\n")) {
+    const line = rawLine.endsWith("\r") ? rawLine.slice(0, -1) : rawLine;
+    if (line.trim() === "") continue;
+    const m = line.match(/^([A-Za-z0-9][A-Za-z0-9_-]*): (.+)$/);
+    if (!m) return null;
+    const value = m[2];
+    // `:#'"` and flow/indicator chars can change meaning (comments, nested
+    // maps, anchors, aliases, block scalars, quotes); a trailing space or any
+    // tab can too (multi-line plain scalars). Undecidable here → YAML.parse.
+    if (/[:#'"{}[\]&*!|>%@`\t]/.test(value) || /[ ]$/.test(value)) return null;
+    if (/^[-+]?0[xXoObB]/.test(value)) return null; // hex/oct/bin ints resolve in YAML, not here
+    if (value.startsWith(".") || value.startsWith("-.") || value.startsWith("+.")) return null;
+    if (m[1] in fm) return null; // YAML keeps the last duplicate key — don't guess
+    fm[m[1]] = parseFlatScalar(value);
+  }
+  return fm;
+}
+
 /**
  * Split raw text into frontmatter + body at the `---` fences. CRLF-tolerant:
  * a Windows-checkout memory/criteria/marker file must parse, not silently
@@ -83,14 +124,19 @@ export function parseMemoryFile(
   const split = splitFrontmatter(raw);
   if (!split) return null;
   let fm: Record<string, unknown>;
-  try {
-    const parsedYaml = YAML.parse(split.fmText);
-    // Syntax-broken frontmatter (e.g. `tags: [unclosed`) follows the same
-    // malformed convention as a schema miss below: dropped, never fatal —
-    // one bad file must not kill a whole store pass.
-    fm = (parsedYaml && typeof parsedYaml === "object" ? parsedYaml : {}) as Record<string, unknown>;
-  } catch {
-    return null;
+  const flat = tryParseFlatFrontmatter(split.fmText);
+  if (flat) {
+    fm = flat;
+  } else {
+    try {
+      const parsedYaml = YAML.parse(split.fmText);
+      // Syntax-broken frontmatter (e.g. `tags: [unclosed`) follows the same
+      // malformed convention as a schema miss below: dropped, never fatal —
+      // one bad file must not kill a whole store pass.
+      fm = (parsedYaml && typeof parsedYaml === "object" ? parsedYaml : {}) as Record<string, unknown>;
+    } catch {
+      return null;
+    }
   }
   const validated = (schema ?? MemoryFileSchema).safeParse({
     ...fm,

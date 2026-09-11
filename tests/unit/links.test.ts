@@ -66,4 +66,20 @@ describe("link graph", () => {
     writeLinks(memDir, g);
     expect(readLinks(memDir)).toEqual(g);
   });
+
+  test("over-shared entities are skipped, not pairwise-linked (O(m²) guard, round 4)", () => {
+    // One entity cited by every entry used to add m(m-1)/2 edges — 5.8s at
+    // n=5000. Beyond MAX_ENTITY_SUPPORT it carries no signal: no derived edges
+    // from it, while small shared entities still link normally.
+    for (let i = 0; i < 60; i += 1) {
+      mem(memDir, `hub${i}.md`, { id: `hub${i}`, type: "knowledge" }, "mentions `.graphkit/evidence/shared.md`\n");
+    }
+    mem(memDir, "a.md", { id: "a", type: "knowledge" }, "references `src/only-two.md` and [[b]]\n");
+    mem(memDir, "b.md", { id: "b", type: "knowledge" }, "references `src/only-two.md`\n");
+    const g = buildLinks(memDir, "2026-09-03T00:00:00.000Z");
+    // hub entries have no edges from the ubiquitous entity…
+    expect(neighborsOf(g, "hub0")).toEqual([]);
+    // …while the 2-entry entity still links and wikilinks still work.
+    expect(neighborsOf(g, "a")).toEqual(["b"]);
+  });
 });
