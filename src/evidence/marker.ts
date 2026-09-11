@@ -30,9 +30,19 @@ const KEYS = [
   "note",
 ] as const;
 
+// One YAML-quoted scalar per value, emitted by the same parser that reads the
+// marker back. Raw `${String(note)}` interpolation corrupted the whole
+// frontmatter when a note contained ": " or a newline — parseMarker returned
+// null and gate freshness silently degraded to "unknown". Multi-line strings
+// come back as column-0 block scalars from YAML.stringify, so continuation
+// lines are re-indented into the mapping.
+function yamlScalar(v: unknown): string {
+  return YAML.stringify(v).replace(/\n$/, "").replace(/\n/g, "\n  ");
+}
+
 export function renderMarker(meta: MarkerMeta, body: string): string {
   const fm = KEYS.filter((k) => meta[k] !== null && meta[k] !== undefined)
-    .map((k) => `${k}: ${String(meta[k])}`)
+    .map((k) => `${k}: ${yamlScalar(meta[k])}`)
     .join("\n");
   return `---\n${fm}\n---\n\n${body}\n`;
 }

@@ -1,5 +1,5 @@
-import { existsSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import { existsSync, readFileSync, realpathSync } from "node:fs";
+import { join, resolve, sep } from "node:path";
 import type { Graph } from "../compiler/validate.js";
 import { loadCriteria } from "./criteria.js";
 import { fingerprint } from "./fingerprint.js";
@@ -73,8 +73,21 @@ function escapeHtml(s: string): string {
 
 function artifactAbs(evidenceDir: string, rel: string | null): string | null {
   if (!rel) return null;
-  const p = join(evidenceDir, rel);
-  return existsSync(p) ? p : null;
+  // Containment: `rel` is agent-authored marker text, and renderHtml embeds the
+  // file's CONTENT — `artifact: ../../../.ssh/id_rsa` must yield "not found",
+  // not an arbitrary read. Same trust boundary as evidence keys. The realpath
+  // check closes the symlink variant (an in-dir link pointing outside).
+  const root = resolve(evidenceDir);
+  const p = resolve(root, rel);
+  if (!existsSync(p)) return null;
+  try {
+    const realRoot = realpathSync(root);
+    const real = realpathSync(p);
+    if (real !== realRoot && !real.startsWith(realRoot + sep)) return null;
+  } catch {
+    return null;
+  }
+  return p;
 }
 
 export function renderHtml(name: string, views: CriterionView[], evidenceDir: string): string {
