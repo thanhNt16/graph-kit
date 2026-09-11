@@ -74,12 +74,22 @@ export const CLI_COMMANDS: { path: string; description: string; options: string[
   },
   {
     path: "memory trace",
-    description: "ACT-R score + expire .graphkit/memory/ entries (decay pass)",
-    options: ["--json"],
+    description: "ACT-R score + expire .graphkit/memory/ entries (decay pass, writes unless manual/--dry-run)",
+    options: ["--dry-run", "--json"],
   },
   {
     path: "memory touch",
     description: "Reinforce a memory (bump use_count/last_used_at) so decay keeps it",
+    options: ["--json"],
+  },
+  {
+    path: "memory list",
+    description: "List every memory entry (id, status, salience, use_count, file)",
+    options: ["--json"],
+  },
+  {
+    path: "memory show",
+    description: "Print one memory entry by id",
     options: ["--json"],
   },
   {

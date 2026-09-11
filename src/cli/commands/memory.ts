@@ -64,7 +64,7 @@ export interface MemoryTrace {
   id: string;
   score: number;
   state: "live" | "expired" | "superseded";
-  action: "kept" | "newly-expired" | "already-expired" | "superseded";
+  action: "kept" | "newly-expired" | "already-expired" | "superseded" | "unknown-date" | "would-expire";
 }
 
 export interface MemoryTraceReport {
@@ -73,7 +73,13 @@ export interface MemoryTraceReport {
   expired: number;
   newly_expired: number;
   superseded: number;
+  /** entries with an unparseable last_used_at — reported, never auto-expired */
+  unparseable_dates: number;
   memories: MemoryTrace[];
+  /** echo of the resolved policy — absent when defaulted */
+  expire_policy?: "act_r" | "manual";
+  /** echo of --dry-run — absent for real passes */
+  dry_run?: boolean;
 }
 
 // ponytail: `.last-index` remains CBM-only; file mutations do not create a
@@ -87,18 +93,36 @@ export interface MemoryTraceReport {
 export function traceMemory(
   cwd: string,
   now = new Date().toISOString(),
-  opts?: { expire_policy?: "act_r" | "manual" },
+  opts?: { expire_policy?: "act_r" | "manual"; dry_run?: boolean },
 ): MemoryTraceReport {
   const memDir = join(cwd, ".graphkit", "memory");
-  const report: MemoryTraceReport = { total: 0, live: 0, expired: 0, newly_expired: 0, superseded: 0, memories: [] };
+  const report: MemoryTraceReport = {
+    total: 0,
+    live: 0,
+    expired: 0,
+    newly_expired: 0,
+    superseded: 0,
+    unparseable_dates: 0,
+    memories: [],
+  };
   // Root plus one sublevel (patterns/, suggestions/) — decay must see the whole
   // store or it eventually evicts every pattern while patterns never age out.
   // walkMemoryStore applies the same legacy-tags coercion as before and drops
   // malformed entries silently (the store-wide convention).
   const entries = walkMemoryStore(memDir, { skip: ["index.md", "log.md"] });
-  if (entries.length === 0) return report;
+  if (entries.length === 0) {
+    if (opts?.expire_policy) report.expire_policy = opts.expire_policy;
+    if (opts?.dry_run) report.dry_run = true;
+    return report;
+  }
 
+  // Default is act_r (decay writes); `manual` scores and reports only. The
+  // policy comes from graph.yaml topology_config.memory.expire_policy via the
+  // CLI — an operator's "manual" must win over the decay default.
   const expireActive = opts?.expire_policy !== "manual";
+  const dryRun = opts?.dry_run === true;
+  if (opts?.expire_policy) report.expire_policy = opts.expire_policy;
+  if (dryRun) report.dry_run = true;
 
   for (const entry of entries) {
     const path = entry.path;
@@ -126,11 +150,35 @@ export function traceMemory(
     });
 
     const wasExpired = fm.expired === true;
+    if (score === null) {
+      // Unknown score (unparseable date / non-finite input) must never read as
+      // a low score: auto-expiring on a typo destroyed healthy memories. Live
+      // entries are reported and left untouched; the operator fixes the field.
+      if (wasExpired) {
+        report.expired++;
+        report.memories.push({
+          id: String(fm.id ?? entry.file),
+          score: 0,
+          state: "expired",
+          action: "already-expired",
+        });
+      } else {
+        report.live++;
+        report.unparseable_dates++;
+        report.memories.push({ id: String(fm.id ?? entry.file), score: 0, state: "live", action: "unknown-date" });
+      }
+      continue;
+    }
     // 0.1, not forgetting.ts's 0.3 default: three ≤1 factors multiply, so a
     // neutral memory (salience 0.5 × connectivity 0.5) scores ~0.15 at peak and
     // could never survive a 0.3 gate. `expire_policy: manual` scores and reports
-    // only, never mutates the store.
-    if (!wasExpired && expireActive && shouldExpire(score, 0.1)) {
+    // only, never mutates the store; --dry-run previews what WOULD expire
+    // ("would-expire") without any write.
+    const wouldExpire = !wasExpired && expireActive && shouldExpire(score, 0.1);
+    if (wouldExpire && dryRun) {
+      report.live++;
+      report.memories.push({ id: String(fm.id ?? entry.file), score, state: "live", action: "would-expire" });
+    } else if (wouldExpire) {
       fm.expired = true;
       fm.valid_to = now;
       fm.status = "deprecated";
@@ -148,12 +196,14 @@ export function traceMemory(
       report.memories.push({ id: String(fm.id ?? entry.file), score, state: "live", action: "kept" });
     }
   }
-  appendFileSync(
-    join(cwd, ".graphkit", ".trace-log"),
-    `${report.memories
-      .map((m) => JSON.stringify({ ts: now, id: m.id, action: m.action, score: +m.score.toFixed(4) }))
-      .join("\n")}\n`,
-  );
+  if (!dryRun) {
+    appendFileSync(
+      join(cwd, ".graphkit", ".trace-log"),
+      `${report.memories
+        .map((m) => JSON.stringify({ ts: now, id: m.id, action: m.action, score: +m.score.toFixed(4) }))
+        .join("\n")}\n`,
+    );
+  }
   return report;
 }
 
@@ -264,6 +314,7 @@ export function registerMemoryCommands(cli: CAC) {
     .command("memory [subcommand] [args...]", `Memory commands\nSubcommands: ${subcommandsFor("memory")}`)
     .example(subcommandHelpFor("memory"))
     .option("--project <project>", "CBM project name (default: graph.yaml memory.project or graph-kit-memory)")
+    .option("--dry-run", "trace: score and report only — write nothing (undeclared flags break cac dispatch)")
     .option("--json", "JSON output")
     .action(async (subcommand, _args, opts) => {
       if (!subcommand) {
@@ -279,9 +330,25 @@ Subcommands: ${subcommandsFor("memory")}\n\nOptions:\n  --project <project>  CBM
         return;
       }
       if (subcommand === "trace") {
-        // decay pass: ACT-R score + expiry marking, no CBM needed
+        // decay pass: ACT-R score + expiry marking, no CBM needed.
+        // expire_policy comes from graph.yaml topology_config.memory (same
+        // source recall_topk uses) so an operator's `manual` is honored; the
+        // round-3 behavior — mutating with the built-in default regardless of
+        // config — is the bug this replaces.
+        let expirePolicy: "act_r" | "manual" | undefined;
         try {
-          console.log(JSON.stringify(ok(traceMemory(process.cwd()))));
+          const graph = YAML.parse(readFileSync(join(process.cwd(), "graph.yaml"), "utf-8"));
+          const memCfg = MemoryConfig.safeParse(graph?.topology_config?.memory);
+          if (memCfg.success) expirePolicy = memCfg.data.expire_policy;
+        } catch {
+          /* no graph.yaml — act_r default */
+        }
+        try {
+          console.log(
+            JSON.stringify(
+              ok(traceMemory(process.cwd(), undefined, { expire_policy: expirePolicy, dry_run: opts.dryRun === true })),
+            ),
+          );
         } catch (e) {
           // a corrupt store must exit via the JSON contract, not a raw stack trace
           console.log(
@@ -294,6 +361,19 @@ Subcommands: ${subcommandsFor("memory")}\n\nOptions:\n  --project <project>  CBM
       }
       if (subcommand === "touch") {
         const id = Array.isArray(_args) ? _args[0] : _args;
+        if (!id) {
+          // "No memory with id \"undefined\"" sent users hunting for a memory
+          // literally named "undefined" — an absent id is a usage error.
+          console.log(
+            JSON.stringify(
+              fail("MISSING_ARG", "touch requires a memory id — discover ids with `gk memory list`", {
+                hint: "Usage: gk memory touch <id>",
+              }),
+            ),
+          );
+          process.exit(1);
+          return;
+        }
         let touched: ReturnType<typeof touchMemory>;
         try {
           touched = id ? touchMemory(process.cwd(), String(id)) : null;
@@ -379,6 +459,84 @@ Subcommands: ${subcommandsFor("memory")}\n\nOptions:\n  --project <project>  CBM
           return;
         }
         console.log(renderRecallHits(memDir, query, results, linked));
+        return;
+      }
+      // Store inspection: recall is a query, not a browser. list/show give the
+      // daily driver an answer to "what's in my memory?" and a way to discover
+      // ids for touch/show. No delete command — expired entries are retained by
+      // contract (audit rule); removal is a manual, deliberate `rm`.
+      if (subcommand === "list") {
+        const memDir = join(process.cwd(), ".graphkit", "memory");
+        if (!existsSync(memDir)) {
+          if (opts.json) {
+            console.log(JSON.stringify(ok({ total: 0, memories: [] })));
+          } else {
+            console.log(
+              `no memory store yet — .graphkit/memory/ is created by graph runs or \`gk memory consolidate\``,
+            );
+          }
+          return;
+        }
+        const rows = walkMemoryStore(memDir, { skip: ["index.md", "log.md"] }).map((entry) => {
+          const fm = entry.fm as unknown as Record<string, unknown>;
+          return {
+            id: entry.id,
+            file: entry.file,
+            status: fm.expired === true ? "expired" : fm.superseded_by ? "superseded" : "live",
+            salience: typeof fm.salience === "number" ? fm.salience : 0.5,
+            use_count: typeof fm.use_count === "number" ? fm.use_count : 0,
+          };
+        });
+        rows.sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+        if (opts.json) {
+          console.log(JSON.stringify(ok({ total: rows.length, memories: rows })));
+          return;
+        }
+        if (rows.length === 0) {
+          console.log("memory store is empty");
+          return;
+        }
+        const w = Math.max(...rows.map((r) => r.id.length));
+        console.log(
+          [
+            `memory store — ${rows.length} entr${rows.length === 1 ? "y" : "ies"}`,
+            ...rows.map(
+              (r) =>
+                `  ${r.id.padEnd(w)}  ${r.status.padEnd(10)}  salience ${r.salience.toFixed(2)}  used ${r.use_count}×  ${r.file}`,
+            ),
+          ].join("\n"),
+        );
+        return;
+      }
+      if (subcommand === "show") {
+        const id = Array.isArray(_args) ? _args[0] : _args;
+        if (!id) {
+          console.log(
+            JSON.stringify(
+              fail("MISSING_ARG", "show requires a memory id — discover ids with `gk memory list`", {
+                hint: "Usage: gk memory show <id>",
+              }),
+            ),
+          );
+          process.exit(1);
+          return;
+        }
+        const memDir = join(process.cwd(), ".graphkit", "memory");
+        const entry = existsSync(memDir) ? walkMemoryStore(memDir).find((e) => e.id === id) : undefined;
+        if (!entry) {
+          const available = existsSync(memDir) ? walkMemoryStore(memDir).map((e) => e.id) : [];
+          console.log(JSON.stringify(fail("MEMORY_NOT_FOUND", `No memory with id "${id}"`, { id, available })));
+          process.exit(1);
+          return;
+        }
+        if (opts.json) {
+          const fm = entry.fm as unknown as Record<string, unknown>;
+          console.log(
+            JSON.stringify(ok({ id, file: entry.file, path: entry.path, frontmatter: fm, body: entry.body })),
+          );
+        } else {
+          console.log(entry.raw.trimEnd());
+        }
         return;
       }
       if (subcommand !== "index") {

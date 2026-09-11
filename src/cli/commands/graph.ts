@@ -12,7 +12,13 @@ import { loadGraph, resolveBareValidateGraph } from "../../compiler/loader.js";
 import { validateGraph } from "../../compiler/validate.js";
 import { GraphKitError } from "../../errors.js";
 import { getTopologyConfigKeys, TOPOLOGY_NAMES, type TopologyName } from "../../schemas/topology/index.js";
-import { getActiveGraphId, listSessionGraphs, loadActiveGraph, sessionGraphPath, setActiveGraphId } from "../../store/index.js";
+import {
+  getActiveGraphId,
+  listSessionGraphs,
+  loadActiveGraph,
+  sessionGraphPath,
+  setActiveGraphId,
+} from "../../store/index.js";
 import { renderAscii } from "../ascii.js";
 import { subcommandHelpFor, subcommandsFor } from "../command-registry.js";
 import { graphTemplate } from "../graph-templates.js";

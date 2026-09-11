@@ -260,3 +260,72 @@ describe("memory lifecycle semantics (exec-tests step 4)", () => {
     expect(r.memories.length).toBe(0);
   });
 });
+
+// Round 4: unknown ≠ expiring, dry-run writes nothing, policy echoes.
+describe("trace honesty guards (round 4)", () => {
+  let cwd: string;
+  beforeEach(() => {
+    cwd = join(tmpdir(), `gk-mem-guard-${process.pid}-${Date.now()}`);
+    mkdirSync(join(cwd, ".graphkit", "memory"), { recursive: true });
+  });
+  afterEach(() => rmSync(cwd, { recursive: true, force: true }));
+
+  test("garbage last_used_at never expires a healthy memory — reported as unknown-date", () => {
+    // Pre-fix: "recently" → ageDays Infinity → score 0 → expired:true rewrite,
+    // regardless of salience or use. Now: untouched, counted, flagged.
+    writeMemory(cwd, "good.md", {
+      id: "good",
+      salience: 0.9,
+      use_count: 50,
+      last_used_at: "recently",
+      type: "knowledge",
+    });
+    const r = traceMemory(cwd, NOW);
+    expect(r.unparseable_dates).toBe(1);
+    expect(r.newly_expired).toBe(0);
+    const m = r.memories.find((x) => x.id === "good")!;
+    expect(m.action).toBe("unknown-date");
+    expect(m.state).toBe("live");
+    const after = readFileSync(join(cwd, ".graphkit", "memory", "good.md"), "utf-8");
+    expect(after).toContain("last_used_at: recently"); // untouched — operator fixes the field
+    expect(after).not.toContain("expired: true");
+  });
+
+  test("already-expired entry with garbage date reports already-expired, not unknown", () => {
+    writeMemory(cwd, "old.md", {
+      id: "old",
+      salience: 0.9,
+      expired: true,
+      last_used_at: "whenever",
+      type: "knowledge",
+    });
+    const r = traceMemory(cwd, NOW);
+    expect(r.memories.find((x) => x.id === "old")?.action).toBe("already-expired");
+    expect(r.unparseable_dates).toBe(0);
+  });
+
+  test("dry_run: would-expire is previewed, zero writes, no trace-log append", () => {
+    writeMemory(cwd, "stale.md", {
+      id: "stale",
+      salience: 0.1,
+      expired: false,
+      valid_from: "2026-01-01T00:00:00.000Z",
+      tags: [],
+    });
+    const before = readFileSync(join(cwd, ".graphkit", "memory", "stale.md"), "utf-8");
+    const r = traceMemory(cwd, NOW, { dry_run: true });
+    expect(readFileSync(join(cwd, ".graphkit", "memory", "stale.md"), "utf-8")).toBe(before); // byte-identical
+    expect(r.memories.find((x) => x.id === "stale")?.action).toBe("would-expire"); // honest preview
+    expect(r.dry_run).toBe(true);
+    expect(existsSync(join(cwd, ".graphkit", ".trace-log"))).toBe(false); // dry run leaves no audit rows
+    // a real pass then expires it
+    const real = traceMemory(cwd, NOW);
+    expect(real.memories.find((x) => x.id === "stale")?.action).toBe("newly-expired");
+  });
+
+  test("report echoes a provided expire_policy", () => {
+    writeMemory(cwd, "a.md", { id: "a", salience: 0.5, expired: false, valid_from: NOW, tags: "[]" });
+    const r = traceMemory(cwd, NOW, { expire_policy: "manual" });
+    expect(r.expire_policy).toBe("manual");
+  });
+});

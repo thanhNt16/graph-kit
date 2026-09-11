@@ -168,8 +168,7 @@ describe("flat-frontmatter fast path parity (round 4)", () => {
   }
 
   test("realistic curator frontmatter parses identically to YAML.parse", () => {
-    const fmText =
-      "id: actR-score\nuse_count: 3\nsalience: 0.8\nvalid_from: 2026-09-01T00:00:00Z\ntype: knowledge";
+    const fmText = "id: actR-score\nuse_count: 3\nsalience: 0.8\nvalid_from: 2026-09-01T00:00:00Z\ntype: knowledge";
     const expected = YAML.parse(fmText) as Record<string, unknown>;
     const parsed = parseMemoryFile(raw(`${fmText}\n`), "x")!;
     for (const [k, v] of Object.entries(expected)) {
