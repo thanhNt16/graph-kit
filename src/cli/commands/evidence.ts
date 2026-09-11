@@ -62,9 +62,17 @@ export function registerEvidenceCommand(cli: CAC) {
             const outPath = join(cwd, ".graphkit", "reports", `${graph.metadata.name}-evidence.html`);
             mkdirSync(dirname(outPath), { recursive: true });
             writeFileSync(outPath, renderHtml(graph.metadata.name, views, join(cwd, graph.outputs.evidence_dir)));
-            console.log(JSON.stringify(ok({ written: outPath, keys: views.length })));
-          } else {
+            if (opts.json) {
+              console.log(JSON.stringify(ok({ written: outPath, keys: views.length })));
+            } else {
+              console.log(`wrote ${outPath} (${views.length} key(s))`);
+            }
+          } else if (opts.json) {
             console.log(JSON.stringify(ok({ markdown: renderMarkdown(graph.metadata.name, views), views })));
+          } else {
+            // Human mode prints the report itself — the markdown IS the human
+            // rendering; wrapping it in a JSON blob made it unreadable.
+            console.log(renderMarkdown(graph.metadata.name, views).trimEnd());
           }
         } catch (e) {
           console.log(

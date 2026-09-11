@@ -7,7 +7,7 @@ import { GraphKitError } from "../../errors.js";
 import { scoreWorkProduct } from "../../eval/rubrics.js";
 import { fingerprint } from "../../evidence/fingerprint.js";
 import { type Freshness, freshnessOf, parseMarker } from "../../evidence/marker.js";
-import { fail, ok } from "../output.js";
+import { fail, ok, renderFindings } from "../output.js";
 import { loadGraph } from "./graph.js";
 
 /**
@@ -92,6 +92,8 @@ export function renderGate(result: {
 export function registerGateCommand(cli: CAC) {
   cli
     .command("gate [file]", "Deterministic evidence gate: MERGE/BLOCK over required evidence keys")
+    .example("$ gk gate                 # gate the active graph's evidence")
+    .example("$ gk gate path/to/graph.yaml --json")
     .option("--json", "JSON output")
     .action((file, opts: { json?: boolean }) => {
       try {
@@ -99,7 +101,12 @@ export function registerGateCommand(cli: CAC) {
         const graph = loadGraph(resolved);
         const findings = validateGraph(graph, process.cwd());
         if (findings.length > 0) {
-          console.log(JSON.stringify(fail("VALIDATION_FAILED", "graph has findings", { findings })));
+          if (opts.json) {
+            console.log(JSON.stringify(fail("VALIDATION_FAILED", "graph has findings", { findings })));
+          } else {
+            console.log(`✗ VALIDATION_FAILED — ${findings.length} finding(s)`);
+            console.log(renderFindings(findings));
+          }
           process.exit(1);
           return;
         }

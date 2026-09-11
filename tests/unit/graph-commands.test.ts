@@ -80,7 +80,7 @@ describe("gk graph commands", () => {
     expect(parsed.error.details.available).toHaveLength(11);
   });
   test("validate on minimal-diamond.yaml — schema parse succeeds", () => {
-    const parsed = JSON.parse(runCli(["validate", graphFile]).stdout);
+    const parsed = JSON.parse(runCli(["validate", graphFile, "--json"]).stdout);
     if (parsed.status === "fail") expect(parsed.error.code).not.toBe("SCHEMA_INVALID");
   });
   test("waves outputs golden topological plan on minimal-diamond.yaml", () => {

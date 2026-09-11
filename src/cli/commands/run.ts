@@ -110,7 +110,14 @@ export function registerRunCommands(cli: CAC) {
       }
       try {
         if (subcommand === "start") {
-          console.log(JSON.stringify(ok(startRun(cwd, opts.graph ?? join(cwd, "graph.yaml")))));
+          const started = startRun(cwd, opts.graph ?? join(cwd, "graph.yaml"));
+          if (opts.json) {
+            console.log(JSON.stringify(ok(started)));
+          } else {
+            console.log(
+              `run ${started.id} started — record nodes with \`gk run node <node-id> --status ok\`, end with \`gk run end\``,
+            );
+          }
           return;
         }
         if (subcommand === "node") {
@@ -177,7 +184,11 @@ export function registerRunCommands(cli: CAC) {
             duration_ms: opts.durationMs == null ? null : Number(opts.durationMs),
             notes: opts.notes ?? null,
           });
-          console.log(JSON.stringify(ok(result)));
+          if (opts.json) {
+            console.log(JSON.stringify(ok(result)));
+          } else {
+            console.log(`recorded ${result.node} on run ${result.run}`);
+          }
           return;
         }
         if (subcommand === "end") {
@@ -186,7 +197,14 @@ export function registerRunCommands(cli: CAC) {
             console.log(JSON.stringify(fail("BAD_STATUS", "end requires --status merged|blocked|failed")));
             return;
           }
-          console.log(JSON.stringify(ok(endRun(cwd, status))));
+          const summary = endRun(cwd, status);
+          if (opts.json) {
+            console.log(JSON.stringify(ok(summary)));
+          } else {
+            console.log(
+              `run ${summary.id} ended: ${summary.status} — ${summary.node_count} node(s), ${summary.failures} failure(s); appended to .graphkit/runs/index.jsonl`,
+            );
+          }
           return;
         }
         if (subcommand === "resume") {

@@ -3,6 +3,7 @@ import { basename, dirname, isAbsolute, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { CAC } from "cac";
 import { GraphKitError } from "../../errors.js";
+import { atomicWrite } from "../../fs.js";
 import { getTarget, isValidTarget, listTargets } from "../../targets/registry.js";
 import type { TargetId } from "../../targets/types.js";
 import { fail, ok } from "../output.js";
@@ -106,6 +107,19 @@ export function mergeAgentsMd(existing: string | null, section: string): string 
   if (!existing) return `${sec}\n`;
   const startIdx = existing.indexOf(START);
   const endIdx = existing.indexOf(END, startIdx === -1 ? 0 : startIdx);
+  if (startIdx !== -1 && endIdx === -1) {
+    // START survived but END was deleted by the user. The old append path
+    // produced a second graphkit section on every refresh; "repair to EOF"
+    // would silently eat any user content added after the section. Neither is
+    // acceptable for a user-owned file — fail with the exact fix instead.
+    throw new GraphKitError(
+      "AGENTS_MD_UNCLOSED",
+      "AGENTS.md has `<!-- graphkit:start -->` but no `<!-- graphkit:end -->` marker",
+      {
+        hint: "Re-add the end marker (or delete the managed section) and rerun `gk init`",
+      },
+    );
+  }
   if (startIdx === -1 || endIdx === -1) {
     return `${existing.replace(/\n+$/, "")}\n${sec}\n`;
   }
@@ -187,7 +201,8 @@ export function installKit(
     const section = readFileSync(sectionPath, "utf8");
     const agentsMd = join(targetDir, "AGENTS.md");
     const existing = existsSync(agentsMd) ? readFileSync(agentsMd, "utf8") : null;
-    writeFileSync(agentsMd, mergeAgentsMd(existing, section));
+    // F6: AGENTS.md is a user-owned file — crash mid-write must not shred it.
+    atomicWrite(agentsMd, mergeAgentsMd(existing, section));
   }
 
   // settings.json is kit-owned infrastructure (hook config), always overwrite for claude
@@ -228,6 +243,8 @@ function installedLine(installDir: string, target: string, count: number, create
 export function registerKitCommands(cli: CAC) {
   cli
     .command("init", "Install the GraphKit kit into the current project")
+    .example("$ gk init")
+    .example("$ gk init --target cursor")
     .option("--json", "JSON output")
     .option("--force", "Remove previous install and install fresh")
     .option("--target <target>", "Kit target: claude, cursor, opencode, codex, or pi", { default: "claude" })
@@ -248,6 +265,7 @@ export function registerKitCommands(cli: CAC) {
 
   cli
     .command("new", "Scaffold a new project with the GraphKit kit")
+    .example("$ gk new --dir my-project --target claude")
     .option("--dir <dir>", "Target directory (required)")
     .option("--json", "JSON output")
     .option("--target <target>", "Kit target: claude, cursor, opencode, codex, or pi", { default: "claude" })

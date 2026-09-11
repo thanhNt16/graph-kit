@@ -221,6 +221,8 @@ export function renderDoctor(checks: DoctorCheck[]): string {
 export function registerDoctorCommand(cli: CAC) {
   cli
     .command("doctor", "One-shot environment check (version, kit, .graphkit dir, graph.yaml, CBM bridge)")
+    .example("$ gk doctor")
+    .example("$ gk doctor --json")
     .option("--json", "JSON output")
     .action((opts: { json?: boolean }) => {
       const checks = runDoctor(process.cwd());

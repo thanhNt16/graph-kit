@@ -6,7 +6,7 @@ import { CBM_UNAVAILABLE_MSG, type CbmClient, createCbmClient, isCbmUnavailable 
 import { indexProject } from "../../cbm/index.js";
 import { actRScore, shouldExpire } from "../../eval/forgetting.js";
 import { atomicWrite } from "../../fs.js";
-import { consolidate } from "../../memory/consolidate.js";
+import { type ConsolidateResult, consolidate } from "../../memory/consolidate.js";
 import { type ParsedMemoryFile, parseMemoryFile, walkMemoryStore } from "../../memory/frontmatter.js";
 import { type ExpandedHit, expandedRecall } from "../../memory/recall-expanded.js";
 import { MemoryConfig } from "../../schemas/memory.schema.js";
@@ -326,7 +326,15 @@ Subcommands: ${subcommandsFor("memory")}\n\nOptions:\n  --project <project>  CBM
         return;
       }
       if (subcommand === "consolidate") {
-        console.log(JSON.stringify(ok(consolidate(process.cwd()))));
+        const result = consolidate(process.cwd());
+        if (opts.json) {
+          console.log(JSON.stringify(ok(result)));
+        } else {
+          const r = result as ConsolidateResult;
+          console.log(
+            `consolidated: ${r.runs} run(s) · ${r.patterns} pattern(s) · ${r.suggestions} suggestion(s) · ${r.links} link(s)${r.pruned > 0 ? ` · ${r.pruned} pruned` : ""}`,
+          );
+        }
         return;
       }
       if (subcommand === "trace") {

@@ -22,7 +22,7 @@ import {
 import { renderAscii } from "../ascii.js";
 import { subcommandHelpFor, subcommandsFor } from "../command-registry.js";
 import { graphTemplate } from "../graph-templates.js";
-import { fail, ok } from "../output.js";
+import { fail, ok, renderFindings } from "../output.js";
 import { renderSvg } from "../svg.js";
 import { templatesDir } from "./kit.js";
 
@@ -233,17 +233,28 @@ export { graphTemplate, loadGraph, resolveBareValidateGraph };
 export function registerGraphCommands(cli: CAC) {
   cli
     .command("validate [file]", "Validate a graph.yaml")
+    .example("$ gk validate graph.yaml")
+    .example("$ gk validate            # active session graph, else ./graph.yaml")
     .option("--json", "JSON output")
-    .action((file) => {
+    .action((file, opts: { json?: boolean }) => {
       try {
         const graph = file ? loadGraph(file) : resolveBareValidateGraph();
         const findings = validateGraph(graph, process.cwd());
         if (findings.length > 0) {
-          console.log(JSON.stringify(fail("VALIDATION_FAILED", "graph has findings", { findings })));
+          if (opts.json) {
+            console.log(JSON.stringify(fail("VALIDATION_FAILED", "graph has findings", { findings })));
+          } else {
+            console.log(`✗ VALIDATION_FAILED — ${findings.length} finding(s)`);
+            console.log(renderFindings(findings));
+          }
           process.exit(1);
           return;
         }
-        console.log(JSON.stringify(ok({ valid: true, topology: graph.topology })));
+        if (opts.json) {
+          console.log(JSON.stringify(ok({ valid: true, topology: graph.topology })));
+        } else {
+          console.log(`validate: ok (topology ${graph.topology})`);
+        }
       } catch (e) {
         console.log(
           JSON.stringify(
@@ -256,6 +267,8 @@ export function registerGraphCommands(cli: CAC) {
 
   cli
     .command("compile [file]", "Compile graph.yaml to a .workflow.js script")
+    .example("$ gk compile graph.yaml")
+    .example("$ gk compile --output custom/workflow.js")
     .option("--output <path>", "Output path (default .claude/workflows/{name}.workflow.js)")
     .option("--json", "JSON output")
     .action((file, opts) => {
@@ -263,7 +276,12 @@ export function registerGraphCommands(cli: CAC) {
         const graph = loadGraph(file ?? join(process.cwd(), "graph.yaml"));
         const findings = validateGraph(graph, process.cwd());
         if (findings.length > 0) {
-          console.log(JSON.stringify(fail("VALIDATION_FAILED", "fix findings before compile", { findings })));
+          if (opts.json) {
+            console.log(JSON.stringify(fail("VALIDATION_FAILED", "fix findings before compile", { findings })));
+          } else {
+            console.log(`✗ VALIDATION_FAILED — ${findings.length} finding(s)`);
+            console.log(renderFindings(findings));
+          }
           process.exit(1);
           return;
         }

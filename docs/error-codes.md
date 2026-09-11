@@ -38,6 +38,7 @@ emits them.
 | Code | Meaning | Fix |
 |---|---|---|
 | `GRAPH_FILE_NOT_FOUND` | The graph file does not exist | `gk graph new <topology>` to scaffold, or check the path |
+| `YAML_INVALID` | The graph file is not parseable YAML | Fix the syntax at the listed `file:line:column` (unquoted colons, bad indentation, unclosed `[`) |
 | `SCHEMA_INVALID` | graph.yaml failed schema validation | Fix the fields listed in `details.issues` |
 | `VALIDATION_FAILED` | Structural validation produced findings | Fix each finding in `details.findings` |
 | `VALIDATE_ERROR` | The validate command itself failed | See the message; usually a read error |
@@ -50,6 +51,9 @@ emits them.
 | `SUBGRAPH_TEMPLATE_MISSING` | A referenced subgraph template is missing | Register the template or fix the reference |
 | `UNKNOWN_SUBGRAPH` | Referenced subgraph topology is unknown | Use a canonical topology name |
 | `RUN_ERROR` | Generic run-command failure (fallback) | See the message for the underlying error |
+| `MISSING_ARG` | A required argument was not provided | Pass the argument shown in the message |
+| `MAP_INVALID` | A `--map` value is not `k=v` (or `--map` is missing) | Pass comma-separated `model=override` pairs |
+| `OVERRIDES_CORRUPT` | The model-overrides JSON file is not parseable | Fix/delete the file (`gk models <target> reset`), or `--force` to discard |
 
 ## Run ledger / resume
 
@@ -64,6 +68,7 @@ emits them.
 | `RESUME_GRAPH_DRIFT` | The recorded graph changed since the run started | Rerun `gk init`/graph edits, or `--force` to override |
 | `RESUME_DERIVED_INVALID` | The pending-only derived graph failed validation | Fix the listed issue in the source graph |
 | `WRITE_FAILED` | An atomic write failed (disk, permissions) | Free space / fix permissions; no partial bytes were written |
+| `AGENTS_MD_UNCLOSED` | AGENTS.md kept the graphkit:start marker but lost graphkit:end | Re-add the end marker (or delete the managed section), then rerun `gk init` |
 
 ## Memory
 

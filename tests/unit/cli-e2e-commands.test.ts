@@ -119,7 +119,7 @@ describe("CLI end-to-end: template pack/list/show", () => {
 
   test("template list reports the packed template", () => {
     runCli(["template", "pack", graphFile(), "--name", "security-audit"], cwd);
-    const { stdout, code } = runCli(["template", "list"], cwd);
+    const { stdout, code } = runCli(["template", "list", "--json"], cwd);
     expect(code).toBe(0);
     const parsed = JSON.parse(stdout);
     expect(parsed.status).toBe("ok");
@@ -158,7 +158,7 @@ describe("CLI end-to-end: template pack/list/show", () => {
 
   test("packed template materializes + validates (graph.yaml round-trip)", () => {
     runCli(["template", "pack", graphFile(), "--name", "security-audit"], cwd);
-    const { stdout, code } = runCli(["validate", graphFile()], cwd);
+    const { stdout, code } = runCli(["validate", graphFile(), "--json"], cwd);
     expect(code).toBe(0);
     const parsed = JSON.parse(stdout);
     expect(parsed.status).toBe("ok");

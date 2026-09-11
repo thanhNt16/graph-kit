@@ -23,7 +23,29 @@ export function loadGraph(file: string) {
     }
     throw e;
   }
-  const doc = YAML.parse(raw);
+  // Wrap the raw YAML parse error: a first-run typo used to surface as a
+  // generic VALIDATE_ERROR whose message happened to contain "line N, column
+  // M" — with the filename nowhere in it. YAML_INVALID carries file + line +
+  // column so both the JSON envelope and the human findings list can point at
+  // the exact spot.
+  let doc: unknown;
+  try {
+    doc = YAML.parse(raw);
+  } catch (e) {
+    if (e instanceof GraphKitError) throw e;
+    const msg = e instanceof Error ? e.message : String(e);
+    const pos = msg.match(/at line (\d+), column (\d+)/);
+    const [, line, column] = pos ?? [];
+    throw new GraphKitError(
+      "YAML_INVALID",
+      `${file} is not valid YAML${pos ? ` (${file}:${line}:${column})` : ""}: ${msg}`,
+      {
+        file,
+        ...(line ? { line: Number(line), column: Number(column) } : {}),
+        hint: "Fix the YAML syntax at the listed position — common causes: unquoted colons in values, bad indentation, unclosed flow sequences",
+      },
+    );
+  }
   const parsed = GraphSchema.safeParse(doc);
   if (!parsed.success) {
     throw new GraphKitError("SCHEMA_INVALID", "graph.yaml failed schema validation", {

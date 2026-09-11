@@ -56,12 +56,12 @@ describe("gk run CLI", () => {
       expect(initialStatus).toEqual({ status: "ok", data: { active: null, advisor_events: 0, resumes_chain: [] } });
 
       // 2. Start run without graph file fails with GRAPH_NOT_FOUND
-      const startFail = JSON.parse(runCli(["run", "start"], cwd).stdout);
+      const startFail = JSON.parse(runCli(["run", "start", "--json"], cwd).stdout);
       expect(startFail.status).toBe("fail");
       expect(startFail.error.code).toBe("GRAPH_NOT_FOUND");
       // 3. Start valid run with graph.yaml
       writeFileSync(join(cwd, "graph.yaml"), "metadata:\n  name: test-graph\n");
-      const startOk = JSON.parse(runCli(["run", "start"], cwd).stdout);
+      const startOk = JSON.parse(runCli(["run", "start", "--json"], cwd).stdout);
       expect(startOk.status).toBe("ok");
       expect(startOk.data.id).toMatch(/test-graph$/);
       const metaFile = JSON.parse(readFileSync(join(startOk.data.dir, "meta.json"), "utf-8"));
@@ -73,12 +73,12 @@ describe("gk run CLI", () => {
       expect(activeStatus.data.active).toBe(startOk.data.dir);
 
       // 5. Node requires node id
-      const missingNode = JSON.parse(runCli(["run", "node", "--status", "ok"], cwd).stdout);
+      const missingNode = JSON.parse(runCli(["run", "node", "--status", "ok", "--json"], cwd).stdout);
       expect(missingNode.status).toBe("fail");
       expect(missingNode.error.code).toBe("MISSING_ARG");
 
       // 6. Node requires status ok|fail
-      const badNodeStatus = JSON.parse(runCli(["run", "node", "review"], cwd).stdout);
+      const badNodeStatus = JSON.parse(runCli(["run", "node", "review", "--json"], cwd).stdout);
       expect(badNodeStatus.status).toBe("fail");
       expect(badNodeStatus.error.code).toBe("BAD_STATUS");
 
@@ -101,6 +101,7 @@ describe("gk run CLI", () => {
             "cov,lint",
             "--duration-ms",
             "1500",
+            "--json",
             "--notes",
             "all passed",
           ],
@@ -112,12 +113,12 @@ describe("gk run CLI", () => {
       expect(nodeOk.data.node).toBe("review");
 
       // 8. End run requires valid status
-      const badEndStatus = JSON.parse(runCli(["run", "end", "--status", "invalid"], cwd).stdout);
+      const badEndStatus = JSON.parse(runCli(["run", "end", "--status", "invalid", "--json"], cwd).stdout);
       expect(badEndStatus.status).toBe("fail");
       expect(badEndStatus.error.code).toBe("BAD_STATUS");
 
       // 9. End run succeeds
-      const endOk = JSON.parse(runCli(["run", "end", "--status", "merged"], cwd).stdout);
+      const endOk = JSON.parse(runCli(["run", "end", "--status", "merged", "--json"], cwd).stdout);
       expect(endOk.status).toBe("ok");
       expect(endOk.data.status).toBe("merged");
       expect(endOk.data.node_count).toBe(1);
@@ -157,7 +158,7 @@ describe("gk run CLI", () => {
       expect(() => JSON.parse(inactive)).toThrow();
       expect(inactive).toContain("no active run");
 
-      const start = JSON.parse(runCli(["run", "start"], cwd).stdout);
+      const start = JSON.parse(runCli(["run", "start", "--json"], cwd).stdout);
       runCli(["run", "node", "exec", "--status", "ok", "--wave", "1", "--evidence", "cov"], cwd);
       const human = runCli(["run", "status"], cwd).stdout;
       expect(() => JSON.parse(human)).toThrow(); // default output is not JSON
@@ -223,9 +224,11 @@ describe("gk run CLI", () => {
           "    advisor: { model: opus }",
         ].join("\n"),
       );
-      const start = JSON.parse(runCli(["run", "start"], cwd).stdout);
+      const start = JSON.parse(runCli(["run", "start", "--json"], cwd).stdout);
       expect(start.status).toBe("ok");
-      const fired = JSON.parse(runCli(["run", "node", "exec", "--advisor-fired", "2", "--streak", "2"], cwd).stdout);
+      const fired = JSON.parse(
+        runCli(["run", "node", "exec", "--advisor-fired", "2", "--streak", "2", "--json"], cwd).stdout,
+      );
       expect(fired.status).toBe("ok");
       expect(fired.data.event).toEqual({ at: expect.any(String), node: "exec", round: 2, tier: "opus", streak: 2 });
       expect(readAdvisorEvents(cwd, start.data.id)).toEqual([
@@ -254,8 +257,8 @@ describe("gk run CLI", () => {
           "    objective: do the thing",
         ].join("\n"),
       );
-      JSON.parse(runCli(["run", "start"], cwd).stdout);
-      const fired = JSON.parse(runCli(["run", "node", "plain", "--advisor-fired", "1"], cwd).stdout);
+      JSON.parse(runCli(["run", "start", "--json"], cwd).stdout);
+      const fired = JSON.parse(runCli(["run", "node", "plain", "--advisor-fired", "1", "--json"], cwd).stdout);
       expect(fired.status).toBe("fail");
       expect(fired.error.code).toBe("BAD_ADVISOR");
     } finally {
@@ -283,7 +286,7 @@ describe("gk run CLI", () => {
           "    advisor: { model: opus }",
         ].join("\n"),
       );
-      JSON.parse(runCli(["run", "start"], cwd).stdout);
+      JSON.parse(runCli(["run", "start", "--json"], cwd).stdout);
       const before = JSON.parse(runCli(["run", "status", "--json"], cwd).stdout);
       expect(before).toEqual({
         status: "ok",
@@ -318,9 +321,11 @@ describe("gk run CLI", () => {
           "    advisor: { model: opus }",
         ].join("\n"),
       );
-      JSON.parse(runCli(["run", "start"], cwd).stdout);
+      JSON.parse(runCli(["run", "start", "--json"], cwd).stdout);
       for (const bad of ["abc", "0", "1.5"]) {
-        const res = JSON.parse(runCli(["run", "node", "exec", "--advisor-fired", "1", "--streak", bad], cwd).stdout);
+        const res = JSON.parse(
+          runCli(["run", "node", "exec", "--advisor-fired", "1", "--streak", bad, "--json"], cwd).stdout,
+        );
         expect(res.status).toBe("fail");
         expect(res.error.code).toBe("BAD_ADVISOR");
         expect(res.error.message).toContain("--streak requires an integer >= 1");
@@ -353,9 +358,9 @@ describe("gk run CLI", () => {
           "    advisor: { model: sonnet }",
         ].join("\n"),
       );
-      const start = JSON.parse(runCli(["run", "start", "--graph", "alt.yaml"], cwd).stdout);
+      const start = JSON.parse(runCli(["run", "start", "--graph", "alt.yaml", "--json"], cwd).stdout);
       expect(start.status).toBe("ok");
-      const fired = JSON.parse(runCli(["run", "node", "exec", "--advisor-fired", "1"], cwd).stdout);
+      const fired = JSON.parse(runCli(["run", "node", "exec", "--advisor-fired", "1", "--json"], cwd).stdout);
       expect(fired.status).toBe("ok");
       expect(fired.data.event).toEqual({
         at: expect.any(String),
@@ -374,7 +379,7 @@ describe("gk run CLI", () => {
     mkdirSync(cwd, { recursive: true });
     try {
       writeFileSync(join(cwd, "graph.yaml"), "metadata:\n  name: demo\ntopology: diamond\n");
-      const r1 = JSON.parse(runCli(["run", "start"], cwd).stdout).data;
+      const r1 = JSON.parse(runCli(["run", "start", "--json"], cwd).stdout).data;
       runCli(["run", "end", "--status", "failed"], cwd);
       const { startRun } = require("../../src/memory/ledger.js");
       startRun(cwd, join(cwd, "graph.yaml"), "2026-09-04T11:00:00.000Z", r1.id);

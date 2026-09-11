@@ -17,7 +17,7 @@ import {
   type TemplateValues,
 } from "../../schemas/template.schema.js";
 import { saveSessionGraph, setActiveGraphId } from "../../store/index.js";
-import { subcommandHelpFor } from "../command-registry.js";
+import { subcommandHelpFor, subcommandsFor } from "../command-registry.js";
 import { fail, ok } from "../output.js";
 
 // ponytail: DI seam mirroring graph.ts — lets tests simulate a rename failure
@@ -182,7 +182,7 @@ export function runTemplatePack(opts: {
 }
 export function runTemplateList(opts: { cwd: string; home: string }): {
   status: string;
-  data: { templates: Array<Record<string, unknown>> };
+  data: { templates: Array<Record<string, unknown>>; skipped: Array<Record<string, unknown>> };
 } {
   const byName = new Map<string, { path: string; origin: TemplateOrigin }>();
   // Gallery first, then global, then project — later writes overwrite, so the
@@ -213,23 +213,31 @@ export function runTemplateList(opts: { cwd: string; home: string }): {
   }
 
   const templates: Array<Record<string, unknown>> = [];
+  const skipped: Array<Record<string, unknown>> = [];
   for (const [name, { path, origin }] of byName) {
-    const t = readTemplate(path);
-    templates.push({
-      name,
-      description: t.metadata.description,
-      version: t.metadata.version,
-      origin,
-      shadowed:
-        origin === "project"
-          ? existsSync(templatePath(globalDir, name))
-          : origin === "gallery"
-            ? existsSync(templatePath(globalDir, name)) || existsSync(templatePath(localDir, name))
-            : false,
-    });
+    // Per-entry tolerance (mirrors listSessionGraphs' onSkipped): one malformed
+    // .gk.yaml in any store used to abort the whole listing — and to break
+    // show/materialize too, whose NOT_FOUND suggestions enumerate this list.
+    try {
+      const t = readTemplate(path);
+      templates.push({
+        name,
+        description: t.metadata.description,
+        version: t.metadata.version,
+        origin,
+        shadowed:
+          origin === "project"
+            ? existsSync(templatePath(globalDir, name))
+            : origin === "gallery"
+              ? existsSync(templatePath(globalDir, name)) || existsSync(templatePath(localDir, name))
+              : false,
+      });
+    } catch (e) {
+      skipped.push({ name, origin, reason: String((e as Error)?.message ?? e) });
+    }
   }
   templates.sort((a, b) => String(a.name).localeCompare(String(b.name)));
-  return ok({ templates });
+  return ok({ templates, skipped });
 }
 
 /** Levenshtein-ish close-match scoring for unknown-name suggestions. */
@@ -411,8 +419,10 @@ export function registerTemplateCommands(cli: CAC) {
           Array.isArray(args) ? args[i] : i === 0 ? (args as string) : undefined;
         if (!subcommand) {
           // Bare `gk template` prints usage and exits 0 — same surface as `gk memory`.
+          // Subcommands derive from the registry so the help can't list a
+          // phantom leaf again (`close` never existed but shipped in this text).
           console.log(
-            `gk template — GraphTemplate commands\n\nUsage:\n  gk template <subcommand> [args...]\n\nSubcommands: list, show, pack, materialize, close\n\nOptions:\n  --name <name>   Template name (pack)\n  --params <json>  Parameters (materialize)\n  --use            Set active session pointer after materialize\n  --force          Overwrite existing template\n  --input <file>   Complete GraphTemplate input file\n  --global         User-global store\n  --json           JSON output (always emitted; flag accepted for parity)`,
+            `gk template — GraphTemplate commands\n\nUsage:\n  gk template <subcommand> [args...]\n\nSubcommands: ${subcommandsFor("template")}\n\nOptions:\n  --name <name>    Template name (pack)\n  --params <json>  Parameters (materialize)\n  --use            Set active session pointer after materialize\n  --force          Overwrite existing template\n  --input <file>   Complete GraphTemplate input file\n  --global         User-global store\n  --json           JSON output`,
           );
           return;
         }
@@ -443,7 +453,30 @@ export function registerTemplateCommands(cli: CAC) {
         }
         if (subcommand === "list") {
           const res = runTemplateList({ cwd: cwd(), home: home() });
-          console.log(JSON.stringify(res));
+          for (const s of res.data.skipped) {
+            console.warn(`skipped malformed template "${String(s.name)}" (${String(s.origin)}): ${String(s.reason)}`);
+          }
+          if (opts.json) {
+            console.log(JSON.stringify(res));
+            return;
+          }
+          // Human default: the README-promised table with the origin column
+          // (project > global > gallery precedence) — list used to print the
+          // raw JSON envelope even on a bare terminal.
+          const rows = res.data.templates;
+          if (rows.length === 0) {
+            console.log("no templates found — pack one with `gk template pack graph.yaml --name <name>`");
+            return;
+          }
+          const nameW = Math.max(...rows.map((r) => String(r.name).length));
+          console.log(`templates — ${rows.length} (precedence: project > global > gallery)`);
+          for (const r of rows) {
+            console.log(
+              `  ${String(r.name).padEnd(nameW)}  ${String(r.origin).padEnd(8)}  v${String(r.version)}${
+                r.shadowed ? "  [shadowed]" : ""
+              }  ${String(r.description ?? "")}`,
+            );
+          }
           return;
         }
         if (subcommand === "show") {

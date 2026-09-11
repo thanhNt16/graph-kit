@@ -369,6 +369,13 @@
         "--all",
         "--json"
       ]
+    },
+    {
+      "name": "completions",
+      "description": "Print a shell completion script (bash | zsh | fish) generated from the command registry",
+      "options": [
+        "--json"
+      ]
     }
   ]
 }

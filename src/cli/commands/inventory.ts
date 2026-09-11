@@ -329,6 +329,8 @@ export function renderInventory(r: InventoryResult): string {
 export function registerInventoryCommands(cli: CAC) {
   cli
     .command("inventory", "Inventory installed agents, skills, tools, and MCP servers")
+    .example("$ gk inventory")
+    .example("$ gk inventory --target cursor")
     .option(
       "--target <target>",
       `Kit target: ${listTargets()

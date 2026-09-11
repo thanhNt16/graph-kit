@@ -66,7 +66,7 @@ describe("advisor + fan-out e2e smoke over real CLI", () => {
   });
 
   test("1. `gk validate` validates graph with advisor + fan_out without findings", async () => {
-    const res = await runCli(["validate"], tmpCwd);
+    const res = await runCli(["validate", "--json"], tmpCwd);
     expect(res.exitCode).toBe(0);
     const parsed = JSON.parse(res.stdout);
     expect(parsed.status).toBe("ok");
@@ -99,7 +99,7 @@ describe("advisor + fan-out e2e smoke over real CLI", () => {
 
   test("3-7. `gk run start` → `gk run node` fail → `gk run node --advisor-fired` → `gk run status` → `gk run end`", async () => {
     // 3. start run
-    const startRes = await runCli(["run", "start"], tmpCwd);
+    const startRes = await runCli(["run", "start", "--json"], tmpCwd);
     expect(startRes.exitCode).toBe(0);
     const startData = JSON.parse(startRes.stdout);
     expect(startData.status).toBe("ok");
@@ -108,14 +108,14 @@ describe("advisor + fan-out e2e smoke over real CLI", () => {
     expect(runId).toContain("orch-smoke");
 
     // 4. record failed node
-    const nodeRes = await runCli(["run", "node", "exec", "--status", "fail", "--wave", "1"], tmpCwd);
+    const nodeRes = await runCli(["run", "node", "exec", "--status", "fail", "--wave", "1", "--json"], tmpCwd);
     expect(nodeRes.exitCode).toBe(0);
     const nodeData = JSON.parse(nodeRes.stdout);
     expect(nodeData.status).toBe("ok");
     expect(nodeData.data.node).toBe("exec");
 
     // 5. record advisor firing with round 2 and streak 2
-    const advRes = await runCli(["run", "node", "exec", "--advisor-fired", "2", "--streak", "2"], tmpCwd);
+    const advRes = await runCli(["run", "node", "exec", "--advisor-fired", "2", "--streak", "2", "--json"], tmpCwd);
     expect(advRes.exitCode).toBe(0);
     const advData = JSON.parse(advRes.stdout);
     expect(advData.status).toBe("ok");
@@ -142,7 +142,7 @@ describe("advisor + fan-out e2e smoke over real CLI", () => {
     expect(statusData.data.advisor_events).toBe(1);
 
     // 7. end run with status failed
-    const endRes = await runCli(["run", "end", "--status", "failed"], tmpCwd);
+    const endRes = await runCli(["run", "end", "--status", "failed", "--json"], tmpCwd);
     expect(endRes.exitCode).toBe(0);
     const endData = JSON.parse(endRes.stdout);
     expect(endData.status).toBe("ok");
@@ -152,17 +152,17 @@ describe("advisor + fan-out e2e smoke over real CLI", () => {
 
   test("8. second scripted run with advisor event + `gk memory consolidate` emits pattern and suggestion", async () => {
     // Run 2: start -> advisor-fired -> end
-    const start2 = await runCli(["run", "start"], tmpCwd);
+    const start2 = await runCli(["run", "start", "--json"], tmpCwd);
     expect(start2.exitCode).toBe(0);
 
-    const adv2 = await runCli(["run", "node", "exec", "--advisor-fired", "1", "--streak", "1"], tmpCwd);
+    const adv2 = await runCli(["run", "node", "exec", "--advisor-fired", "1", "--streak", "1", "--json"], tmpCwd);
     expect(adv2.exitCode).toBe(0);
 
-    const end2 = await runCli(["run", "end", "--status", "failed"], tmpCwd);
+    const end2 = await runCli(["run", "end", "--status", "failed", "--json"], tmpCwd);
     expect(end2.exitCode).toBe(0);
 
     // Consolidate memory
-    const consRes = await runCli(["memory", "consolidate"], tmpCwd);
+    const consRes = await runCli(["memory", "consolidate", "--json"], tmpCwd);
     expect(consRes.exitCode).toBe(0);
     const consData = JSON.parse(consRes.stdout);
     expect(consData.status).toBe("ok");

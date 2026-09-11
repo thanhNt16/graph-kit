@@ -43,6 +43,8 @@ export function renderStatus(data: StatusData): string {
 export function registerStatusCommand(cli: CAC) {
   cli
     .command("status", "Summarize active graph run and evidence coverage")
+    .example("$ gk status")
+    .example("$ gk status --json")
     .option("--json", "JSON output")
     .action((opts: { json?: boolean }) => {
       try {

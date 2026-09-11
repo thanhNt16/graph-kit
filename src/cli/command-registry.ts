@@ -172,6 +172,11 @@ export const CLI_COMMANDS: { path: string; description: string; options: string[
     description: "Show ranked workflow suggestions from memory",
     options: ["--dismiss <id>", "--all", "--json"],
   },
+  {
+    path: "completions",
+    description: "Print a shell completion script (bash | zsh | fish) generated from the command registry",
+    options: ["--json"],
+  },
 ];
 
 /** Return the manifest object (mirrors cli-manifest.json). */
