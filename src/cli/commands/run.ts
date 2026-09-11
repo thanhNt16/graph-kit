@@ -7,6 +7,7 @@ import {
   activeRunGraph,
   appendAdvisor,
   appendNode,
+  deriveRound,
   endRun,
   listRunIds,
   readAdvisorEvents,
@@ -51,8 +52,7 @@ function renderRunStatus(
   const trace = readTrace(cwd, id);
   const okNodes = trace.filter((t) => t.status === "ok").length;
   const failedNodes = trace.filter((t) => t.status === "fail").length;
-  const waves = new Set(trace.map((t) => t.wave).filter((w) => w != null));
-  const round = waves.size ? Math.max(...waves) + 1 : 0;
+  const round = deriveRound(trace);
   const evidence = new Set(trace.flatMap((t) => t.evidence));
   return [
     `run: ${id}`,

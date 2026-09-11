@@ -3,7 +3,7 @@ import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import YAML from "yaml";
-import { parseMemoryFile, splitFrontmatter, walkMemoryStore } from "../../src/memory/frontmatter.js";
+import { parseMemoryFile, splitFrontmatter, walkMemoryStore } from "../../src/frontmatter.js";
 
 const raw = (fm: string, body = "notes\n") => `---\n${fm}---\n${body}`;
 

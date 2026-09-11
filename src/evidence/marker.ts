@@ -1,5 +1,5 @@
 import YAML from "yaml";
-import { splitFrontmatter } from "../memory/frontmatter.js";
+import { splitFrontmatter } from "../frontmatter.js";
 import type { Fingerprint } from "./fingerprint.js";
 
 export type Freshness = "fresh" | "stale" | "unknown";

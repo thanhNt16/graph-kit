@@ -1,11 +1,11 @@
 import { existsSync, readFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import type { CAC } from "cac";
+import { loadGraph } from "../../compiler/loader.js";
 import { GraphKitError } from "../../errors.js";
-import { activeRun, activeRunGraph, readRunMeta, readTrace } from "../../memory/ledger.js";
+import { activeRun, activeRunGraph, deriveRound, readRunMeta, readTrace } from "../../memory/ledger.js";
 import { fail, ok } from "../output.js";
 import { type GateResult, gateGraph } from "./gate.js";
-import { loadGraph } from "./graph.js";
 
 interface StatusData {
   running: boolean;
@@ -96,10 +96,7 @@ export function registerStatusCommand(cli: CAC) {
         // wave + 1, the same derivation `gk run status` prints.
         if (run.round === undefined && ledgerId) {
           try {
-            const waves = readTrace(cwd, ledgerId)
-              .map((t) => t.wave)
-              .filter((w): w is number => w != null);
-            run.round = waves.length ? Math.max(...waves) + 1 : 0;
+            run.round = deriveRound(readTrace(cwd, ledgerId));
           } catch {
             /* no trace yet — round stays unset */
           }

@@ -1,4 +1,4 @@
-// src/memory/frontmatter.ts
+// src/frontmatter.ts
 // The single frontmatter reader for the memory store: one parser, one legacy
 // coercion rule (string `tags:` → array), one malformed convention (drop the
 // entry, never abort the pass). Every module that reads .graphkit/memory goes
@@ -9,7 +9,7 @@ import { type Dirent, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import YAML from "yaml";
 import type { z } from "zod";
-import { MemoryFileSchema } from "../schemas/memory.schema.js";
+import { MemoryFileSchema } from "./schemas/memory.schema.js";
 
 export type MemoryFile = z.infer<typeof MemoryFileSchema>;
 

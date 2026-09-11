@@ -10,6 +10,7 @@ import { listTemplates, QUERY_TEMPLATES, runTemplate } from "../../cbm/templates
 import { compileGraph } from "../../compiler/emitter.js";
 import { loadGraph, resolveBareValidateGraph } from "../../compiler/loader.js";
 import { validateGraph } from "../../compiler/validate.js";
+import { computeWaves } from "../../compiler/waves.js";
 import { GraphKitError } from "../../errors.js";
 import { getTopologyConfigKeys, TOPOLOGY_NAMES, type TopologyName } from "../../schemas/topology/index.js";
 import {
@@ -228,7 +229,6 @@ function printQueryTemplates(json: boolean | undefined): void {
 // Back-compat re-exports: sibling commands (gate/doctor/status/evidence) and
 // tests import loadGraph/graphTemplate from this module — keep the surface
 // stable now that the implementations live in dedicated modules.
-export { graphTemplate, loadGraph, resolveBareValidateGraph };
 
 export function registerGraphCommands(cli: CAC) {
   cli
@@ -544,24 +544,12 @@ export function registerGraphCommands(cli: CAC) {
             const hasCurator = curatorName !== null && Object.hasOwn(nodes, curatorName);
             const actionIds = hasCurator ? ids.filter((id) => id !== curatorName) : ids;
 
-            // Kahn's algorithm over action nodes → action waves
-            const completed = new Set<string>();
-            const actionWaves: string[][] = [];
-            while (completed.size < actionIds.length) {
-              const ready = actionIds.filter((id) => {
-                if (completed.has(id)) return false;
-                const deps = nodes[id]?.depend_on || [];
-                return deps.every((d: string) => completed.has(d));
-              });
-              if (ready.length === 0) break;
-              actionWaves.push(ready);
-              ready.forEach((id) => {
-                completed.add(id);
-              });
-            }
-
-            if (completed.size < actionIds.length) {
-              const unresolved = actionIds.filter((id) => !completed.has(id));
+            // Shared Kahn partition (src/compiler/waves.ts) over action nodes.
+            // The curator node is excluded from scheduling and re-inserted as
+            // its own interleave waves below.
+            const actionNodes = Object.fromEntries(actionIds.map((id) => [id, nodes[id]]));
+            const { waves: actionWaves, unresolved } = computeWaves(actionNodes);
+            if (unresolved.length > 0) {
               console.log(
                 JSON.stringify(
                   fail("WAVES_INCOMPLETE", `unresolved nodes after topological sort: ${unresolved.join(", ")}`, {

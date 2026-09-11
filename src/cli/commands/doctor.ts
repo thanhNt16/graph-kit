@@ -1,12 +1,12 @@
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { delimiter, dirname, join, resolve } from "node:path";
 import type { CAC } from "cac";
+import { loadGraph } from "../../compiler/loader.js";
 import { GraphKitError } from "../../errors.js";
 import { listTargets } from "../../targets/registry.js";
 import type { TargetId } from "../../targets/types.js";
 import { APP_VERSION } from "../../version.js";
 import { ok } from "../output.js";
-import { loadGraph } from "./graph.js";
 import { kitSourceDir } from "./kit.js";
 
 export type DoctorStatus = "ok" | "warn" | "fail" | "info";

@@ -3,7 +3,7 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import YAML from "yaml";
-import { graphTemplate } from "../../src/cli/commands/graph.js";
+import { graphTemplate } from "../../src/cli/graph-templates.js";
 import { validateGraph } from "../../src/compiler/validate.js";
 import { GraphSchema } from "../../src/schemas/graph.schema.js";
 import { TOPOLOGY_NAMES } from "../../src/schemas/topology/index.js";

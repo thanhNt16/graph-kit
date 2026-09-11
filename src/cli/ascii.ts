@@ -1,4 +1,5 @@
 import type { Graph } from "../compiler/validate.js";
+import { computeLevels } from "../compiler/waves.js";
 
 type GraphNode = Graph["nodes"][string];
 
@@ -110,23 +111,9 @@ export function renderAscii(graph: Graph): string {
   const nodes = graph.nodes;
   const nodeIds = Object.keys(nodes);
 
-  // Topological levels: level = longest path from any root
-  const levels = new Map<string, number>();
-  const computeLevel = (id: string, seen: Set<string>): number => {
-    if (levels.has(id)) return levels.get(id)!;
-    if (seen.has(id)) return 0;
-    seen.add(id);
-    const deps = nodes[id]?.depend_on ?? [];
-    if (deps.length === 0) {
-      levels.set(id, 0);
-      return 0;
-    }
-    const maxDep = Math.max(...deps.map((d) => computeLevel(d, seen)));
-    const lvl = maxDep + 1;
-    levels.set(id, lvl);
-    return lvl;
-  };
-  for (const id of nodeIds) computeLevel(id, new Set());
+  // Topological levels: level = longest path from any root — the shared
+  // computeLevels (src/compiler/waves.ts); was a verbatim twin of validate.ts's.
+  const levels = computeLevels(nodes);
 
   const maxLevel = Math.max(...levels.values());
   const byLevel: string[][] = Array.from({ length: maxLevel + 1 }, () => []);
@@ -160,7 +147,7 @@ export function renderAscii(graph: Graph): string {
       }
     } else {
       // Single node — indent and center
-      const box = nodeBox(ids[0], nodes[0] ? nodes[ids[0]] : nodes[ids[0]]);
+      const box = nodeBox(ids[0], nodes[ids[0]]);
       for (const bl of box) out.push(`  ${bl}`);
     }
 

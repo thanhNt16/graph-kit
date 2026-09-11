@@ -4,9 +4,8 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { z } from "zod";
-
+import { walkMemoryStore } from "../frontmatter.js";
 import { atomicWrite } from "../fs.js";
-import { walkMemoryStore } from "./frontmatter.js";
 
 export interface LinkGraph {
   generated_at: string;

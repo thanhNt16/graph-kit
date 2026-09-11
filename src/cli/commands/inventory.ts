@@ -4,7 +4,7 @@ import { join } from "node:path";
 import type { CAC } from "cac";
 import YAML from "yaml";
 import { GraphKitError } from "../../errors.js";
-import { splitFrontmatter } from "../../memory/frontmatter.js";
+import { splitFrontmatter } from "../../frontmatter.js";
 import { getTarget, isValidTarget, listTargets } from "../../targets/index.js";
 import type { TargetId } from "../../targets/types.js";
 import { fail, ok } from "../output.js";

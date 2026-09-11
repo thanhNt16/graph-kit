@@ -211,6 +211,5 @@ function substitute(node: unknown, template: GraphTemplate, values: TemplateValu
  * receive exactly what the rest of the toolchain expects.
  */
 export function materializeTemplate(template: GraphTemplate, values: TemplateValues): z.infer<typeof GraphSchema> {
-  const graph = substitute(template.graph, template, values) as unknown as z.infer<typeof GraphSchema>;
-  return GraphSchema.parse(graph);
+  return GraphSchema.parse(substitute(template.graph, template, values));
 }

@@ -334,6 +334,13 @@ export function endRun(cwd: string, status: RunIndexLine["status"], now = new Da
   return summary;
 }
 
+/** Highest completed wave + 1 — the one "what round are we in" derivation.
+ *  run status and gk status used to inline this separately and could drift. */
+export function deriveRound(trace: TraceLine[]): number {
+  const waves = trace.map((t) => t.wave).filter((w): w is number => w != null);
+  return waves.length > 0 ? Math.max(...waves) + 1 : 0;
+}
+
 /** Run ids present on disk, oldest first — ids are timestamp-prefixed so lexical == chronological. */
 export function listRunIds(cwd: string): string[] {
   const d = runsDir(cwd);
