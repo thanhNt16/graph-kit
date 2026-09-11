@@ -1,41 +1,33 @@
-import { describe, expect, test } from "bun:test";
+import { afterAll, afterEach, beforeAll, describe, expect, test } from "bun:test";
 import { chmodSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { cac } from "cac";
 import { registerGraphCommands } from "../../src/cli/commands/graph.js";
 import { registerMemoryCommands } from "../../src/cli/commands/memory.js";
+import { type CliRun, createCliHarness } from "../helpers/cli-harness.js";
 
 const FIXTURES = join(import.meta.dir, "..", "fixtures");
 
-function runCli(args: string[]) {
-  const cli = cac("gk");
-  registerGraphCommands(cli);
-  const logs: string[] = [];
-  const origLog = console.log;
-  console.log = (...a: unknown[]) => logs.push(a.map(String).join(" "));
-  let exitCode = 0;
-  const origExit = process.exit;
-  process.exit = (c?: number) => {
-    exitCode = c ?? 1;
-  };
-  try {
-    cli.parse(["node", "gk", ...args], { run: true });
-  } finally {
-    console.log = origLog;
-    process.exit = origExit;
-  }
-  return { stdout: logs.join("\n"), code: exitCode };
-}
+// Fixture graphs used to land as loose .yaml files directly in the global
+// tmpdir() and were never cleaned up — pin them under one unique dir and
+// remove it when the file finishes.
+let fixtureDir: string;
+let ON_NODE: string;
+let EVERY2: string;
+let NO_CURATOR: string;
+let EVERY3: string;
 
-const ON_NODE = join(tmpdir(), `gk-waves-mem-on-${process.pid}-${Date.now()}.yaml`);
-const EVERY2 = join(tmpdir(), `gk-waves-mem-every-${process.pid}-${Date.now()}.yaml`);
-const NO_CURATOR = join(tmpdir(), `gk-waves-mem-nocur-${process.pid}-${Date.now()}.yaml`);
-const EVERY3 = join(tmpdir(), `gk-waves-mem-every3-${process.pid}-${Date.now()}.yaml`);
+beforeAll(() => {
+  fixtureDir = join(tmpdir(), `gk-waves-mem-${process.pid}-${Date.now()}`);
+  mkdirSync(fixtureDir, { recursive: true });
+  ON_NODE = join(fixtureDir, "on-node.yaml");
+  EVERY2 = join(fixtureDir, "every-2.yaml");
+  NO_CURATOR = join(fixtureDir, "no-curator.yaml");
+  EVERY3 = join(fixtureDir, "every-3.yaml");
 
-writeFileSync(
-  ON_NODE,
-  `topology: memory-augmented
+  writeFileSync(
+    ON_NODE,
+    `topology: memory-augmented
 apiVersion: graphkit.dev/v2
 kind: Graph
 metadata: { name: memory-test }
@@ -53,11 +45,11 @@ nodes:
   synthesizer: { agent: Software Architect, objective: test, depend_on: [worker] }
   curator: { agent: Memory Curator, objective: test, depend_on: [] }
 `,
-);
+  );
 
-writeFileSync(
-  EVERY2,
-  `topology: memory-augmented
+  writeFileSync(
+    EVERY2,
+    `topology: memory-augmented
 apiVersion: graphkit.dev/v2
 kind: Graph
 metadata: { name: memory-test }
@@ -70,11 +62,11 @@ nodes:
   synthesizer: { agent: Software Architect, objective: test, depend_on: [worker] }
   curator: { agent: Memory Curator, objective: test, depend_on: [] }
 `,
-);
+  );
 
-writeFileSync(
-  EVERY3,
-  `topology: memory-augmented
+  writeFileSync(
+    EVERY3,
+    `topology: memory-augmented
 apiVersion: graphkit.dev/v2
 kind: Graph
 metadata: { name: memory-test }
@@ -89,11 +81,11 @@ nodes:
   synthesizer: { agent: Software Architect, objective: test, depend_on: [w1, w2] }
   curator: { agent: Memory Curator, objective: test, depend_on: [] }
 `,
-);
+  );
 
-writeFileSync(
-  NO_CURATOR,
-  `topology: memory-augmented
+  writeFileSync(
+    NO_CURATOR,
+    `topology: memory-augmented
 apiVersion: graphkit.dev/v2
 kind: Graph
 metadata: { name: memory-test }
@@ -104,12 +96,22 @@ nodes:
   scouter: { agent: Software Architect, objective: test, depend_on: [] }
   synthesizer: { agent: Software Architect, objective: test, depend_on: [scouter] }
 `,
-);
+  );
+});
+
+afterAll(() => {
+  process.exitCode = 0; // fail() sets process.exitCode=1 — reset so bun:test exits 0
+  rmSync(fixtureDir, { recursive: true, force: true });
+});
+
+afterEach(() => {
+  process.exitCode = 0;
+});
 
 function parsed(file: string) {
-  const { stdout, code } = runCli(["graph", "waves", file, "--json"]);
-  expect(code).toBe(0);
-  return JSON.parse(stdout).data;
+  const run = createCliHarness(registerGraphCommands).run(["graph", "waves", file, "--json"]);
+  expect(run.exit).toBeUndefined();
+  return JSON.parse(run.stdout).data;
 }
 
 describe("gk graph waves — memory-augmented curator interleave", () => {
@@ -149,8 +151,8 @@ describe("gk graph waves — memory-augmented curator interleave", () => {
   });
 
   test("absent curator is rejected by validation", () => {
-    const result = runCli(["graph", "waves", NO_CURATOR, "--json"]);
-    expect(result.code).toBe(1);
+    const result = createCliHarness(registerGraphCommands).run(["graph", "waves", NO_CURATOR, "--json"]);
+    expect(result.exit).toBe(1);
     expect(result.stdout).toContain("VALIDATION_FAILED");
     expect(result.stdout).toContain("memory-curator-node");
   });
@@ -193,17 +195,8 @@ describe("gk graph waves — memory-augmented curator interleave", () => {
 
 describe("memory config allowlist + bare gk memory (exec-tests step 5)", () => {
   test("graph inspect memory-augmented lists memory.every and memory.null_intervention_allowed keys", () => {
-    const cli = cac("gk");
-    registerGraphCommands(cli);
-    const logs: string[] = [];
-    const origLog = console.log;
-    console.log = (...a: unknown[]) => logs.push(a.map(String).join(" "));
-    try {
-      cli.parse(["node", "gk", "graph", "inspect", "memory-augmented"], { run: true });
-    } finally {
-      console.log = origLog;
-    }
-    const data = JSON.parse(logs.join("\n")).data;
+    const run = createCliHarness(registerGraphCommands).run(["graph", "inspect", "memory-augmented"]);
+    const data = JSON.parse(run.stdout).data;
     expect(data.config_keys).toContain("memory.every");
     expect(data.config_keys).toContain("memory.null_intervention_allowed");
     expect(data.config_keys).toContain("memory.recall_topk");
@@ -229,35 +222,19 @@ describe("memory config allowlist + bare gk memory (exec-tests step 5)", () => {
     mkdirSync(join(cwd, ".graphkit", "memory"), { recursive: true });
     writeFileSync(join(cwd, ".graphkit", "memory", "m.md"), "---\nid: m\ntype: knowledge\n---\nbody\n");
     chmodSync(join(cwd, ".graphkit", "memory"), 0o000);
+    let run: CliRun | undefined;
     try {
-      const cli = cac("gk");
-      registerMemoryCommands(cli);
-      const logs: string[] = [];
-      let exitCode = 0;
-      const origLog = console.log;
-      console.log = (...a: unknown[]) => logs.push(a.map(String).join(" "));
-      const origExit = process.exit;
-      process.exit = (c?: number) => {
-        exitCode = c ?? 1;
-      };
-      const previousCwd = process.cwd();
-      try {
-        process.chdir(cwd);
-        cli.parse(["node", "gk", "memory", "recall", "--json", "anything"], { run: true });
-        await new Promise((r) => setTimeout(r, 200));
-      } finally {
-        process.chdir(previousCwd);
-        console.log = origLog;
-        process.exit = origExit;
-      }
-      const out = JSON.parse(logs.join("\n"));
-      expect(out.status).toBe("fail");
-      expect(out.error.code).toBe("MEMORY_DIR_UNREADABLE");
-      expect(exitCode).toBe(1);
-      process.exitCode = 0;
+      // memory recall's handler is async and cac does not await it — runAsync
+      // holds the stubs (200ms, as before) so its log/exit land inside the window.
+      const cli = createCliHarness(registerMemoryCommands, { cwd });
+      run = await cli.runAsync(["memory", "recall", "--json", "anything"], 200);
     } finally {
-      chmodSync(join(cwd, ".graphkit", "memory"), 0o755);
+      chmodSync(join(cwd, ".graphkit", "memory"), 0o755); // restore before rmSync cleanup
       rmSync(cwd, { recursive: true, force: true });
     }
+    const out = JSON.parse(run!.stdout);
+    expect(out.status).toBe("fail");
+    expect(out.error.code).toBe("MEMORY_DIR_UNREADABLE");
+    expect(run!.exit).toBe(1);
   });
 });

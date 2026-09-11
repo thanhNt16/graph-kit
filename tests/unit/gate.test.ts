@@ -3,39 +3,13 @@ import { createHash } from "node:crypto";
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { cac } from "cac";
 import { gateGraph, registerGateCommand } from "../../src/cli/commands/gate.js";
+import { createCliHarness } from "../helpers/cli-harness.js";
 
 function scaffoldProject(dir: string) {
   mkdirSync(join(dir, ".omp", "agents"), { recursive: true });
   writeFileSync(join(dir, ".omp", "agents", "software-architect.md"), "# SA\n");
   writeFileSync(join(dir, ".omp", "agents", "code-reviewer.md"), "# CR\n");
-}
-
-function runCli(args: string[], cwd: string) {
-  const origCwd = process.cwd();
-  process.chdir(cwd);
-  const cli = cac("gk");
-  registerGateCommand(cli);
-  const logs: string[] = [];
-  const origLog = console.log;
-  console.log = (...a: unknown[]) => logs.push(a.map(String).join(" "));
-  let exitCode = 0;
-  const origExit = process.exit;
-  process.exit = (c?: number) => {
-    exitCode = c ?? 1;
-  };
-  let error: Error | undefined;
-  try {
-    cli.parse(["node", "gk", ...args], { run: true });
-  } catch (e) {
-    error = e as Error;
-  } finally {
-    console.log = origLog;
-    process.exit = origExit;
-    process.chdir(origCwd);
-  }
-  return { stdout: logs.join("\n"), code: exitCode, error };
 }
 
 const MINIMAL_GRAPH = `apiVersion: graphkit.dev/v2
@@ -115,8 +89,8 @@ describe("gk gate command", () => {
     const evDir = join(tmp, ".graphkit", "evidence");
     mkdirSync(evDir, { recursive: true });
     writeFileSync(join(evDir, "design.md"), "approved\n");
-    const result = runCli(["gate", join(tmp, "graph.yaml")], tmp);
-    expect(result.code).toBe(0);
+    const result = createCliHarness(registerGateCommand, { cwd: tmp }).run(["gate", join(tmp, "graph.yaml")]);
+    expect(result.exit).toBeUndefined();
     expect(() => JSON.parse(result.stdout)).toThrow(); // human mode is not JSON
     expect(result.stdout).toContain("VERDICT: PASS");
     expect(result.stdout).toContain("key");
@@ -130,8 +104,8 @@ describe("gk gate command", () => {
     const evDir = join(tmp, ".graphkit", "evidence");
     mkdirSync(evDir, { recursive: true });
     writeFileSync(join(evDir, "design.md"), "approved\n");
-    const result = runCli(["gate", "--json", join(tmp, "graph.yaml")], tmp);
-    expect(result.code).toBe(0);
+    const result = createCliHarness(registerGateCommand, { cwd: tmp }).run(["gate", "--json", join(tmp, "graph.yaml")]);
+    expect(result.exit).toBeUndefined();
     const parsed = JSON.parse(result.stdout);
     expect(parsed.status).toBe("ok");
     expect(parsed.data.verdict).toBe("MERGE");
@@ -142,8 +116,8 @@ describe("gk gate command", () => {
   test("BLOCK default mode: human verdict table + repair hint, exit 1", () => {
     writeFileSync(join(tmp, "graph.yaml"), MINIMAL_GRAPH);
     // No evidence file created
-    const result = runCli(["gate", join(tmp, "graph.yaml")], tmp);
-    expect(result.code).toBe(1);
+    const result = createCliHarness(registerGateCommand, { cwd: tmp }).run(["gate", join(tmp, "graph.yaml")]);
+    expect(result.exit).toBe(1);
     expect(result.stdout).toContain("VERDICT: BLOCK");
     expect(result.stdout).toContain("design");
     expect(result.stdout).toContain("Missing: design");
@@ -153,8 +127,8 @@ describe("gk gate command", () => {
 
   test("BLOCK --json keeps the GATE_BLOCK fail envelope for scripts", () => {
     writeFileSync(join(tmp, "graph.yaml"), MINIMAL_GRAPH);
-    const result = runCli(["gate", "--json", join(tmp, "graph.yaml")], tmp);
-    expect(result.code).toBe(1);
+    const result = createCliHarness(registerGateCommand, { cwd: tmp }).run(["gate", "--json", join(tmp, "graph.yaml")]);
+    expect(result.exit).toBe(1);
     const parsed = JSON.parse(result.stdout);
     expect(parsed.status).toBe("fail");
     expect(parsed.error.code).toBe("GATE_BLOCK");
@@ -166,15 +140,15 @@ describe("gk gate command", () => {
     const evDir = join(tmp, ".graphkit", "evidence");
     mkdirSync(evDir, { recursive: true });
     writeFileSync(join(evDir, "design.md"), "approved\n");
-    const result = runCli(["gate"], tmp);
-    expect(result.code).toBe(0);
+    const result = createCliHarness(registerGateCommand, { cwd: tmp }).run(["gate"]);
+    expect(result.exit).toBeUndefined();
     expect(result.stdout).toContain("VERDICT: PASS");
   });
 
   test("schema invalid graph exits 1", () => {
     writeFileSync(join(tmp, "graph.yaml"), "");
-    const result = runCli(["gate", join(tmp, "graph.yaml")], tmp);
-    expect(result.code).toBe(1);
+    const result = createCliHarness(registerGateCommand, { cwd: tmp }).run(["gate", join(tmp, "graph.yaml")]);
+    expect(result.exit).toBe(1);
     const parsed = JSON.parse(result.stdout);
     expect(parsed.status).toBe("fail");
     expect(parsed.error.code).toBe("SCHEMA_INVALID");

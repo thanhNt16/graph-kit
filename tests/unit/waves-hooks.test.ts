@@ -1,35 +1,24 @@
 // tests/unit/waves-hooks.test.ts
-import { describe, expect, test } from "bun:test";
-import { writeFileSync } from "node:fs";
+import { afterAll, afterEach, beforeAll, describe, expect, test } from "bun:test";
+import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { cac } from "cac";
 import { registerGraphCommands } from "../../src/cli/commands/graph.js";
+import { createCliHarness } from "../helpers/cli-harness.js";
 
-function runCli(args: string[]) {
-  const cli = cac("gk");
-  registerGraphCommands(cli);
-  const logs: string[] = [];
-  const origLog = console.log;
-  console.log = (...a: unknown[]) => logs.push(a.map(String).join(" "));
-  let exitCode = 0;
-  const origExit = process.exit;
-  process.exit = (c?: number) => {
-    exitCode = c ?? 1;
-  };
-  try {
-    cli.parse(["node", "gk", ...args], { run: true });
-  } finally {
-    console.log = origLog;
-    process.exit = origExit;
-  }
-  return { stdout: logs.join("\n"), code: exitCode };
-}
+// Fixture graphs used to land as loose .yaml files directly in the global
+// tmpdir() and were never cleaned up — pin them under one unique dir and
+// remove it when the file finishes.
+let fixtureDir: string;
+let GRAPH: string;
 
-const GRAPH = join(tmpdir(), `gk-waves-hooks-${process.pid}-${Date.now()}.yaml`);
-writeFileSync(
-  GRAPH,
-  `topology: diamond
+beforeAll(() => {
+  fixtureDir = join(tmpdir(), `gk-waves-hooks-${process.pid}-${Date.now()}`);
+  mkdirSync(fixtureDir, { recursive: true });
+  GRAPH = join(fixtureDir, "hooked.yaml");
+  writeFileSync(
+    GRAPH,
+    `topology: diamond
 apiVersion: graphkit.dev/v2
 kind: Graph
 metadata: { name: hooked }
@@ -40,31 +29,41 @@ nodes:
   a: { agent: Code Reviewer, objective: review, depend_on: [] }
   b: { agent: Software Architect, objective: verify, depend_on: [a] }
 `,
-);
+  );
+});
+
+afterAll(() => {
+  process.exitCode = 0; // fail() sets process.exitCode=1 — reset so bun:test exits 0
+  rmSync(fixtureDir, { recursive: true, force: true });
+});
+
+afterEach(() => {
+  process.exitCode = 0;
+});
 
 describe("gk graph waves hook emission", () => {
   test("waves payload carries per-node and graph-level hook commands", () => {
-    const { stdout, code } = runCli(["graph", "waves", GRAPH, "--json"]);
-    expect(code).toBe(0);
-    const d = JSON.parse(stdout).data;
+    const run = createCliHarness(registerGraphCommands).run(["graph", "waves", GRAPH, "--json"]);
+    expect(run.exit).toBeUndefined();
+    const d = JSON.parse(run.stdout).data;
     expect(d.on_graph_complete).toEqual(["gk run end --status merged"]);
     expect(d.waves[0].nodes[0].hooks).toEqual(["gk run node {node} --status ok"]);
     expect(d.waves[1].nodes[0].hooks).toEqual(["gk run node {node} --status ok"]);
   });
   test("graph without hooks emits empty arrays", () => {
-    const graph = join(tmpdir(), `gk-waves-nohooks-${process.pid}-${Date.now()}.yaml`);
+    const graph = join(fixtureDir, "no-hooks.yaml");
     writeFileSync(
       graph,
       `topology: diamond\napiVersion: graphkit.dev/v2\nkind: Graph\nmetadata: { name: plain }\nnodes:\n  a: { agent: Code Reviewer, objective: x, depend_on: [] }\n`,
     );
-    const { stdout, code } = runCli(["graph", "waves", graph, "--json"]);
-    expect(code).toBe(0);
-    const d = JSON.parse(stdout).data;
+    const run = createCliHarness(registerGraphCommands).run(["graph", "waves", graph, "--json"]);
+    expect(run.exit).toBeUndefined();
+    const d = JSON.parse(run.stdout).data;
     expect(d.on_graph_complete).toEqual([]);
     expect(d.waves[0].nodes[0].hooks).toEqual([]);
   });
   test("waves payload carries advisor and fan_out verbatim", () => {
-    const graph = join(tmpdir(), `gk-waves-advisor-${process.pid}-${Date.now()}.yaml`);
+    const graph = join(fixtureDir, "advisor.yaml");
     writeFileSync(
       graph,
       [
@@ -88,9 +87,9 @@ describe("gk graph waves hook emission", () => {
         '    fan_out: { briefs_from: plan, template: "Implement {brief.title}: {brief.body}" }',
       ].join("\n"),
     );
-    const { stdout, code } = runCli(["graph", "waves", graph, "--json"]);
-    expect(code).toBe(0);
-    const payload = JSON.parse(stdout).data;
+    const run = createCliHarness(registerGraphCommands).run(["graph", "waves", graph, "--json"]);
+    expect(run.exit).toBeUndefined();
+    const payload = JSON.parse(run.stdout).data;
     const nodes = payload.waves.flatMap((w: { nodes: unknown[] }) => w.nodes) as Array<{
       id: string;
       advisor: unknown;

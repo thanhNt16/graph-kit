@@ -2,34 +2,11 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { type CAC, cac } from "cac";
 import { registerExecuteCommand } from "../../src/cli/commands/execute.js";
 import { registerStatusCommand } from "../../src/cli/commands/status.js";
 import { registerVisualizeCommand } from "../../src/cli/commands/visualize.js";
 import { appendNode, startRun } from "../../src/memory/ledger.js";
-
-function runCli(args: string[], cwd: string, register: (cli: CAC) => void) {
-  const cli = cac("gk");
-  register(cli);
-  const logs: string[] = [];
-  const origLog = console.log;
-  const origExit = process.exit;
-  const origCwd = process.cwd;
-  let code = 0;
-  console.log = (...a: unknown[]) => logs.push(a.map(String).join(" "));
-  process.exit = (c?: number) => {
-    code = c ?? 1;
-  };
-  process.cwd = () => cwd;
-  try {
-    cli.parse(["node", "gk", ...args], { run: true });
-  } finally {
-    console.log = origLog;
-    process.exit = origExit;
-    process.cwd = origCwd;
-  }
-  return { code, output: logs.join("\n") };
-}
+import { createCliHarness } from "../helpers/cli-harness.js";
 
 describe("gk status", () => {
   let root: string;
@@ -43,25 +20,25 @@ describe("gk status", () => {
   });
 
   test("no active run: --json keeps the stable ok envelope", () => {
-    const result = runCli(["status", "--json"], root, registerStatusCommand);
-    expect(result.code).toBe(0);
-    expect(JSON.parse(result.output)).toEqual({
+    const result = createCliHarness(registerStatusCommand, { cwd: root }).run(["status", "--json"]);
+    expect(result.exit).toBeUndefined();
+    expect(JSON.parse(result.stdout)).toEqual({
       status: "ok",
       data: { running: false, run: null, coverage: null },
     });
   });
 
   test("no active run: default output is a human one-liner, exit 0", () => {
-    const result = runCli(["status"], root, registerStatusCommand);
-    expect(result.code).toBe(0);
-    expect(result.output).toBe("no active run");
+    const result = createCliHarness(registerStatusCommand, { cwd: root }).run(["status"]);
+    expect(result.exit).toBeUndefined();
+    expect(result.stdout).toBe("no active run");
   });
 
   test("active run: --json keeps the full envelope (run, coverage, gate_error)", () => {
     seedActiveRun(root);
-    const result = runCli(["status", "--json"], root, registerStatusCommand);
-    expect(result.code).toBe(0);
-    const parsed = JSON.parse(result.output);
+    const result = createCliHarness(registerStatusCommand, { cwd: root }).run(["status", "--json"]);
+    expect(result.exit).toBeUndefined();
+    const parsed = JSON.parse(result.stdout);
     expect(parsed.status).toBe("ok");
     expect(parsed.data.running).toBe(true);
     expect(parsed.data.run.name).toBe("demo");
@@ -70,12 +47,12 @@ describe("gk status", () => {
 
   test("active run: default output is a human summary (run, round, coverage, verdict)", () => {
     seedActiveRun(root);
-    const result = runCli(["status"], root, registerStatusCommand);
-    expect(result.code).toBe(0);
-    expect(result.output).toContain("run: demo");
-    expect(result.output).toContain("round:");
-    expect(result.output).toContain("coverage: 1/1 keys ok");
-    expect(result.output).toContain("verdict: MERGE");
+    const result = createCliHarness(registerStatusCommand, { cwd: root }).run(["status"]);
+    expect(result.exit).toBeUndefined();
+    expect(result.stdout).toContain("run: demo");
+    expect(result.stdout).toContain("round:");
+    expect(result.stdout).toContain("coverage: 1/1 keys ok");
+    expect(result.stdout).toContain("verdict: MERGE");
   });
 
   // A4: the ledger is authoritative for identity — a real `gk run start` run
@@ -98,11 +75,11 @@ describe("gk status", () => {
       duration_ms: null,
       notes: null,
     });
-    const result = runCli(["status"], root, registerStatusCommand);
-    expect(result.code).toBe(0);
-    expect(result.output).toContain(`run: ${id}`);
-    expect(result.output).toContain("round: 3"); // highest wave + 1
-    expect(result.output).toContain("verdict: MERGE");
+    const result = createCliHarness(registerStatusCommand, { cwd: root }).run(["status"]);
+    expect(result.exit).toBeUndefined();
+    expect(result.stdout).toContain(`run: ${id}`);
+    expect(result.stdout).toContain("round: 3"); // highest wave + 1
+    expect(result.stdout).toContain("verdict: MERGE");
   });
 });
 
@@ -129,14 +106,14 @@ describe("gk execute/visualize stubs", () => {
     rmSync(root, { recursive: true, force: true });
   });
   test("execute exits 1 with NOT_IMPLEMENTED", () => {
-    const result = runCli(["execute"], root, registerExecuteCommand);
-    expect(result.code).toBe(1);
-    expect(JSON.parse(result.output).error.code).toBe("NOT_IMPLEMENTED");
+    const result = createCliHarness(registerExecuteCommand, { cwd: root }).run(["execute"]);
+    expect(result.exit).toBe(1);
+    expect(JSON.parse(result.stdout).error.code).toBe("NOT_IMPLEMENTED");
   });
   test("visualize exits 1 with NOT_IMPLEMENTED", () => {
-    const result = runCli(["visualize"], root, registerVisualizeCommand);
-    expect(result.code).toBe(1);
-    expect(JSON.parse(result.output).error.code).toBe("NOT_IMPLEMENTED");
+    const result = createCliHarness(registerVisualizeCommand, { cwd: root }).run(["visualize"]);
+    expect(result.exit).toBe(1);
+    expect(JSON.parse(result.stdout).error.code).toBe("NOT_IMPLEMENTED");
   });
 });
 
@@ -170,8 +147,8 @@ describe("gk status coverage source (round 4)", () => {
     writeFileSync(join(root, ".graphkit", "evidence", "design.md"), "done\n");
     startRun(root, sessionPath); // records graph_path = session.yaml in meta.json
 
-    const result = runCli(["status", "--json"], root, registerStatusCommand);
-    const parsed = JSON.parse(result.output);
+    const result = createCliHarness(registerStatusCommand, { cwd: root }).run(["status", "--json"]);
+    const parsed = JSON.parse(result.stdout);
     expect(parsed.data.running).toBe(true);
     expect(parsed.data.coverage.verdict).toBe("MERGE"); // was BLOCK (missing extra) before
     expect(Object.keys(parsed.data.coverage.scorecard)).toEqual(["design"]);

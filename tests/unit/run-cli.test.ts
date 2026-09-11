@@ -7,33 +7,12 @@ import YAML from "yaml";
 import { CLI_COMMANDS } from "../../src/cli/command-registry.js";
 import { registerRunCommands } from "../../src/cli/commands/run.js";
 import { appendNode, endRun, readAdvisorEvents, startRun } from "../../src/memory/ledger.js";
-
-function runCli(args: string[], cwd: string) {
-  const cli = cac("gk");
-  registerRunCommands(cli);
-  const logs: string[] = [];
-  const origLog = console.log;
-  const origCwd = process.cwd();
-  const origExit = process.exit;
-  let exitCode = 0;
-  console.log = (...a: unknown[]) => logs.push(a.map(String).join(" "));
-  process.exit = (c?: number) => {
-    exitCode = c ?? 1;
-  };
-  process.chdir(cwd);
-  try {
-    cli.parse(["node", "gk", ...args], { run: true });
-  } finally {
-    console.log = origLog;
-    process.exit = origExit;
-    process.chdir(origCwd);
-  }
-  const code = process.exitCode ? Number(process.exitCode) : exitCode;
-  process.exitCode = 0; // fail() paths set process.exitCode=1 — reset so bun:test exits 0
-  return { stdout: logs.join("\n"), code };
-}
+import { createCliHarness } from "../helpers/cli-harness.js";
 
 describe("gk run CLI", () => {
+  afterEach(() => {
+    process.exitCode = 0; // fail() paths set process.exitCode=1 — reset so bun:test exits 0
+  });
   test("registers a single `run` command with subcommand dispatch", () => {
     const cli = cac("gk");
     registerRunCommands(cli);
@@ -52,73 +31,84 @@ describe("gk run CLI", () => {
     mkdirSync(cwd, { recursive: true });
     try {
       // 1. Initial status -> inactive (--json: the machine envelope)
-      const initialStatus = JSON.parse(runCli(["run", "status", "--json"], cwd).stdout);
+      const initialStatus = JSON.parse(
+        createCliHarness(registerRunCommands, { cwd }).run(["run", "status", "--json"]).stdout,
+      );
       expect(initialStatus).toEqual({ status: "ok", data: { active: null, advisor_events: 0, resumes_chain: [] } });
 
       // 2. Start run without graph file fails with GRAPH_NOT_FOUND
-      const startFail = JSON.parse(runCli(["run", "start", "--json"], cwd).stdout);
+      const startFail = JSON.parse(
+        createCliHarness(registerRunCommands, { cwd }).run(["run", "start", "--json"]).stdout,
+      );
       expect(startFail.status).toBe("fail");
       expect(startFail.error.code).toBe("GRAPH_NOT_FOUND");
       // 3. Start valid run with graph.yaml
       writeFileSync(join(cwd, "graph.yaml"), "metadata:\n  name: test-graph\n");
-      const startOk = JSON.parse(runCli(["run", "start", "--json"], cwd).stdout);
+      const startOk = JSON.parse(createCliHarness(registerRunCommands, { cwd }).run(["run", "start", "--json"]).stdout);
       expect(startOk.status).toBe("ok");
       expect(startOk.data.id).toMatch(/test-graph$/);
       const metaFile = JSON.parse(readFileSync(join(startOk.data.dir, "meta.json"), "utf-8"));
       expect(metaFile.fingerprint).toEqual({ head: null, tree: null }); // tmp cwd is not a git repo
 
       // 4. Status returns active run directory
-      const activeStatus = JSON.parse(runCli(["run", "status", "--json"], cwd).stdout);
+      const activeStatus = JSON.parse(
+        createCliHarness(registerRunCommands, { cwd }).run(["run", "status", "--json"]).stdout,
+      );
       expect(activeStatus.status).toBe("ok");
       expect(activeStatus.data.active).toBe(startOk.data.dir);
 
       // 5. Node requires node id
-      const missingNode = JSON.parse(runCli(["run", "node", "--status", "ok", "--json"], cwd).stdout);
+      const missingNode = JSON.parse(
+        createCliHarness(registerRunCommands, { cwd }).run(["run", "node", "--status", "ok", "--json"]).stdout,
+      );
       expect(missingNode.status).toBe("fail");
       expect(missingNode.error.code).toBe("MISSING_ARG");
 
       // 6. Node requires status ok|fail
-      const badNodeStatus = JSON.parse(runCli(["run", "node", "review", "--json"], cwd).stdout);
+      const badNodeStatus = JSON.parse(
+        createCliHarness(registerRunCommands, { cwd }).run(["run", "node", "review", "--json"]).stdout,
+      );
       expect(badNodeStatus.status).toBe("fail");
       expect(badNodeStatus.error.code).toBe("BAD_STATUS");
 
       // 7. Node append succeeds
       const nodeOk = JSON.parse(
-        runCli(
-          [
-            "run",
-            "node",
-            "review",
-            "--status",
-            "ok",
-            "--wave",
-            "1",
-            "--agent",
-            "reviewer",
-            "--model",
-            "claude-3-7",
-            "--evidence",
-            "cov,lint",
-            "--duration-ms",
-            "1500",
-            "--json",
-            "--notes",
-            "all passed",
-          ],
-          cwd,
-        ).stdout,
+        createCliHarness(registerRunCommands, { cwd }).run([
+          "run",
+          "node",
+          "review",
+          "--status",
+          "ok",
+          "--wave",
+          "1",
+          "--agent",
+          "reviewer",
+          "--model",
+          "claude-3-7",
+          "--evidence",
+          "cov,lint",
+          "--duration-ms",
+          "1500",
+          "--json",
+          "--notes",
+          "all passed",
+        ]).stdout,
       );
       expect(nodeOk.status).toBe("ok");
       expect(nodeOk.data.run).toBe(startOk.data.id);
       expect(nodeOk.data.node).toBe("review");
 
       // 8. End run requires valid status
-      const badEndStatus = JSON.parse(runCli(["run", "end", "--status", "invalid", "--json"], cwd).stdout);
+      const badEndStatus = JSON.parse(
+        createCliHarness(registerRunCommands, { cwd }).run(["run", "end", "--status", "invalid", "--json"]).stdout,
+      );
       expect(badEndStatus.status).toBe("fail");
       expect(badEndStatus.error.code).toBe("BAD_STATUS");
 
       // 9. End run succeeds
-      const endOk = JSON.parse(runCli(["run", "end", "--status", "merged", "--json"], cwd).stdout);
+      const endOk = JSON.parse(
+        createCliHarness(registerRunCommands, { cwd }).run(["run", "end", "--status", "merged", "--json"]).stdout,
+      );
       expect(endOk.status).toBe("ok");
       expect(endOk.data.status).toBe("merged");
       expect(endOk.data.node_count).toBe(1);
@@ -126,7 +116,9 @@ describe("gk run CLI", () => {
       expect(endOk.data.evidence_keys).toEqual(["cov", "lint"]);
 
       // 10. Status returns null after end
-      const finalStatus = JSON.parse(runCli(["run", "status", "--json"], cwd).stdout);
+      const finalStatus = JSON.parse(
+        createCliHarness(registerRunCommands, { cwd }).run(["run", "status", "--json"]).stdout,
+      );
       expect(finalStatus).toEqual({ status: "ok", data: { active: null, advisor_events: 0, resumes_chain: [] } });
     } finally {
       rmSync(cwd, { recursive: true, force: true });
@@ -154,13 +146,23 @@ describe("gk run CLI", () => {
         ].join("\n"),
       );
       // inactive: plain human notice, not JSON
-      const inactive = runCli(["run", "status"], cwd).stdout;
+      const inactive = createCliHarness(registerRunCommands, { cwd }).run(["run", "status"]).stdout;
       expect(() => JSON.parse(inactive)).toThrow();
       expect(inactive).toContain("no active run");
 
-      const start = JSON.parse(runCli(["run", "start", "--json"], cwd).stdout);
-      runCli(["run", "node", "exec", "--status", "ok", "--wave", "1", "--evidence", "cov"], cwd);
-      const human = runCli(["run", "status"], cwd).stdout;
+      const start = JSON.parse(createCliHarness(registerRunCommands, { cwd }).run(["run", "start", "--json"]).stdout);
+      createCliHarness(registerRunCommands, { cwd }).run([
+        "run",
+        "node",
+        "exec",
+        "--status",
+        "ok",
+        "--wave",
+        "1",
+        "--evidence",
+        "cov",
+      ]);
+      const human = createCliHarness(registerRunCommands, { cwd }).run(["run", "status"]).stdout;
       expect(() => JSON.parse(human)).toThrow(); // default output is not JSON
       expect(human).toContain(start.data.id); // run id
       expect(human).toContain("graph: human-graph");
@@ -170,7 +172,7 @@ describe("gk run CLI", () => {
       expect(human).toContain(`verdict chain: ${start.data.id}`);
 
       // --json keeps today's envelope shape byte-for-byte
-      const js = JSON.parse(runCli(["run", "status", "--json"], cwd).stdout);
+      const js = JSON.parse(createCliHarness(registerRunCommands, { cwd }).run(["run", "status", "--json"]).stdout);
       expect(js).toEqual({
         status: "ok",
         data: { active: start.data.dir, advisor_events: 0, resumes_chain: [start.data.id] },
@@ -184,7 +186,7 @@ describe("gk run CLI", () => {
     const cwd = join(tmpdir(), `gk-run-unknown-${process.pid}-${Date.now()}`);
     mkdirSync(cwd, { recursive: true });
     try {
-      const res = JSON.parse(runCli(["run", "foo"], cwd).stdout);
+      const res = JSON.parse(createCliHarness(registerRunCommands, { cwd }).run(["run", "foo"]).stdout);
       expect(res.status).toBe("fail");
       expect(res.error.code).toBe("UNKNOWN_RUN_SUBCOMMAND");
     } finally {
@@ -196,7 +198,7 @@ describe("gk run CLI", () => {
     const cwd = join(tmpdir(), `gk-run-none-${process.pid}-${Date.now()}`);
     mkdirSync(cwd, { recursive: true });
     try {
-      const res = runCli(["run"], cwd);
+      const res = createCliHarness(registerRunCommands, { cwd }).run(["run"]);
       expect(res.stdout).toContain("gk run — run ledger commands");
       expect(res.stdout).toContain("Subcommands: start node end list status resume");
     } finally {
@@ -224,10 +226,19 @@ describe("gk run CLI", () => {
           "    advisor: { model: opus }",
         ].join("\n"),
       );
-      const start = JSON.parse(runCli(["run", "start", "--json"], cwd).stdout);
+      const start = JSON.parse(createCliHarness(registerRunCommands, { cwd }).run(["run", "start", "--json"]).stdout);
       expect(start.status).toBe("ok");
       const fired = JSON.parse(
-        runCli(["run", "node", "exec", "--advisor-fired", "2", "--streak", "2", "--json"], cwd).stdout,
+        createCliHarness(registerRunCommands, { cwd }).run([
+          "run",
+          "node",
+          "exec",
+          "--advisor-fired",
+          "2",
+          "--streak",
+          "2",
+          "--json",
+        ]).stdout,
       );
       expect(fired.status).toBe("ok");
       expect(fired.data.event).toEqual({ at: expect.any(String), node: "exec", round: 2, tier: "opus", streak: 2 });
@@ -257,8 +268,11 @@ describe("gk run CLI", () => {
           "    objective: do the thing",
         ].join("\n"),
       );
-      JSON.parse(runCli(["run", "start", "--json"], cwd).stdout);
-      const fired = JSON.parse(runCli(["run", "node", "plain", "--advisor-fired", "1", "--json"], cwd).stdout);
+      JSON.parse(createCliHarness(registerRunCommands, { cwd }).run(["run", "start", "--json"]).stdout);
+      const fired = JSON.parse(
+        createCliHarness(registerRunCommands, { cwd }).run(["run", "node", "plain", "--advisor-fired", "1", "--json"])
+          .stdout,
+      );
       expect(fired.status).toBe("fail");
       expect(fired.error.code).toBe("BAD_ADVISOR");
     } finally {
@@ -286,14 +300,14 @@ describe("gk run CLI", () => {
           "    advisor: { model: opus }",
         ].join("\n"),
       );
-      JSON.parse(runCli(["run", "start", "--json"], cwd).stdout);
-      const before = JSON.parse(runCli(["run", "status", "--json"], cwd).stdout);
+      JSON.parse(createCliHarness(registerRunCommands, { cwd }).run(["run", "start", "--json"]).stdout);
+      const before = JSON.parse(createCliHarness(registerRunCommands, { cwd }).run(["run", "status", "--json"]).stdout);
       expect(before).toEqual({
         status: "ok",
         data: { active: expect.any(String), advisor_events: 0, resumes_chain: [expect.any(String)] },
       });
-      runCli(["run", "node", "exec", "--advisor-fired", "1"], cwd);
-      const after = JSON.parse(runCli(["run", "status", "--json"], cwd).stdout);
+      createCliHarness(registerRunCommands, { cwd }).run(["run", "node", "exec", "--advisor-fired", "1"]);
+      const after = JSON.parse(createCliHarness(registerRunCommands, { cwd }).run(["run", "status", "--json"]).stdout);
       expect(after.status).toBe("ok");
       expect(after.data.advisor_events).toBe(1);
     } finally {
@@ -321,10 +335,19 @@ describe("gk run CLI", () => {
           "    advisor: { model: opus }",
         ].join("\n"),
       );
-      JSON.parse(runCli(["run", "start", "--json"], cwd).stdout);
+      JSON.parse(createCliHarness(registerRunCommands, { cwd }).run(["run", "start", "--json"]).stdout);
       for (const bad of ["abc", "0", "1.5"]) {
         const res = JSON.parse(
-          runCli(["run", "node", "exec", "--advisor-fired", "1", "--streak", bad, "--json"], cwd).stdout,
+          createCliHarness(registerRunCommands, { cwd }).run([
+            "run",
+            "node",
+            "exec",
+            "--advisor-fired",
+            "1",
+            "--streak",
+            bad,
+            "--json",
+          ]).stdout,
         );
         expect(res.status).toBe("fail");
         expect(res.error.code).toBe("BAD_ADVISOR");
@@ -358,9 +381,14 @@ describe("gk run CLI", () => {
           "    advisor: { model: sonnet }",
         ].join("\n"),
       );
-      const start = JSON.parse(runCli(["run", "start", "--graph", "alt.yaml", "--json"], cwd).stdout);
+      const start = JSON.parse(
+        createCliHarness(registerRunCommands, { cwd }).run(["run", "start", "--graph", "alt.yaml", "--json"]).stdout,
+      );
       expect(start.status).toBe("ok");
-      const fired = JSON.parse(runCli(["run", "node", "exec", "--advisor-fired", "1", "--json"], cwd).stdout);
+      const fired = JSON.parse(
+        createCliHarness(registerRunCommands, { cwd }).run(["run", "node", "exec", "--advisor-fired", "1", "--json"])
+          .stdout,
+      );
       expect(fired.status).toBe("ok");
       expect(fired.data.event).toEqual({
         at: expect.any(String),
@@ -379,11 +407,11 @@ describe("gk run CLI", () => {
     mkdirSync(cwd, { recursive: true });
     try {
       writeFileSync(join(cwd, "graph.yaml"), "metadata:\n  name: demo\ntopology: diamond\n");
-      const r1 = JSON.parse(runCli(["run", "start", "--json"], cwd).stdout).data;
-      runCli(["run", "end", "--status", "failed"], cwd);
+      const r1 = JSON.parse(createCliHarness(registerRunCommands, { cwd }).run(["run", "start", "--json"]).stdout).data;
+      createCliHarness(registerRunCommands, { cwd }).run(["run", "end", "--status", "failed"]);
       const { startRun } = require("../../src/memory/ledger.js");
       startRun(cwd, join(cwd, "graph.yaml"), "2026-09-04T11:00:00.000Z", r1.id);
-      const parsed = JSON.parse(runCli(["run", "status", "--json"], cwd).stdout);
+      const parsed = JSON.parse(createCliHarness(registerRunCommands, { cwd }).run(["run", "status", "--json"]).stdout);
       expect(parsed.status).toBe("ok");
       expect(parsed.data.resumes_chain).toEqual(["20260904-110000-demo", r1.id]);
     } finally {
@@ -395,6 +423,7 @@ describe("gk run CLI", () => {
 describe("run resume CLI", () => {
   let cwd: string;
   beforeEach(() => {
+    process.exitCode = 0; // assert exitCode as a plain number, even before any fail()
     cwd = join(tmpdir(), `gk-resume-${process.pid}-${Date.now()}`);
     mkdirSync(join(cwd, ".graphkit", "runs"), { recursive: true });
     mkdirSync(join(cwd, ".graphkit", "evidence"), { recursive: true });
@@ -404,7 +433,10 @@ describe("run resume CLI", () => {
       `apiVersion: graphkit.dev/v2\nkind: Graph\nmetadata:\n  name: demo\ntopology: custom\nnodes:\n  a:\n    agent: scout\n    objective: A\n    evidence: [a-out]\n  b:\n    agent: task\n    objective: B\n    depend_on: [a]\n  c:\n    agent: reviewer\n    objective: C\n    depend_on: [b]\n`,
     );
   });
-  afterEach(() => rmSync(cwd, { recursive: true, force: true }));
+  afterEach(() => {
+    process.exitCode = 0; // fail() paths set process.exitCode=1 — reset so bun:test exits 0
+    rmSync(cwd, { recursive: true, force: true });
+  });
 
   test("failed run derives session graph and reports pending", () => {
     writeFileSync(join(cwd, ".graphkit", "evidence", "a-out.md"), "ok\n");
@@ -430,8 +462,8 @@ describe("run resume CLI", () => {
       notes: null,
     });
     endRun(cwd, "failed");
-    const res = runCli(["run", "resume", r.id], cwd);
-    expect(res.code).toBe(0);
+    const res = createCliHarness(registerRunCommands, { cwd }).run(["run", "resume", r.id]);
+    expect(res.exitCode).toBe(0);
     const out = JSON.parse(res.stdout);
     expect(out.status).toBe("ok");
     expect(out.data.resumed).toBe(true);
@@ -459,7 +491,9 @@ describe("run resume CLI", () => {
     });
     endRun(cwd, "failed");
     const before = readdirSync(join(cwd, ".graphkit", "graphs"));
-    const out = JSON.parse(runCli(["run", "resume", r.id, "--dry-run"], cwd).stdout);
+    const out = JSON.parse(
+      createCliHarness(registerRunCommands, { cwd }).run(["run", "resume", r.id, "--dry-run"]).stdout,
+    );
     expect(out.data.resumed).toBe(false);
     expect(out.data.reason).toBe("DRY_RUN");
     expect(readdirSync(join(cwd, ".graphkit", "graphs"))).toEqual(before);
@@ -478,7 +512,7 @@ describe("run resume CLI", () => {
         notes: null,
       });
     endRun(cwd, "merged");
-    const out = JSON.parse(runCli(["run", "resume", r.id], cwd).stdout);
+    const out = JSON.parse(createCliHarness(registerRunCommands, { cwd }).run(["run", "resume", r.id]).stdout);
     expect(out.data.resumed).toBe(false);
     expect(out.data.reason).toBe("NOTHING_TO_RESUME");
   });
@@ -486,9 +520,9 @@ describe("run resume CLI", () => {
     const r = startRun(cwd, join(cwd, "graph.yaml"));
     endRun(cwd, "failed");
     appendFileSync(join(cwd, "graph.yaml"), "# drift\n");
-    const out = JSON.parse(runCli(["run", "resume", r.id], cwd).stdout);
+    const out = JSON.parse(createCliHarness(registerRunCommands, { cwd }).run(["run", "resume", r.id]).stdout);
     expect(out.error.code).toBe("RESUME_GRAPH_DRIFT");
-    expect(runCli(["run", "resume", r.id], cwd).code).toBe(1);
+    expect(createCliHarness(registerRunCommands, { cwd }).run(["run", "resume", r.id]).exitCode).toBe(1);
   });
 });
 
@@ -496,11 +530,15 @@ describe("run resume CLI", () => {
 describe("gk run list / run status <id> (round 4)", () => {
   let cwd: string;
   beforeEach(() => {
+    process.exitCode = 0; // assert exitCode as a plain number, even before any fail()
     cwd = join(tmpdir(), `gk-run-list-${process.pid}-${Date.now()}`);
     mkdirSync(join(cwd, ".graphkit", "runs"), { recursive: true });
     writeFileSync(join(cwd, "graph.yaml"), "metadata:\n  name: demo\ntopology: diamond\n");
   });
-  afterEach(() => rmSync(cwd, { recursive: true, force: true }));
+  afterEach(() => {
+    process.exitCode = 0; // fail() paths set process.exitCode=1 — reset so bun:test exits 0
+    rmSync(cwd, { recursive: true, force: true });
+  });
 
   test("list merges index entries with dir-only runs (ended / running / interrupted)", () => {
     startRun(cwd, join(cwd, "graph.yaml"), "2026-09-03T10:00:00.000Z");
@@ -509,7 +547,7 @@ describe("gk run list / run status <id> (round 4)", () => {
     startRun(cwd, join(cwd, "graph.yaml"), "2026-09-03T12:00:00.000Z");
     rmSync(join(cwd, ".graphkit", "runs", ".active")); // dir-only run → "interrupted"
 
-    const json = JSON.parse(runCli(["run", "list", "--json"], cwd).stdout);
+    const json = JSON.parse(createCliHarness(registerRunCommands, { cwd }).run(["run", "list", "--json"]).stdout);
     expect(json.status).toBe("ok");
     expect(json.data.total).toBe(2);
     expect(json.data.runs[0].id).toBe("20260903-120000-demo"); // newest first
@@ -518,9 +556,9 @@ describe("gk run list / run status <id> (round 4)", () => {
 
     // a live run shows as running
     startRun(cwd, join(cwd, "graph.yaml"), "2026-09-03T13:00:00.000Z");
-    const live = JSON.parse(runCli(["run", "list", "--json"], cwd).stdout);
+    const live = JSON.parse(createCliHarness(registerRunCommands, { cwd }).run(["run", "list", "--json"]).stdout);
     expect(live.data.runs[0].status).toBe("running");
-    const human = runCli(["run", "list"], cwd).stdout;
+    const human = createCliHarness(registerRunCommands, { cwd }).run(["run", "list"]).stdout;
     expect(human).toContain("running");
     expect(human).toContain("interrupted");
     expect(human).toContain("`gk run resume");
@@ -539,14 +577,16 @@ describe("gk run list / run status <id> (round 4)", () => {
       notes: null,
     });
     endRun(cwd, "merged");
-    const human = runCli(["run", "status", r.id], cwd);
+    const human = createCliHarness(registerRunCommands, { cwd }).run(["run", "status", r.id]);
     expect(human.stdout).toContain(`run: ${r.id}`);
     expect(human.stdout).toContain("nodes: 1 ok");
-    const json = JSON.parse(runCli(["run", "status", r.id, "--json"], cwd).stdout);
+    const json = JSON.parse(
+      createCliHarness(registerRunCommands, { cwd }).run(["run", "status", r.id, "--json"]).stdout,
+    );
     expect(json.status).toBe("ok");
     expect(json.data.active).toContain(r.id);
-    const miss = runCli(["run", "status", "no-such-run", "--json"], cwd);
+    const miss = createCliHarness(registerRunCommands, { cwd }).run(["run", "status", "no-such-run", "--json"]);
     expect(JSON.parse(miss.stdout).error.code).toBe("RUN_NOT_FOUND");
-    expect(miss.code).toBe(1);
+    expect(miss.exitCode).toBe(1);
   });
 });

@@ -1,5 +1,4 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { cac } from "cac";
 import { CBM_UNAVAILABLE_MSG } from "../../src/cbm/client.js";
 
 // --- Mutable refs — the seam reads these at call time ---
@@ -10,20 +9,12 @@ let capturedTool: string | undefined;
 let _capturedArgs: Record<string, unknown> | undefined;
 
 import { _resetCbmSeam, _setCbmSeam, registerGraphCommands } from "../../src/cli/commands/graph.js";
+import { createCliHarness } from "../helpers/cli-harness.js";
 
 describe("gk graph CBM subcommands", () => {
-  const sink: string[] = [];
-  let origLog: typeof console.log;
-  let origExit: typeof process.exit;
-
   beforeEach(() => {
     capturedTool = undefined;
     _capturedArgs = undefined;
-    sink.length = 0;
-    origLog = console.log;
-    origExit = process.exit;
-    console.log = (...a: unknown[]) => sink.push(a.map(String).join(" "));
-    process.exit = () => {};
     // Inject fakes via the DI seam (no module mock → no cross-file bleed)
     _setCbmSeam({
       clientFactory: () => ({
@@ -41,38 +32,20 @@ describe("gk graph CBM subcommands", () => {
 
   afterEach(() => {
     process.exitCode = 0; // fail() sets process.exitCode=1 — reset so bun:test exits 0
-    console.log = origLog;
-    process.exit = origExit;
     fakeCallFn = undefined;
     fakeCloseFn = undefined;
     fakeIndexFn = undefined;
     _resetCbmSeam();
   });
 
-  function runCli(args: string[]) {
-    const cli = cac("gk");
-    registerGraphCommands(cli);
-    try {
-      cli.parse(["node", "gk", ...args], { run: true });
-    } catch {
-      // async handlers settle later
-    }
-    return {
-      get stdout() {
-        return sink.join("\n");
-      },
-    };
-  }
-
   // --- index ---
   test("graph index emits ok with indexProject result", async () => {
     fakeIndexFn = async () => ({ project: "test-proj", indexed: true, nodes: 42 });
     fakeCloseFn = async () => {};
 
-    runCli(["graph", "index", "fast"]);
-    await new Promise((r) => setTimeout(r, 50));
+    const run = await createCliHarness(registerGraphCommands).runAsync(["graph", "index", "fast"], 50);
 
-    const parsed = JSON.parse(sink.join("\n"));
+    const parsed = JSON.parse(run.stdout);
     expect(parsed.status).toBe("ok");
     expect(parsed.data.indexed).toBe(true);
     expect(parsed.data.project).toBe("test-proj");
@@ -98,10 +71,9 @@ describe("gk graph CBM subcommands", () => {
     });
     fakeCloseFn = async () => {};
 
-    runCli(["graph", "search", "sampleAdd"]);
-    await new Promise((r) => setTimeout(r, 50));
+    const run = await createCliHarness(registerGraphCommands).runAsync(["graph", "search", "sampleAdd"], 50);
 
-    const parsed = JSON.parse(sink.join("\n"));
+    const parsed = JSON.parse(run.stdout);
     expect(parsed.status).toBe("ok");
     expect(parsed.data.results).toHaveLength(1);
     expect(parsed.data.results[0].qualified_name).toBe("sampleAdd");
@@ -111,9 +83,9 @@ describe("gk graph CBM subcommands", () => {
     expect(capturedTool).toBe("search_graph");
   });
 
-  test("graph search without pattern emits fail MISSING_ARG", () => {
-    runCli(["graph", "search"]);
-    const parsed = JSON.parse(sink.join("\n"));
+  test("graph search without pattern emits fail MISSING_ARG", async () => {
+    const run = await createCliHarness(registerGraphCommands).runAsync(["graph", "search"], 50);
+    const parsed = JSON.parse(run.stdout);
     expect(parsed.status).toBe("fail");
     expect(parsed.error.code).toBe("MISSING_ARG");
   });
@@ -128,10 +100,9 @@ describe("gk graph CBM subcommands", () => {
     });
     fakeCloseFn = async () => {};
 
-    runCli(["graph", "trace", "sampleAdd"]);
-    await new Promise((r) => setTimeout(r, 50));
+    const run = await createCliHarness(registerGraphCommands).runAsync(["graph", "trace", "sampleAdd"], 50);
 
-    const parsed = JSON.parse(sink.join("\n"));
+    const parsed = JSON.parse(run.stdout);
     expect(parsed.status).toBe("ok");
     expect(parsed.data.function).toBe("sampleAdd");
     expect(parsed.data.direction).toBe("both");
@@ -142,9 +113,9 @@ describe("gk graph CBM subcommands", () => {
     expect(capturedTool).toBe("trace_path");
   });
 
-  test("graph trace without arg emits fail MISSING_ARG", () => {
-    runCli(["graph", "trace"]);
-    const parsed = JSON.parse(sink.join("\n"));
+  test("graph trace without arg emits fail MISSING_ARG", async () => {
+    const run = await createCliHarness(registerGraphCommands).runAsync(["graph", "trace"], 50);
+    const parsed = JSON.parse(run.stdout);
     expect(parsed.status).toBe("fail");
     expect(parsed.error.code).toBe("MISSING_ARG");
   });
@@ -158,10 +129,12 @@ describe("gk graph CBM subcommands", () => {
     });
     fakeCloseFn = async () => {};
 
-    runCli(["graph", "query", "MATCH (n) RETURN n LIMIT 1"]);
-    await new Promise((r) => setTimeout(r, 50));
+    const run = await createCliHarness(registerGraphCommands).runAsync(
+      ["graph", "query", "MATCH (n) RETURN n LIMIT 1"],
+      50,
+    );
 
-    const parsed = JSON.parse(sink.join("\n"));
+    const parsed = JSON.parse(run.stdout);
     expect(parsed.status).toBe("ok");
     expect(parsed.data.columns).toEqual(["f.name", "f.label"]);
     expect(parsed.data.rows).toEqual([["sampleAdd", "Function"]]);
@@ -169,9 +142,9 @@ describe("gk graph CBM subcommands", () => {
     expect(capturedTool).toBe("query_graph");
   });
 
-  test("graph query without arg emits fail MISSING_ARG", () => {
-    runCli(["graph", "query"]);
-    const parsed = JSON.parse(sink.join("\n"));
+  test("graph query without arg emits fail MISSING_ARG", async () => {
+    const run = await createCliHarness(registerGraphCommands).runAsync(["graph", "query"], 50);
+    const parsed = JSON.parse(run.stdout);
     expect(parsed.status).toBe("fail");
     expect(parsed.error.code).toBe("MISSING_ARG");
   });
@@ -183,10 +156,9 @@ describe("gk graph CBM subcommands", () => {
     };
     fakeCloseFn = async () => {};
 
-    runCli(["graph", "search", "foo"]);
-    await new Promise((r) => setTimeout(r, 50));
+    const run = await createCliHarness(registerGraphCommands).runAsync(["graph", "search", "foo"], 50);
 
-    const parsed = JSON.parse(sink.join("\n"));
+    const parsed = JSON.parse(run.stdout);
     expect(parsed.status).toBe("fail");
     expect(parsed.error.code).toBe("CBM_UNAVAILABLE");
   });
@@ -199,13 +171,15 @@ describe("gk graph CBM subcommands", () => {
     };
     fakeCloseFn = async () => {};
 
-    runCli(["graph", "ask", "Who calls validateGraph in production code?"]);
-    await new Promise((r) => setTimeout(r, 50));
+    const run = await createCliHarness(registerGraphCommands).runAsync(
+      ["graph", "ask", "Who calls validateGraph in production code?"],
+      50,
+    );
 
-    const parsed = JSON.parse(sink.join("\n"));
+    const parsed = JSON.parse(run.stdout);
     expect(parsed.status).toBe("fail");
     expect(parsed.error.code).toBe("CBM_UNAVAILABLE");
-    expect(process.exitCode).toBe(1);
+    expect(run.exitCode).toBe(1);
   });
 
   test("client.close called after successful search", async () => {
@@ -215,8 +189,7 @@ describe("gk graph CBM subcommands", () => {
       closeCalled = true;
     };
 
-    runCli(["graph", "search", "sampleAdd"]);
-    await new Promise((r) => setTimeout(r, 50));
+    await createCliHarness(registerGraphCommands).runAsync(["graph", "search", "sampleAdd"], 50);
 
     expect(closeCalled).toBe(true);
   });
@@ -230,17 +203,16 @@ describe("gk graph CBM subcommands", () => {
       closeCalled = true;
     };
 
-    runCli(["graph", "search", "sampleAdd"]);
-    await new Promise((r) => setTimeout(r, 50));
+    await createCliHarness(registerGraphCommands).runAsync(["graph", "search", "sampleAdd"], 50);
 
     expect(closeCalled).toBe(true);
   });
 
   // --- R7: flag validation (previously uncovered INVALID_LIMIT / INVALID_DEPTH) ---
   test("graph search --limit 0 emits fail INVALID_LIMIT with no CBM call", async () => {
-    runCli(["graph", "search", "foo", "--limit", "0"]);
-    await new Promise((r) => setTimeout(r, 50));
-    const parsed = JSON.parse(sink.join("\n"));
+    const run = await createCliHarness(registerGraphCommands).runAsync(["graph", "search", "foo", "--limit", "0"], 50);
+
+    const parsed = JSON.parse(run.stdout);
     expect(parsed.status).toBe("fail");
     expect(parsed.error.code).toBe("INVALID_LIMIT");
     expect(parsed.error.message).toContain("must be a positive integer");
@@ -248,18 +220,24 @@ describe("gk graph CBM subcommands", () => {
   });
 
   test("graph ask --limit 0 emits fail INVALID_LIMIT", async () => {
-    runCli(["graph", "ask", "Who calls validateGraph?", "--limit", "0"]);
-    await new Promise((r) => setTimeout(r, 50));
-    const parsed = JSON.parse(sink.join("\n"));
+    const run = await createCliHarness(registerGraphCommands).runAsync(
+      ["graph", "ask", "Who calls validateGraph?", "--limit", "0"],
+      50,
+    );
+
+    const parsed = JSON.parse(run.stdout);
     expect(parsed.status).toBe("fail");
     expect(parsed.error.code).toBe("INVALID_LIMIT");
     expect(capturedTool).toBeUndefined();
   });
 
   test("graph ask --depth -1 emits fail INVALID_DEPTH (limit checked before depth)", async () => {
-    runCli(["graph", "ask", "Who calls validateGraph?", "--depth=-1"]);
-    await new Promise((r) => setTimeout(r, 50));
-    const parsed = JSON.parse(sink.join("\n"));
+    const run = await createCliHarness(registerGraphCommands).runAsync(
+      ["graph", "ask", "Who calls validateGraph?", "--depth=-1"],
+      50,
+    );
+
+    const parsed = JSON.parse(run.stdout);
     expect(parsed.status).toBe("fail");
     expect(parsed.error.code).toBe("INVALID_DEPTH");
     expect(parsed.error.message).toContain("must be a positive integer");
@@ -267,9 +245,12 @@ describe("gk graph CBM subcommands", () => {
   });
 
   test("graph trace --depth -1 emits fail INVALID_DEPTH with no CBM call", async () => {
-    runCli(["graph", "trace", "sampleAdd", "--depth=-1"]);
-    await new Promise((r) => setTimeout(r, 50));
-    const parsed = JSON.parse(sink.join("\n"));
+    const run = await createCliHarness(registerGraphCommands).runAsync(
+      ["graph", "trace", "sampleAdd", "--depth=-1"],
+      50,
+    );
+
+    const parsed = JSON.parse(run.stdout);
     expect(parsed.status).toBe("fail");
     expect(parsed.error.code).toBe("INVALID_DEPTH");
     expect(capturedTool).toBeUndefined();
@@ -280,8 +261,7 @@ describe("gk graph CBM subcommands", () => {
     fakeCallFn = async () => ({ total: 0, search_mode: "bm25", results: [], has_more: false });
     fakeCloseFn = async () => {};
 
-    runCli(["graph", "search", "sampleAdd", "--limit", "2"]);
-    await new Promise((r) => setTimeout(r, 50));
+    await createCliHarness(registerGraphCommands).runAsync(["graph", "search", "sampleAdd", "--limit", "2"], 50);
 
     expect(capturedTool).toBe("search_graph");
     expect(_capturedArgs?.limit).toBe(2);
@@ -309,10 +289,12 @@ describe("gk graph CBM subcommands", () => {
     };
     fakeCloseFn = async () => {};
 
-    runCli(["graph", "ask", "Who calls validateGraph in production code?", "--limit", "2", "--depth", "2"]);
-    await new Promise((r) => setTimeout(r, 50));
+    const run = await createCliHarness(registerGraphCommands).runAsync(
+      ["graph", "ask", "Who calls validateGraph in production code?", "--limit", "2", "--depth", "2"],
+      50,
+    );
 
-    const parsed = JSON.parse(sink.join("\n"));
+    const parsed = JSON.parse(run.stdout);
     expect(parsed.status).toBe("ok");
     expect(parsed.data.kind).toBe("callers");
     const searches = calls.filter((c) => c.tool === "search_graph");
@@ -326,8 +308,7 @@ describe("gk graph CBM subcommands", () => {
     fakeCallFn = async () => ({ function: "sampleAdd", direction: "both", callers: [], callees: [] });
     fakeCloseFn = async () => {};
 
-    runCli(["graph", "trace", "sampleAdd", "--depth", "2"]);
-    await new Promise((r) => setTimeout(r, 50));
+    await createCliHarness(registerGraphCommands).runAsync(["graph", "trace", "sampleAdd", "--depth", "2"], 50);
 
     expect(capturedTool).toBe("trace_path");
     expect(_capturedArgs?.depth).toBe(2);
@@ -352,10 +333,9 @@ describe("gk graph CBM subcommands", () => {
     });
     fakeCloseFn = async () => {};
 
-    runCli(["graph", "trace", "sampleAdd"]);
-    await new Promise((r) => setTimeout(r, 50));
+    const run = await createCliHarness(registerGraphCommands).runAsync(["graph", "trace", "sampleAdd"], 50);
 
-    const parsed = JSON.parse(sink.join("\n"));
+    const parsed = JSON.parse(run.stdout);
     expect(parsed.status).toBe("ok");
     expect(parsed.data.callers[0].file_path).toBe("server/anchor.ts");
     expect(parsed.data.callers[0].start_line).toBe(42);
@@ -378,16 +358,18 @@ describe("gk graph CBM subcommands", () => {
     };
     fakeCloseFn = async () => {};
 
-    runCli(["graph", "query", "--template", "dead-code"]);
-    await new Promise((r) => setTimeout(r, 50));
+    const run = await createCliHarness(registerGraphCommands).runAsync(
+      ["graph", "query", "--template", "dead-code"],
+      50,
+    );
 
     expect(capturedTool).toBe("query_graph");
-    const parsed = JSON.parse(sink.join("\n"));
+    const parsed = JSON.parse(run.stdout);
     expect(parsed.status).toBe("ok");
     expect(parsed.data.isolated).toEqual([{ name: "lonelyVar", file: "src/b.ts", line: 2 }]);
   });
 
-  test("graph query --templates lists offline — the CBM client factory is never invoked", () => {
+  test("graph query --templates lists offline — the CBM client factory is never invoked", async () => {
     let factoryCalls = 0;
     _setCbmSeam({
       clientFactory: () => {
@@ -396,8 +378,8 @@ describe("gk graph CBM subcommands", () => {
       },
     });
 
-    runCli(["graph", "query", "--templates", "--json"]);
-    const parsed = JSON.parse(sink.join("\n"));
+    const run = await createCliHarness(registerGraphCommands).runAsync(["graph", "query", "--templates", "--json"], 50);
+    const parsed = JSON.parse(run.stdout);
     expect(parsed.status).toBe("ok");
     expect(parsed.data.templates.map((t: { name: string }) => t.name).sort()).toEqual([
       "callers-of",
@@ -409,9 +391,9 @@ describe("gk graph CBM subcommands", () => {
   });
 
   test("graph query --template nope emits fail UNKNOWN_TEMPLATE with available, no CBM call", async () => {
-    runCli(["graph", "query", "--template", "nope"]);
-    await new Promise((r) => setTimeout(r, 50));
-    const parsed = JSON.parse(sink.join("\n"));
+    const run = await createCliHarness(registerGraphCommands).runAsync(["graph", "query", "--template", "nope"], 50);
+
+    const parsed = JSON.parse(run.stdout);
     expect(parsed.status).toBe("fail");
     expect(parsed.error.code).toBe("UNKNOWN_TEMPLATE");
     expect(parsed.error.details.available).toContain("dead-code");
@@ -428,10 +410,12 @@ describe("gk graph CBM subcommands", () => {
       },
     });
 
-    runCli(["graph", "query", "--template", "dead-code"]);
-    await new Promise((r) => setTimeout(r, 50));
+    const run = await createCliHarness(registerGraphCommands).runAsync(
+      ["graph", "query", "--template", "dead-code"],
+      50,
+    );
 
-    const parsed = JSON.parse(sink.join("\n"));
+    const parsed = JSON.parse(run.stdout);
     expect(parsed.status).toBe("fail");
     expect(parsed.error.code).toBe("CBM_UNAVAILABLE");
   });
