@@ -293,7 +293,7 @@ export function registerGraphCommands(cli: CAC) {
     .option("--template <name>", "Query template for `graph query` (dead-code | callers-of | symbol-set)")
     .option("--templates", "List available query templates (offline, no CBM client)")
     .action(
-      (
+      async (
         subcommand: string | undefined,
         args: string | string[] | undefined,
         opts: {
@@ -479,7 +479,7 @@ export function registerGraphCommands(cli: CAC) {
           const file = Array.isArray(args) ? args[0] : args;
           try {
             const graph = loadGraph(file ?? join(process.cwd(), "graph.yaml"));
-            const svg = renderSvg(graph);
+            const svg = await renderSvg(graph);
             const outDir = join(process.cwd(), ".graphkit", "diagrams");
             mkdirSync(outDir, { recursive: true });
             const outPath = join(outDir, `${graph.metadata?.name || "graph"}.svg`);
