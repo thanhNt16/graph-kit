@@ -682,7 +682,7 @@ export function registerGraphCommands(cli: CAC) {
     .option("--limit <n>", "Max search results for `graph search`/`graph ask` (default: CBM default / 8)")
     .option("--depth <n>", "Trace depth for `graph trace`/`graph ask` (default 3)")
     .action(
-      (
+      async (
         subcommand: string | undefined,
         args: string | string[] | undefined,
         opts: { json?: boolean; limit?: number | string; depth?: number | string },
@@ -861,7 +861,7 @@ export function registerGraphCommands(cli: CAC) {
           const file = Array.isArray(args) ? args[0] : args;
           try {
             const resolved = file ?? join(process.cwd(), "graph.yaml");
-            const svg = renderSvg(resolved);
+            const svg = await renderSvg(resolved);
             const outDir = join(process.cwd(), ".graphkit", "diagrams");
             mkdirSync(outDir, { recursive: true });
             const graph = YAML.parse(readFileSync(resolved, "utf-8"));

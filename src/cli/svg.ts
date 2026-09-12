@@ -1,5 +1,4 @@
 import { readFileSync } from "node:fs";
-import { createRequire } from "node:module";
 import YAML from "yaml";
 
 const TIER_COLOR: Record<string, string> = {
@@ -11,14 +10,11 @@ const TIER_COLOR: Record<string, string> = {
 
 // F6: dagre is heavy and only `gk graph svg` renders, but every command that
 // pulls in ./graph.js pays for a top-level import of it. Load on first render
-// instead. Kept synchronous on purpose: the svg subcommand calls renderSvg()
-// from a non-async action, so a dynamic `await import()` (which would change
-// the exported signature) is not an option here.
-type DagreModule = typeof import("@dagrejs/dagre").default;
-const lazyRequire = createRequire(import.meta.url);
-
-export function renderSvg(graphFile: string): string {
-  const dagre = lazyRequire("@dagrejs/dagre") as DagreModule;
+// via dynamic import — Bun's bundler follows `await import()` into compiled
+// binaries (a createRequire/require call is NOT bundled, breaking `gk graph
+// svg` in release artifacts).
+export async function renderSvg(graphFile: string): Promise<string> {
+  const dagre = (await import("@dagrejs/dagre")).default;
   const raw = readFileSync(graphFile, "utf-8");
   const graph = YAML.parse(raw);
   const nodes = graph.nodes || {};
