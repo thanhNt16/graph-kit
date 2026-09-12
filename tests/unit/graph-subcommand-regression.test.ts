@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, sep } from "node:path";
 import { cac } from "cac";
 import { registerGraphCommands } from "../../src/cli/commands/graph.js";
 
@@ -63,11 +63,16 @@ describe("graph subcommand regression (new/ascii/svg/waves)", () => {
   });
 
   test("graph svg writes a .svg diagram and reports its path", () => {
-    const { stdout, code } = runCli(["graph", "svg", diamond], cwd);
-    expect(code).toBe(0);
-    const parsed = JSON.parse(stdout);
+    // Real subprocess: the svg action awaits a dynamic dagre import, which the
+    // sync in-process harness cannot capture.
+    const { stdout, exitCode } = Bun.spawnSync(
+      ["bun", "run", join(import.meta.dir, "..", "..", "src", "index.ts"), "graph", "svg", diamond],
+      { cwd },
+    );
+    expect(exitCode).toBe(0);
+    const parsed = JSON.parse(stdout.toString());
     expect(parsed.status).toBe("ok");
-    expect(parsed.data.svg).toContain(".graphkit/diagrams/");
+    expect(parsed.data.svg).toContain(join(".graphkit", "diagrams") + sep);
     expect(parsed.data.svg).toMatch(/\.svg$/);
     expect(existsSync(parsed.data.svg)).toBe(true);
   });
