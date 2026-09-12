@@ -204,4 +204,22 @@ describe("flat-frontmatter fast path parity (round 4)", () => {
     const hex = parseMemoryFile(raw("n: 0x1A\n"), "x") as Record<string, unknown>;
     expect((hex.fm as Record<string, unknown>).n).toBe(26);
   });
+
+  // B2 regression: `key:  value` (extra spaces) once slipped through the fast
+  // path with the leading space glued to the value — `salience:  0.8` came
+  // back as the string " 0.8", missed the schema, and the entry silently
+  // vanished from every store pass.
+  test("extra spaces after the colon fall back to YAML.parse, not a space-glued string (B2)", () => {
+    const parsed = parseMemoryFile(raw("id: spaced\nsalience:  0.8\n"), "spaced");
+    expect(parsed).not.toBeNull();
+    expect(parsed!.fm.salience).toBe(0.8);
+    expect(parsed!.fm.id).toBe("spaced");
+  });
+
+  // B2 sibling: `note: - did the thing` opens with a block-sequence indicator
+  // in value position — invalid YAML, so the malformed convention (null) must
+  // hold; the fast path once kept it as the literal string.
+  test("dash-prefixed value declines to YAML.parse, which rejects it as malformed", () => {
+    expect(parseMemoryFile(raw("id: dash\nnote: - did the thing\n"), "dash")).toBeNull();
+  });
 });

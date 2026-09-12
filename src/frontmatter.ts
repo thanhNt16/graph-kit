@@ -77,6 +77,13 @@ function tryParseFlatFrontmatter(fmText: string): Record<string, unknown> | null
     // maps, anchors, aliases, block scalars, quotes); a trailing space or any
     // tab can too (multi-line plain scalars). Undecidable here → YAML.parse.
     if (/[:#'"{}[\]&*!|>%@`\t]/.test(value) || /[ ]$/.test(value)) return null;
+    // `key:  value` (extra spaces) must re-join to the plain scalar YAML
+    // sees, and a value opening with `- ` / `-` / `? ` is a block-sequence
+    // or mapping indicator, not a scalar (YAML rejects it outright). Neither
+    // is provable here → YAML.parse, so a dropped-vs-kept verdict can never
+    // silently diverge (a `salience:  0.8` string once fell out as a schema
+    // miss and the entry vanished).
+    if (/^ /.test(value) || /^[-?]( |$)/.test(value)) return null;
     if (/^[-+]?0[xXoObB]/.test(value)) return null; // hex/oct/bin ints resolve in YAML, not here
     if (value.startsWith(".") || value.startsWith("-.") || value.startsWith("+.")) return null;
     if (m[1] in fm) return null; // YAML keeps the last duplicate key — don't guess

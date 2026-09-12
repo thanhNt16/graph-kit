@@ -40,10 +40,10 @@ describe("graph subcommand regression (new/ascii/svg/waves)", () => {
   });
 
   test("graph svg writes a .svg diagram and reports its path", async () => {
-     // the svg action awaits a dynamic dagre import — use the async harness path
-     const run = await createCliHarness(registerGraphCommands, { cwd }).runAsync(["graph", "svg", diamond]);
-     expect(run.exit).toBeUndefined();
-     const parsed = JSON.parse(run.stdout);
+    // the svg action awaits a dynamic dagre import — use the async harness path
+    const run = await createCliHarness(registerGraphCommands, { cwd }).runAsync(["graph", "svg", diamond]);
+    expect(run.exit).toBeUndefined();
+    const parsed = JSON.parse(run.stdout);
     expect(parsed.status).toBe("ok");
     expect(parsed.data.svg).toContain(".graphkit/diagrams/");
     expect(parsed.data.svg).toMatch(/\.svg$/);
