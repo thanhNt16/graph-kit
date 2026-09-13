@@ -144,7 +144,7 @@ describe("CLI trust: memory index fails honestly with CBM_UNAVAILABLE — F3", (
   });
 
   test("memory index --json emits CBM_UNAVAILABLE with CBM_CMD/CBM_ARGS + npm 404, process.exit(1)", async () => {
-    const run = await createCliHarness(registerAll, { cwd }).runAsync(["memory", "index", "--json"], 500);
+    const run = await createCliHarness(registerAll, { cwd }).runAsync(["memory", "index", "--json"], 120);
     const out = JSON.parse(run.stdout);
     expect(out.status).toBe("fail");
     expect(out.error.code).toBe("CBM_UNAVAILABLE");

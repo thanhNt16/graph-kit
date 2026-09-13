@@ -89,6 +89,13 @@ export function createCliHarness(
       const restore = stubConsoleAndProcess(sink, exited);
       try {
         cli.parse(["node", "gk", ...args], { run: true });
+        if (exited.code !== undefined) {
+          // The stubbed process.exit fired synchronously — the handler is done.
+          // Waiting the window here burned up to 500ms in tests that pass a
+          // generous settle only for the CBM-timeout path.
+          restore();
+          return { stdout: sink.join("\n"), exit: exited.code, exitCode: process.exitCode };
+        }
         await new Promise((r) => setTimeout(r, settleMs));
       } catch {
         // cac throws for async handlers — they settle via awaited microtasks
