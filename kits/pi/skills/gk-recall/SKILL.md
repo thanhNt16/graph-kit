@@ -15,17 +15,18 @@ as File/Module shells with no searchable content; measured 2026-08-15, see
 
 ## Process
 
-1. Build the query from the calling node's `objective` + any explicit query argument. Honor an `as_of` argument if the caller supplied one (defaults to now).
+1. Build the query from the calling node's `objective` + any explicit query argument.
 2. Run `gk memory recall --json "<query>"`. This single command:
    - ranks memories by keyword-overlap × salience,
    - drops expired / not-yet-valid / past-valid entries,
-   - resolves `superseded_by` chains to the newest member,
+   - resolves `superseded_by` chains to the newest member (link-expansion hits pass the same filters),
    - returns top `recall_topk` — resolved from the graph's `memory.recall_topk` (default 5),
    - reports link-neighbor expansion hits in a `linked` count (memories pulled in via `.links.json` edges below direct keyword hits),
+   - reports a `malformed` count (store entries dropped by the malformed convention — nonzero means a store audit is due),
    - fails with `MEMORY_DIR_UNREADABLE` (exit 1) when the store exists but cannot be read — only a missing store returns empty results,
    - and reinforces every survivor (`gk memory touch`: `use_count` + `last_used_at` bump) so ACT-R decay keeps what recall actually uses.
 3. Read each returned `file` under `.graphkit/memory/` for full content. Surface a `stale: true` flag if the memory's source evidence predates the current node's `depend_on` ancestors. Report the `linked` count alongside results when nonzero.
-4. Return each memory with: `id`, `type`, one-line summary, full `content`, `as_of` validity window.
+4. Return each memory with: `id`, `type`, one-line summary, and full `content`.
 
 ## Store layout
 

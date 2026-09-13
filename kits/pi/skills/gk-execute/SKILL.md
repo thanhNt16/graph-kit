@@ -45,6 +45,8 @@ gk run start --graph graph.yaml --json
 
 Before dispatching wave 1, start the ledger. If it fails with `RUN_ACTIVE`, a previous
 run never ended — ask the user, or run `gk run status` to inspect, before proceeding.
+`gk run list` discovers ids: ended runs from the ledger index, plus running/interrupted
+dir-only runs, newest first — the front door for `gk run status <id>` and `gk run resume <id>`.
 
 ### Recording nodes
 

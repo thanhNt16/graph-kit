@@ -27,6 +27,12 @@ disable-model-invocation: false
 6. Write the final result to `.graphkit/runs/{name}-result.json`.
 7. Report to the user: verdict (passed/failed/partial), which nodes ran, and suggest `/gk:evidence`.
 
+## Discovering run ids
+
+`gk run list` shows every run — ended (from the index) plus running/interrupted
+dir-only runs — newest first, with a resume hint per interrupted run. Pass an id
+from it to `gk run status <id>` or the commands below.
+
 ## gk run resume
 
 Resume a failed or interrupted run:

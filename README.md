@@ -62,7 +62,7 @@ gk can bridge to the codebase-memory-mcp (CBM) MCP server for indexing and code-
 curl -fsSL https://raw.githubusercontent.com/thanhNt16/graph-kit/main/scripts/install.sh | sh
 ```
 
-Detects your platform, downloads the matching release, and swaps it in atomically — no sudo (installs into `~/.local/bin`), no stale-file overlays. Pin a version with `GK_VERSION=v0.3.8`, choose a dir with `GK_BIN_DIR=/usr/local/bin`. `curl | sh` runs a script you can [read first](scripts/install.sh); prefer to stay manual? Use the tarball:
+Detects your platform, downloads the matching release, and swaps it in atomically — no sudo (installs into `~/.local/bin`), no stale-file overlays. Pin a version with `GK_VERSION=<tag>` (see the [releases](https://github.com/thanhNt16/graph-kit/releases/latest) page), choose a dir with `GK_BIN_DIR=/usr/local/bin`. `curl | sh` runs a script you can [read first](scripts/install.sh); prefer to stay manual? Use the tarball:
 
 **Manual tarball** (macOS Apple Silicon shown; see [releases](https://github.com/thanhNt16/graph-kit/releases/latest) for other platforms):
 
@@ -157,11 +157,14 @@ nodes:
   worker:
     agent: code-reviewer
     model: sonnet
+    objective: Review the assigned files and record findings
     depend_on: [scouter]
   synthesizer:
     agent: software-architect
     model: opus
+    objective: Merge review findings into a verdict
     depend_on: [worker]
+    evidence: [report]
 evidence:
   required_keys: [report]
 ```
@@ -251,13 +254,13 @@ $ gk --help  (output abbreviated — run it yourself for the current list)
   Commands:
     init                             Install the GraphKit kit into the current project
     new                              Scaffold a new project with the GraphKit kit
-    gate [file]                      Deterministic evidence gate: MERGE/BLOCK over required evidence keys
+    gate [file]                      Deterministic evidence gate: MERGE/BLOCK over required evidence keys (--github-actions for CI annotations)
     validate [file]                  Validate a graph.yaml
     compile [file]                   Compile graph.yaml to a .workflow.js script
     graph [subcommand] [args...]     Graph lifecycle commands
                                      Subcommands: list switch show topologies inspect new ascii svg waves index search ask trace query
     memory [subcommand] [args...]    Memory commands
-                                     Subcommands: index trace touch recall consolidate
+                                     Subcommands: index trace touch list show recall consolidate
     models [subcommand] [args...]    Per-target model mapping commands
     template [subcommand] [args...]  Package, list, inspect, and materialize reusable GraphTemplates
     inventory                        Inventory installed agents, skills, tools, and MCP servers
@@ -266,8 +269,10 @@ $ gk --help  (output abbreviated — run it yourself for the current list)
     execute [file]                   Execute a graph.yaml (not yet implemented)
     visualize [file]                 Visualize a graph.yaml (not yet implemented)
     run [subcommand] [args...]       Run ledger commands
-                                     Subcommands: start node end status resume
+                                     Subcommands: start node end list status plan resume
     suggest                          Show ranked workflow suggestions from memory
+    evidence [subcommand]            Evidence store: add artifacts, render reports
+    completions [shell]              Print static shell completion scripts (bash|zsh|fish)
 
   Options:
     -v, --version  Display version number

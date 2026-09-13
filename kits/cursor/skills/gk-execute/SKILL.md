@@ -45,6 +45,8 @@ gk run start --graph graph.yaml --json
 
 Before dispatching wave 1, start the ledger. If it fails with `RUN_ACTIVE`, a previous
 run never ended — ask the user, or run `gk run status` to inspect, before proceeding.
+`gk run list` discovers ids: ended runs from the ledger index, plus running/interrupted
+dir-only runs, newest first — the front door for `gk run status <id>` and `gk run resume <id>`.
 
 ### Recording nodes
 
@@ -174,6 +176,31 @@ After all agents in a wave finish (wait on notifications — never assume):
 Graph authority is unchanged in worktree mode — topology, `depend_on` ordering, and loops still come from graph.yaml; worktrees are transport-level isolation only.
 
 **Fallback (no worktree support):** same-tree mode with a strict per-node file ownership map; if files can't be partitioned, sequence the nodes via `depend_on` and re-validate.
+
+## Loop groups (multi-node loops)
+
+Top-level `loops:` repeats a **contiguous wave span** as a round trip (e.g. implement → test) until a stop condition. Semantics are authoritative in the design spec §4.3:
+
+```yaml
+loops:
+  - nodes: [implement, test]      # required; contiguous wave span (validator-enforced)
+    max_rounds: 5                 # required; ≥ 1 hard cap
+    stop_when: "all tests pass"   # LLM-judged; required unless gate_evidence
+    gate_evidence: [test-report]  # optional deterministic machine gate
+```
+
+**Execution:** waves are computed once from the DAG. Walk waves normally; when you reach a loop group's head wave, enter the loop:
+
+1. **Run a round** = one pass over the span's waves, dispatching normally. Round N outputs feed round N+1 node contexts.
+2. **Hybrid stop ladder** — after each round, check in order:
+   1. `gate_evidence` set and every listed `<evidence_dir>/<key>.md` exists and is non-whitespace → **stop: success** (deterministic, shell-testable).
+   2. Else `stop_when` present → judge the previous round's node outputs against the text yourself (same LLM-read pattern as curator `INJECTION:` parsing). Satisfied → **stop: success**.
+   3. Else dispatch the next round.
+3. **Evidence:** latest round wins — overwrite `<evidence_dir>/<key>.md` in place; never accumulate rounds.
+4. **Exhaustion:** `max_rounds` reached without satisfaction → the loop fails and, per graph-stop rules, the whole run stops. Report rounds executed, last-round outputs, and which condition was being checked.
+5. **Run report:** record rounds completed and stop reason per loop — `gate` | `judged` | `exhausted`.
+
+Per-node `loop:` keeps its existing behavior and is orthogonal — a node inside a group may still carry its own internal loop.
 
 ## Why this is effective
 

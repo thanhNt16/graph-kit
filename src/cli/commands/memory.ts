@@ -5,7 +5,7 @@ import YAML from "yaml";
 import { CBM_UNAVAILABLE_MSG, isCbmUnavailable } from "../../cbm/client.js";
 import { getIndexProjectFn, withCbmClient } from "../../cbm/seam.js";
 import { actRScore, shouldExpire } from "../../eval/forgetting.js";
-import { type ParsedMemoryFile, parseMemoryFile, walkMemoryStore } from "../../frontmatter.js";
+import { type ParsedMemoryFile, parseMemoryFile, walkMemoryStore, walkMemoryStoreStats } from "../../frontmatter.js";
 import { atomicWrite } from "../../fs.js";
 import { type ConsolidateResult, consolidate } from "../../memory/consolidate.js";
 import { type ExpandedHit, expandedRecall } from "../../memory/recall-expanded.js";
@@ -447,6 +447,9 @@ export function registerMemoryCommands(cli: CAC) {
           return;
         }
         console.log(renderRecallHits(memDir, query, results, linked));
+        // D5: a silent drop used to read as "no match" — hand-rolled entries
+        // with a bad date/id vanished without a trace in human mode.
+        if (malformed > 0) console.log(`(${malformed} store file(s) skipped as malformed — details: --json)`);
         return;
       }
       // Store inspection: recall is a query, not a browser. list/show give the
@@ -465,7 +468,8 @@ export function registerMemoryCommands(cli: CAC) {
           }
           return;
         }
-        const rows = walkMemoryStore(memDir, { skip: ["index.md", "log.md"] }).map((entry) => {
+        const walked = walkMemoryStoreStats(memDir, { skip: ["index.md", "log.md"] });
+        const rows = walked.entries.map((entry) => {
           const fm = entry.fm as unknown as Record<string, unknown>;
           return {
             id: entry.id,
@@ -481,7 +485,11 @@ export function registerMemoryCommands(cli: CAC) {
           return;
         }
         if (rows.length === 0) {
-          console.log("memory store is empty");
+          console.log(
+            walked.malformed > 0
+              ? `memory store has no readable entries — ${walked.malformed} file(s) skipped as malformed (details: --json; run \`gk memory show <id>\` on a known-good entry for the required frontmatter)`
+              : "memory store is empty",
+          );
           return;
         }
         const w = Math.max(...rows.map((r) => r.id.length));
@@ -492,6 +500,7 @@ export function registerMemoryCommands(cli: CAC) {
               (r) =>
                 `  ${r.id.padEnd(w)}  ${r.status.padEnd(10)}  salience ${r.salience.toFixed(2)}  used ${r.use_count}×  ${r.file}`,
             ),
+            ...(walked.malformed > 0 ? [`(${walked.malformed} file(s) skipped as malformed — details: --json)`] : []),
           ].join("\n"),
         );
         return;
