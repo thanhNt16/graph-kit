@@ -89,3 +89,158 @@ export function computeLevels(nodes: Graph["nodes"]): Map<string, number> {
   for (const id of Object.keys(nodes)) visit(id);
   return levels;
 }
+
+// ---------------------------------------------------------------------------
+// Execution planning: the curator-interleave + cadence computation that
+// `gk graph waves` (and round-5 `gk run plan`) project onto the wave partition.
+// Extracted verbatim from the inline planner in cli/commands/graph.ts so the
+// cadence rules are unit-testable directly instead of only through the CLI.
+
+export interface PlanWave {
+  wave: number;
+  parallel: boolean;
+  curator?: boolean;
+  nodes: PlanNode[];
+}
+
+export interface PlanNode {
+  id: string;
+  agent?: string;
+  model: string;
+  objective: string;
+  tools: string[];
+  skills: string[];
+  refs: Graph["nodes"][string]["refs"];
+  depend_on: string[];
+  loop: Graph["nodes"][string]["loop"] | null;
+  evidence: string[];
+  advisor: Graph["nodes"][string]["advisor"] | null;
+  fan_out: Graph["nodes"][string]["fan_out"] | null;
+  hooks: NonNullable<Graph["hooks"]>["on_node_complete"];
+}
+
+export interface ExecutionPlan {
+  graph?: string;
+  topology: string;
+  total_waves: number;
+  total_nodes: number;
+  waves: PlanWave[];
+  evidence_required: string[];
+  on_graph_complete: NonNullable<Graph["hooks"]>["on_graph_complete"];
+  /** present only for memory-augmented graphs with a live curator node */
+  memory?: {
+    curator_node: string;
+    cadence: string;
+    every: number;
+    recall_topk: number;
+    expire_policy: string;
+    null_intervention_allowed: boolean;
+  };
+}
+
+/**
+ * Project a graph onto dispatch waves. Action nodes go through the shared
+ * Kahn partition; a memory-augmented graph's curator node is pulled out of
+ * scheduling and re-inserted as its own interleave waves at the configured
+ * cadence (the execute-path equivalent of memory-augmented.workflow.js's
+ * wrappedAgent, which only runs under the Workflow tool). Throws-free: an
+ * unresolvable dependency graph yields `unresolved` — the CALLER decides
+ * whether that is loud (WAVES_INCOMPLETE) or tolerated.
+ */
+export function planExecutionWaves(graph: Graph): { plan: ExecutionPlan; unresolved: string[] } {
+  const nodes = graph.nodes || {};
+  const ids = Object.keys(nodes);
+
+  const isMem = graph.topology === "memory-augmented";
+  const memCfg = isMem ? graph.topology_config?.memory || {} : {};
+  const curatorName = isMem ? memCfg.curator_node || "curator" : null;
+  const cadence = memCfg.cadence || "on_node_complete";
+  const every = memCfg.every || 1;
+  const hasCurator = curatorName !== null && Object.hasOwn(nodes, curatorName);
+  const actionIds = hasCurator ? ids.filter((id) => id !== curatorName) : ids;
+
+  const actionNodes = Object.fromEntries(actionIds.map((id) => [id, nodes[id]]));
+  const { waves: actionWaves, unresolved } = computeWaves(actionNodes);
+
+  // Interleave curator waves at cadence; always finish with one end-of-run curation.
+  type Stage = { kind: "action"; ids: string[] } | { kind: "curator" };
+  const stages: Stage[] = [];
+  let completedActions = 0;
+  let lastCuratedAt = 0;
+  actionWaves.forEach((w) => {
+    stages.push({ kind: "action", ids: w });
+    completedActions += w.length;
+    if (hasCurator) {
+      const fire =
+        cadence === "on_node_complete" ||
+        (cadence === "every" && Math.floor(completedActions / every) > Math.floor(lastCuratedAt / every));
+      if (fire) {
+        stages.push({ kind: "curator" });
+        lastCuratedAt = completedActions;
+      }
+    }
+  });
+  // End-of-run curation: fire if the last crossing happened at a multiple of
+  // `every` but the current cumulative total no longer is — a threshold was
+  // passed since the last fire.
+  if (
+    hasCurator &&
+    actionWaves.length > 0 &&
+    lastCuratedAt > 0 &&
+    lastCuratedAt < completedActions &&
+    completedActions % every !== 0 &&
+    lastCuratedAt % every === 0
+  ) {
+    stages.push({ kind: "curator" });
+  }
+
+  // HookRef commands ride the payload so /gk:execute can run them without
+  // re-reading graph.yaml. on_fanout_dispatch stays declared-but-unused:
+  // no consumer exists, and inventing one would be speculative.
+  const nodeHooks = graph.hooks?.on_node_complete ?? [];
+  const nodeObj = (id: string): PlanNode => ({
+    id,
+    agent: nodes[id]?.agent,
+    model: nodes[id]?.model || "sonnet",
+    objective: nodes[id]?.objective?.trim() || "",
+    tools: nodes[id]?.tools || [],
+    skills: nodes[id]?.skills || [],
+    refs: nodes[id]?.refs || [],
+    depend_on: nodes[id]?.depend_on || [],
+    loop: nodes[id]?.loop || null,
+    evidence: nodes[id]?.evidence || [],
+    advisor: nodes[id]?.advisor ?? null,
+    fan_out: nodes[id]?.fan_out ?? null,
+    hooks: nodeHooks,
+  });
+
+  // Materialize waves; curator waves carry `curator: true` + the recall skill.
+  const waves: PlanWave[] = stages.map((stage, i) => {
+    if (stage.kind === "curator") {
+      const skills = Array.from(new Set([...(nodes[curatorName!]?.skills || []), "gk-recall"]));
+      return { wave: i, parallel: false, curator: true, nodes: [{ ...nodeObj(curatorName!), skills }] };
+    }
+    return { wave: i, parallel: stage.ids.length > 1, nodes: stage.ids.map(nodeObj) };
+  });
+
+  const plan: ExecutionPlan = {
+    graph: graph.metadata?.name,
+    topology: graph.topology,
+    total_waves: waves.length,
+    total_nodes: ids.length,
+    waves,
+    evidence_required: graph.evidence?.required_keys || [],
+    on_graph_complete: graph.hooks?.on_graph_complete ?? [],
+  };
+  if (hasCurator) {
+    plan.memory = {
+      curator_node: curatorName!,
+      cadence,
+      every,
+      recall_topk: memCfg.recall_topk ?? 5,
+      expire_policy: memCfg.expire_policy ?? "act_r",
+      null_intervention_allowed: memCfg.null_intervention_allowed ?? true,
+    };
+  }
+  return { plan, unresolved };
+}

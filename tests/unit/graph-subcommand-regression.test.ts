@@ -102,3 +102,12 @@ describe("gk-execute skill", () => {
     expect(body).toContain("Agent");
   });
 });
+
+import { subcommandsFor } from "../../src/cli/command-registry.js";
+// Round 5 B2: the else-if chain became a route table — the table's keys must
+// stay in lockstep with the registry (the manifest/completions contract).
+import { GRAPH_ROUTES } from "../../src/cli/commands/graph.js";
+
+test("GRAPH_ROUTES keys === registry subcommands (route-table shape)", () => {
+  expect(Object.keys(GRAPH_ROUTES).sort()).toEqual(subcommandsFor("graph").split(" ").sort());
+});

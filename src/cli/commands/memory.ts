@@ -2,8 +2,8 @@ import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } fr
 import { basename, join } from "node:path";
 import type { CAC } from "cac";
 import YAML from "yaml";
-import { CBM_UNAVAILABLE_MSG, type CbmClient, createCbmClient, isCbmUnavailable } from "../../cbm/client.js";
-import { indexProject } from "../../cbm/index.js";
+import { CBM_UNAVAILABLE_MSG, isCbmUnavailable } from "../../cbm/client.js";
+import { getIndexProjectFn, withCbmClient } from "../../cbm/seam.js";
 import { actRScore, shouldExpire } from "../../eval/forgetting.js";
 import { type ParsedMemoryFile, parseMemoryFile, walkMemoryStore } from "../../frontmatter.js";
 import { atomicWrite } from "../../fs.js";
@@ -13,19 +13,10 @@ import { MemoryConfig } from "../../schemas/memory.schema.js";
 import { subcommandHelpFor, subcommandsFor } from "../command-registry.js";
 import { ok, printFail, printFailFromError } from "../output.js";
 
-// ponytail: DI seam for tests — avoids spawning the real CBM server.
-let _cbmClientFactory: () => CbmClient = () => createCbmClient();
-let _indexProjectFn: typeof indexProject = indexProject;
-/** @internal test seam — inject client + index implementations. */
-export function _setMemoryCbmSeam(opts: { clientFactory?: () => CbmClient; indexProject?: typeof indexProject }) {
-  if (opts.clientFactory) _cbmClientFactory = opts.clientFactory;
-  if (opts.indexProject) _indexProjectFn = opts.indexProject;
-}
-/** @internal test seam — restore real implementations. */
-export function _resetMemoryCbmSeam() {
-  _cbmClientFactory = () => createCbmClient();
-  _indexProjectFn = indexProject;
-}
+// Round 5: the DI seam + create→call→close lifecycle moved to src/cbm/seam.ts
+// (one implementation for graph + memory). These aliases keep the historical
+// memory-named import surface stable for tests.
+export { _injectCbm as _setMemoryCbmSeam, _resetCbm as _resetMemoryCbmSeam } from "../../cbm/seam.js";
 
 // project precedence: --project flag → graph.yaml topology_config.memory.project → default
 function resolveProject(cwd: string, override?: string): string {
@@ -45,12 +36,7 @@ export async function indexMemory(cwd: string, projectOverride?: string) {
   const memDir = join(cwd, ".graphkit", "memory");
   mkdirSync(memDir, { recursive: true });
 
-  const client = _cbmClientFactory();
-  try {
-    await _indexProjectFn(client, { repoPath: memDir, name: project });
-  } finally {
-    await client.close();
-  }
+  await withCbmClient((client) => getIndexProjectFn()(client, { repoPath: memDir, name: project }));
 
   const watermark = new Date().toISOString();
   // ponytail: .last-index stays CBM-only — it is the freshness watermark the
