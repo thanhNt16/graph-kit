@@ -17,6 +17,7 @@ import {
   getActiveGraphId,
   listSessionGraphs,
   loadActiveGraph,
+  safeGraphName,
   sessionGraphPath,
   setActiveGraphId,
 } from "../../store/index.js";
@@ -287,7 +288,8 @@ export function registerGraphCommands(cli: CAC) {
         }
         const script = compileGraph(graph, templatesDir());
         const outPath =
-          opts.output ?? join(process.cwd(), ".claude", "workflows", `${graph.metadata.name}.workflow.js`);
+          opts.output ??
+          join(process.cwd(), ".claude", "workflows", `${safeGraphName(graph.metadata.name)}.workflow.js`);
         mkdirSync(dirname(outPath), { recursive: true });
         writeFileSync(outPath, script);
         // F9: human mode voices the artifact path so the build is visible; --json stays structured.
@@ -509,7 +511,7 @@ export function registerGraphCommands(cli: CAC) {
             const svg = renderSvg(graph);
             const outDir = join(process.cwd(), ".graphkit", "diagrams");
             mkdirSync(outDir, { recursive: true });
-            const outPath = join(outDir, `${graph.metadata?.name || "graph"}.svg`);
+            const outPath = join(outDir, `${safeGraphName(graph.metadata?.name || "graph")}.svg`);
             writeFileSync(outPath, svg);
             console.log(JSON.stringify(ok({ svg: outPath })));
           } catch (e) {

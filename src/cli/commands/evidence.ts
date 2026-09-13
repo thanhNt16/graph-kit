@@ -5,6 +5,7 @@ import { loadGraph } from "../../compiler/loader.js";
 import { GraphKitError } from "../../errors.js";
 import { buildViews, renderHtml, renderMarkdown } from "../../evidence/report.js";
 import { addEvidence, maxBytesFromConfig } from "../../evidence/store.js";
+import { safeGraphName } from "../../store/index.js";
 import { subcommandHelpFor, subcommandsFor } from "../command-registry.js";
 import { fail, ok } from "../output.js";
 
@@ -59,7 +60,7 @@ export function registerEvidenceCommand(cli: CAC) {
           const graph = loadGraph(join(cwd, "graph.yaml"));
           const views = buildViews(cwd, graph);
           if (opts.html) {
-            const outPath = join(cwd, ".graphkit", "reports", `${graph.metadata.name}-evidence.html`);
+            const outPath = join(cwd, ".graphkit", "reports", `${safeGraphName(graph.metadata.name)}-evidence.html`);
             mkdirSync(dirname(outPath), { recursive: true });
             writeFileSync(outPath, renderHtml(graph.metadata.name, views, join(cwd, graph.outputs.evidence_dir)));
             if (opts.json) {

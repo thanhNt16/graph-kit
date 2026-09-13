@@ -41,6 +41,21 @@ function slugify(input: string): string {
   return slug || "graph";
 }
 
+/**
+ * Filesystem-safe form of a graph display name for every derived path and run
+ * id. The run-ledger id regex is `^\d{8}-\d{6}-[\w.-]+$`, so a name keeping
+ * anything outside [A-Za-z0-9._-] strands the run (readRunMeta rejects it), and
+ * a name keeping `/` or `..` escapes the output dirs compile/svg/report join
+ * it into. Display surfaces (meta.graph, `run list`) keep the raw name.
+ */
+export function safeGraphName(name: string): string {
+  const slug = name
+    .replace(/[^A-Za-z0-9._-]+/g, "-")
+    .replace(/^[-.]+|[-.]+$/g, "")
+    .slice(0, 80);
+  return slug || "graph";
+}
+
 // Session ids are interpolated into filesystem paths — a pointer file or CLI arg
 // carrying "../" must never resolve outside .graphkit/graphs/. Validate against
 // the canonical id shape (<date>-<kebab-slug>[<-N>]) before any join.
@@ -63,16 +78,24 @@ export function saveSessionGraph(
   const base = slugify(slug);
   const dir = graphsDir(baseDir);
 
-  let id = `${todayStamp()}-${base}`;
-  for (let suffix = 2; existsSync(join(dir, `${id}${EXT}`)); suffix += 1) {
-    id = `${todayStamp()}-${base}-${suffix}`;
+  // Exclusive-create ("wx") inside the suffix loop: the old existsSync+write
+  // was check-then-write — concurrent savers all saw the same free suffix and
+  // clobbered each other's graph while every caller held a success envelope
+  // pointing at the winner's bytes. EEXIST bumps the suffix instead.
+  let suffix = 1;
+  for (;;) {
+    const id = `${todayStamp()}-${base}${suffix === 1 ? "" : `-${suffix}`}`;
+    const path = join(dir, `${id}${EXT}`);
+    try {
+      writeFileSync(path, YAML.stringify(graph), { encoding: "utf-8", flag: "wx" });
+      // Save does NOT touch the active pointer; activation is the explicit
+      // setActiveGraphId opt-in so `gk template materialize` stays --use-gated.
+      return { id, path };
+    } catch (e) {
+      if ((e as NodeJS.ErrnoException)?.code !== "EEXIST") throw e;
+      suffix += 1;
+    }
   }
-
-  const path = join(dir, `${id}${EXT}`);
-  writeFileSync(path, YAML.stringify(graph), "utf-8");
-  // Save does NOT touch the active pointer; activation is the explicit
-  // setActiveGraphId opt-in so `gk template materialize` stays --use-gated.
-  return { id, path };
 }
 
 export function setActiveGraphId(id: string, baseDir: string = process.cwd()): void {

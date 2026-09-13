@@ -7,6 +7,7 @@ import {
   openSync,
   readdirSync,
   readFileSync,
+  renameSync,
   rmdirSync,
   rmSync,
   writeFileSync,
@@ -16,6 +17,7 @@ import YAML from "yaml";
 import { GraphKitError } from "../errors.js";
 import { fingerprint } from "../evidence/fingerprint.js";
 import { atomicWrite } from "../fs.js";
+import { safeGraphName } from "../store/index.js";
 
 export interface TraceLine {
   at: string;
@@ -63,10 +65,6 @@ export function activeRunGraph(cwd: string): string | null {
   } catch {
     return null; // unreadable meta falls back to the caller's default graph
   }
-}
-
-function safeGraphName(name: string): string {
-  return name.replace(/\.\./g, "-").replace(/[\\/]/g, "-");
 }
 
 function graphName(graphPath: string): string {
@@ -128,7 +126,11 @@ export function startRun(
   if (!existsSync(resolved)) throw new GraphKitError("GRAPH_NOT_FOUND", `GRAPH_NOT_FOUND: ${graphPath}`);
 
   const raw = readFileSync(resolved, "utf-8");
-  const name = safeGraphName(graphName(resolved));
+  const displayName = graphName(resolved);
+  // The id (and the dir name) must match readRunMeta's ^\d{8}-\d{6}-[\w.-]+$ —
+  // a display name like "My Graph" in the id used to strand the run: end/resume
+  // could never resolve it again. meta.graph keeps the display name.
+  const name = safeGraphName(displayName);
 
   mkdirSync(runsDir(cwd), { recursive: true });
   const baseId = runId(now, name);
@@ -167,7 +169,7 @@ export function startRun(
   writeFileSync(join(dir, "trace.jsonl"), "");
   const meta: Record<string, unknown> = {
     id,
-    graph: name,
+    graph: displayName,
     graph_path: resolved,
     graph_sha256: createHash("sha256").update(raw).digest("hex"),
     fingerprint: fingerprint(cwd),
@@ -297,41 +299,59 @@ function readJsonl<T>(file: string): T[] {
 }
 
 export function endRun(cwd: string, status: RunIndexLine["status"], now = new Date().toISOString()): RunIndexLine {
+  const active = activeFile(cwd);
+  // Recover a crashed end (killed between claim and index append) so the run
+  // stays endable instead of orphaned with a stray .ending claim.
+  if (!existsSync(active)) {
+    const stale = `${active}.ending`;
+    if (!existsSync(stale)) throw new GraphKitError("NO_ACTIVE_RUN", "NO_ACTIVE_RUN: nothing to end");
+    renameSync(stale, active);
+  }
   const dir = activeRun(cwd);
   if (!dir) throw new GraphKitError("NO_ACTIVE_RUN", "NO_ACTIVE_RUN: nothing to end");
   const id = basename(dir);
-  // Claim the end by removing the pointer FIRST: two concurrent `gk run end`
-  // both used to pass the activeRun() check and double-append to index.jsonl.
-  // Removing the pointer costs at most a lost summary on a crash between here
-  // and the append; double-appending corrupted the ledger permanently.
-  rmSync(activeFile(cwd), { force: true });
-  const meta = readRunMeta(cwd, id);
-  const trace = readTrace(cwd, id);
+  // Atomic end-claim: rename moves the pointer aside for exactly one ender (a
+  // second end sees no .active and fails — two concurrent ends used to
+  // double-append to index.jsonl). Unlike a plain rm, the claim survives long
+  // enough to hand back if anything below fails.
+  const claim = `${active}.ending`;
+  renameSync(active, claim);
+  try {
+    const meta = readRunMeta(cwd, id);
+    const trace = readTrace(cwd, id);
 
-  const summary: RunIndexLine = {
-    id,
-    graph: meta.graph,
-    graph_sha256: meta.graph_sha256,
-    started_at: meta.started_at,
-    ended_at: now,
-    status,
-    node_count: trace.length,
-    failures: trace.filter((t) => t.status === "fail").length,
-    evidence_keys: Array.from(new Set(trace.flatMap((t) => t.evidence))).sort(),
-  };
+    const summary: RunIndexLine = {
+      id,
+      graph: meta.graph,
+      graph_sha256: meta.graph_sha256,
+      started_at: meta.started_at,
+      ended_at: now,
+      status,
+      node_count: trace.length,
+      failures: trace.filter((t) => t.status === "fail").length,
+      evidence_keys: Array.from(new Set(trace.flatMap((t) => t.evidence))).sort(),
+    };
 
-  appendFileSync(indexFile(cwd), `${JSON.stringify(summary)}\n`);
-  const md = readFileSync(join(dir, "run.md"), "utf-8").replace(
-    "- status: running",
-    [
-      `- status: ${status}`,
-      `- ended_at: ${now}`,
-      `- nodes: ${summary.node_count}`,
-      `- failures: ${summary.failures}`,
-    ].join("\n"),
-  );
-  atomicWrite(join(dir, "run.md"), md);
-  return summary;
+    appendFileSync(indexFile(cwd), `${JSON.stringify(summary)}\n`);
+    const md = readFileSync(join(dir, "run.md"), "utf-8").replace(
+      "- status: running",
+      [
+        `- status: ${status}`,
+        `- ended_at: ${now}`,
+        `- nodes: ${summary.node_count}`,
+        `- failures: ${summary.failures}`,
+      ].join("\n"),
+    );
+    atomicWrite(join(dir, "run.md"), md);
+    rmSync(claim, { force: true });
+    return summary;
+  } catch (e) {
+    // Repair, don't strand: a failed end (corrupt meta, missing run.md) used to
+    // leave the run without its pointer — unindexable AND unresumable.
+    if (!existsSync(active)) renameSync(claim, active);
+    else rmSync(claim, { force: true }); // a newer run owns .active; ours is beyond repair
+    throw e;
+  }
 }
 
 /** Highest completed wave + 1 — the one "what round are we in" derivation.
