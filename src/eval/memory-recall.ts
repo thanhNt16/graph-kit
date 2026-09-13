@@ -135,7 +135,7 @@ function readMemories(dir: string): LoadedMemories {
   return { docs, malformed };
 }
 
-export function loadMemories(dir: string): MemoryDoc[] {
+function loadMemories(dir: string): MemoryDoc[] {
   return readMemories(dir).docs;
 }
 

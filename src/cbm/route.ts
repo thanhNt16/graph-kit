@@ -88,7 +88,7 @@ const STOP = new Set([
 ]);
 
 // identifier-looking tokens (camelCase / snake_case / ALLCAPS) — the strongest BM25 queries
-export function symbols(q: string): string[] {
+function symbols(q: string): string[] {
   return q
     .split(/[^A-Za-z0-9_-]+/)
     .filter(

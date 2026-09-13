@@ -188,6 +188,21 @@ export function cliManifest(): { cli: string; version: string; commands: CliMani
   };
 }
 
+/**
+ * Bare `gk <group>` usage text — one format for the group usage blocks (the
+ * subcommand list is always derived, so a new leaf can't be forgotten in it).
+ * Option lines are passed verbatim so each group keeps its aligned block.
+ */
+export function groupUsage(group: string, title: string, optionLines: string[] = ["--json  JSON output"]): string {
+  return `gk ${group} — ${title}\n\nUsage:\n  gk ${group} <subcommand> [args...]\n\nSubcommands: ${subcommandsFor(group)}\n\nOptions:\n  ${optionLines.join("\n  ")}`;
+}
+
+/** Positional i (0-based) from cac's string | string[] | undefined shape. */
+export function argAt(args: string | string[] | undefined, i = 0): string | undefined {
+  if (Array.isArray(args)) return args[i];
+  return i === 0 ? args : undefined;
+}
+
 /** Space-joined leaf names for a command group — injected into group --help and error hints. */
 export function subcommandsFor(group: string): string {
   return CLI_COMMANDS.filter((c) => c.path.startsWith(`${group} `))

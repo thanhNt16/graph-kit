@@ -17,7 +17,7 @@ export interface OverridesRead {
   corrupt: boolean;
 }
 
-export function loadOverrides(cwd: string, target: string): OverridesRead {
+function loadOverrides(cwd: string, target: string): OverridesRead {
   const p = overridesPath(cwd, target);
   if (!existsSync(p)) return { overrides: {}, corrupt: false };
   try {

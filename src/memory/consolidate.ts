@@ -33,7 +33,7 @@ const GENERATOR = "process:gk-memory-consolidate";
 const INDEX_MAX_LINES = 200; // Claude Code's cap: an index nobody can read is not an index
 
 /** One suggestion per pattern that implies an action. Deterministic, no model. */
-export function suggestionsFor(patterns: Pattern[]): SuggestionDraft[] {
+function suggestionsFor(patterns: Pattern[]): SuggestionDraft[] {
   const out: SuggestionDraft[] = [];
   for (const p of patterns) {
     const based = [`pattern-${p.signature}`];

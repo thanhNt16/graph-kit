@@ -11,15 +11,15 @@ import { loadGraph, resolveBareValidateGraph } from "../../../compiler/loader.js
 import { validateGraph } from "../../../compiler/validate.js";
 import { planExecutionWaves } from "../../../compiler/waves.js";
 import { safeGraphName } from "../../../store/index.js";
-import { subcommandHelpFor, subcommandsFor } from "../../command-registry.js";
+import { templatesDir } from "../../../targets/kit-source.js";
+import { groupUsage, subcommandHelpFor, subcommandsFor } from "../../command-registry.js";
 import { fail, ok, printFail, printFailFromError, renderFindings } from "../../output.js";
-import { templatesDir } from "../kit.js";
 import { printCbmFailure, printQueryTemplates, runCbmAction, runQueryTemplate } from "./cbm.js";
 import { cmdInspect, cmdList, cmdNew, cmdShow, cmdSwitch, type GraphOpts } from "./lifecycle.js";
 import { cmdAscii, cmdSvg, cmdTopologies } from "./render.js";
 
 // cac hands positionals as string | string[] | undefined — normalize once.
-export function posArgs(args: string | string[] | undefined): string[] {
+function posArgs(args: string | string[] | undefined): string[] {
   if (Array.isArray(args)) return args;
   return args === undefined ? [] : [args];
 }
@@ -186,9 +186,7 @@ export function registerGraphCommands(cli: CAC) {
     .action((subcommand: string | undefined, args: string | string[] | undefined, opts: GraphOpts) => {
       if (!subcommand) {
         // Bare `gk graph` prints usage and exits 0 — same surface as `gk memory`.
-        console.log(
-          `gk graph — graph lifecycle commands\n\nUsage:\n  gk graph <subcommand> [args...]\n\nSubcommands: ${subcommandsFor("graph")}\n\nOptions:\n  --json  JSON output`,
-        );
+        console.log(groupUsage("graph", "graph lifecycle commands"));
         return;
       }
       const route = GRAPH_ROUTES[subcommand];

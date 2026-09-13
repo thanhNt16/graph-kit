@@ -1,6 +1,5 @@
 import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { basename, dirname, isAbsolute, join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { basename, isAbsolute, join } from "node:path";
 import type { CAC } from "cac";
 import { GraphKitError } from "../../errors.js";
 import { atomicWrite } from "../../fs.js";
@@ -10,47 +9,8 @@ import { ok, printFail } from "../output.js";
 
 export type KitTarget = "claude" | "cursor";
 
-// The kit source ships inside the npm package: <package-root>/kits/<target>/
-// Resolve relative to this module, not process.cwd(). Exported for `gk doctor`,
-// which probes the same resolution `init` will do (and for templatesDir).
-export function kitSourceDir(targetId: TargetId = "claude"): string {
-  const t = getTarget(targetId);
-  const here = dirname(fileURLToPath(import.meta.url));
-  const kitName = t.kitDirName;
-
-  // 1. Explicit env override
-  if (process.env.GK_KIT_DIR && existsSync(process.env.GK_KIT_DIR)) return process.env.GK_KIT_DIR;
-
-  const candidates = [
-    // 2. Dev: src/cli/commands/ → kits/<kit>/
-    join(here, "..", "..", "..", "kits", kitName),
-    join(here, "..", "..", "..", "..", "kits", kitName),
-    // 3. npm package: dist/index.js → package-root/kits/<kit>/ (npm link, npm install -g)
-    join(here, "..", "kits", kitName),
-    join(here, "kits", kitName),
-    // 4. Standalone binary layout: <bin>/share/gk/kits/<kit>/ (extracted
-    // side-by-side with the binary — wins over #5 because it can only come
-    // from the same tarball as this binary, while ../share may be a stale
-    // kit left by an earlier install under a different prefix)
-    join(dirname(process.execPath), "share", "gk", "kits", kitName),
-    // 5. Standalone binary layout: <bin>/../share/gk/kits/<kit>/
-    join(dirname(process.execPath), "..", "share", "gk", "kits", kitName),
-    // 6. User home install: ~/.graphkit/kits/<kit>/
-    join(process.env.HOME ?? "", ".graphkit", "kits", kitName),
-    // 7. cwd fallbacks (works from repo root)
-    join(process.cwd(), "kits", kitName),
-    join(process.cwd(), "apps", "gk", "kits", kitName),
-  ];
-
-  const found = candidates.find((c) => existsSync(c));
-  if (!found) {
-    throw new GraphKitError("KIT_SOURCE_MISSING", `Bundled kits/${kitName}/ directory not found`, {
-      hint: `Set GK_KIT_DIR to the kits/${kitName}/ directory, or install the kit: sudo cp -r kits/${kitName} /usr/local/share/gk/kits/${kitName}`,
-      tried: candidates,
-    });
-  }
-  return found;
-}
+// The kit source resolution lives in targets/kit-source.ts; re-exported here
+// so `gk doctor` and existing imports keep their surface.
 
 // Retired kit assets, listed in the kit's metadata.json as relative paths.
 // Pruned from the destination on every install so upgrades drop files the kit
@@ -89,11 +49,9 @@ function kitDeletions(source: string): string[] {
   return raw as string[];
 }
 
-// Re-exported so graph.ts can resolve the templates dir the same way.
-export function templatesDir(target: TargetId = "claude"): string {
-  return join(kitSourceDir(target), "templates");
-}
+import { kitSourceDir, templatesDir } from "../../targets/kit-source.js";
 
+export { kitSourceDir, templatesDir };
 // Merge the GraphKit rules section into an existing AGENTS.md.
 // - null existing → the section becomes the whole file
 // - no markers → append a marked section

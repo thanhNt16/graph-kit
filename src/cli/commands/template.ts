@@ -17,7 +17,7 @@ import {
   type TemplateValues,
 } from "../../schemas/template.schema.js";
 import { saveSessionGraph, setActiveGraphId } from "../../store/index.js";
-import { subcommandHelpFor, subcommandsFor } from "../command-registry.js";
+import { groupUsage, subcommandHelpFor, subcommandsFor } from "../command-registry.js";
 import { fail, ok, printFail, printFailFromError } from "../output.js";
 
 // ponytail: DI seam mirroring graph.ts — lets tests simulate a rename failure
@@ -422,7 +422,15 @@ export function registerTemplateCommands(cli: CAC) {
           // Subcommands derive from the registry so the help can't list a
           // phantom leaf again (`close` never existed but shipped in this text).
           console.log(
-            `gk template — GraphTemplate commands\n\nUsage:\n  gk template <subcommand> [args...]\n\nSubcommands: ${subcommandsFor("template")}\n\nOptions:\n  --name <name>    Template name (pack)\n  --params <json>  Parameters (materialize)\n  --use            Set active session pointer after materialize\n  --force          Overwrite existing template\n  --input <file>   Complete GraphTemplate input file\n  --global         User-global store\n  --json           JSON output`,
+            groupUsage("template", "GraphTemplate commands", [
+              "--name <name>    Template name (pack)",
+              "--params <json>  Parameters (materialize)",
+              "--use            Set active session pointer after materialize",
+              "--force          Overwrite existing template",
+              "--input <file>   Complete GraphTemplate input file",
+              "--global         User-global store",
+              "--json           JSON output",
+            ]),
           );
           return;
         }

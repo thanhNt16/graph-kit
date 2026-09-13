@@ -12,7 +12,7 @@ export const TEMPLATE_NAME_MSG = `Template name must match ${TEMPLATE_NAME_RE.so
 const PARAM_LOWER_CAMEL_RE = /^[a-z][a-zA-Z0-9]*$/;
 const PARAM_KEBAB_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
-export function isValidParamName(name: string): boolean {
+function isValidParamName(name: string): boolean {
   return PARAM_LOWER_CAMEL_RE.test(name) || PARAM_KEBAB_RE.test(name);
 }
 

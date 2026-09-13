@@ -3,11 +3,11 @@ import { delimiter, dirname, join, resolve } from "node:path";
 import type { CAC } from "cac";
 import { loadGraph } from "../../compiler/loader.js";
 import { GraphKitError } from "../../errors.js";
+import { kitSourceDir } from "../../targets/kit-source.js";
 import { listTargets } from "../../targets/registry.js";
 import type { TargetId } from "../../targets/types.js";
 import { APP_VERSION } from "../../version.js";
 import { ok } from "../output.js";
-import { kitSourceDir } from "./kit.js";
 
 export type DoctorStatus = "ok" | "warn" | "fail" | "info";
 
@@ -203,7 +203,7 @@ export function runDoctor(cwd: string): DoctorCheck[] {
 // (warn) or is simply a state report (info).
 const MARKERS: Record<DoctorStatus, string> = { ok: "✓", warn: "–", fail: "✗", info: "–" };
 
-export function summarizeDoctor(checks: DoctorCheck[]): { ok: number; warnings: number; failures: number } {
+function summarizeDoctor(checks: DoctorCheck[]): { ok: number; warnings: number; failures: number } {
   return {
     ok: checks.filter((c) => c.status === "ok").length,
     warnings: checks.filter((c) => c.status === "warn").length,

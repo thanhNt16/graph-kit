@@ -10,7 +10,7 @@ import { atomicWrite } from "../../fs.js";
 import { type ConsolidateResult, consolidate } from "../../memory/consolidate.js";
 import { type ExpandedHit, expandedRecall } from "../../memory/recall-expanded.js";
 import { MemoryConfig } from "../../schemas/memory.schema.js";
-import { subcommandHelpFor, subcommandsFor } from "../command-registry.js";
+import { argAt, groupUsage, subcommandHelpFor, subcommandsFor } from "../command-registry.js";
 import { ok, printFail, printFailFromError } from "../output.js";
 
 // Round 5: the DI seam + create→call→close lifecycle moved to src/cbm/seam.ts
@@ -306,8 +306,10 @@ export function registerMemoryCommands(cli: CAC) {
       if (!subcommand) {
         // Bare `gk memory` prints usage and exits 0 — a documented surface, not an error.
         console.log(
-          `gk memory — memory lifecycle commands\n\nUsage:\n  gk memory <subcommand> [args...]\n
-Subcommands: ${subcommandsFor("memory")}\n\nOptions:\n  --project <project>  CBM project name\n  --json               JSON output`,
+          groupUsage("memory", "memory lifecycle commands", [
+            "--project <project>  CBM project name",
+            "--json               JSON output",
+          ]),
         );
         return;
       }
@@ -359,7 +361,7 @@ Subcommands: ${subcommandsFor("memory")}\n\nOptions:\n  --project <project>  CBM
         return;
       }
       if (subcommand === "touch") {
-        const id = Array.isArray(_args) ? _args[0] : _args;
+        const id = argAt(_args);
         if (!id) {
           // "No memory with id \"undefined\"" sent users hunting for a memory
           // literally named "undefined" — an absent id is a usage error.
@@ -386,7 +388,7 @@ Subcommands: ${subcommandsFor("memory")}\n\nOptions:\n  --project <project>  CBM
         return;
       }
       if (subcommand === "recall") {
-        const query = Array.isArray(_args) ? _args.join(" ") : _args;
+        const query = Array.isArray(_args) ? _args.join(" ") : argAt(_args);
         if (!query) {
           printFail("MISSING_ARG", "recall requires a query", { json: opts.json === true });
           return;
@@ -495,7 +497,7 @@ Subcommands: ${subcommandsFor("memory")}\n\nOptions:\n  --project <project>  CBM
         return;
       }
       if (subcommand === "show") {
-        const id = Array.isArray(_args) ? _args[0] : _args;
+        const id = argAt(_args);
         if (!id) {
           printFail("MISSING_ARG", "show requires a memory id — discover ids with `gk memory list`", {
             details: { hint: "Usage: gk memory show <id>" },

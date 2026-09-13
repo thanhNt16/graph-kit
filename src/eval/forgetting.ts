@@ -19,7 +19,7 @@ export function ageDays(lastUsedAt: string, now: string): number | null {
 const HALF_LIFE_DAYS = 14;
 
 /** 0..1 recency weight, or null when the age is unknown. */
-export function recencyDecay(lastUsedAt: string, now: string): number | null {
+function recencyDecay(lastUsedAt: string, now: string): number | null {
   const age = ageDays(lastUsedAt, now);
   return age === null ? null : 0.5 ** (age / HALF_LIFE_DAYS);
 }
