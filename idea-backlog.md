@@ -1,5 +1,23 @@
 # Axis Backlogs — merged, ranked
 
+> **Status (2026-09-13, round 5):** Round 5 (`improvement/efficiency-quality-round5`) landed the
+> five-lens brainstorm's accepted set: graph-name safety end-to-end (traversal-proof output paths,
+> unstrandable run ledger, exclusive session-graph creates), the consolidate/suggestions/recall
+> correctness batch, `printFail` (human fail verdicts by default; `process.exit(1)` retired),
+> the `graph/` route-table split + `planExecutionWaves` extraction + one CBM seam, `run plan`,
+> the full topology gallery (+`template list --topology`, `gk new --topology`), `gate
+> --github-actions`, the runnable example, the kit-parity round (loop groups in all 5 hosts,
+> as_of removal, honest gk-status), and the README accuracy guards.
+> **Cleared from the deferred list: graph.ts slimming + central fail renderer (the narrow
+> printFail slice; fails→stderr stays deferred — now a one-line flip), lazy command dispatch
+> RE-DEFERRED with sharper numbers (app-side startup floor ~27ms here; bench-relevant commands
+> import zod+yaml through their own trees, so the rewrite buys ~20ms only for light commands
+> while adding 16 module splits of help/manifest drift risk), `memory list --stats`/`gate
+> --junit` (speculative pull), zod hand-map for n=5000 (borderline), single-source kit skill
+> bodies (L; round 5's port makes the drift concrete — revisit if it recurs). Still deferred:**
+> E2–E5 clamps, R8 rg retriever, persistent `.recall-index.json`, date-only validity windows,
+> memory forget/vacuum, coverage-floor gate.
+
 > **Status (2026-09-11, round 4):** Round 4 (`improvement/efficiency-quality-round4`) landed the
 > five-lens brainstorm's accepted set: silent-expiry guard (E1 — unparseable dates never auto-expire),
 > marker YAML escaping + artifact containment, run-dir TOCTOU fix, resume key containment, honest

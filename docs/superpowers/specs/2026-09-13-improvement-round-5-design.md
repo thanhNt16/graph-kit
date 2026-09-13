@@ -163,3 +163,23 @@ plus new unit tests for planExecutionWaves and the route-table shape. `bun run c
 (typecheck, lint, test, build, cbm:parity, eval:memory, check-changelog, check:parity,
 manifest drift) must pass before push. Startup and recall deltas re-measured with `bun run perf`
 before/after C1.
+
+## Addendum — implementation notes (2026-09-13, post-execution)
+
+- **C1 lazy dispatch — deferred, not landed.** Re-measurement during implementation cut the
+  ceiling roughly in half and shrank the beneficiaries: `node dist/index.js --version` is ~50ms
+  on this machine (23ms node floor → ~27ms app-side, not the 55ms first estimated from the probe),
+  and the bench-relevant commands (`run`, `memory`, `gate`, `validate`) import zod + yaml through
+  their OWN invocation trees — lazy dispatch cannot remove that cost, only other modules' init.
+  Net win would be ~20ms on light commands (`--help`, kit, models) for 16 module splits of
+  help/manifest drift risk. The `check:parity` gate covers the built bundle either way. Revisit
+  only if per-invocation latency re-enters the measured critical path.
+- **B4/B6 landed narrower than designed.** `defineGroup` became `groupUsage` + `argAt`
+  (registry-derived subcommand lists + one positional normalizer) after the five usage blocks
+  proved structurally different (models lists targets, not subcommands); `renderTable` was dropped
+  — the 18 padEnd blocks each have bespoke semantics (marks, composite cells, unpadded middle
+  columns), and forcing them through one helper changes pinned output for cosmetics only. The
+  actual drift vector (hand-typed `available:` lists) was already killed in B1.
+- **C2 bonus find:** parallelizing `check:parity` exposed that its probes read the human surface —
+  after printFail, unknown-leaf failures print verdict lines the gate's JSON parse can't see, i.e.
+  the gate would have false-passed everything. Probes now pass `--json` explicitly.
