@@ -129,7 +129,7 @@ describe("gk suggest CLI", () => {
   test("--dismiss unknown id emits fail envelope with exit code 1", () => {
     const { stdout, exitCode } = createCliHarness(registerSuggestCommands, {
       cwd: join(memDir, "..", ".."),
-    }).run(["suggest", "--dismiss", "suggestion-nope"]);
+    }).run(["suggest", "--dismiss", "suggestion-nope", "--json"]);
     expect(exitCode).toBe(1);
     const envelope = JSON.parse(stdout) as { status: string; error: { code: string } };
     expect(envelope.status).toBe("fail");

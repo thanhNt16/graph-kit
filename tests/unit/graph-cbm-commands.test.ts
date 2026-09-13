@@ -84,7 +84,7 @@ describe("gk graph CBM subcommands", () => {
   });
 
   test("graph search without pattern emits fail MISSING_ARG", async () => {
-    const run = await createCliHarness(registerGraphCommands).runAsync(["graph", "search"], 50);
+    const run = await createCliHarness(registerGraphCommands).runAsync(["graph", "search", "--json"], 50);
     const parsed = JSON.parse(run.stdout);
     expect(parsed.status).toBe("fail");
     expect(parsed.error.code).toBe("MISSING_ARG");
@@ -114,7 +114,7 @@ describe("gk graph CBM subcommands", () => {
   });
 
   test("graph trace without arg emits fail MISSING_ARG", async () => {
-    const run = await createCliHarness(registerGraphCommands).runAsync(["graph", "trace"], 50);
+    const run = await createCliHarness(registerGraphCommands).runAsync(["graph", "trace", "--json"], 50);
     const parsed = JSON.parse(run.stdout);
     expect(parsed.status).toBe("fail");
     expect(parsed.error.code).toBe("MISSING_ARG");
@@ -143,7 +143,7 @@ describe("gk graph CBM subcommands", () => {
   });
 
   test("graph query without arg emits fail MISSING_ARG", async () => {
-    const run = await createCliHarness(registerGraphCommands).runAsync(["graph", "query"], 50);
+    const run = await createCliHarness(registerGraphCommands).runAsync(["graph", "query", "--json"], 50);
     const parsed = JSON.parse(run.stdout);
     expect(parsed.status).toBe("fail");
     expect(parsed.error.code).toBe("MISSING_ARG");
@@ -156,7 +156,7 @@ describe("gk graph CBM subcommands", () => {
     };
     fakeCloseFn = async () => {};
 
-    const run = await createCliHarness(registerGraphCommands).runAsync(["graph", "search", "foo"], 50);
+    const run = await createCliHarness(registerGraphCommands).runAsync(["graph", "search", "foo", "--json"], 50);
 
     const parsed = JSON.parse(run.stdout);
     expect(parsed.status).toBe("fail");
@@ -172,7 +172,7 @@ describe("gk graph CBM subcommands", () => {
     fakeCloseFn = async () => {};
 
     const run = await createCliHarness(registerGraphCommands).runAsync(
-      ["graph", "ask", "Who calls validateGraph in production code?"],
+      ["graph", "ask", "Who calls validateGraph in production code?", "--json"],
       50,
     );
 
@@ -210,7 +210,10 @@ describe("gk graph CBM subcommands", () => {
 
   // --- R7: flag validation (previously uncovered INVALID_LIMIT / INVALID_DEPTH) ---
   test("graph search --limit 0 emits fail INVALID_LIMIT with no CBM call", async () => {
-    const run = await createCliHarness(registerGraphCommands).runAsync(["graph", "search", "foo", "--limit", "0"], 50);
+    const run = await createCliHarness(registerGraphCommands).runAsync(
+      ["graph", "search", "foo", "--limit", "0", "--json"],
+      50,
+    );
 
     const parsed = JSON.parse(run.stdout);
     expect(parsed.status).toBe("fail");
@@ -221,7 +224,7 @@ describe("gk graph CBM subcommands", () => {
 
   test("graph ask --limit 0 emits fail INVALID_LIMIT", async () => {
     const run = await createCliHarness(registerGraphCommands).runAsync(
-      ["graph", "ask", "Who calls validateGraph?", "--limit", "0"],
+      ["graph", "ask", "Who calls validateGraph?", "--limit", "0", "--json"],
       50,
     );
 
@@ -233,7 +236,7 @@ describe("gk graph CBM subcommands", () => {
 
   test("graph ask --depth -1 emits fail INVALID_DEPTH (limit checked before depth)", async () => {
     const run = await createCliHarness(registerGraphCommands).runAsync(
-      ["graph", "ask", "Who calls validateGraph?", "--depth=-1"],
+      ["graph", "ask", "Who calls validateGraph?", "--depth=-1", "--json"],
       50,
     );
 
@@ -246,7 +249,7 @@ describe("gk graph CBM subcommands", () => {
 
   test("graph trace --depth -1 emits fail INVALID_DEPTH with no CBM call", async () => {
     const run = await createCliHarness(registerGraphCommands).runAsync(
-      ["graph", "trace", "sampleAdd", "--depth=-1"],
+      ["graph", "trace", "sampleAdd", "--depth=-1", "--json"],
       50,
     );
 
@@ -359,7 +362,7 @@ describe("gk graph CBM subcommands", () => {
     fakeCloseFn = async () => {};
 
     const run = await createCliHarness(registerGraphCommands).runAsync(
-      ["graph", "query", "--template", "dead-code"],
+      ["graph", "query", "--template", "dead-code", "--json"],
       50,
     );
 
@@ -391,7 +394,10 @@ describe("gk graph CBM subcommands", () => {
   });
 
   test("graph query --template nope emits fail UNKNOWN_TEMPLATE with available, no CBM call", async () => {
-    const run = await createCliHarness(registerGraphCommands).runAsync(["graph", "query", "--template", "nope"], 50);
+    const run = await createCliHarness(registerGraphCommands).runAsync(
+      ["graph", "query", "--template", "nope", "--json"],
+      50,
+    );
 
     const parsed = JSON.parse(run.stdout);
     expect(parsed.status).toBe("fail");
@@ -411,7 +417,7 @@ describe("gk graph CBM subcommands", () => {
     });
 
     const run = await createCliHarness(registerGraphCommands).runAsync(
-      ["graph", "query", "--template", "dead-code"],
+      ["graph", "query", "--template", "dead-code", "--json"],
       50,
     );
 

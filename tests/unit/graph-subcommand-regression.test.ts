@@ -84,8 +84,8 @@ nodes:
   });
 
   test("unknown graph subcommand rejected (regression)", () => {
-    const run = createCliHarness(registerGraphCommands, { cwd }).run(["graph", "bogus"]);
-    expect(run.exit).toBe(1);
+    const run = createCliHarness(registerGraphCommands, { cwd }).run(["graph", "bogus", "--json"]);
+    expect(run.exitCode).toBe(1);
     const parsed = JSON.parse(run.stdout);
     expect(parsed.status).toBe("fail");
     expect(parsed.error.code).toBe("UNKNOWN_GRAPH_SUBCOMMAND");

@@ -18,6 +18,7 @@ emits them.
 
 | Code | Meaning | Fix |
 |---|---|---|
+| `CONSOLIDATE_ERROR` | `gk memory consolidate` failed (store unreadable, generated-entry schema drift) | Inspect `.graphkit/memory/`; the message names the failing file or path |
 | `MISSING_ARG` | A required positional argument is absent | Provide the argument shown in `gk <command> --help` |
 | `MISSING_DIR` | `gk new` requires `--dir` | `gk new --dir my-project` |
 | `MISSING_NAME` | A required name argument is absent | Provide the name (`gk template pack` etc.) |
@@ -51,7 +52,6 @@ emits them.
 | `SUBGRAPH_TEMPLATE_MISSING` | A referenced subgraph template is missing | Register the template or fix the reference |
 | `UNKNOWN_SUBGRAPH` | Referenced subgraph topology is unknown | Use a canonical topology name |
 | `RUN_ERROR` | Generic run-command failure (fallback) | See the message for the underlying error |
-| `MISSING_ARG` | A required argument was not provided | Pass the argument shown in the message |
 | `MAP_INVALID` | A `--map` value is not `k=v` (or `--map` is missing) | Pass comma-separated `model=override` pairs |
 | `OVERRIDES_CORRUPT` | The model-overrides JSON file is not parseable | Fix/delete the file (`gk models <target> reset`), or `--force` to discard |
 
@@ -97,7 +97,6 @@ emits them.
 | `LIST_ERROR` | Graph/template listing failed | See the message |
 | `SHOW_ERROR` | Show failed (session graph or template) | See the message |
 | `SWITCH_ERROR` | `gk graph switch` failed | See the message |
-| `SVG_ERROR` | SVG render failed | See the message; check the graph parses with `gk validate` |
 | `UNKNOWN_TEMPLATE_SUBCOMMAND` | Unknown `gk template` subcommand | See `gk template --help` |
 | `NO_ACTIVE_GRAPH` | No active session graph | `gk graph switch <id>` or `gk template materialize --use` |
 | `GRAPH_NOT_FOUND` | No session graph with that id | `gk graph list` for available ids |

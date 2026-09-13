@@ -18,7 +18,7 @@ import {
 } from "../../schemas/template.schema.js";
 import { saveSessionGraph, setActiveGraphId } from "../../store/index.js";
 import { subcommandHelpFor, subcommandsFor } from "../command-registry.js";
-import { fail, ok } from "../output.js";
+import { fail, ok, printFail, printFailFromError } from "../output.js";
 
 // ponytail: DI seam mirroring graph.ts — lets tests simulate a rename failure
 // without touching the real filesystem. Delegates to the shared fs.ts seam;
@@ -429,13 +429,11 @@ export function registerTemplateCommands(cli: CAC) {
         if (subcommand === "pack") {
           const file = argAt(0);
           if (!file) {
-            console.log(JSON.stringify(fail("MISSING_FILE", "template pack requires a <file> argument")));
-            process.exit(1);
+            printFail("MISSING_FILE", "template pack requires a <file> argument", { json: opts.json === true });
             return;
           }
           if (!opts.name) {
-            console.log(JSON.stringify(fail("MISSING_NAME", "--name is required")));
-            process.exit(1);
+            printFail("MISSING_NAME", "--name is required", { json: opts.json === true });
             return;
           }
           const res = runTemplatePack({
@@ -447,8 +445,14 @@ export function registerTemplateCommands(cli: CAC) {
             force: opts.force,
             global: opts.global,
           });
-          console.log(JSON.stringify(res));
-          if (res.status === "fail") process.exit(1);
+          if (res.status === "fail") {
+            printFail(res.error?.code ?? "TEMPLATE_ERROR", res.error?.message ?? "template operation failed", {
+              details: res.error?.details,
+              json: opts.json === true,
+            });
+          } else {
+            console.log(JSON.stringify(res));
+          }
           return;
         }
         if (subcommand === "list") {
@@ -482,20 +486,24 @@ export function registerTemplateCommands(cli: CAC) {
         if (subcommand === "show") {
           const name = argAt(0);
           if (!name) {
-            console.log(JSON.stringify(fail("MISSING_NAME", "template show requires a <name> argument")));
-            process.exit(1);
+            printFail("MISSING_NAME", "template show requires a <name> argument", { json: opts.json === true });
             return;
           }
           const res = runTemplateShow({ cwd: cwd(), home: home(), name });
-          console.log(JSON.stringify(res));
-          if (res.status === "fail") process.exit(1);
+          if (res.status === "fail") {
+            printFail(res.error?.code ?? "TEMPLATE_ERROR", res.error?.message ?? "template operation failed", {
+              details: res.error?.details,
+              json: opts.json === true,
+            });
+          } else {
+            console.log(JSON.stringify(res));
+          }
           return;
         }
         if (subcommand === "materialize") {
           const name = argAt(0);
           if (!name) {
-            console.log(JSON.stringify(fail("MISSING_NAME", "template materialize requires a <name> argument")));
-            process.exit(1);
+            printFail("MISSING_NAME", "template materialize requires a <name> argument", { json: opts.json === true });
             return;
           }
           let params: TemplateValues = {};
@@ -503,13 +511,11 @@ export function registerTemplateCommands(cli: CAC) {
             try {
               params = JSON.parse(opts.params as string) as TemplateValues;
             } catch {
-              console.log(JSON.stringify(fail("BAD_PARAMS", "--params must be a JSON object")));
-              process.exit(1);
+              printFail("BAD_PARAMS", "--params must be a JSON object", { json: opts.json === true });
               return;
             }
             if (params === null || typeof params !== "object" || Array.isArray(params)) {
-              console.log(JSON.stringify(fail("BAD_PARAMS", "--params must be a JSON object")));
-              process.exit(1);
+              printFail("BAD_PARAMS", "--params must be a JSON object", { json: opts.json === true });
               return;
             }
           }
@@ -519,23 +525,16 @@ export function registerTemplateCommands(cli: CAC) {
             if (res.active !== undefined) payload.active = res.active;
             console.log(JSON.stringify(ok(payload)));
           } catch (e) {
-            console.log(
-              JSON.stringify(
-                e instanceof GraphKitError ? fail(e.code, e.message, e.details) : fail("MATERIALIZE_ERROR", String(e)),
-              ),
-            );
-            process.exit(1);
+            printFailFromError(e, "MATERIALIZE_ERROR", { json: opts.json === true });
           }
           return;
         }
-        console.log(
-          JSON.stringify(
-            fail("UNKNOWN_TEMPLATE_SUBCOMMAND", `Unknown template subcommand "${subcommand}"`, {
-              available: ["pack", "list", "show", "materialize"],
-            }),
-          ),
-        );
-        process.exit(1);
+        // available: derived from the registry — the hand-typed copy here drifted
+        // (it once named a \`close\` subcommand that never existed).
+        printFail("UNKNOWN_TEMPLATE_SUBCOMMAND", `Unknown template subcommand "${subcommand}"`, {
+          details: { available: subcommandsFor("template").split(" ") },
+          json: opts.json === true,
+        });
       },
     );
 }

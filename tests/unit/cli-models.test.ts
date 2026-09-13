@@ -54,8 +54,8 @@ describe("gk models", () => {
   });
 
   test("models cursor garbage exits nonzero with status fail", () => {
-    const run = createCliHarness(registerModelsCommands, { cwd }).run(["models", "cursor", "garbage"]);
-    expect(run.exit).toBe(1);
+    const run = createCliHarness(registerModelsCommands, { cwd }).run(["models", "cursor", "garbage", "--json"]);
+    expect(run.exitCode).toBe(1);
     const parsed = JSON.parse(run.stdout);
     expect(parsed.status).toBe("fail");
   });
@@ -78,8 +78,8 @@ describe("gk models", () => {
   });
 
   test("models vscode is rejected with target list", () => {
-    const run = createCliHarness(registerModelsCommands, { cwd }).run(["models", "vscode"]);
-    expect(run.exit).toBe(1);
+    const run = createCliHarness(registerModelsCommands, { cwd }).run(["models", "vscode", "--json"]);
+    expect(run.exitCode).toBe(1);
     const parsed = JSON.parse(run.stdout);
     expect(parsed.status).toBe("fail");
     expect(parsed.error.code).toBe("UNKNOWN_MODELS_SUBCOMMAND");

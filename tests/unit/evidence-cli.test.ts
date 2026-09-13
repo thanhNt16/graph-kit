@@ -62,13 +62,13 @@ describe("gk evidence add", () => {
       "bogus",
       "--json",
     ]);
-    expect(r.exit).toBe(1);
+    expect(r.exitCode).toBe(1);
     expect(JSON.parse(r.stdout).error.code).toBe("EVIDENCE_KEY_NOT_DECLARED");
   });
 
   test("missing --key fails fast", () => {
     const r = createCliHarness(registerEvidenceCommand, { cwd }).run(["evidence", "add", "r.json", "--json"]);
-    expect(r.exit).toBe(1);
+    expect(r.exitCode).toBe(1);
     expect(JSON.parse(r.stdout).error.code).toBe("MISSING_ARG");
   });
 

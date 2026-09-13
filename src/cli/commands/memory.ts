@@ -4,7 +4,6 @@ import type { CAC } from "cac";
 import YAML from "yaml";
 import { CBM_UNAVAILABLE_MSG, type CbmClient, createCbmClient, isCbmUnavailable } from "../../cbm/client.js";
 import { indexProject } from "../../cbm/index.js";
-import { GraphKitError } from "../../errors.js";
 import { actRScore, shouldExpire } from "../../eval/forgetting.js";
 import { type ParsedMemoryFile, parseMemoryFile, walkMemoryStore } from "../../frontmatter.js";
 import { atomicWrite } from "../../fs.js";
@@ -12,7 +11,7 @@ import { type ConsolidateResult, consolidate } from "../../memory/consolidate.js
 import { type ExpandedHit, expandedRecall } from "../../memory/recall-expanded.js";
 import { MemoryConfig } from "../../schemas/memory.schema.js";
 import { subcommandHelpFor, subcommandsFor } from "../command-registry.js";
-import { fail, ok } from "../output.js";
+import { ok, printFail, printFailFromError } from "../output.js";
 
 // ponytail: DI seam for tests — avoids spawning the real CBM server.
 let _cbmClientFactory: () => CbmClient = () => createCbmClient();
@@ -340,15 +339,7 @@ Subcommands: ${subcommandsFor("memory")}\n\nOptions:\n  --project <project>  CBM
         } catch (e) {
           // Last unenveloped sibling: a raw EISDIR / PATTERN_SCHEMA_VIOLATION
           // stack used to be the only output a broken store produced.
-          console.log(
-            JSON.stringify(
-              fail(
-                e instanceof GraphKitError ? e.code : "CONSOLIDATE_ERROR",
-                e instanceof Error ? e.message : String(e),
-              ),
-            ),
-          );
-          process.exit(1);
+          printFailFromError(e, "CONSOLIDATE_ERROR", { json: opts.json === true });
         }
         return;
       }
@@ -373,11 +364,10 @@ Subcommands: ${subcommandsFor("memory")}\n\nOptions:\n  --project <project>  CBM
             ),
           );
         } catch (e) {
-          // a corrupt store must exit via the JSON contract, not a raw stack trace
-          console.log(
-            JSON.stringify(fail("MEMORY_TRACE_FAILED", `trace failed: ${String((e as Error)?.message ?? e)}`)),
-          );
-          process.exit(1);
+          // a corrupt store must exit via the envelope contract, not a raw stack trace
+          printFail("MEMORY_TRACE_FAILED", `trace failed: ${String((e as Error)?.message ?? e)}`, {
+            json: opts.json === true,
+          });
           return;
         }
         return;
@@ -387,29 +377,23 @@ Subcommands: ${subcommandsFor("memory")}\n\nOptions:\n  --project <project>  CBM
         if (!id) {
           // "No memory with id \"undefined\"" sent users hunting for a memory
           // literally named "undefined" — an absent id is a usage error.
-          console.log(
-            JSON.stringify(
-              fail("MISSING_ARG", "touch requires a memory id — discover ids with `gk memory list`", {
-                hint: "Usage: gk memory touch <id>",
-              }),
-            ),
-          );
-          process.exit(1);
+          printFail("MISSING_ARG", "touch requires a memory id — discover ids with `gk memory list`", {
+            details: { hint: "Usage: gk memory touch <id>" },
+            json: opts.json === true,
+          });
           return;
         }
         let touched: ReturnType<typeof touchMemory>;
         try {
           touched = id ? touchMemory(process.cwd(), String(id)) : null;
         } catch (e) {
-          console.log(
-            JSON.stringify(fail("MEMORY_TOUCH_FAILED", `touch failed: ${String((e as Error)?.message ?? e)}`)),
-          );
-          process.exit(1);
+          printFail("MEMORY_TOUCH_FAILED", `touch failed: ${String((e as Error)?.message ?? e)}`, {
+            json: opts.json === true,
+          });
           return;
         }
         if (!touched) {
-          console.log(JSON.stringify(fail("MEMORY_NOT_FOUND", `No memory with id "${id}"`)));
-          process.exit(1);
+          printFail("MEMORY_NOT_FOUND", `No memory with id "${id}"`, { json: opts.json === true });
           return;
         }
         console.log(JSON.stringify(ok(touched)));
@@ -418,8 +402,7 @@ Subcommands: ${subcommandsFor("memory")}\n\nOptions:\n  --project <project>  CBM
       if (subcommand === "recall") {
         const query = Array.isArray(_args) ? _args.join(" ") : _args;
         if (!query) {
-          console.log(JSON.stringify(fail("MISSING_ARG", "recall requires a query")));
-          process.exit(1);
+          printFail("MISSING_ARG", "recall requires a query", { json: opts.json === true });
           return;
         }
         // the working retriever (keyword×salience + validity/supersede filters) —
@@ -444,12 +427,9 @@ Subcommands: ${subcommandsFor("memory")}\n\nOptions:\n  --project <project>  CBM
           linked = stats.linked;
           malformed = stats.malformed;
         } catch (e) {
-          console.log(
-            JSON.stringify(
-              fail("MEMORY_DIR_UNREADABLE", `memory store unreadable: ${String((e as Error)?.message ?? e)}`),
-            ),
-          );
-          process.exit(1);
+          printFail("MEMORY_DIR_UNREADABLE", `memory store unreadable: ${String((e as Error)?.message ?? e)}`, {
+            json: opts.json === true,
+          });
           return;
         }
         // Reinforcement reads/writes the same store as expandedRecall above —
@@ -459,12 +439,9 @@ Subcommands: ${subcommandsFor("memory")}\n\nOptions:\n  --project <project>  CBM
         try {
           for (const h of results) _touchByPath(process.cwd(), h.path, h.id);
         } catch (e) {
-          console.log(
-            JSON.stringify(
-              fail("MEMORY_DIR_UNREADABLE", `memory store unreadable: ${String((e as Error)?.message ?? e)}`),
-            ),
-          );
-          process.exit(1);
+          printFail("MEMORY_DIR_UNREADABLE", `memory store unreadable: ${String((e as Error)?.message ?? e)}`, {
+            json: opts.json === true,
+          });
           return;
         }
         if (opts.json) {
@@ -534,22 +511,20 @@ Subcommands: ${subcommandsFor("memory")}\n\nOptions:\n  --project <project>  CBM
       if (subcommand === "show") {
         const id = Array.isArray(_args) ? _args[0] : _args;
         if (!id) {
-          console.log(
-            JSON.stringify(
-              fail("MISSING_ARG", "show requires a memory id — discover ids with `gk memory list`", {
-                hint: "Usage: gk memory show <id>",
-              }),
-            ),
-          );
-          process.exit(1);
+          printFail("MISSING_ARG", "show requires a memory id — discover ids with `gk memory list`", {
+            details: { hint: "Usage: gk memory show <id>" },
+            json: opts.json === true,
+          });
           return;
         }
         const memDir = join(process.cwd(), ".graphkit", "memory");
         const entry = existsSync(memDir) ? walkMemoryStore(memDir).find((e) => e.id === id) : undefined;
         if (!entry) {
           const available = existsSync(memDir) ? walkMemoryStore(memDir).map((e) => e.id) : [];
-          console.log(JSON.stringify(fail("MEMORY_NOT_FOUND", `No memory with id "${id}"`, { id, available })));
-          process.exit(1);
+          printFail("MEMORY_NOT_FOUND", `No memory with id "${id}"`, {
+            details: { id, available },
+            json: opts.json === true,
+          });
           return;
         }
         if (opts.json) {
@@ -563,14 +538,10 @@ Subcommands: ${subcommandsFor("memory")}\n\nOptions:\n  --project <project>  CBM
         return;
       }
       if (subcommand !== "index") {
-        console.log(
-          JSON.stringify(
-            fail("UNKNOWN_MEMORY_SUBCOMMAND", `Unknown memory subcommand "${subcommand}"`, {
-              available: subcommandsFor("memory").split(" "),
-            }),
-          ),
-        );
-        process.exit(1);
+        printFail("UNKNOWN_MEMORY_SUBCOMMAND", `Unknown memory subcommand "${subcommand}"`, {
+          details: { available: subcommandsFor("memory").split(" ") },
+          json: opts.json === true,
+        });
         return;
       }
       try {
@@ -578,10 +549,9 @@ Subcommands: ${subcommandsFor("memory")}\n\nOptions:\n  --project <project>  CBM
         console.log(JSON.stringify(ok(result)));
       } catch (e) {
         const msg = String((e as Error)?.message ?? e);
-        console.log(
-          JSON.stringify(fail("CBM_UNAVAILABLE", isCbmUnavailable(e) ? msg : `${CBM_UNAVAILABLE_MSG}\n${msg}`)),
-        );
-        process.exit(1);
+        printFail("CBM_UNAVAILABLE", isCbmUnavailable(e) ? msg : `${CBM_UNAVAILABLE_MSG}\n${msg}`, {
+          json: opts.json === true,
+        });
       }
     });
 }

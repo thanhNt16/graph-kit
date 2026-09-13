@@ -6,7 +6,7 @@ import { GraphKitError } from "../../errors.js";
 import { atomicWrite } from "../../fs.js";
 import { getTarget, isValidTarget, listTargets } from "../../targets/registry.js";
 import type { TargetId } from "../../targets/types.js";
-import { fail, ok } from "../output.js";
+import { ok, printFail } from "../output.js";
 
 export type KitTarget = "claude" | "cursor";
 
@@ -226,8 +226,9 @@ function assertValidTarget(opts: { target?: string }) {
     const valid = listTargets()
       .map((t) => t.id)
       .join(", ");
-    console.log(JSON.stringify(fail("BAD_TARGET", `Invalid target: ${opts.target}. Must be one of: ${valid}`)));
-    process.exit(1);
+    printFail("BAD_TARGET", `Invalid target: ${opts.target}. Must be one of: ${valid}`, {
+      details: { available: valid.split(", ") },
+    });
   }
 }
 
@@ -258,8 +259,7 @@ export function registerKitCommands(cli: CAC) {
             : installedLine(getTarget(opts.target as TargetId).installDir, opts.target, result.installed.length),
         );
       } catch (e) {
-        console.log(JSON.stringify(fail("INIT_FAILED", String(e))));
-        process.exit(1);
+        printFail("INIT_FAILED", e instanceof Error ? e.message : String(e), { json: opts.json === true });
       }
     });
 
@@ -271,14 +271,12 @@ export function registerKitCommands(cli: CAC) {
     .option("--target <target>", "Kit target: claude, cursor, opencode, codex, or pi", { default: "claude" })
     .action((opts) => {
       if (!opts.dir) {
-        console.log(JSON.stringify(fail("MISSING_DIR", "--dir is required")));
-        process.exit(1);
+        printFail("MISSING_DIR", "--dir is required", { json: opts.json === true });
         return;
       }
       assertValidTarget(opts);
       if (existsSync(opts.dir) && readdirSync(opts.dir).length > 0) {
-        console.log(JSON.stringify(fail("DIR_NOT_EMPTY", `Directory ${opts.dir} exists and is not empty`)));
-        process.exit(1);
+        printFail("DIR_NOT_EMPTY", `Directory ${opts.dir} exists and is not empty`, { json: opts.json === true });
         return;
       }
       mkdirSync(opts.dir, { recursive: true });

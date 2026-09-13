@@ -50,7 +50,8 @@ describe("gk graph commands", () => {
   });
   test("graph inspect nonexistent fails with UNKNOWN_TOPOLOGY", () => {
     const parsed = JSON.parse(
-      createCliHarness(registerGraphCommands, { captureWarn: true }).run(["graph", "inspect", "nonexistent"]).stdout,
+      createCliHarness(registerGraphCommands, { captureWarn: true }).run(["graph", "inspect", "nonexistent", "--json"])
+        .stdout,
     );
     expect(parsed.status).toBe("fail");
     expect(parsed.error.code).toBe("UNKNOWN_TOPOLOGY");
@@ -145,8 +146,8 @@ describe("gk graph commands", () => {
   test("waves rejects an empty graph through schema validation", () => {
     const file = join(tmp, "empty.yaml");
     writeFileSync(file, "");
-    const out = createCliHarness(registerGraphCommands, { captureWarn: true }).run(["graph", "waves", file]);
-    expect(out.exit).toBe(1);
+    const out = createCliHarness(registerGraphCommands, { captureWarn: true }).run(["graph", "waves", file, "--json"]);
+    expect(out.exitCode).toBe(1);
     expect(JSON.parse(out.stdout).error.code).toBe("SCHEMA_INVALID");
     expect(out.stdout).not.toContain("TypeError");
   });
@@ -156,8 +157,8 @@ describe("gk graph commands", () => {
       file,
       `apiVersion: graphkit.dev/v2\nkind: Graph\nmetadata: { name: stalled }\ntopology: memory-augmented\nnodes:\n  curator: { agent: software-architect, objective: curate, depend_on: [] }\n  worker: { agent: code-reviewer, objective: work, depend_on: [curator] }\ntopology_config:\n  inner: { template: custom }\n  memory: { curator_node: curator }\nevidence: { required_keys: [] }\n`,
     );
-    const out = createCliHarness(registerGraphCommands, { captureWarn: true }).run(["graph", "waves", file]);
-    expect(out.exit).toBe(1);
+    const out = createCliHarness(registerGraphCommands, { captureWarn: true }).run(["graph", "waves", file, "--json"]);
+    expect(out.exitCode).toBe(1);
     expect(JSON.parse(out.stdout).error).toMatchObject({
       code: "WAVES_INCOMPLETE",
       details: { unresolved: ["worker"] },

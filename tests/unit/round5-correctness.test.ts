@@ -60,7 +60,7 @@ describe("A4: consolidate tolerates a directory named *.md and envelopes failure
     // .graphkit/memory replaced by a FILE → mkdirSync inside consolidate throws
     rmSync(join(cwd, ".graphkit", "memory"), { recursive: true, force: true });
     writeFileSync(join(cwd, ".graphkit", "memory"), "not a dir");
-    const run = createCliHarness(registerMemoryCommands, { cwd }).run(["memory", "consolidate"]);
+    const run = createCliHarness(registerMemoryCommands, { cwd }).run(["memory", "consolidate", "--json"]);
     const parsed = JSON.parse(run.stdout);
     expect(parsed.status).toBe("fail");
     expect(parsed.error.code).toBe("CONSOLIDATE_ERROR");
@@ -137,7 +137,7 @@ describe("A8: corrupt active session graph fails with YAML_INVALID, not a raw pa
     writeFileSync(join(cwd, ".graphkit", "active"), id);
     mkdirSync(join(cwd, ".graphkit", "graphs"), { recursive: true });
     writeFileSync(join(cwd, ".graphkit", "graphs", `${id}.yaml`), "metadata: [unclosed\n");
-    const run = createCliHarness(registerGraphCommands, { cwd }).run(["validate"]);
+    const run = createCliHarness(registerGraphCommands, { cwd }).run(["validate", "--json"]);
     const parsed = JSON.parse(run.stdout);
     expect(parsed.status).toBe("fail");
     expect(parsed.error.code).toBe("YAML_INVALID");
@@ -164,5 +164,37 @@ nodes:
     expect(svg).not.toContain("<img src=x");
     expect(svg).toContain("&lt;script&gt;");
     expect(svg).toContain("&lt;img");
+  });
+});
+
+// B1: catch-block fail envelopes render as human verdict lines by default;
+// --json keeps the exact envelope contract agents parse.
+describe("B1: printFail human rendering at the catch-block sites", () => {
+  test("validate schema-fail in human mode prints ✗ + findings, not raw JSON", () => {
+    const cwd = tmpProject("dxval");
+    writeFileSync(
+      join(cwd, "bad.yaml"),
+      "apiVersion: graphkit.dev/v2\nkind: Graph\nmetadata: { name: x }\ntopology: nope\nnodes: {}\n",
+    );
+    const run = createCliHarness(registerGraphCommands, { cwd }).run(["validate", join(cwd, "bad.yaml")]);
+    expect(run.exitCode).toBe(1);
+    expect(run.stdout).toContain("✗ SCHEMA_INVALID");
+    expect(run.stdout).toContain("topology");
+    expect(run.stdout).not.toMatch(/^\{/);
+    rmSync(cwd, { recursive: true, force: true });
+  });
+
+  test("the same failure under --json prints the unchanged envelope", () => {
+    const cwd = tmpProject("dxvalj");
+    writeFileSync(
+      join(cwd, "bad.yaml"),
+      "apiVersion: graphkit.dev/v2\nkind: Graph\nmetadata: { name: x }\ntopology: nope\nnodes: {}\n",
+    );
+    const run = createCliHarness(registerGraphCommands, { cwd }).run(["validate", join(cwd, "bad.yaml"), "--json"]);
+    expect(run.exitCode).toBe(1);
+    const parsed = JSON.parse(run.stdout);
+    expect(parsed.status).toBe("fail");
+    expect(parsed.error.code).toBe("SCHEMA_INVALID");
+    rmSync(cwd, { recursive: true, force: true });
   });
 });

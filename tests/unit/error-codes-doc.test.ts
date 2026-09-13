@@ -1,9 +1,11 @@
 // tests/unit/error-codes-doc.test.ts
 // D6 guard: docs/error-codes.md must cover every error code emitted by src/.
-// Extraction is call-site based (`fail("X"…` / `new GraphKitError("X"…`),
-// whitespace/newline tolerant), matching the public surface rather than any
-// uppercase string literal. The doc may document extra codes (e.g. the
-// dynamically-derived RUN_ERROR fallback) — it just may not miss any.
+// Extraction is call-site based (`fail("X"…` / `printFail("X"…` /
+// `printFailFromError(e, "X"…` / `new GraphKitError("X"…`), whitespace/newline
+// tolerant), matching the public surface rather than any uppercase string
+// literal. The doc may document extra codes (e.g. the dynamically-derived
+// RUN_ERROR fallback) — it just may not miss any, and may not list a code twice
+// (a duplicated row once hid an editing mistake from both drift directions).
 import { describe, expect, test } from "bun:test";
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -23,15 +25,21 @@ describe("error-code catalog", () => {
     const emitted = new Set<string>();
     for (const file of walk(SRC)) {
       const src = readFileSync(file, "utf-8");
-      for (const m of src.matchAll(/(?:\bfail|new GraphKitError)\(\s*"([A-Z][A-Z0-9_]+)"/g)) {
+      for (const m of src.matchAll(
+        /(?:\bprintFailFromError|\bprintFail|\bfail|new GraphKitError)\(\s*(?:[A-Za-z_$][\w$.]*\s*,\s*)?"([A-Z][A-Z0-9_]+)"/g,
+      )) {
         emitted.add(m[1]);
       }
     }
     const docTable = readFileSync(DOC, "utf-8");
+    const rows: string[] = [];
     const documented = new Set<string>();
     for (const line of docTable.split("\n")) {
       const m = line.match(/^\| `([A-Z][A-Z0-9_]+)` \|/);
-      if (m) documented.add(m[1]);
+      if (m) {
+        rows.push(m[1]);
+        documented.add(m[1]);
+      }
     }
     expect(documented.size).toBeGreaterThan(50); // the catalog is substantive
 
@@ -43,5 +51,10 @@ describe("error-code catalog", () => {
     const dynamic = new Set(["RUN_ERROR"]);
     const stale = [...documented].filter((c) => !emitted.has(c) && !dynamic.has(c)).sort();
     expect(stale).toEqual([]);
+
+    // A duplicated catalogue row means the Set-based checks above silently
+    // under-count; fail loudly instead (MISSING_ARG/SVG_ERROR were duplicated).
+    const dupes = rows.filter((c, i) => rows.indexOf(c) !== i).sort();
+    expect(dupes).toEqual([]);
   });
 });

@@ -92,7 +92,7 @@ describe("gk graph session commands", () => {
     seedGraph("2026-08-26-audit-pr", "audit");
     setActive("2026-08-26-ghost");
     const run = createCliHarness(registerGraphCommands, { cwd: TEST_DIR }).run(["graph", "list", "--json"]);
-    expect(run.exit).toBe(1);
+    expect(run.exitCode).toBe(1);
     const parsed = JSON.parse(run.stdout);
     expect(parsed.status).toBe("fail");
     expect(parsed.error.code).toBe("ACTIVE_POINTER_DANGLING");
@@ -124,7 +124,7 @@ describe("gk graph session commands", () => {
       "2026-01-01-ghost",
       "--json",
     ]);
-    expect(run.exit).toBe(1);
+    expect(run.exitCode).toBe(1);
     const parsed = JSON.parse(run.stdout);
     expect(parsed.status).toBe("fail");
     expect(parsed.error.code).toBe("GRAPH_NOT_FOUND");
@@ -138,7 +138,7 @@ describe("gk graph session commands", () => {
       "../evil",
       "--json",
     ]);
-    expect(run.exit).toBe(1);
+    expect(run.exitCode).toBe(1);
     const parsed = JSON.parse(run.stdout);
     expect(parsed.status).toBe("fail");
     expect(parsed.error.code).toBe("INVALID_SESSION_ID");
@@ -182,8 +182,8 @@ describe("gk graph session commands", () => {
   it("graph show fails with ACTIVE_POINTER_DANGLING when active names a missing file", () => {
     seedGraph("2026-08-26-audit-pr", "audit");
     setActive("2026-08-26-ghost");
-    const run = createCliHarness(registerGraphCommands, { cwd: TEST_DIR }).run(["graph", "show"]);
-    expect(run.exit).toBe(1);
+    const run = createCliHarness(registerGraphCommands, { cwd: TEST_DIR }).run(["graph", "show", "--json"]);
+    expect(run.exitCode).toBe(1);
     const parsed = JSON.parse(run.stdout);
     expect(parsed.status).toBe("fail");
     expect(parsed.error.code).toBe("ACTIVE_POINTER_DANGLING");
@@ -191,8 +191,13 @@ describe("gk graph session commands", () => {
 
   it("graph show <id> to an unknown id fails with GRAPH_NOT_FOUND", () => {
     seedGraph("2026-08-26-audit-pr", "audit");
-    const run = createCliHarness(registerGraphCommands, { cwd: TEST_DIR }).run(["graph", "show", "2026-01-01-ghost"]);
-    expect(run.exit).toBe(1);
+    const run = createCliHarness(registerGraphCommands, { cwd: TEST_DIR }).run([
+      "graph",
+      "show",
+      "2026-01-01-ghost",
+      "--json",
+    ]);
+    expect(run.exitCode).toBe(1);
     const parsed = JSON.parse(run.stdout);
     expect(parsed.status).toBe("fail");
     expect(parsed.error.code).toBe("GRAPH_NOT_FOUND");
@@ -204,10 +209,10 @@ describe("gk graph session commands", () => {
     for (const args of [
       ["graph", "list", "--json"],
       ["graph", "switch", "2026-08-26-audit-pr", "--json"],
-      ["graph", "show"],
+      ["graph", "show", "--json"],
     ]) {
       const run = createCliHarness(registerGraphCommands, { cwd: dir }).run(args);
-      expect(run.exit).toBe(1);
+      expect(run.exitCode).toBe(1);
       const parsed = JSON.parse(run.stdout);
       expect(parsed.status).toBe("fail");
       expect(parsed.error.code).toBe("GRAPHKIT_NOT_INITIALIZED");
@@ -257,7 +262,7 @@ describe("gk graph session commands", () => {
       setActive("2026-08-26-audit-pr");
       seedRootGraph("root-graph");
       const run = createCliHarness(registerGraphCommands, { cwd: TEST_DIR }).run(["validate", "--json"]);
-      expect(run.exit).toBe(1);
+      expect(run.exitCode).toBe(1);
       const parsed = JSON.parse(run.stdout);
       expect(parsed.status).toBe("fail");
       expect(parsed.error.code).toBe("VALIDATION_FAILED");
@@ -268,7 +273,7 @@ describe("gk graph session commands", () => {
       seedGraph("2026-08-26-audit-pr", "audit");
       setActive("2026-08-26-ghost");
       const run = createCliHarness(registerGraphCommands, { cwd: TEST_DIR }).run(["validate", "--json"]);
-      expect(run.exit).toBe(1);
+      expect(run.exitCode).toBe(1);
       const parsed = JSON.parse(run.stdout);
       expect(parsed.error.code).toBe("ACTIVE_POINTER_DANGLING");
       expect(parsed.error.details.available).toContain("2026-08-26-audit-pr");
@@ -287,7 +292,7 @@ describe("gk graph session commands", () => {
       const dir = join(TEST_DIR, "empty-init");
       mkdirSync(join(dir, ".graphkit", "graphs"), { recursive: true });
       const run = createCliHarness(registerGraphCommands, { cwd: dir }).run(["validate", "--json"]);
-      expect(run.exit).toBe(1);
+      expect(run.exitCode).toBe(1);
       const parsed = JSON.parse(run.stdout);
       expect(parsed.error.code).toBe("NO_ACTIVE_GRAPH");
     });

@@ -2,7 +2,7 @@
 import { join } from "node:path";
 import type { CAC } from "cac";
 import { dismissSuggestion, rankSuggestions, readSuggestions } from "../../memory/suggest.js";
-import { fail, ok } from "../output.js";
+import { ok, printFail } from "../output.js";
 
 export function registerSuggestCommands(cli: CAC) {
   cli
@@ -18,7 +18,7 @@ export function registerSuggestCommands(cli: CAC) {
         if (dismissSuggestion(memDir, String(opts.dismiss))) {
           console.log(JSON.stringify(ok({ dismissed: String(opts.dismiss) })));
         } else {
-          console.log(JSON.stringify(fail("SUGGESTION_NOT_FOUND", `No suggestion with id "${opts.dismiss}"`)));
+          printFail("SUGGESTION_NOT_FOUND", `No suggestion with id "${opts.dismiss}"`, { json: opts.json === true });
         }
         return;
       }

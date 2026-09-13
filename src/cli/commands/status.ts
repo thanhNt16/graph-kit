@@ -4,7 +4,7 @@ import type { CAC } from "cac";
 import { loadGraph } from "../../compiler/loader.js";
 import { GraphKitError } from "../../errors.js";
 import { activeRun, activeRunGraph, deriveRound, readRunMeta, readTrace } from "../../memory/ledger.js";
-import { fail, ok } from "../output.js";
+import { ok, printFailFromError } from "../output.js";
 import { type GateResult, gateGraph } from "./gate.js";
 
 interface StatusData {
@@ -121,12 +121,7 @@ export function registerStatusCommand(cli: CAC) {
         const data: StatusData = { running: true, run, coverage, gate_error: gateError };
         console.log(opts.json ? JSON.stringify(ok(data)) : renderStatus(data));
       } catch (e) {
-        console.log(
-          JSON.stringify(
-            e instanceof GraphKitError ? fail(e.code, e.message, e.details) : fail("STATUS_ERROR", String(e)),
-          ),
-        );
-        process.exit(1);
+        printFailFromError(e, "STATUS_ERROR", { json: opts.json === true });
       }
     });
 }

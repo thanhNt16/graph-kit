@@ -110,11 +110,11 @@ describe("CLI trust: bare gk (no command) prints help + exits 1 — F1", () => {
   });
 
   test("graph new with empty/absent topology is status:fail UNKNOWN_TOPOLOGY and exits non-zero", () => {
-    const run = createCliHarness(registerAll, { cwd }).run(["graph", "new"]);
+    const run = createCliHarness(registerAll, { cwd }).run(["graph", "new", "--json"]);
     const parsed = JSON.parse(run.stdout);
     expect(parsed.status).toBe("fail");
     expect(parsed.error.code).toBe("UNKNOWN_TOPOLOGY");
-    expect(run.exit).toBe(1);
+    expect(run.exitCode).toBe(1);
   });
 });
 
@@ -152,7 +152,7 @@ describe("CLI trust: memory index fails honestly with CBM_UNAVAILABLE — F3", (
     expect(out.error.message).toContain("CBM_ARGS");
     expect(out.error.message).toContain("npm 404");
     // The handler's stubbed process.exit(1) fired (not just fail()'s exitCode).
-    expect(run.exit).toBe(1);
+    expect(run.exitCode).toBe(1);
     // The async handler also set the real process.exitCode via fail() — clear it
     // so this success-path unit test doesn't make bun:test exit non-zero.
     process.exitCode = 0;

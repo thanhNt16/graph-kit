@@ -19,7 +19,7 @@ import {
 } from "../../memory/ledger.js";
 import { resumeRun } from "../../memory/resume.js";
 import { subcommandHelpFor, subcommandsFor } from "../command-registry.js";
-import { fail, ok } from "../output.js";
+import { ok, printFail } from "../output.js";
 
 function errCode(e: unknown): { code: string; message: string; details?: Record<string, unknown> } {
   // GraphKitError carries its code (and optional details) — use them directly.
@@ -123,7 +123,7 @@ export function registerRunCommands(cli: CAC) {
         if (subcommand === "node") {
           const node = Array.isArray(args) ? args[0] : args;
           if (!node) {
-            console.log(JSON.stringify(fail("MISSING_ARG", "node requires a node id")));
+            printFail("MISSING_ARG", "node requires a node id", { json: opts.json === true });
             return;
           }
           // Advisor-fired mode needs no --status: the firing itself is the trace line.
@@ -131,12 +131,12 @@ export function registerRunCommands(cli: CAC) {
             const round = Number(opts.advisorFired);
             // tier is derived from the graph's node.advisor.model (spec §5)
             if (!Number.isInteger(round) || round < 1) {
-              console.log(JSON.stringify(fail("BAD_ADVISOR", "--advisor-fired requires an integer round >= 1")));
+              printFail("BAD_ADVISOR", "--advisor-fired requires an integer round >= 1", { json: opts.json === true });
               return;
             }
             const streak = opts.streak == null ? null : Number(opts.streak);
             if (streak !== null && (!Number.isInteger(streak) || streak < 1)) {
-              console.log(JSON.stringify(fail("BAD_ADVISOR", "--streak requires an integer >= 1")));
+              printFail("BAD_ADVISOR", "--streak requires an integer >= 1", { json: opts.json === true });
               return;
             }
             // Tier source: the ACTIVE RUN's recorded graph (what the run actually executes) so a
@@ -148,7 +148,9 @@ export function registerRunCommands(cli: CAC) {
             // misleading BAD_ADVISOR for an unrelated read failure.
             const advisor = loadGraph(graphPath).nodes[String(node)]?.advisor;
             if (!advisor) {
-              console.log(JSON.stringify(fail("BAD_ADVISOR", `node "${node}" has no advisor config in ${graphPath}`)));
+              printFail("BAD_ADVISOR", `node "${node}" has no advisor config in ${graphPath}`, {
+                json: opts.json === true,
+              });
               return;
             }
             console.log(
@@ -166,7 +168,7 @@ export function registerRunCommands(cli: CAC) {
             return;
           }
           if (opts.status !== "ok" && opts.status !== "fail") {
-            console.log(JSON.stringify(fail("BAD_STATUS", "node requires --status ok|fail")));
+            printFail("BAD_STATUS", "node requires --status ok|fail", { json: opts.json === true });
             return;
           }
           const result = appendNode(cwd, {
@@ -194,7 +196,7 @@ export function registerRunCommands(cli: CAC) {
         if (subcommand === "end") {
           const status = opts.status ?? "merged";
           if (!["merged", "blocked", "failed"].includes(status)) {
-            console.log(JSON.stringify(fail("BAD_STATUS", "end requires --status merged|blocked|failed")));
+            printFail("BAD_STATUS", "end requires --status merged|blocked|failed", { json: opts.json === true });
             return;
           }
           const summary = endRun(cwd, status);
@@ -210,8 +212,7 @@ export function registerRunCommands(cli: CAC) {
         if (subcommand === "resume") {
           const target = Array.isArray(args) ? args[0] : args;
           if (!target) {
-            process.exitCode = 1;
-            console.log(JSON.stringify(fail("MISSING_ARG", "resume requires a run id")));
+            printFail("MISSING_ARG", "resume requires a run id", { json: opts.json === true });
             return;
           }
           try {
@@ -221,9 +222,8 @@ export function registerRunCommands(cli: CAC) {
               ),
             );
           } catch (e) {
-            process.exitCode = 1;
             const { code, message, details } = errCode(e);
-            console.log(JSON.stringify(fail(code, message, details)));
+            printFail(code, message, { details, json: opts.json === true });
           }
           return;
         }
@@ -295,10 +295,9 @@ export function registerRunCommands(cli: CAC) {
             try {
               readRunMeta(cwd, id);
             } catch {
-              console.log(
-                JSON.stringify(fail("RUN_NOT_FOUND", `no run "${id}" under ${join(cwd, ".graphkit", "runs")}`)),
-              );
-              process.exitCode = 1;
+              printFail("RUN_NOT_FOUND", `no run "${id}" under ${join(cwd, ".graphkit", "runs")}`, {
+                json: opts.json === true,
+              });
               return;
             }
             const dir = join(cwd, ".graphkit", "runs", id);
@@ -328,16 +327,13 @@ export function registerRunCommands(cli: CAC) {
           }
           return;
         }
-        console.log(
-          JSON.stringify(
-            fail("UNKNOWN_RUN_SUBCOMMAND", `Unknown run subcommand "${subcommand}"`, {
-              available: subcommandsFor("run").split(" "),
-            }),
-          ),
-        );
+        printFail("UNKNOWN_RUN_SUBCOMMAND", `Unknown run subcommand "${subcommand}"`, {
+          details: { available: subcommandsFor("run").split(" ") },
+          json: opts.json === true,
+        });
       } catch (e) {
         const { code, message, details } = errCode(e);
-        console.log(JSON.stringify(fail(code, message, details)));
+        printFail(code, message, { details, json: opts.json === true });
       }
     });
 }

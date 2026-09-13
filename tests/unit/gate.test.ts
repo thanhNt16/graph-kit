@@ -117,7 +117,7 @@ describe("gk gate command", () => {
     writeFileSync(join(tmp, "graph.yaml"), MINIMAL_GRAPH);
     // No evidence file created
     const result = createCliHarness(registerGateCommand, { cwd: tmp }).run(["gate", join(tmp, "graph.yaml")]);
-    expect(result.exit).toBe(1);
+    expect(result.exitCode).toBe(1);
     expect(result.stdout).toContain("VERDICT: BLOCK");
     expect(result.stdout).toContain("design");
     expect(result.stdout).toContain("Missing: design");
@@ -128,7 +128,7 @@ describe("gk gate command", () => {
   test("BLOCK --json keeps the GATE_BLOCK fail envelope for scripts", () => {
     writeFileSync(join(tmp, "graph.yaml"), MINIMAL_GRAPH);
     const result = createCliHarness(registerGateCommand, { cwd: tmp }).run(["gate", "--json", join(tmp, "graph.yaml")]);
-    expect(result.exit).toBe(1);
+    expect(result.exitCode).toBe(1);
     const parsed = JSON.parse(result.stdout);
     expect(parsed.status).toBe("fail");
     expect(parsed.error.code).toBe("GATE_BLOCK");
@@ -147,8 +147,8 @@ describe("gk gate command", () => {
 
   test("schema invalid graph exits 1", () => {
     writeFileSync(join(tmp, "graph.yaml"), "");
-    const result = createCliHarness(registerGateCommand, { cwd: tmp }).run(["gate", join(tmp, "graph.yaml")]);
-    expect(result.exit).toBe(1);
+    const result = createCliHarness(registerGateCommand, { cwd: tmp }).run(["gate", join(tmp, "graph.yaml"), "--json"]);
+    expect(result.exitCode).toBe(1);
     const parsed = JSON.parse(result.stdout);
     expect(parsed.status).toBe("fail");
     expect(parsed.error.code).toBe("SCHEMA_INVALID");

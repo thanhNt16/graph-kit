@@ -36,22 +36,22 @@ describe("gk memory CLI error envelopes", () => {
 
   test("touch with unknown id → MEMORY_NOT_FOUND fail envelope + exit 1", () => {
     const cli = createCliHarness(registerMemoryCommands, { cwd: root });
-    const run = cli.run(["memory", "touch", "no-such-id"]);
+    const run = cli.run(["memory", "touch", "no-such-id", "--json"]);
     const parsed = JSON.parse(run.stdout);
     expect(parsed.status).toBe("fail");
     expect(parsed.error.code).toBe("MEMORY_NOT_FOUND");
-    expect(run.exit).toBe(1);
+    expect(run.exitCode).toBe(1);
     expect(run.exitCode).toBe(1);
   });
 
   test("unknown subcommand → UNKNOWN_MEMORY_SUBCOMMAND with available list", () => {
     const cli = createCliHarness(registerMemoryCommands, { cwd: root });
-    const run = cli.run(["memory", "frobnicate"]);
+    const run = cli.run(["memory", "frobnicate", "--json"]);
     const parsed = JSON.parse(run.stdout);
     expect(parsed.status).toBe("fail");
     expect(parsed.error.code).toBe("UNKNOWN_MEMORY_SUBCOMMAND");
     expect(parsed.error.details.available).toContain("recall");
-    expect(run.exit).toBe(1);
+    expect(run.exitCode).toBe(1);
   });
 
   test("recall with unreadable store → MEMORY_DIR_UNREADABLE fail envelope", () => {
@@ -67,7 +67,7 @@ describe("gk memory CLI error envelopes", () => {
     const parsed = JSON.parse(run.stdout); // JSON contract holds — no raw stack trace
     expect(parsed.status).toBe("fail");
     expect(parsed.error.code).toBe("MEMORY_DIR_UNREADABLE");
-    expect(run.exit).toBe(1);
+    expect(run.exitCode).toBe(1);
   });
 });
 
@@ -75,12 +75,12 @@ describe("gk memory CLI error envelopes", () => {
 describe("gk memory CLI list/show/touch usage (round 4)", () => {
   test('touch without id → MISSING_ARG, not id "undefined"', () => {
     const cli = createCliHarness(registerMemoryCommands, { cwd: root });
-    const run = cli.run(["memory", "touch"]);
+    const run = cli.run(["memory", "touch", "--json"]);
     const parsed = JSON.parse(run.stdout);
     expect(parsed.status).toBe("fail");
     expect(parsed.error.code).toBe("MISSING_ARG");
     expect(parsed.error.message).not.toContain("undefined");
-    expect(run.exit).toBe(1);
+    expect(run.exitCode).toBe(1);
   });
 
   test("list reports id, status, salience, use_count, file (json + human)", () => {
@@ -112,7 +112,7 @@ describe("gk memory CLI list/show/touch usage (round 4)", () => {
     expect(parsed.status).toBe("fail");
     expect(parsed.error.code).toBe("MEMORY_NOT_FOUND");
     expect(parsed.error.details.available).toContain("alpha");
-    expect(miss.exit).toBe(1);
+    expect(miss.exitCode).toBe(1);
   });
 
   test("trace --dry-run writes nothing and echoes dry_run", () => {

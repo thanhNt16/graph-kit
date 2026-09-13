@@ -152,7 +152,7 @@ describe("gk graph waves — memory-augmented curator interleave", () => {
 
   test("absent curator is rejected by validation", () => {
     const result = createCliHarness(registerGraphCommands).run(["graph", "waves", NO_CURATOR, "--json"]);
-    expect(result.exit).toBe(1);
+    expect(result.exitCode).toBe(1);
     expect(result.stdout).toContain("VALIDATION_FAILED");
     expect(result.stdout).toContain("memory-curator-node");
   });
@@ -235,6 +235,6 @@ describe("memory config allowlist + bare gk memory (exec-tests step 5)", () => {
     const out = JSON.parse(run!.stdout);
     expect(out.status).toBe("fail");
     expect(out.error.code).toBe("MEMORY_DIR_UNREADABLE");
-    expect(run!.exit).toBe(1);
+    expect(run!.exitCode).toBe(1);
   });
 });

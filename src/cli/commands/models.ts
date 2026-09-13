@@ -5,7 +5,7 @@ import { atomicWrite } from "../../fs.js";
 import type { Tier } from "../../targets/index.js";
 import { isValidTarget, listTargets, resolveModel } from "../../targets/index.js";
 import { subcommandHelpFor } from "../command-registry.js";
-import { fail, ok } from "../output.js";
+import { ok, printFail } from "../output.js";
 
 function overridesPath(cwd: string, target: string): string {
   return join(cwd, ".graphkit", `models.${target}.json`);
@@ -68,44 +68,33 @@ export function registerModelsCommands(cli: CAC): void {
           return;
         }
         if (!isValidTarget(subcommand)) {
-          console.log(
-            JSON.stringify(
-              fail("UNKNOWN_MODELS_SUBCOMMAND", `Unknown models subcommand "${subcommand}"`, {
-                available: listTargets().map((t) => t.id),
-              }),
-            ),
-          );
-          process.exit(1);
+          printFail("UNKNOWN_MODELS_SUBCOMMAND", `Unknown models subcommand "${subcommand}"`, {
+            details: { available: listTargets().map((t) => t.id) },
+            json: opts.json === true,
+          });
           return;
         }
         const rest = Array.isArray(args) ? args : args == null ? [] : [args];
         const action = rest[0] ?? "";
         if (action === "set") {
           if (!opts.map) {
-            console.log(JSON.stringify(fail("MAP_INVALID", "Missing --map k=v pairs")));
-            process.exit(1);
+            printFail("MAP_INVALID", "Missing --map k=v pairs", { json: opts.json === true });
             return;
           }
           const { overrides, corrupt } = loadOverrides(process.cwd(), subcommand);
           if (corrupt && !opts.force) {
-            console.log(
-              JSON.stringify(
-                fail(
-                  "OVERRIDES_CORRUPT",
-                  `${overridesPath(process.cwd(), subcommand)} is not valid JSON — fix or delete it (or run \`gk models ${subcommand} reset\`); pass --force to discard it`,
-                  { hint: "Writing now would erase the unreadable file's contents" },
-                ),
-              ),
+            printFail(
+              "OVERRIDES_CORRUPT",
+              `${overridesPath(process.cwd(), subcommand)} is not valid JSON — fix or delete it (or run \`gk models ${subcommand} reset\`); pass --force to discard it`,
+              { details: { hint: "Writing now would erase the unreadable file's contents" }, json: opts.json === true },
             );
-            process.exit(1);
             return;
           }
           for (const pair of opts.map.split(",")) {
             const [k, ...tail] = pair.split("=");
             const v = tail.join("=");
             if (!k || !v) {
-              console.log(JSON.stringify(fail("MAP_INVALID", `Invalid mapping '${pair}', expected k=v`)));
-              process.exit(1);
+              printFail("MAP_INVALID", `Invalid mapping '${pair}', expected k=v`, { json: opts.json === true });
               return;
             }
             overrides[k.trim()] = v.trim();
@@ -116,14 +105,10 @@ export function registerModelsCommands(cli: CAC): void {
           rmSync(overridesPath(process.cwd(), subcommand), { force: true });
           console.log(JSON.stringify(ok({ reset: true })));
         } else if (action !== "") {
-          console.log(
-            JSON.stringify(
-              fail("UNKNOWN_MODELS_SUBCOMMAND", `Unknown models subcommand "${action}"`, {
-                available: listTargets().map((t) => t.id),
-              }),
-            ),
-          );
-          process.exit(1);
+          printFail("UNKNOWN_MODELS_SUBCOMMAND", `Unknown models subcommand "${action}"`, {
+            details: { available: listTargets().map((t) => t.id) },
+            json: opts.json === true,
+          });
         } else {
           const { overrides } = loadOverrides(process.cwd(), subcommand);
           const data: Record<string, string> = {};

@@ -106,13 +106,13 @@ describe("gk execute/visualize stubs", () => {
     rmSync(root, { recursive: true, force: true });
   });
   test("execute exits 1 with NOT_IMPLEMENTED", () => {
-    const result = createCliHarness(registerExecuteCommand, { cwd: root }).run(["execute"]);
-    expect(result.exit).toBe(1);
+    const result = createCliHarness(registerExecuteCommand, { cwd: root }).run(["execute", "--json"]);
+    expect(result.exitCode).toBe(1);
     expect(JSON.parse(result.stdout).error.code).toBe("NOT_IMPLEMENTED");
   });
   test("visualize exits 1 with NOT_IMPLEMENTED", () => {
-    const result = createCliHarness(registerVisualizeCommand, { cwd: root }).run(["visualize"]);
-    expect(result.exit).toBe(1);
+    const result = createCliHarness(registerVisualizeCommand, { cwd: root }).run(["visualize", "--json"]);
+    expect(result.exitCode).toBe(1);
     expect(JSON.parse(result.stdout).error.code).toBe("NOT_IMPLEMENTED");
   });
 });

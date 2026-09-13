@@ -2,12 +2,11 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, isAbsolute, join } from "node:path";
 import type { CAC } from "cac";
 import { loadGraph } from "../../compiler/loader.js";
-import { GraphKitError } from "../../errors.js";
 import { buildViews, renderHtml, renderMarkdown } from "../../evidence/report.js";
 import { addEvidence, maxBytesFromConfig } from "../../evidence/store.js";
 import { safeGraphName } from "../../store/index.js";
 import { subcommandHelpFor, subcommandsFor } from "../command-registry.js";
-import { fail, ok } from "../output.js";
+import { ok, printFail, printFailFromError } from "../output.js";
 
 export function registerEvidenceCommand(cli: CAC) {
   cli
@@ -29,8 +28,7 @@ export function registerEvidenceCommand(cli: CAC) {
       if (subcommand === "add") {
         const file = Array.isArray(args) ? args[0] : args;
         if (!file || !opts.key) {
-          console.log(JSON.stringify(fail("MISSING_ARG", "evidence add requires <file> and --key <k>")));
-          process.exit(1);
+          printFail("MISSING_ARG", "evidence add requires <file> and --key <k>", { json: opts.json === true });
           return;
         }
         try {
@@ -47,14 +45,7 @@ export function registerEvidenceCommand(cli: CAC) {
           });
           console.log(JSON.stringify(ok(result)));
         } catch (e) {
-          console.log(
-            JSON.stringify(
-              e instanceof GraphKitError
-                ? fail(e.code, e.message, e.details)
-                : fail("EVIDENCE_ERROR", e instanceof Error ? e.message : String(e)),
-            ),
-          );
-          process.exit(1);
+          printFailFromError(e, "EVIDENCE_ERROR", { json: opts.json === true });
         }
         return;
       }
@@ -79,24 +70,13 @@ export function registerEvidenceCommand(cli: CAC) {
             console.log(renderMarkdown(graph.metadata.name, views).trimEnd());
           }
         } catch (e) {
-          console.log(
-            JSON.stringify(
-              e instanceof GraphKitError
-                ? fail(e.code, e.message, e.details)
-                : fail("EVIDENCE_ERROR", e instanceof Error ? e.message : String(e)),
-            ),
-          );
-          process.exit(1);
+          printFailFromError(e, "EVIDENCE_ERROR", { json: opts.json === true });
         }
         return;
       }
-      console.log(
-        JSON.stringify(
-          fail("UNKNOWN_EVIDENCE_SUBCOMMAND", `Unknown evidence subcommand "${subcommand}"`, {
-            hint: `Subcommands: ${subcommandsFor("evidence")}`,
-          }),
-        ),
-      );
-      process.exit(1);
+      printFail("UNKNOWN_EVIDENCE_SUBCOMMAND", `Unknown evidence subcommand "${subcommand}"`, {
+        details: { hint: `Subcommands: ${subcommandsFor("evidence")}` },
+        json: opts.json === true,
+      });
     });
 }

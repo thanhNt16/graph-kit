@@ -72,6 +72,7 @@ describe("CLI end-to-end: template pack/list/show", () => {
       graphFile(),
       "--name",
       "security-audit",
+      "--json",
     ]);
     expect(run.exit).toBeUndefined();
     const parsed = JSON.parse(run.stdout);
@@ -89,6 +90,7 @@ describe("CLI end-to-end: template pack/list/show", () => {
       graphFile(),
       "--name",
       "security-audit",
+      "--json",
     ]);
     const run = createCliHarness(registerAll, { cwd: cwd, version: APP_VERSION }).run([
       "template",
@@ -96,8 +98,9 @@ describe("CLI end-to-end: template pack/list/show", () => {
       graphFile(),
       "--name",
       "security-audit",
+      "--json",
     ]);
-    expect(run.exit).toBe(1);
+    expect(run.exitCode).toBe(1);
     const parsed = JSON.parse(run.stdout);
     expect(parsed.status).toBe("fail");
     expect(parsed.error.code).toBe("TEMPLATE_EXISTS");
@@ -108,8 +111,9 @@ describe("CLI end-to-end: template pack/list/show", () => {
       "template",
       "pack",
       graphFile(),
+      "--json",
     ]);
-    expect(run.exit).toBe(1);
+    expect(run.exitCode).toBe(1);
     const parsed = JSON.parse(run.stdout);
     expect(parsed.status).toBe("fail");
     expect(parsed.error.code).toBe("MISSING_NAME");
@@ -122,6 +126,7 @@ describe("CLI end-to-end: template pack/list/show", () => {
       graphFile(),
       "--name",
       "security-audit",
+      "--json",
     ]);
     const run = createCliHarness(registerAll, { cwd: cwd, version: APP_VERSION }).run(["template", "list", "--json"]);
     expect(run.exit).toBeUndefined();
@@ -139,11 +144,13 @@ describe("CLI end-to-end: template pack/list/show", () => {
       graphFile(),
       "--name",
       "security-audit",
+      "--json",
     ]);
     const run = createCliHarness(registerAll, { cwd: cwd, version: APP_VERSION }).run([
       "template",
       "show",
       "security-audit",
+      "--json",
     ]);
     expect(run.exit).toBeUndefined();
     const parsed = JSON.parse(run.stdout);
@@ -159,13 +166,15 @@ describe("CLI end-to-end: template pack/list/show", () => {
       graphFile(),
       "--name",
       "security-audit",
+      "--json",
     ]);
     const run = createCliHarness(registerAll, { cwd: cwd, version: APP_VERSION }).run([
       "template",
       "show",
       "security-audit-t",
+      "--json",
     ]);
-    expect(run.exit).toBe(1);
+    expect(run.exitCode).toBe(1);
     const parsed = JSON.parse(run.stdout);
     expect(parsed.status).toBe("fail");
     expect(parsed.error.code).toBe("TEMPLATE_NOT_FOUND");
@@ -173,8 +182,8 @@ describe("CLI end-to-end: template pack/list/show", () => {
   });
 
   test("unknown template subcommand rejected", () => {
-    const run = createCliHarness(registerAll, { cwd: cwd, version: APP_VERSION }).run(["template", "bogus"]);
-    expect(run.exit).toBe(1);
+    const run = createCliHarness(registerAll, { cwd: cwd, version: APP_VERSION }).run(["template", "bogus", "--json"]);
+    expect(run.exitCode).toBe(1);
     const parsed = JSON.parse(run.stdout);
     expect(parsed.status).toBe("fail");
     expect(parsed.error.code).toBe("UNKNOWN_TEMPLATE_SUBCOMMAND");
@@ -187,6 +196,7 @@ describe("CLI end-to-end: template pack/list/show", () => {
       graphFile(),
       "--name",
       "security-audit",
+      "--json",
     ]);
     const run = createCliHarness(registerAll, { cwd: cwd, version: APP_VERSION }).run([
       "validate",
@@ -265,8 +275,9 @@ describe("CLI end-to-end: inventory registration", () => {
       "inventory",
       "--target",
       "vscode",
+      "--json",
     ]);
-    expect(run.exit).toBe(1);
+    expect(run.exitCode).toBe(1);
     const parsed = JSON.parse(run.stdout);
     expect(parsed.status).toBe("fail");
     expect(parsed.error.code).toBe("BAD_TARGET");
@@ -324,12 +335,12 @@ describe("CLI end-to-end: kit init/new human + --json", () => {
     expect(Array.isArray(parsed.data.installed)).toBe(true);
   });
 
-  test("new missing --dir fails with MISSING_DIR (JSON fail envelope in both modes)", () => {
+  test("new missing --dir fails with MISSING_DIR (human verdict line, --json envelope)", () => {
     const human = createCliHarness(registerAll, { cwd: root, version: APP_VERSION }).run(["new"]);
-    expect(human.exit).toBe(1);
-    expect(JSON.parse(human.stdout).error.code).toBe("MISSING_DIR");
+    expect(human.exitCode).toBe(1);
+    expect(human.stdout).toContain("✗ MISSING_DIR");
     const json = createCliHarness(registerAll, { cwd: root, version: APP_VERSION }).run(["new", "--json"]);
-    expect(json.exit).toBe(1);
+    expect(json.exitCode).toBe(1);
     expect(JSON.parse(json.stdout).error.code).toBe("MISSING_DIR");
   });
 });

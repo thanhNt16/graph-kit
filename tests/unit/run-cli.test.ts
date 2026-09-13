@@ -186,7 +186,7 @@ describe("gk run CLI", () => {
     const cwd = join(tmpdir(), `gk-run-unknown-${process.pid}-${Date.now()}`);
     mkdirSync(cwd, { recursive: true });
     try {
-      const res = JSON.parse(createCliHarness(registerRunCommands, { cwd }).run(["run", "foo"]).stdout);
+      const res = JSON.parse(createCliHarness(registerRunCommands, { cwd }).run(["run", "foo", "--json"]).stdout);
       expect(res.status).toBe("fail");
       expect(res.error.code).toBe("UNKNOWN_RUN_SUBCOMMAND");
     } finally {
@@ -520,7 +520,9 @@ describe("run resume CLI", () => {
     const r = startRun(cwd, join(cwd, "graph.yaml"));
     endRun(cwd, "failed");
     appendFileSync(join(cwd, "graph.yaml"), "# drift\n");
-    const out = JSON.parse(createCliHarness(registerRunCommands, { cwd }).run(["run", "resume", r.id]).stdout);
+    const out = JSON.parse(
+      createCliHarness(registerRunCommands, { cwd }).run(["run", "resume", r.id, "--json"]).stdout,
+    );
     expect(out.error.code).toBe("RESUME_GRAPH_DRIFT");
     expect(createCliHarness(registerRunCommands, { cwd }).run(["run", "resume", r.id]).exitCode).toBe(1);
   });

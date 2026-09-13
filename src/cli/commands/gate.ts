@@ -4,11 +4,10 @@ import { join } from "node:path";
 import type { CAC } from "cac";
 import { loadGraph } from "../../compiler/loader.js";
 import { validateGraph } from "../../compiler/validate.js";
-import { GraphKitError } from "../../errors.js";
 import { scoreWorkProduct } from "../../eval/rubrics.js";
 import { fingerprint } from "../../evidence/fingerprint.js";
 import { type Freshness, freshnessOf, parseMarker } from "../../evidence/marker.js";
-import { fail, ok, renderFindings } from "../output.js";
+import { fail, ok, printFailFromError, renderFindings } from "../output.js";
 
 /**
  * Deterministic evidence gate: MERGE/BLOCK over required evidence keys.
@@ -107,7 +106,7 @@ export function registerGateCommand(cli: CAC) {
             console.log(`✗ VALIDATION_FAILED — ${findings.length} finding(s)`);
             console.log(renderFindings(findings));
           }
-          process.exit(1);
+          process.exitCode = 1; // fail() sets this on the json arm; the human arm obeys the same rule
           return;
         }
         const evidenceDir = join(process.cwd(), graph.outputs.evidence_dir);
@@ -140,7 +139,7 @@ export function registerGateCommand(cli: CAC) {
             }
             console.log(lines.join("\n"));
           }
-          process.exit(1);
+          process.exitCode = 1; // fail() sets this on the json arm; the human arm obeys the same rule
           return;
         }
         console.log(
@@ -149,12 +148,7 @@ export function registerGateCommand(cli: CAC) {
             : renderGate({ verdict, scorecard, freshness }),
         );
       } catch (e) {
-        console.log(
-          JSON.stringify(
-            e instanceof GraphKitError ? fail(e.code, e.message, e.details) : fail("GATE_ERROR", String(e)),
-          ),
-        );
-        process.exit(1);
+        printFailFromError(e, "GATE_ERROR", { json: opts.json === true });
       }
     });
 }
