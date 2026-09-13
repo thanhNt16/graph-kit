@@ -3,8 +3,10 @@ import { basename, isAbsolute, join } from "node:path";
 import type { CAC } from "cac";
 import { GraphKitError } from "../../errors.js";
 import { atomicWrite } from "../../fs.js";
+import { TOPOLOGY_NAMES, type TopologyName } from "../../schemas/topology/index.js";
 import { getTarget, isValidTarget, listTargets } from "../../targets/registry.js";
 import type { TargetId } from "../../targets/types.js";
+import { graphTemplate } from "../graph-templates.js";
 import { ok, printFail } from "../output.js";
 
 export type KitTarget = "claude" | "cursor";
@@ -194,9 +196,18 @@ function assertValidTarget(opts: { target?: string }) {
 // target, and the next step. The next step names CLI commands — they are the
 // only surface identical on every host (the /gk:* skill spellings differ).
 // --json keeps the ok(result) envelope.
-function installedLine(installDir: string, target: string, count: number, created?: string): string {
+function installedLine(
+  installDir: string,
+  target: string,
+  count: number,
+  created?: string,
+  graphWritten?: boolean,
+): string {
   const prefix = created ? `created ${created} — ` : "";
-  return `${prefix}installed ${count} entries into ${installDir}/ (target ${target}) — next: \`gk graph new diamond > graph.yaml\`, then \`gk validate\``;
+  const next = graphWritten
+    ? "next: `gk validate graph.yaml`, then `/gk:visualize` or `/gk:execute`"
+    : "next: `gk graph new diamond > graph.yaml`, then `gk validate`";
+  return `${prefix}installed ${count} entries into ${installDir}/ (target ${target}) — ${next}`;
 }
 
 export function registerKitCommands(cli: CAC) {
@@ -225,6 +236,7 @@ export function registerKitCommands(cli: CAC) {
     .command("new", "Scaffold a new project with the GraphKit kit")
     .example("$ gk new --dir my-project --target claude")
     .option("--dir <dir>", "Target directory (required)")
+    .option("--topology <t>", "Also write a starter graph.yaml for the topology (see `gk graph topologies`)")
     .option("--json", "JSON output")
     .option("--target <target>", "Kit target: claude, cursor, opencode, codex, or pi", { default: "claude" })
     .action((opts) => {
@@ -239,14 +251,29 @@ export function registerKitCommands(cli: CAC) {
       }
       mkdirSync(opts.dir, { recursive: true });
       const result = installKit(opts.dir, false, opts.target);
+      // D2: `--topology` writes the starter graph.yaml too — the success line
+      // used to send the user off to hand-run `gk graph new` themselves.
+      let topologyFile: string | undefined;
+      if (opts.topology) {
+        if (!TOPOLOGY_NAMES.includes(opts.topology as TopologyName)) {
+          printFail("UNKNOWN_TOPOLOGY", `"${opts.topology}" is not a canonical topology`, {
+            details: { available: TOPOLOGY_NAMES },
+            json: opts.json === true,
+          });
+          return;
+        }
+        topologyFile = join(opts.dir, "graph.yaml");
+        writeFileSync(topologyFile, graphTemplate(opts.topology as TopologyName));
+      }
       console.log(
         opts.json
-          ? JSON.stringify(ok({ created: opts.dir, ...result }))
+          ? JSON.stringify(ok({ created: opts.dir, ...(topologyFile ? { graph: topologyFile } : {}), ...result }))
           : installedLine(
               getTarget(opts.target as TargetId).installDir,
               opts.target,
               result.installed.length,
               opts.dir,
+              Boolean(topologyFile),
             ),
       );
     });

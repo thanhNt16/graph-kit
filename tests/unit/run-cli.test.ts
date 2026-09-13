@@ -200,7 +200,7 @@ describe("gk run CLI", () => {
     try {
       const res = createCliHarness(registerRunCommands, { cwd }).run(["run"]);
       expect(res.stdout).toContain("gk run — run ledger commands");
-      expect(res.stdout).toContain("Subcommands: start node end list status resume");
+      expect(res.stdout).toContain("Subcommands: start node end list status plan resume");
     } finally {
       rmSync(cwd, { recursive: true, force: true });
     }

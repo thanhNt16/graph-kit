@@ -1,0 +1,64 @@
+apiVersion: graphkit.dev/v1
+kind: GraphTemplate
+metadata:
+  name: adversarial-verification
+  description: Produce, refute, and adjudicate claims about {{task}}
+  version: 1
+parameters:
+  task:
+    description: What the run should accomplish
+    required: true
+graph:
+  apiVersion: graphkit.dev/v2
+  kind: Graph
+  metadata:
+    name: adversarial-verification
+    description: Produce, refute, and adjudicate claims about {{task}}
+  topology: adversarial-verification
+  inputs:
+    task:
+      type: string
+      required: true
+  nodes:
+    producer:
+      agent: code-reviewer
+      model: sonnet
+      objective: Produce findings or claims to be verified.
+      depend_on: []
+      evidence:
+      - claims
+    refuter-1:
+      agent: qa-engineer
+      model: sonnet
+      objective: Try to REFUTE each claim. Default to refuted if uncertain.
+      depend_on:
+      - producer
+      evidence:
+      - verdicts
+    refuter-2:
+      agent: agents-orchestrator
+      model: sonnet
+      objective: Try to REFUTE each claim from a different angle.
+      depend_on:
+      - producer
+      evidence:
+      - verdicts
+    adjudicator:
+      agent: software-architect
+      model: opus
+      objective: Count survivals. Claims surviving >= threshold are kept.
+      depend_on:
+      - refuter-1
+      - refuter-2
+      evidence:
+      - verified_claims
+  topology_config:
+    producer: producer
+    refuters:
+    - refuter-1
+    - refuter-2
+    survive_threshold: 2
+    adjudicator: adjudicator
+  evidence:
+    required_keys:
+    - verified_claims

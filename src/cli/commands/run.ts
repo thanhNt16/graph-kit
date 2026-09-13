@@ -1,6 +1,8 @@
 import { basename, join } from "node:path";
 import type { CAC } from "cac";
 import { loadGraph } from "../../compiler/loader.js";
+import { validateGraph } from "../../compiler/validate.js";
+import { planExecutionWaves } from "../../compiler/waves.js";
 import { GraphKitError } from "../../errors.js";
 import {
   activeRun,
@@ -80,6 +82,45 @@ function resumesChain(cwd: string, startId: string): string[] {
     }
   }
   return chain;
+}
+
+// D1: worst-case dispatch projection over an execution plan. Deterministic
+// arithmetic over declared caps — gk never predicts model behavior, it bounds
+// the coordination surface before any token is spent.
+function worstCaseDispatch(
+  plan: ReturnType<typeof planExecutionWaves>["plan"],
+  graph: ReturnType<typeof loadGraph>,
+): {
+  dispatches_min: number;
+  dispatches_worst: number;
+  advisor_calls_worst: number;
+  loop_nodes: string[];
+  loop_groups: Array<{ nodes: string[]; max_rounds: number }>;
+} {
+  // Curator waves are dispatches too — they cost a model call like any node.
+  const actionNodes = plan.waves.filter((w) => !w.curator).flatMap((w) => w.nodes);
+  const curatorDispatches = plan.waves.length - plan.waves.filter((w) => !w.curator).length;
+  let worst = actionNodes.length + curatorDispatches;
+  const loopNodes: string[] = [];
+  for (const n of actionNodes) {
+    const rounds = n.loop?.enabled ? (n.loop.max_rounds ?? 1) : 1;
+    if (rounds > 1) {
+      worst += rounds - 1;
+      loopNodes.push(n.id);
+    }
+  }
+  const groups = graph.loops ?? [];
+  for (const g of groups) {
+    worst += (g.max_rounds - 1) * g.nodes.length;
+  }
+  const advisorCalls = actionNodes.reduce((sum, n) => sum + (n.advisor?.max_calls ?? 0), 0);
+  return {
+    dispatches_min: actionNodes.length + curatorDispatches,
+    dispatches_worst: worst,
+    advisor_calls_worst: advisorCalls,
+    loop_nodes: loopNodes,
+    loop_groups: groups.map((g) => ({ nodes: g.nodes, max_rounds: g.max_rounds })),
+  };
 }
 
 export function registerRunCommands(cli: CAC) {
@@ -206,6 +247,54 @@ export function registerRunCommands(cli: CAC) {
             console.log(
               `run ${summary.id} ended: ${summary.status} — ${summary.node_count} node(s), ${summary.failures} failure(s); appended to .graphkit/runs/index.jsonl`,
             );
+          }
+          return;
+        }
+        if (subcommand === "plan") {
+          // D1: pre-flight execution plan — also the execute-skill Step 0:
+          // invalid graphs exit 1 here, before any agent spends a token.
+          const graphPath = opts.graph ?? join(cwd, "graph.yaml");
+          try {
+            const graph = loadGraph(graphPath);
+            const findings = validateGraph(graph, process.cwd());
+            if (findings.length > 0) {
+              printFail("VALIDATION_FAILED", "graph has findings", {
+                details: { findings },
+                json: opts.json === true,
+              });
+              return;
+            }
+            const { plan } = planExecutionWaves(graph);
+            const worst = worstCaseDispatch(plan, graph);
+            if (opts.json) {
+              console.log(JSON.stringify(ok({ graph_path: graphPath, plan, worst_case: worst })));
+              return;
+            }
+            const lines = [
+              `execution plan — ${plan.graph ?? "graph"} (${plan.topology})`,
+              `  waves: ${plan.total_waves} · nodes: ${plan.total_nodes} · evidence keys: ${plan.evidence_required.length}`,
+            ];
+            for (const w of plan.waves) {
+              const who = w.nodes
+                .map((n) => `${n.id} [${n.model}]${n.loop?.enabled ? ` ×${n.loop.max_rounds}` : ""}`)
+                .join(", ");
+              lines.push(`  wave ${w.wave}${w.curator ? " (curator)" : w.parallel ? " (parallel)" : ""}: ${who}`);
+            }
+            lines.push(
+              `  worst case: ${worst.dispatches_worst} node dispatch(es)` +
+                ` (min ${worst.dispatches_min})` +
+                `${worst.advisor_calls_worst > 0 ? `, up to ${worst.advisor_calls_worst} advisor escalation(s)` : ""}`,
+            );
+            if (worst.loop_groups.length > 0) {
+              lines.push(
+                `  loop groups: ${worst.loop_groups.map((g) => `[${g.nodes.join("+")}] ×${g.max_rounds}`).join(", ")}`,
+              );
+            }
+            lines.push(`  fan-out bounds are data-dependent (brief counts) and not projected`);
+            console.log(lines.join("\n"));
+          } catch (e) {
+            const { code, message, details } = errCode(e);
+            printFail(code, message, { details, json: opts.json === true });
           }
           return;
         }

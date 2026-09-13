@@ -1,0 +1,68 @@
+apiVersion: graphkit.dev/v1
+kind: GraphTemplate
+metadata:
+  name: classify-and-act
+  description: Route {{task}} to exactly one handler (classifier dispatch)
+  version: 1
+parameters:
+  task:
+    description: What the run should accomplish
+    required: true
+graph:
+  apiVersion: graphkit.dev/v2
+  kind: Graph
+  metadata:
+    name: classify-and-act
+    description: Route {{task}} to exactly one handler (classifier dispatch)
+  topology: classify-and-act
+  inputs:
+    task:
+      type: string
+      required: true
+  nodes:
+    classifier:
+      agent: software-architect
+      model: sonnet
+      objective: 'Classify the input into exactly one category.
+
+        Return ONLY the category label.
+
+        '
+      depend_on: []
+      evidence:
+      - label
+    handler-a:
+      agent: code-reviewer
+      model: sonnet
+      objective: Handle category A.
+      depend_on:
+      - classifier
+      evidence:
+      - result
+    handler-b:
+      agent: qa-engineer
+      model: sonnet
+      objective: Handle category B.
+      depend_on:
+      - classifier
+      evidence:
+      - result
+    fallback:
+      agent: document-generator
+      model: haiku
+      objective: Handle unknown categories gracefully.
+      depend_on:
+      - classifier
+      evidence:
+      - result
+  topology_config:
+    classifier: classifier
+    routes:
+    - condition: category-a
+      handler: handler-a
+    - condition: category-b
+      handler: handler-b
+    fallback: fallback
+  evidence:
+    required_keys:
+    - result

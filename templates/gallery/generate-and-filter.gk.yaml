@@ -1,0 +1,68 @@
+apiVersion: graphkit.dev/v1
+kind: GraphTemplate
+metadata:
+  name: generate-and-filter
+  description: Generate many candidates for {{task}}, keep the best
+  version: 1
+parameters:
+  task:
+    description: What the run should accomplish
+    required: true
+graph:
+  apiVersion: graphkit.dev/v2
+  kind: Graph
+  metadata:
+    name: generate-and-filter
+    description: Generate many candidates for {{task}}, keep the best
+  topology: generate-and-filter
+  inputs:
+    task:
+      type: string
+      required: true
+  nodes:
+    generator-1:
+      agent: software-architect
+      model: sonnet
+      objective: Generate candidates from angle 1.
+      depend_on: []
+      evidence:
+      - candidates
+    generator-2:
+      agent: code-reviewer
+      model: sonnet
+      objective: Generate candidates from angle 2.
+      depend_on: []
+      evidence:
+      - candidates
+    generator-3:
+      agent: ui-ux-researcher
+      model: sonnet
+      objective: Generate candidates from angle 3.
+      depend_on: []
+      evidence:
+      - candidates
+    scorer:
+      agent: qa-engineer
+      model: opus
+      objective: Score each candidate against the rubric. Return ranked.
+      depend_on:
+      - generator-1
+      - generator-2
+      - generator-3
+      evidence:
+      - ranked
+  topology_config:
+    generators:
+    - generator-1
+    - generator-2
+    - generator-3
+    rubric: 'Correctness, completeness, feasibility.
+
+      Score 1-10. Higher is better.
+
+      '
+    keep_top: 3
+    scorer: scorer
+  evidence:
+    required_keys:
+    - ranked

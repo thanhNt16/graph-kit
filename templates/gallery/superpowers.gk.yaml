@@ -1,0 +1,89 @@
+apiVersion: graphkit.dev/v1
+kind: GraphTemplate
+metadata:
+  name: superpowers
+  description: Superpowers flow for {{task}} — brainstorm, plan, parallel execution, test until done
+  version: 1
+parameters:
+  task:
+    description: What the run should accomplish
+    required: true
+graph:
+  apiVersion: graphkit.dev/v2
+  kind: Graph
+  metadata:
+    name: superpowers
+    description: Superpowers flow for {{task}} — brainstorm, plan, parallel execution, test until done
+  topology: superpowers
+  inputs:
+    task:
+      type: string
+      required: true
+  nodes:
+    brainstormer:
+      agent: software-architect
+      model: opus
+      objective: Brainstorm and clarify the task. Explore approaches.
+      depend_on: []
+      evidence:
+      - approach
+    planner:
+      agent: software-architect
+      model: opus
+      objective: 'Write a bite-sized implementation plan.
+
+        Split into independent, testable tasks.
+
+        '
+      depend_on:
+      - brainstormer
+      evidence:
+      - plan
+    executor-1:
+      agent: code-reviewer
+      model: sonnet
+      objective: Implement task 1 from the plan. TDD — write test first.
+      depend_on:
+      - planner
+      evidence:
+      - code
+      - tests
+    executor-2:
+      agent: code-reviewer
+      model: sonnet
+      objective: Implement task 2 from the plan. TDD — write test first.
+      depend_on:
+      - planner
+      evidence:
+      - code
+      - tests
+    executor-3:
+      agent: ui-ux-researcher
+      model: sonnet
+      objective: Implement task 3 from the plan. TDD — write test first.
+      depend_on:
+      - planner
+      evidence:
+      - code
+      - tests
+    tester:
+      agent: qa-engineer
+      model: haiku
+      objective: 'Run all tests. If any fail, report which and why.
+
+        Return {passed, failures} so the loop can decide.
+
+        '
+      depend_on:
+      - executor-1
+      - executor-2
+      - executor-3
+      loop:
+        enabled: true
+        stop_when: all tests pass
+        max_rounds: 5
+      evidence:
+      - test_results
+  evidence:
+    required_keys:
+    - test_results

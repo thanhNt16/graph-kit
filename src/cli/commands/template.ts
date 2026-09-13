@@ -16,6 +16,7 @@ import {
   TEMPLATE_NAME_RE,
   type TemplateValues,
 } from "../../schemas/template.schema.js";
+import { TOPOLOGY_NAMES } from "../../schemas/topology/index.js";
 import { saveSessionGraph, setActiveGraphId } from "../../store/index.js";
 import { groupUsage, subcommandHelpFor, subcommandsFor } from "../command-registry.js";
 import { fail, ok, printFail, printFailFromError } from "../output.js";
@@ -224,6 +225,10 @@ export function runTemplateList(opts: { cwd: string; home: string }): {
         name,
         description: t.metadata.description,
         version: t.metadata.version,
+        // D2: the topology each template materializes — `template list
+        // --topology <t>` filters on it (the README's "11 topologies" used to
+        // have no discoverable template coverage).
+        topology: (t.graph as { topology?: string } | undefined)?.topology,
         origin,
         shadowed:
           origin === "project"
@@ -395,6 +400,7 @@ export function registerTemplateCommands(cli: CAC) {
     .command("template [subcommand] [args...]", "Package, list, inspect, and materialize reusable GraphTemplates")
     .example(subcommandHelpFor("template"))
     .option("--name <name>", "Template name (required for pack)")
+    .option("--topology <t>", "Filter `template list` by materialized topology")
     .option("--global", "Write to the user-global store")
     .option("--force", "Overwrite an existing template")
     .option("--input <file>", "Prepared complete GraphTemplate input file")
@@ -407,6 +413,7 @@ export function registerTemplateCommands(cli: CAC) {
         args: string | string[] | undefined,
         opts: {
           name?: string;
+          topology?: string;
           input?: string;
           force?: boolean;
           global?: boolean;
@@ -468,14 +475,25 @@ export function registerTemplateCommands(cli: CAC) {
           for (const s of res.data.skipped) {
             console.warn(`skipped malformed template "${String(s.name)}" (${String(s.origin)}): ${String(s.reason)}`);
           }
+          // D2: topology filter — unknown names get the canonical list.
+          let rows = res.data.templates;
+          if (opts.topology) {
+            rows = rows.filter((r) => r.topology === opts.topology);
+            if (rows.length === 0) {
+              printFail("UNKNOWN_TOPOLOGY", `no templates materialize topology "${opts.topology}"`, {
+                details: { available: TOPOLOGY_NAMES },
+                json: opts.json === true,
+              });
+              return;
+            }
+          }
           if (opts.json) {
-            console.log(JSON.stringify(res));
+            console.log(JSON.stringify(ok({ templates: rows, skipped: res.data.skipped })));
             return;
           }
           // Human default: the README-promised table with the origin column
           // (project > global > gallery precedence) — list used to print the
           // raw JSON envelope even on a bare terminal.
-          const rows = res.data.templates;
           if (rows.length === 0) {
             console.log("no templates found — pack one with `gk template pack graph.yaml --name <name>`");
             return;

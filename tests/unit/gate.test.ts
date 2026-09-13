@@ -153,4 +153,19 @@ describe("gk gate command", () => {
     expect(parsed.status).toBe("fail");
     expect(parsed.error.code).toBe("SCHEMA_INVALID");
   });
+  // Round 5 D7: CI annotation surface.
+  test("BLOCK --github-actions emits ::error annotations per blocked key", () => {
+    writeFileSync(join(tmp, "graph.yaml"), MINIMAL_GRAPH);
+    const result = createCliHarness(registerGateCommand, { cwd: tmp }).run([
+      "gate",
+      join(tmp, "graph.yaml"),
+      "--github-actions",
+    ]);
+    expect(result.exitCode).toBe(1);
+    expect(result.stdout).toContain("VERDICT: BLOCK");
+    expect(result.stdout).toContain(
+      "::error title=gk gate: design::missing evidence — produce .graphkit/evidence/design.md",
+    );
+    expect(result.stdout).not.toContain("::error title=gk gate: design::evidence stale");
+  });
 });

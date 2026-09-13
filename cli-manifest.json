@@ -16,6 +16,7 @@
       "description": "Scaffold a new project with the GraphKit kit",
       "options": [
         "--dir <dir>",
+        "--topology <t>",
         "--json",
         "--target <target>"
       ]
@@ -60,7 +61,8 @@
       "name": "gate",
       "description": "Deterministic evidence gate: MERGE/BLOCK over required evidence keys",
       "options": [
-        "--json"
+        "--json",
+        "--github-actions"
       ]
     },
     {
@@ -240,6 +242,7 @@
       "name": "template list",
       "description": "List packaged templates",
       "options": [
+        "--topology <t>",
         "--json"
       ]
     },
@@ -348,6 +351,14 @@
       "name": "run status",
       "description": "Show run progress (default: the active run; pass a run id for any run)",
       "options": [
+        "--json"
+      ]
+    },
+    {
+      "name": "run plan",
+      "description": "Pre-flight execution plan: waves, model tiers, worst-case dispatch count (also validates)",
+      "options": [
+        "--graph <path>",
         "--json"
       ]
     },

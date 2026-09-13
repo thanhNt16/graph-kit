@@ -1,0 +1,110 @@
+apiVersion: graphkit.dev/v1
+kind: GraphTemplate
+metadata:
+  name: sdd
+  description: Subagent-driven development of {{task}} — brainstorm, plan, parallel workers, review, test
+    loop
+  version: 1
+parameters:
+  task:
+    description: What the run should accomplish
+    required: true
+graph:
+  apiVersion: graphkit.dev/v2
+  kind: Graph
+  metadata:
+    name: sdd
+    description: Subagent-driven development of {{task}} — brainstorm, plan, parallel workers, review,
+      test loop
+  topology: sdd
+  inputs:
+    task:
+      type: string
+      required: true
+  nodes:
+    brainstormer:
+      agent: software-architect
+      model: opus
+      objective: 'Brainstorm the approach. Ask clarifying questions.
+
+        Identify key decisions and constraints.
+
+        '
+      depend_on: []
+      evidence:
+      - approach
+      - decisions
+    planner:
+      agent: software-architect
+      model: opus
+      objective: 'Write a detailed implementation plan with tasks.
+
+        Each task should be independently assignable.
+
+        '
+      depend_on:
+      - brainstormer
+      evidence:
+      - plan
+      - task_list
+    worker-1:
+      agent: code-reviewer
+      model: sonnet
+      objective: Execute plan task 1. Write tests. Record evidence.
+      depend_on:
+      - planner
+      evidence:
+      - implementation
+      - tests
+    worker-2:
+      agent: code-reviewer
+      model: sonnet
+      objective: Execute plan task 2. Write tests. Record evidence.
+      depend_on:
+      - planner
+      evidence:
+      - implementation
+      - tests
+    worker-3:
+      agent: data-engineer
+      model: sonnet
+      objective: Execute plan task 3. Write tests. Record evidence.
+      depend_on:
+      - planner
+      evidence:
+      - implementation
+      - tests
+    reviewer:
+      agent: agents-orchestrator
+      model: sonnet
+      objective: 'Review all worker implementations against the plan.
+
+        Check for integration issues, missing tests, code quality.
+
+        '
+      depend_on:
+      - worker-1
+      - worker-2
+      - worker-3
+      evidence:
+      - review_findings
+    tester:
+      agent: qa-engineer
+      model: haiku
+      objective: 'Run all tests. Report failures with details.
+
+        Return {passed: bool, failures: [...]}.
+
+        '
+      depend_on:
+      - reviewer
+      loop:
+        enabled: true
+        stop_when: all tests pass
+        max_rounds: 5
+      evidence:
+      - test_results
+      - coverage
+  evidence:
+    required_keys:
+    - test_results

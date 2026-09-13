@@ -1,0 +1,40 @@
+apiVersion: graphkit.dev/v2
+kind: Graph
+metadata:
+  name: review-diamond
+  description: Diamond review of a change — fan out two reviewers, merge into a verdict
+topology: diamond
+inputs:
+  task:
+    type: string
+    required: true
+nodes:
+  scouter:
+    agent: software-architect
+    model: opus
+    objective: |
+      Scope the change under review. Break it into independent review angles
+      (design, correctness, tests) and list what each reviewer should look at.
+      Produce the work items for the parallel reviewers.
+    tools: [Read, Glob, Grep]
+    depend_on: []
+    evidence: [work_items]
+  reviewer:
+    agent: code-reviewer
+    model: sonnet
+    objective: |
+      Review the assigned angle of the change. Record findings, risks, and
+      open questions as evidence for the synthesizer.
+    tools: [Read, Glob, Grep]
+    depend_on: [scouter]
+    evidence: [findings]
+  synthesizer:
+    agent: software-architect
+    model: opus
+    objective: |
+      Merge the review findings into one verdict: approve, request-changes,
+      or block. Cite the reviewer evidence for every blocking issue.
+    depend_on: [reviewer]
+    evidence: [report]
+evidence:
+  required_keys: [report]

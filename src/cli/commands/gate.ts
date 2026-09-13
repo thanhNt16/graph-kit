@@ -94,7 +94,10 @@ export function registerGateCommand(cli: CAC) {
     .example("$ gk gate                 # gate the active graph's evidence")
     .example("$ gk gate path/to/graph.yaml --json")
     .option("--json", "JSON output")
-    .action((file, opts: { json?: boolean }) => {
+    // D7: CI annotation surface — one ::error line per blocked key, so a
+    // pipeline surfaces the verdict inline instead of a parse-the-table step.
+    .option("--github-actions", "Emit GitHub Actions ::error annotations per blocked key")
+    .action((file, opts: { json?: boolean; githubActions?: boolean }) => {
       try {
         const resolved = file ?? join(process.cwd(), "graph.yaml");
         const graph = loadGraph(resolved);
@@ -138,6 +141,21 @@ export function registerGateCommand(cli: CAC) {
               );
             }
             console.log(lines.join("\n"));
+          }
+          if (opts.githubActions && !opts.json) {
+            // Annotations ride stderr's convention (::error is parsed wherever
+            // it appears), but they are part of this command's verdict output;
+            // stdout keeps the table, annotations append after it.
+            for (const key of missing) {
+              console.log(
+                `::error title=gk gate: ${key}::missing evidence — produce ${graph.outputs.evidence_dir}${key}.md`,
+              );
+            }
+            for (const key of stale) {
+              console.log(
+                `::error title=gk gate: ${key}::evidence stale — re-run the producing node or update the marker`,
+              );
+            }
           }
           process.exitCode = 1; // fail() sets this on the json arm; the human arm obeys the same rule
           return;

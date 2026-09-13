@@ -1,0 +1,101 @@
+apiVersion: graphkit.dev/v1
+kind: GraphTemplate
+metadata:
+  name: research-and-build
+  description: Research tools and approaches for {{task}}, then plan and build from the findings
+  version: 1
+parameters:
+  task:
+    description: What the run should accomplish
+    required: true
+graph:
+  apiVersion: graphkit.dev/v2
+  kind: Graph
+  metadata:
+    name: research-and-build
+    description: Research tools and approaches for {{task}}, then plan and build from the findings
+  topology: research-and-build
+  inputs:
+    task:
+      type: string
+      required: true
+  nodes:
+    scouter:
+      agent: software-architect
+      model: opus
+      objective: 'Identify what needs researching.
+
+        Break the research into independent areas.
+
+        '
+      depend_on: []
+      evidence:
+      - research_areas
+    researcher-1:
+      agent: data-engineer
+      model: sonnet
+      objective: Deep-dive research area 1. Report findings, pros/cons, evidence.
+      depend_on:
+      - scouter
+      evidence:
+      - findings
+    researcher-2:
+      agent: code-reviewer
+      model: sonnet
+      objective: Deep-dive research area 2. Report findings, pros/cons, evidence.
+      depend_on:
+      - scouter
+      evidence:
+      - findings
+    researcher-3:
+      agent: ui-ux-researcher
+      model: sonnet
+      objective: Deep-dive research area 3. Report findings, pros/cons, evidence.
+      depend_on:
+      - scouter
+      evidence:
+      - findings
+    planner:
+      agent: software-architect
+      model: opus
+      objective: 'Synthesize research into a build plan.
+
+        Decide what to build vs leverage.
+
+        '
+      depend_on:
+      - researcher-1
+      - researcher-2
+      - researcher-3
+      evidence:
+      - decision
+      - plan
+    builder-1:
+      agent: code-reviewer
+      model: sonnet
+      objective: Build plan task 1. Write code and tests.
+      depend_on:
+      - planner
+      evidence:
+      - implementation
+    builder-2:
+      agent: data-engineer
+      model: sonnet
+      objective: Build plan task 2. Write code and tests.
+      depend_on:
+      - planner
+      evidence:
+      - implementation
+    reviewer:
+      agent: agents-orchestrator
+      model: opus
+      objective: Review the full build against the plan. Verify integration.
+      depend_on:
+      - builder-1
+      - builder-2
+      evidence:
+      - review
+      - verdict
+  evidence:
+    required_keys:
+    - verdict

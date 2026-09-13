@@ -1,0 +1,70 @@
+apiVersion: graphkit.dev/v1
+kind: GraphTemplate
+metadata:
+  name: memory-augmented
+  description: Run {{task}} with a curator interleaving memory recall and curation
+  version: 1
+parameters:
+  task:
+    description: What the run should accomplish
+    required: true
+graph:
+  apiVersion: graphkit.dev/v2
+  kind: Graph
+  metadata:
+    name: memory-augmented
+    description: Run {{task}} with a curator interleaving memory recall and curation
+  topology: memory-augmented
+  inputs:
+    task:
+      type: string
+      required: true
+  topology_config:
+    inner:
+      template: diamond
+    memory:
+      project: graph-kit-memory
+      cadence: on_node_complete
+      curator_node: curator
+      recall_topk: 5
+      expire_policy: act_r
+      null_intervention_allowed: true
+  nodes:
+    scouter:
+      agent: software-architect
+      model: opus
+      objective: Analyze the task and break it into work items.
+      depend_on: []
+      evidence:
+      - work_items
+    worker:
+      agent: code-reviewer
+      model: sonnet
+      objective: Complete the assigned work item.
+      depend_on:
+      - scouter
+      evidence:
+      - findings
+    synthesizer:
+      agent: software-architect
+      model: opus
+      objective: Merge findings into a report.
+      depend_on:
+      - worker
+      evidence:
+      - report
+    curator:
+      agent: memory-curator
+      model: opus
+      objective: 'Curate memory: extract, consolidate, resolve, expire.
+
+        Decide whether to inject a reminder or stay silent.
+
+        '
+      depend_on: []
+      evidence:
+      - memory_delta
+      - injection_decision
+  evidence:
+    required_keys:
+    - report

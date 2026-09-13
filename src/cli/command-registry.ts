@@ -24,7 +24,7 @@ export const CLI_COMMANDS: { path: string; description: string; options: string[
   {
     path: "new",
     description: "Scaffold a new project with the GraphKit kit",
-    options: ["--dir <dir>", "--json", "--target <target>"],
+    options: ["--dir <dir>", "--topology <t>", "--json", "--target <target>"],
   },
   { path: "validate", description: "Validate a graph.yaml", options: ["--json"] },
   { path: "status", description: "Summarize active graph run and evidence coverage", options: ["--json"] },
@@ -38,7 +38,7 @@ export const CLI_COMMANDS: { path: string; description: string; options: string[
   {
     path: "gate",
     description: "Deterministic evidence gate: MERGE/BLOCK over required evidence keys",
-    options: ["--json"],
+    options: ["--json", "--github-actions"],
   },
   {
     path: "compile",
@@ -107,7 +107,7 @@ export const CLI_COMMANDS: { path: string; description: string; options: string[
     description: "Package a graph.yaml as a reusable GraphTemplate",
     options: ["--name <name>", "--global", "--force", "--input <file>"],
   },
-  { path: "template list", description: "List packaged templates", options: ["--json"] },
+  { path: "template list", description: "List packaged templates", options: ["--topology <t>", "--json"] },
   { path: "template show", description: "Show a packaged template", options: ["--json"] },
   {
     path: "template materialize",
@@ -161,6 +161,11 @@ export const CLI_COMMANDS: { path: string; description: string; options: string[
     path: "run status",
     description: "Show run progress (default: the active run; pass a run id for any run)",
     options: ["--json"],
+  },
+  {
+    path: "run plan",
+    description: "Pre-flight execution plan: waves, model tiers, worst-case dispatch count (also validates)",
+    options: ["--graph <path>", "--json"],
   },
   {
     path: "run resume",
