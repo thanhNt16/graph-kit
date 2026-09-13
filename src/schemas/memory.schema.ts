@@ -42,13 +42,26 @@ export const PatternFileSchema = MemoryFileSchema.extend({
   signature: z.string().min(4),
 });
 
+export const SUGGESTION_STATUSES = ["proposed", "accepted", "dismissed"] as const;
+
 /** Actionable suggestions under .graphkit/memory/suggestions/. */
 export const SuggestionFileSchema = MemoryFileSchema.extend({
   type: z.literal("suggestion"),
   action: z.enum(SUGGESTION_ACTIONS),
   rationale: z.string().min(1),
   based_on: z.array(z.string()),
-  status: z.enum(["proposed", "accepted", "dismissed"]).default("proposed"),
+  status: z.enum(SUGGESTION_STATUSES).default("proposed"),
+});
+
+/**
+ * Store-wide recall schema: every generated entry kind is a first-class recall
+ * citizen. Suggestions carry `status: proposed|accepted|dismissed`, which
+ * MemoryFileSchema's status enum rejects — recall used to drop them AND count
+ * them malformed, so healthy stores reported malformed > 0 and suggestions
+ * could never be recalled or reinforced.
+ */
+export const RecallFileSchema = MemoryFileSchema.extend({
+  status: z.enum(["draft", "stable", "deprecated", ...SUGGESTION_STATUSES]).optional(),
 });
 
 export const MemoryConfig = z

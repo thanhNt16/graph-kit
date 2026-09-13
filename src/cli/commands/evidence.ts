@@ -1,5 +1,5 @@
 import { mkdirSync, writeFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { dirname, isAbsolute, join } from "node:path";
 import type { CAC } from "cac";
 import { loadGraph } from "../../compiler/loader.js";
 import { GraphKitError } from "../../errors.js";
@@ -36,7 +36,10 @@ export function registerEvidenceCommand(cli: CAC) {
         try {
           const graph = loadGraph(join(cwd, "graph.yaml"));
           const result = addEvidence(cwd, graph, {
-            file: join(cwd, String(file)),
+            // An absolute artifact path is the caller's choice, not a mistake —
+            // the unconditional join used to manufacture "<cwd>/tmp/…" and then
+            // report EVIDENCE_FILE_MISSING for the file it mangled.
+            file: isAbsolute(String(file)) ? String(file) : join(cwd, String(file)),
             key: String(opts.key),
             node: opts.node ? String(opts.node) : undefined,
             note: opts.note ? String(opts.note) : undefined,

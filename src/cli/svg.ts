@@ -3,6 +3,14 @@ import type { Graph } from "../compiler/validate.js";
 
 type GraphNode = Graph["nodes"][string];
 
+// Node ids / agent names / graph names come from agent-authored graph.yaml —
+// they must render as text, never as markup in the generated SVG.
+function escapeXml(s: string): string {
+  return s.replace(/[&<>"']/g, (c) =>
+    c === "&" ? "&amp;" : c === "<" ? "&lt;" : c === ">" ? "&gt;" : c === '"' ? "&quot;" : "&apos;",
+  );
+}
+
 // dagre's re-exported graphlib defaults its generics to `any`; pin the layout
 // shapes we rely on so the render path stays honestly typed.
 interface LayoutNode {
@@ -61,8 +69,8 @@ export function renderSvg(graph: Graph): string {
       return `
     <g transform="translate(${n.x - n.width / 2},${n.y - n.height / 2})">
       <rect width="${n.width}" height="${n.height}" rx="8" fill="#0d1117" stroke="${color}" stroke-width="2"/>
-      <text x="${n.width / 2}" y="20" text-anchor="middle" fill="${color}" font-family="monospace" font-size="13" font-weight="bold">${lines[0] || id}</text>
-      <text x="${n.width / 2}" y="38" text-anchor="middle" fill="#8b949e" font-family="monospace" font-size="11">${lines[1] || ""}</text>
+      <text x="${n.width / 2}" y="20" text-anchor="middle" fill="${color}" font-family="monospace" font-size="13" font-weight="bold">${escapeXml(lines[0] || id)}</text>
+      <text x="${n.width / 2}" y="38" text-anchor="middle" fill="#8b949e" font-family="monospace" font-size="11">${escapeXml(lines[1] || "")}</text>
     </g>`;
     })
     .join("");
@@ -82,10 +90,11 @@ export function renderSvg(graph: Graph): string {
   const height = (graphObj.height || 400) + 80;
 
   const title = `${graph.metadata?.name || "graph"} (${graph.topology})`;
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" role="img" aria-label="${title}" style="background:#0a0e14">
-  <title>${title}</title>
+  const safeTitle = escapeXml(title);
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" role="img" aria-label="${safeTitle}" style="background:#0a0e14">
+  <title>${safeTitle}</title>
   <rect width="100%" height="100%" fill="#0a0e14"/>
-  <text x="${width / 2}" y="25" text-anchor="middle" fill="#e6edf3" font-family="sans-serif" font-size="16" font-weight="bold">${title}</text>
+  <text x="${width / 2}" y="25" text-anchor="middle" fill="#e6edf3" font-family="sans-serif" font-size="16" font-weight="bold">${safeTitle}</text>
   ${svgEdges}
   ${svgNodes}
 </svg>`;

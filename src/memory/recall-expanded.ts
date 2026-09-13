@@ -11,6 +11,7 @@ import {
   termsOf,
 } from "../eval/memory-recall.js";
 import { walkMemoryStoreStats } from "../frontmatter.js";
+import { RecallFileSchema } from "../schemas/memory.schema.js";
 import { readLinks } from "./links.js";
 
 export interface ExpandedHit extends RecallHit {
@@ -34,7 +35,10 @@ const LINK_PENALTY = 0.5; // linked-not-keyword ranks below any direct hit
 export function expandedRecall(memDir: string, query: string, k = 5, now = new Date().toISOString()): ExpandedRecall {
   const docs: MemoryDoc[] = [];
   const where = new Map<string, string>(); // id → store-relative file path
-  const { entries, malformed } = walkMemoryStoreStats(memDir, { skip: ["index.md", "log.md"] });
+  const { entries, malformed } = walkMemoryStoreStats(memDir, {
+    skip: ["index.md", "log.md"],
+    schema: RecallFileSchema,
+  });
   for (const entry of entries) {
     docs.push({
       id: entry.id,

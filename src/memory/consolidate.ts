@@ -3,7 +3,7 @@
 // index. Pure filesystem + counting; the dream graph consumes this output rather
 // than re-deriving it, which is what keeps the dream prompt cheap.
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import YAML from "yaml";
 import { GraphKitError } from "../errors.js";
@@ -90,15 +90,17 @@ function writeEntry(dir: string, file: string, frontmatter: Record<string, unkno
 }
 
 /** Delete generated files in `dir` whose basename is not in `keep`. Hand-written
- *  files (no `generated.by` of ours) are never touched. */
+ *  files (no `generated.by` of ours) are never touched. Dirent-checked: a
+ *  directory named `*.md` is somebody's data, not a generated entry — reading it
+ *  used to EISDIR the whole pass. */
 function prune(dir: string, keep: Set<string>): number {
   if (!existsSync(dir)) return 0;
   let pruned = 0;
-  for (const f of readdirSync(dir)) {
-    if (!f.endsWith(".md") || keep.has(f)) continue;
-    const raw = readFileSync(join(dir, f), "utf-8");
+  for (const de of readdirSync(dir, { withFileTypes: true })) {
+    if (!de.isFile() || !de.name.endsWith(".md") || keep.has(de.name)) continue;
+    const raw = readFileSync(join(dir, de.name), "utf-8");
     if (!raw.includes(GENERATOR)) continue;
-    rmSync(join(dir, f));
+    rmSync(join(dir, de.name));
     pruned += 1;
   }
   return pruned;
@@ -221,7 +223,7 @@ export function consolidate(cwd: string, now = new Date().toISOString()): Consol
     ...drafts.slice(0, 20).map((s) => `- ${s.action}: ${s.rationale}`),
     "",
   ].slice(0, INDEX_MAX_LINES);
-  writeFileSync(join(memDir, "index.md"), `${indexLines.join("\n")}\n`);
+  atomicWrite(join(memDir, "index.md"), `${indexLines.join("\n")}\n`);
 
   return {
     runs: runs.length,

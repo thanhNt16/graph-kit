@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import YAML from "yaml";
+import { parseGraphDoc } from "../compiler/loader.js";
 import type { Graph } from "../compiler/validate.js";
 import { GraphKitError } from "../errors.js";
 import { atomicWrite } from "../fs.js";
@@ -201,7 +202,9 @@ export function loadActiveGraph(baseDir: string = process.cwd()): { id: string; 
     });
   }
 
-  const parsed = GraphSchema.safeParse(YAML.parse(readFileSync(path, "utf-8")));
+  // Same YAML_INVALID contract as loadGraph — a corrupt active session graph is
+  // a first-run-class typo, not an internal error.
+  const parsed = GraphSchema.safeParse(parseGraphDoc(readFileSync(path, "utf-8"), path));
   if (!parsed.success) {
     throw new GraphKitError("SCHEMA_INVALID", `Session graph ${id} failed schema validation`, {
       issues: parsed.error.issues.map((issue) => ({

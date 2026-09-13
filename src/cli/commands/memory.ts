@@ -4,6 +4,7 @@ import type { CAC } from "cac";
 import YAML from "yaml";
 import { CBM_UNAVAILABLE_MSG, type CbmClient, createCbmClient, isCbmUnavailable } from "../../cbm/client.js";
 import { indexProject } from "../../cbm/index.js";
+import { GraphKitError } from "../../errors.js";
 import { actRScore, shouldExpire } from "../../eval/forgetting.js";
 import { type ParsedMemoryFile, parseMemoryFile, walkMemoryStore } from "../../frontmatter.js";
 import { atomicWrite } from "../../fs.js";
@@ -326,14 +327,28 @@ Subcommands: ${subcommandsFor("memory")}\n\nOptions:\n  --project <project>  CBM
         return;
       }
       if (subcommand === "consolidate") {
-        const result = consolidate(process.cwd());
-        if (opts.json) {
-          console.log(JSON.stringify(ok(result)));
-        } else {
-          const r = result as ConsolidateResult;
+        try {
+          const result = consolidate(process.cwd());
+          if (opts.json) {
+            console.log(JSON.stringify(ok(result)));
+          } else {
+            const r = result as ConsolidateResult;
+            console.log(
+              `consolidated: ${r.runs} run(s) · ${r.patterns} pattern(s) · ${r.suggestions} suggestion(s) · ${r.links} link(s)${r.pruned > 0 ? ` · ${r.pruned} pruned` : ""}`,
+            );
+          }
+        } catch (e) {
+          // Last unenveloped sibling: a raw EISDIR / PATTERN_SCHEMA_VIOLATION
+          // stack used to be the only output a broken store produced.
           console.log(
-            `consolidated: ${r.runs} run(s) · ${r.patterns} pattern(s) · ${r.suggestions} suggestion(s) · ${r.links} link(s)${r.pruned > 0 ? ` · ${r.pruned} pruned` : ""}`,
+            JSON.stringify(
+              fail(
+                e instanceof GraphKitError ? e.code : "CONSOLIDATE_ERROR",
+                e instanceof Error ? e.message : String(e),
+              ),
+            ),
           );
+          process.exit(1);
         }
         return;
       }

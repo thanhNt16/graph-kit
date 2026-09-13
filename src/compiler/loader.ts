@@ -10,27 +10,15 @@ import type { Graph } from "./validate.js";
 // the CLI (graph validate/compile/svg/ascii/waves, gate, doctor, status,
 // evidence). Lives in src/compiler so it sits next to the schema it enforces.
 
-export function loadGraph(file: string) {
-  let raw: string;
+/**
+ * YAML text → doc with the YAML_INVALID wrap (file + line + column + hint): a
+ * raw YAMLParseError string used to leak through non-loader paths (a corrupt
+ * ACTIVE session graph reached `gk validate` as a generic VALIDATE_ERROR with
+ * the filename nowhere in it). One rule for every graph-yaml parse.
+ */
+export function parseGraphDoc(raw: string, file: string): unknown {
   try {
-    raw = readFileSync(file, "utf-8");
-  } catch (e) {
-    if ((e as NodeJS.ErrnoException).code === "ENOENT") {
-      throw new GraphKitError("GRAPH_FILE_NOT_FOUND", `file not found: ${file}`, {
-        file,
-        hint: "run `gk graph new <topology>` to scaffold one, or check the path",
-      });
-    }
-    throw e;
-  }
-  // Wrap the raw YAML parse error: a first-run typo used to surface as a
-  // generic VALIDATE_ERROR whose message happened to contain "line N, column
-  // M" — with the filename nowhere in it. YAML_INVALID carries file + line +
-  // column so both the JSON envelope and the human findings list can point at
-  // the exact spot.
-  let doc: unknown;
-  try {
-    doc = YAML.parse(raw);
+    return YAML.parse(raw);
   } catch (e) {
     if (e instanceof GraphKitError) throw e;
     const msg = e instanceof Error ? e.message : String(e);
@@ -46,6 +34,22 @@ export function loadGraph(file: string) {
       },
     );
   }
+}
+
+export function loadGraph(file: string) {
+  let raw: string;
+  try {
+    raw = readFileSync(file, "utf-8");
+  } catch (e) {
+    if ((e as NodeJS.ErrnoException).code === "ENOENT") {
+      throw new GraphKitError("GRAPH_FILE_NOT_FOUND", `file not found: ${file}`, {
+        file,
+        hint: "run `gk graph new <topology>` to scaffold one, or check the path",
+      });
+    }
+    throw e;
+  }
+  const doc = parseGraphDoc(raw, file);
   const parsed = GraphSchema.safeParse(doc);
   if (!parsed.success) {
     throw new GraphKitError("SCHEMA_INVALID", "graph.yaml failed schema validation", {

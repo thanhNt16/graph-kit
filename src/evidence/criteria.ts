@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import YAML from "yaml";
+import { splitFrontmatter } from "../frontmatter.js";
 
 export type CriterionKind = "report" | "screenshot" | "json" | "metrics" | "text";
 export interface Criterion {
@@ -26,14 +27,18 @@ export function loadCriteria(cwd: string, ids: string[]): Map<string, Criterion>
     }
     let fm: Record<string, unknown> = {};
     let body = readFileSync(p, "utf-8");
-    const m = body.match(/^---\n([\s\S]*?)\n---\n?/);
-    if (m) {
+    // Shared CRLF-tolerant split (the same one validate.ts uses for these
+    // files): the private /^---\n/ regex here used to silently miss on a
+    // Windows-checkout file — kind degraded to "report" and the raw
+    // frontmatter leaked into the rendered description.
+    const split = splitFrontmatter(body);
+    if (split) {
       try {
-        fm = (YAML.parse(m[1]) ?? {}) as Record<string, unknown>;
+        fm = (YAML.parse(split.fmText) ?? {}) as Record<string, unknown>;
       } catch {
         fm = {};
       }
-      body = body.slice(m[0].length);
+      body = split.body;
     }
     const kind = KINDS.includes(fm.kind as CriterionKind) ? (fm.kind as CriterionKind) : "report";
     out.set(id, { id, description: body.trim(), kind });
