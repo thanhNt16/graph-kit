@@ -1,17 +1,28 @@
 /** CLI parity gate for the built bin target. */
-import { spawnSync } from "node:child_process";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 import { CLI_COMMANDS, cliManifest } from "../src/cli/command-registry.js";
 
 const cli = resolve(import.meta.dir, "..", "dist", "index.js");
-/** Run the built CLI from a throwaway cwd so a probe can never mutate the repo. */
-function run(...args: string[]): { status: number; stdout: string; stderr: string } {
+const CONCURRENCY = 8;
+
+/**
+ * Run the built CLI from a throwaway cwd so a probe can never mutate the repo.
+ * Every probe passes --json: the fail-envelope contract is the machine-checkable
+ * surface, and since round 5 human mode prints verdict lines a JSON parse can't
+ * see (a human-only probe would false-pass every leaf).
+ */
+async function run(...args: string[]): Promise<{ status: number; stdout: string; stderr: string }> {
   const cwd = mkdtempSync(resolve(tmpdir(), "gk-parity-"));
-  const result = spawnSync("bun", [cli, ...args], { encoding: "utf8", cwd });
-  rmSync(cwd, { recursive: true, force: true });
-  return result;
+  try {
+    const proc = Bun.spawn(["bun", cli, ...args], { cwd, stdout: "pipe", stderr: "pipe" });
+    const [stdout, stderr] = await Promise.all([new Response(proc.stdout).text(), new Response(proc.stderr).text()]);
+    const status = await proc.exited;
+    return { status, stdout, stderr };
+  } finally {
+    rmSync(cwd, { recursive: true, force: true });
+  }
 }
 function fail(message: string): never {
   console.error(`check-cli-parity: ${message}`);
@@ -45,10 +56,23 @@ function isUnknownCommand(result: { stdout: string; stderr: string }, _parent: s
  * touch the repository; the leaf receives no sub-argument beyond its own name,
  * so it errors fast instead of waiting on a run lock that does not exist.
  */
-function leafReachable(path: string): boolean {
+async function leafReachable(path: string): Promise<boolean> {
   const [parent, leaf] = path.split(" ");
-  const result = run(parent, leaf);
+  const result = await run(parent, leaf, "--json");
   return !isUnknownCommand(result, parent);
+}
+
+/** Bounded-concurrency map (the probe used to spawn ~60 CLI processes serially —
+ *  2.4s of ci:local wall; the leaves are independent read-only probes). */
+async function mapPool<T>(items: T[], limit: number, fn: (item: T) => Promise<void>): Promise<void> {
+  let cursor = 0;
+  const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (cursor < items.length) {
+      const item = items[cursor++];
+      await fn(item);
+    }
+  });
+  await Promise.all(workers);
 }
 
 const names = cliManifest().commands.map((c) => c.name);
@@ -57,15 +81,17 @@ if (JSON.stringify([...names].sort()) !== JSON.stringify([...expected].sort()))
   fail("manifest does not match CLI_COMMANDS");
 
 // Root help must expose exactly the registered top-level commands.
-const root = run("--help");
+const root = await run("--help");
 if (root.status !== 0) fail(`built CLI --help failed: ${root.status}`);
 const top = [...new Set(expected.map((path) => path.split(" ")[0]))];
 for (const command of top) if (!outputOf(root).includes(`${command} `)) fail(`missing top-level command '${command}'`);
 
 // Every registered leaf must reach its real handler, not the unknown-leaf fallback.
-for (const path of expected) {
-  if (!leafReachable(path)) fail(`registered command '${path}' is not reachable in dist/index.js`);
-}
+const unreachable: string[] = [];
+await mapPool(expected, CONCURRENCY, async (path) => {
+  if (!(await leafReachable(path))) unreachable.push(path);
+});
+if (unreachable.length > 0) fail(`registered commands not reachable in dist/index.js: ${unreachable.join(", ")}`);
 
 // Unknown leaves under every parent family must be rejected with a non-zero
 // exit; a silently dropped handler would otherwise accept the unknown leaf.
@@ -75,11 +101,12 @@ for (const path of expected) {
 const parentsWithLeaves = [...new Set(expected.map((path) => path.split(" ")[0]))].filter((parent) =>
   expected.some((path) => path.split(" ").length === 2 && path.startsWith(`${parent} `)),
 );
-for (const parent of parentsWithLeaves) {
-  const unknown = run(parent, "__parity_unknown__");
-  if (unknown.status === 0 || !isUnknownCommand(unknown, parent))
-    fail(`unknown '${parent}' leaf unexpectedly passes parity`);
-}
+const leaky: string[] = [];
+await mapPool(parentsWithLeaves, CONCURRENCY, async (parent) => {
+  const unknown = await run(parent, "__parity_unknown__", "--json");
+  if (unknown.status === 0 || !isUnknownCommand(unknown, parent)) leaky.push(parent);
+});
+if (leaky.length > 0) fail(`unknown leaves unexpectedly pass parity under: ${leaky.join(", ")}`);
 
 console.log(
   `check-cli-parity: ${names.length} commands reachable in dist/index.js; unknown leaf rejected under each of ${parentsWithLeaves.length} subcommand parents`,
