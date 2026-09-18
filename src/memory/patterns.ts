@@ -2,6 +2,7 @@
 // Deterministic pattern extraction over the run ledger. Zero model calls:
 // everything here is counting, and counting is free.
 import { createHash } from "node:crypto";
+import { HALF_LIFE_DAYS } from "../eval/forgetting.js";
 import type { AdvisorEvent, RunIndexLine, TraceLine } from "./ledger.js";
 
 export type PatternKind =
@@ -29,7 +30,7 @@ const COOCCUR_MIN_RUNS = 3;
 const FAILURE_MIN = 2;
 const REUSE_MIN_RUNS = 3;
 const ADVISOR_MIN = 2;
-const HALF_LIFE_DAYS = 14; // same constant as src/eval/forgetting.ts
+
 const DAY_MS = 86_400_000;
 
 /** count × exp2 recency decay. Frequent-but-stale ranks below frequent-and-recent. */

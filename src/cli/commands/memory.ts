@@ -1,31 +1,18 @@
-import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { appendFileSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { CAC } from "cac";
 import YAML from "yaml";
-import { CBM_UNAVAILABLE_MSG, type CbmClient, createCbmClient } from "../../cbm/client.js";
-import { indexProject } from "../../cbm/index.js";
+import { CBM_UNAVAILABLE_MSG } from "../../cbm/client.js";
 import { actRScore, shouldExpire } from "../../eval/forgetting.js";
 import { consolidate } from "../../memory/consolidate.js";
 import { explainRecall, type RecallExplanation } from "../../memory/explain-recall.js";
 import { expandedRecall } from "../../memory/recall-expanded.js";
 import { renderRecallAscii, renderRecallHtml } from "../../memory/render-recall.js";
+import { readMemoryFile, walkMemoryFiles, writeMemoryFile } from "../../memory/store.js";
 import { MemoryConfig, MemoryFileSchema } from "../../schemas/memory.schema.js";
+import { seamClientFactory, seamIndexProject } from "../cbm-seam.js";
 import { subcommandsFor } from "../command-registry.js";
-import { fail, ok } from "../output.js";
-
-// ponytail: DI seam for tests — avoids spawning the real CBM server.
-let _cbmClientFactory: () => CbmClient = () => createCbmClient();
-let _indexProjectFn: typeof indexProject = indexProject;
-/** @internal test seam — inject client + index implementations. */
-export function _setMemoryCbmSeam(opts: { clientFactory?: () => CbmClient; indexProject?: typeof indexProject }) {
-  if (opts.clientFactory) _cbmClientFactory = opts.clientFactory;
-  if (opts.indexProject) _indexProjectFn = opts.indexProject;
-}
-/** @internal test seam — restore real implementations. */
-export function _resetMemoryCbmSeam() {
-  _cbmClientFactory = () => createCbmClient();
-  _indexProjectFn = indexProject;
-}
+import { emit, fail, ok } from "../output.js";
 
 // project precedence: --project flag → graph.yaml topology_config.memory.project → default
 function resolveProject(cwd: string, override?: string): string {
@@ -45,9 +32,9 @@ export async function indexMemory(cwd: string, projectOverride?: string) {
   const memDir = join(cwd, ".graphkit", "memory");
   mkdirSync(memDir, { recursive: true });
 
-  const client = _cbmClientFactory();
+  const client = seamClientFactory()();
   try {
-    await _indexProjectFn(client, { repoPath: memDir, name: project });
+    await seamIndexProject()(client, { repoPath: memDir, name: project });
   } finally {
     await client.close();
   }
@@ -73,6 +60,7 @@ export interface MemoryTraceReport {
   expired: number;
   newly_expired: number;
   superseded: number;
+  malformed: number;
   memories: MemoryTrace[];
 }
 
@@ -90,22 +78,28 @@ export function traceMemory(
   opts?: { expire_policy?: "act_r" | "manual" },
 ): MemoryTraceReport {
   const memDir = join(cwd, ".graphkit", "memory");
-  const report: MemoryTraceReport = { total: 0, live: 0, expired: 0, newly_expired: 0, superseded: 0, memories: [] };
-  // Reserved names are workflows' indexes, not memory entries.
-  const files = existsSync(memDir) ? readdirSync(memDir) : [];
-  const entries = files.filter((f) => f.endsWith(".md") && f !== "index.md" && f !== "log.md");
-  if (!existsSync(memDir) || entries.length === 0) return report;
+  const report: MemoryTraceReport = {
+    total: 0,
+    live: 0,
+    expired: 0,
+    newly_expired: 0,
+    superseded: 0,
+    malformed: 0,
+    memories: [],
+  };
+  const files = walkMemoryFiles(memDir); // root + one sublevel, reserved names skipped
+  if (files.length === 0) return report;
 
   const expireActive = opts?.expire_policy !== "manual";
 
-  for (const file of entries) {
-    const path = join(memDir, file);
-    const raw = readFileSync(path, "utf-8");
+  for (const { rel, path } of files) {
+    const { fm, head, body, error } = readMemoryFile(path);
+    if (error) {
+      report.malformed++;
+      continue;
+    }
     // Strict schema parse before rewrites; malformed entries are counted but skipped.
-    const m = raw.match(/^---\n([\s\S]*?)\n---/);
-    if (!m) continue;
-    const parsedYaml = YAML.parse(m[1]);
-    const fm = (parsedYaml && typeof parsedYaml === "object" ? parsedYaml : {}) as Record<string, unknown>;
+    const base = rel.replace(/^.*\//, "").replace(/\.md$/, "");
     const legacyTags = Array.isArray(fm.tags)
       ? fm.tags
       : typeof fm.tags === "string"
@@ -121,21 +115,24 @@ export function traceMemory(
     const validated = MemoryFileSchema.safeParse({
       ...fm,
       tags: legacyTags,
-      id: typeof fm.id === "string" && fm.id.trim() ? fm.id : file.replace(/\.md$/, ""),
+      id: typeof fm.id === "string" && fm.id.trim() ? fm.id : base,
       type: typeof fm.type === "string" && fm.type.trim() ? fm.type : "knowledge",
     });
-    if (!validated.success) continue;
+    if (!validated.success) {
+      report.malformed++;
+      continue;
+    }
     Object.assign(fm, validated.data);
     report.total++;
 
     if (fm.superseded_by) {
       report.superseded++;
-      report.memories.push({ id: String(fm.id ?? file), score: 0, state: "superseded", action: "superseded" });
+      report.memories.push({ id: String(fm.id ?? base), score: 0, state: "superseded", action: "superseded" });
       continue;
     }
 
     const tags = Array.isArray(fm.tags) ? fm.tags.length : 0;
-    const links = (raw.match(/\[\[[^\]]+\]\]/g) ?? []).length;
+    const links = (`${head}\n${body}`.match(/\[\[[^\]]+\]\]/g) ?? []).length;
     // ponytail: connectivity heuristic — floor 0.5 with no signal, tags+wikilinks
     // normalized at 3 above that; monotonic so adding a tag never lowers a score.
     // Upgrade to real graph degree if memory entries ever get CBM-indexed edges.
@@ -149,24 +146,24 @@ export function traceMemory(
     });
 
     const wasExpired = fm.expired === true;
-    // 0.1, not forgetting.ts's 0.3 default: three ≤1 factors multiply, so a
-    // neutral memory (salience 0.5 × connectivity 0.5) scores ~0.15 at peak and
-    // could never survive a 0.3 gate. `expire_policy: manual` scores and reports
-    // only, never mutates the store.
-    if (!wasExpired && expireActive && shouldExpire(score, 0.1)) {
+    // shouldExpire's default 0.1 is the operating point: three ≤1 factors
+    // multiply, so a neutral memory (salience 0.5 × connectivity 0.5) scores
+    // ~0.15 at peak. `expire_policy: manual` scores and reports only, never
+    // mutates the store.
+    if (!wasExpired && expireActive && shouldExpire(score)) {
       fm.expired = true;
       fm.valid_to = now;
       fm.status = "deprecated";
-      writeFileSync(path, `---\n${YAML.stringify(fm)}---\n${raw.slice(m[0].length)}`);
+      writeMemoryFile(path, fm, body);
       report.expired++;
       report.newly_expired++;
-      report.memories.push({ id: String(fm.id ?? file), score, state: "expired", action: "newly-expired" });
+      report.memories.push({ id: String(fm.id ?? base), score, state: "expired", action: "newly-expired" });
     } else if (wasExpired) {
       report.expired++;
-      report.memories.push({ id: String(fm.id ?? file), score, state: "expired", action: "already-expired" });
+      report.memories.push({ id: String(fm.id ?? base), score, state: "expired", action: "already-expired" });
     } else {
       report.live++;
-      report.memories.push({ id: String(fm.id ?? file), score, state: "live", action: "kept" });
+      report.memories.push({ id: String(fm.id ?? base), score, state: "live", action: "kept" });
     }
   }
   appendFileSync(
@@ -186,37 +183,24 @@ export function touchMemory(
   id: string,
   now = new Date().toISOString(),
 ): { id: string; file: string; use_count: number; last_used_at: string } | null {
-  const memDir = join(cwd, ".graphkit", "memory");
-  if (!existsSync(memDir)) return null;
   // Root plus one sublevel (patterns/, suggestions/) — subfolder entries must
   // get use_count reinforcement too, or decay eventually evicts every pattern.
-  const candidates: Array<{ file: string; path: string }> = [];
-  for (const de of readdirSync(memDir, { withFileTypes: true })) {
-    if (de.isFile() && de.name.endsWith(".md")) candidates.push({ file: de.name, path: join(memDir, de.name) });
-    else if (de.isDirectory() && !de.name.startsWith(".")) {
-      for (const f of readdirSync(join(memDir, de.name), { withFileTypes: true })) {
-        if (f.isFile() && f.name.endsWith(".md"))
-          candidates.push({ file: f.name, path: join(memDir, de.name, f.name) });
-      }
-    }
-  }
-  for (const { file, path } of candidates) {
-    const raw = readFileSync(path, "utf-8");
-    const m = raw.match(/^---\n([\s\S]*?)\n---/);
-    if (!m) continue;
-    const fm = (YAML.parse(m[1]) ?? {}) as Record<string, unknown>;
-    if (String(fm.id ?? "") !== id && file.replace(/\.md$/, "") !== id) continue;
+  for (const { rel, path } of walkMemoryFiles(join(cwd, ".graphkit", "memory"))) {
+    const { fm, body, error } = readMemoryFile(path);
+    if (error) continue;
+    const base = rel.replace(/^.*\//, "").replace(/\.md$/, "");
+    if (String(fm.id ?? "") !== id && base !== id) continue;
     const useCount = (typeof fm.use_count === "number" ? fm.use_count : 1) + 1;
     fm.use_count = useCount;
     fm.last_used_at = now;
     const validated = MemoryFileSchema.safeParse({
       ...fm,
-      id: typeof fm.id === "string" && fm.id.trim() ? fm.id : file.replace(/\.md$/, ""),
+      id: typeof fm.id === "string" && fm.id.trim() ? fm.id : base,
       type: typeof fm.type === "string" && fm.type.trim() ? fm.type : "knowledge",
     });
     if (!validated.success) continue;
-    writeFileSync(path, `---\n${YAML.stringify(validated.data)}---\n${raw.slice(m[0].length)}`);
-    return { id: String(fm.id ?? id), file, use_count: useCount, last_used_at: now };
+    writeMemoryFile(path, validated.data, body);
+    return { id: String(fm.id ?? id), file: base, use_count: useCount, last_used_at: now };
   }
   return null;
 }
@@ -242,35 +226,32 @@ Recall options:\n  --explain            Explain recall scoring and filter decisi
         return;
       }
       if (subcommand === "consolidate") {
-        console.log(JSON.stringify(ok(consolidate(process.cwd()))));
+        emit(ok(consolidate(process.cwd())));
         return;
       }
       if (subcommand === "trace") {
         // decay pass: ACT-R score + expiry marking, no CBM needed
-        console.log(JSON.stringify(ok(traceMemory(process.cwd()))));
+        emit(ok(traceMemory(process.cwd())));
         return;
       }
       if (subcommand === "touch") {
         const id = Array.isArray(_args) ? _args[0] : _args;
         const touched = id ? touchMemory(process.cwd(), String(id)) : null;
         if (!touched) {
-          console.log(JSON.stringify(fail("MEMORY_NOT_FOUND", `No memory with id "${id}"`)));
-          process.exit(1);
+          emit(fail("MEMORY_NOT_FOUND", `No memory with id "${id}"`));
           return;
         }
-        console.log(JSON.stringify(ok(touched)));
+        emit(ok(touched));
         return;
       }
       if (subcommand === "recall") {
         const query = Array.isArray(_args) ? _args.join(" ") : _args;
         if (!query) {
-          console.log(JSON.stringify(fail("MISSING_ARG", "recall requires a query")));
-          process.exit(1);
+          emit(fail("MISSING_ARG", "recall requires a query"));
           return;
         }
         if (opts.html && !opts.explain) {
-          console.log(JSON.stringify(fail("INVALID_OPTION", "--html requires --explain")));
-          process.exit(1);
+          emit(fail("INVALID_OPTION", "--html requires --explain"));
           return;
         }
         // the working retriever (keyword×salience + validity/supersede filters) —
@@ -293,16 +274,7 @@ Recall options:\n  --explain            Explain recall scoring and filter decisi
           try {
             exp = explainRecall(memDir, query, topk);
           } catch (e) {
-            console.log(
-              JSON.stringify(
-                fail("MEMORY_DIR_UNREADABLE", `memory store unreadable: ${String((e as Error)?.message ?? e)}`),
-              ),
-            );
-            process.exit(1);
-            return;
-          }
-          if (opts.json) {
-            console.log(JSON.stringify(ok(exp)));
+            emit(fail("MEMORY_DIR_UNREADABLE", `memory store unreadable: ${String((e as Error)?.message ?? e)}`));
             return;
           }
           if (opts.html) {
@@ -326,6 +298,10 @@ Recall options:\n  --explain            Explain recall scoring and filter decisi
             }
             return;
           }
+          if (opts.json) {
+            emit(ok(exp));
+            return;
+          }
           console.log(renderRecallAscii(exp));
           return;
         }
@@ -338,12 +314,7 @@ Recall options:\n  --explain            Explain recall scoring and filter decisi
           linked = stats.linked;
           scanned = stats.scanned;
         } catch (e) {
-          console.log(
-            JSON.stringify(
-              fail("MEMORY_DIR_UNREADABLE", `memory store unreadable: ${String((e as Error)?.message ?? e)}`),
-            ),
-          );
-          process.exit(1);
+          emit(fail("MEMORY_DIR_UNREADABLE", `memory store unreadable: ${String((e as Error)?.message ?? e)}`));
           return;
         }
         for (const h of results) touchMemory(process.cwd(), h.id);
@@ -362,34 +333,28 @@ Recall options:\n  --explain            Explain recall scoring and filter decisi
             scanned,
           })}\n`,
         );
-        console.log(JSON.stringify(ok({ query, top_k: results.length, results, linked, recall_topk: topk })));
+        emit(ok({ query, top_k: results.length, results, linked, recall_topk: topk }));
         return;
       }
       if (subcommand !== "index") {
-        console.log(
-          JSON.stringify(
-            fail("UNKNOWN_MEMORY_SUBCOMMAND", `Unknown memory subcommand "${subcommand}"`, {
-              available: subcommandsFor("memory").split(" "),
-            }),
-          ),
+        emit(
+          fail("UNKNOWN_MEMORY_SUBCOMMAND", `Unknown memory subcommand "${subcommand}"`, {
+            available: subcommandsFor("memory").split(" "),
+          }),
         );
-        process.exit(1);
         return;
       }
       try {
         const result = await indexMemory(process.cwd(), opts.project);
-        console.log(JSON.stringify(ok(result)));
+        emit(ok(result));
       } catch (e) {
         const msg = String((e as Error)?.message ?? e);
-        console.log(
-          JSON.stringify(
-            fail(
-              "CBM_UNAVAILABLE",
-              msg.includes("@graphkit/codebase-memory-mcp") ? msg : `${CBM_UNAVAILABLE_MSG}\n${msg}`,
-            ),
+        emit(
+          fail(
+            "CBM_UNAVAILABLE",
+            msg.includes("@graphkit/codebase-memory-mcp") ? msg : `${CBM_UNAVAILABLE_MSG}\n${msg}`,
           ),
         );
-        process.exit(1);
       }
     });
 }

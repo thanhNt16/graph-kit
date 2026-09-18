@@ -17,6 +17,7 @@ function runCli(args: string[], cwd: string) {
   const origLog = console.log;
   console.log = (...a: unknown[]) => logs.push(a.map(String).join(" "));
   let exitCode = 0;
+  let code = 0;
   const origExit = process.exit;
   process.exit = (c?: number) => {
     exitCode = c ?? 1;
@@ -29,8 +30,10 @@ function runCli(args: string[], cwd: string) {
     console.log = origLog;
     process.exit = origExit;
     process.cwd = origCwd;
+    code = exitCode || ((process.exitCode as number | undefined) ?? 0);
+    process.exitCode = 0; // emit-fail sets exitCode=1; reset so later tests start clean
   }
-  return { stdout: logs.join("\n"), code: exitCode };
+  return { stdout: logs.join("\n"), code };
 }
 
 function seedGraph(id: string, name: string, task?: string) {
@@ -78,11 +81,12 @@ describe("gk graph session commands", () => {
     expect(names).toContain("classify-and-act");
   });
 
-  it("graph topologies renders human table with name and description", () => {
+  it("graph topologies emits the topology envelope", () => {
     const { stdout, code } = runCli(["graph", "topologies"], TEST_DIR);
     expect(code).toBe(0);
-    expect(stdout).toContain("diamond");
-    expect(stdout).toContain("description");
+    const parsed = JSON.parse(stdout);
+    expect(parsed.status).toBe("ok");
+    expect(JSON.stringify(parsed.data.topologies)).toContain("diamond");
   });
 
   it("graph list --json returns saved session ids and the active pointer", () => {
@@ -97,18 +101,6 @@ describe("gk graph session commands", () => {
     expect(ids).toContain("2026-08-26-audit-pr");
     expect(ids).toContain("2026-08-26-refactor");
     expect(parsed.data.active).toBe("2026-08-26-audit-pr");
-  });
-
-  it("graph list renders a human table with ids, task, created, and last-run columns", () => {
-    seedGraph("2026-08-26-audit-pr", "audit", "audit auth module");
-    setActive("2026-08-26-audit-pr");
-    const { stdout, code } = runCli(["graph", "list"], TEST_DIR);
-    expect(code).toBe(0);
-    expect(stdout).toContain("last-run");
-    expect(stdout).toContain("2026-08-26-audit-pr");
-    expect(stdout).toContain("audit");
-    expect(stdout).toContain("audit auth module");
-    expect(stdout).toContain("-");
   });
 
   it("graph list fails with ACTIVE_POINTER_DANGLING when active names a missing file", () => {
@@ -152,24 +144,26 @@ describe("gk graph session commands", () => {
     expect(parsed.error.code).toBe("INVALID_SESSION_ID");
   });
 
-  it("graph show with no id prints the active graph's YAML", () => {
+  it("graph show with no id emits the active graph envelope", () => {
     seedGraph("2026-08-26-audit-pr", "audit", "review auth module");
     setActive("2026-08-26-audit-pr");
     const { stdout, code } = runCli(["graph", "show"], TEST_DIR);
     expect(code).toBe(0);
-    const doc = YAML.parse(stdout);
-    expect(doc.metadata.name).toBe("audit");
-    expect(doc.metadata.task).toBe("review auth module");
+    const parsed = JSON.parse(stdout);
+    expect(parsed.status).toBe("ok");
+    expect(parsed.data.graph.metadata.name).toBe("audit");
+    expect(parsed.data.graph.metadata.task).toBe("review auth module");
   });
 
-  it("graph show <id> prints that graph's YAML", () => {
+  it("graph show <id> emits that graph's envelope", () => {
     seedGraph("2026-08-26-audit-pr", "audit");
     seedGraph("2026-08-26-refactor", "refactor");
     setActive("2026-08-26-audit-pr");
     const { stdout, code } = runCli(["graph", "show", "2026-08-26-refactor"], TEST_DIR);
     expect(code).toBe(0);
-    const doc = YAML.parse(stdout);
-    expect(doc.metadata.name).toBe("refactor");
+    const parsed = JSON.parse(stdout);
+    expect(parsed.status).toBe("ok");
+    expect(parsed.data.graph.metadata.name).toBe("refactor");
   });
 
   it("graph show --json returns the parsed graph", () => {

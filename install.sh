@@ -37,8 +37,9 @@ install_binary() {
   BIN="$HOME/.local/bin"
   mkdir -p "$BIN"
   # The tarball holds `gk` plus `share/gk/kits/` beside it; tar overlays and never
-  # removes files a newer release dropped, so clear both paths first.
-  rm -rf "$BIN/gk" "$BIN/share"
+  # removes files a newer release dropped, so clear the installed paths first.
+  # Scoped to share/gk — never touch unrelated content under share/.
+  rm -rf "$BIN/gk" "$BIN/share/gk"
 
   echo "Installing graph-kit ($ASSET) to $BIN ..."
   curl -# -fL "https://github.com/thanhNt16/graph-kit/releases/latest/download/$ASSET" | tar -xz -C "$BIN"

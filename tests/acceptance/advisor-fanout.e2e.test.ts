@@ -94,6 +94,7 @@ describe("advisor + fan-out e2e smoke over real CLI", () => {
     expect(execNode.fan_out).toEqual({
       briefs_from: "plan",
       template: "Implement {brief.title}: {brief.body}",
+      reduce: "append",
     });
   });
 

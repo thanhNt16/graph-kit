@@ -11,10 +11,10 @@ disable-model-invocation: false
 ## Purpose
 Render a graph.yaml as a diagram. Modes:
 
-- **Archify HTML** (default) — you author a typed JSON IR from the graph, archify compiles it to a single self-contained HTML file with pan/zoom, search, and guided views. Shareable, attachable to a PR, opens with no server. Default for `gk-visualize`.
-- **ASCII** (in-session, instant) — pure CLI, no model, no rendering pipeline. Shows in terminal immediately. Explicit `gk-visualize --ascii` mode.
-- **SVG** (visual export, fast) — generates an SVG file, opens in browser. Explicit `gk-visualize --svg` mode. Also the fallback when archify is unavailable.
-- **Excalidraw** (editable, slower) — generates an editable .excalidraw file. Only when user asks. Explicit `gk-visualize --excalidraw`.
+- **Archify HTML** (default) — you author a typed JSON IR from the graph, archify compiles it to a single self-contained HTML file with pan/zoom, search, and guided views. Shareable, attachable to a PR, opens with no server. Default for `/gk:visualize`.
+- **ASCII** (in-session, instant) — pure CLI, no model, no rendering pipeline. Shows in terminal immediately. Explicit `/gk:visualize --ascii` mode.
+- **SVG** (visual export, fast) — generates an SVG file, opens in browser. Explicit `/gk:visualize --svg` mode. Also the fallback when archify is unavailable.
+- **Excalidraw** (editable, slower) — generates an editable .excalidraw file. Only when user asks. Explicit `/gk:visualize --excalidraw`.
 
 ## Process
 
@@ -23,7 +23,7 @@ Render a graph.yaml as a diagram. Modes:
 **Step 1 — locate archify.** Probe in order; first hit wins:
 
 ```bash
-for d in ./node_modules/archify ~/.cursor/skills/archify ~/.agents/skills/archify; do
+for d in ./node_modules/archify ~/.agents/skills/archify; do
   [ -f "$d/bin/archify.mjs" ] && echo "$d" && break
 done
 ```
@@ -99,3 +99,13 @@ Note: Excalidraw mode requires `uv sync && uv run playwright install chromium` i
 - **ASCII**: stdout (instant)
 - **SVG**: `.graphkit/diagrams/{name}.svg` — opens in browser
 - **Excalidraw**: `.graphkit/diagrams/{name}.excalidraw` — editable in Excalidraw app
+
+## Bundled live viewer (legacy)
+
+The kit also ships a self-contained live viewer with a node drawer, search, filters, and live updates over Server-Sent Events — no archify install needed:
+
+```bash
+bun .cursor/viewer/server.mjs graph.yaml
+```
+
+Prefer the archify HTML output above; fall back to this viewer when archify is unavailable.

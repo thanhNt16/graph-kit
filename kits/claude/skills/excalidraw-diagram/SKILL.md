@@ -1,6 +1,7 @@
 ---
 name: excalidraw-diagram
 description: Create Excalidraw diagram JSON files that make visual arguments. Use when the user wants to visualize workflows, architectures, or concepts.
+disable-model-invocation: false
 ---
 
 # Excalidraw Diagram Creator
@@ -207,7 +208,7 @@ After generating the JSON, you MUST run the render-view-fix loop until the diagr
 
 ## Large / Comprehensive Diagram Strategy
 
-**For comprehensive or technical diagrams, you MUST build the JSON one section at a time.** Do NOT attempt to generate the entire file in a single pass. This is a hard constraint — Claude Code has a ~32,000 token output limit per response, and a comprehensive diagram easily exceeds that in one shot. Even if it didn't, generating everything at once leads to worse quality. Section-by-section is better in every way.
+**For comprehensive or technical diagrams, you MUST build the JSON one section at a time.** Do NOT attempt to generate the entire file in a single pass. This is a hard constraint — Cursor has a token output limit per response, and a comprehensive diagram easily exceeds that in one shot. Even if it didn't, generating everything at once leads to worse quality. Section-by-section is better in every way.
 
 ### The Section-by-Section Workflow
 
@@ -235,7 +236,6 @@ Now run the render-view-fix loop from the Render & Validate section. This is whe
 ### Section Boundaries
 
 Plan your sections around natural visual groupings from the diagram plan. A typical large diagram might split into:
-
 - **Section 1**: Entry point / trigger
 - **Section 2**: First decision or routing
 - **Section 3**: Main content (hero section — may be the largest single section)
@@ -452,6 +452,15 @@ You cannot judge a diagram from JSON alone. After generating or editing the Exca
 
 ```bash
 cd .claude/skills/excalidraw-diagram/references && uv run python render_excalidraw.py <path-to-file.excalidraw>
+```
+
+This outputs a PNG next to the `.excalidraw` file. Then use the **Read tool** on the PNG to actually view it.
+
+### The Loop
+
+After generating the initial JSON, run this cycle:
+
+**1. Render & View** — Run the render script, then Read the PNG.
 ```
 
 This outputs a PNG next to the `.excalidraw` file. Then use the **Read tool** on the PNG to actually view it.

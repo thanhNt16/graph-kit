@@ -8,7 +8,8 @@ let fakeIndexFn: ((client: unknown, opts: Record<string, unknown>) => Promise<un
 let capturedTool: string | undefined;
 let _capturedArgs: Record<string, unknown> | undefined;
 
-import { _resetCbmSeam, _setCbmSeam, registerGraphCommands } from "../../src/cli/commands/graph.js";
+import { resetCbmSeam, setCbmSeam } from "../../src/cli/cbm-seam.js";
+import { registerGraphCommands } from "../../src/cli/commands/graph.js";
 
 describe("gk graph CBM subcommands", () => {
   const sink: string[] = [];
@@ -24,7 +25,7 @@ describe("gk graph CBM subcommands", () => {
     console.log = (...a: unknown[]) => sink.push(a.map(String).join(" "));
     process.exit = () => {};
     // Inject fakes via the DI seam (no module mock → no cross-file bleed)
-    _setCbmSeam({
+    setCbmSeam({
       clientFactory: () => ({
         call: async (tool: string, args: Record<string, unknown>) => {
           capturedTool = tool;
@@ -45,7 +46,7 @@ describe("gk graph CBM subcommands", () => {
     fakeCallFn = undefined;
     fakeCloseFn = undefined;
     fakeIndexFn = undefined;
-    _resetCbmSeam();
+    resetCbmSeam();
   });
 
   function runCli(args: string[]) {

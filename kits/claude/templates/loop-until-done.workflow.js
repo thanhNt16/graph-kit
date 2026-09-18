@@ -3,9 +3,11 @@ function nodeOpts(node) {
 }
 
 export function createLoopWorkflow(config) {
-  const { nodes, limits, topology_config } = config;
+  const { nodes, topology_config } = config;
   const dryThreshold = topology_config.dry_threshold ?? 2;
-  const maxRounds = limits.max_iterations ?? 10;
+  // `limits` was dropped from the graph schema; bounds now live in
+  // topology_config (free-form record) or node loop config.
+  const maxRounds = topology_config.max_iterations ?? 10;
   return async function loopUntilDone(context) {
     const seen = new Set();
     const all = [];

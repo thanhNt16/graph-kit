@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import type { Graph } from "../../src/compiler/validate.js";
 import { GraphKitError } from "../../src/errors.js";
+import type { Graph } from "../../src/schemas/graph.schema.js";
 import {
   getActiveGraphId,
   listSessionGraphs,

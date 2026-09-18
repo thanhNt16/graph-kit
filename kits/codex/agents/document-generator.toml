@@ -72,7 +72,7 @@ When bound to a graph node, you:
 2. Load `refs` for additional context (each labeled with its purpose).
 3. Use only `tools` listed in your node config.
 4. Respect `depend_on` ordering — wait for upstream evidence.
-5. If `loop.enabled`, iterate until `exit_condition` is met (max `max_rounds`).
+5. If `loop.enabled`, iterate until `stop_when` is met (bounded by `loop.max_rounds`).
 6. Produce all `evidence` keys declared in your node config.
 7. Never modify files outside your assigned scope (`constraints.assigned_only`).
 """

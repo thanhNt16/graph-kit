@@ -21,37 +21,15 @@
       ]
     },
     {
-      "name": "validate",
-      "description": "Validate a graph.yaml",
-      "options": [
-        "--json"
-      ]
-    },
-    {
-      "name": "status",
-      "description": "Summarize active graph run and evidence coverage",
-      "options": [
-        "--json"
-      ]
-    },
-    {
-      "name": "execute",
-      "description": "Execute a graph.yaml (not yet implemented)",
-      "options": [
-        "--json",
-        "--worktree"
-      ]
-    },
-    {
-      "name": "visualize",
-      "description": "Visualize a graph.yaml (not yet implemented)",
-      "options": [
-        "--json"
-      ]
-    },
-    {
       "name": "gate",
       "description": "Deterministic evidence gate: MERGE/BLOCK over required evidence keys",
+      "options": [
+        "--json"
+      ]
+    },
+    {
+      "name": "validate",
+      "description": "Validate a graph.yaml",
       "options": [
         "--json"
       ]
@@ -65,167 +43,39 @@
       ]
     },
     {
-      "name": "graph list",
-      "description": "List session graphs",
+      "name": "graph",
+      "description": "Graph lifecycle commands\nSubcommands: topologies list switch show inspect new ascii svg waves index search ask trace query",
       "options": [
         "--json"
       ]
     },
     {
-      "name": "graph switch",
-      "description": "Switch active session graph",
-      "options": [
-        "--json"
-      ]
-    },
-    {
-      "name": "graph show",
-      "description": "Show a session graph (default active)",
-      "options": [
-        "--json"
-      ]
-    },
-    {
-      "name": "graph topologies",
-      "description": "List canonical topologies",
-      "options": [
-        "--json"
-      ]
-    },
-    {
-      "name": "graph inspect",
-      "description": "Inspect a topology's config keys",
-      "options": [
-        "--json"
-      ]
-    },
-    {
-      "name": "graph new",
-      "description": "Emit a graph.yaml template for a topology",
-      "options": [
-        "--json"
-      ]
-    },
-    {
-      "name": "graph ascii",
-      "description": "Render an ASCII diagram",
-      "options": [
-        "--json"
-      ]
-    },
-    {
-      "name": "graph svg",
-      "description": "Render an SVG export",
-      "options": [
-        "--json"
-      ]
-    },
-    {
-      "name": "graph waves",
-      "description": "Output topological wave structure",
-      "options": [
-        "--json"
-      ]
-    },
-    {
-      "name": "graph index",
-      "description": "Index memory into CBM",
-      "options": [
-        "--json"
-      ]
-    },
-    {
-      "name": "graph search",
-      "description": "Search the CBM memory graph",
-      "options": [
-        "--json"
-      ]
-    },
-    {
-      "name": "graph ask",
-      "description": "Ask a natural-language question (routed to the right CBM primitive)",
-      "options": [
-        "--json"
-      ]
-    },
-    {
-      "name": "graph trace",
-      "description": "Trace calls/callees in the CBM graph",
-      "options": [
-        "--json"
-      ]
-    },
-    {
-      "name": "graph query",
-      "description": "Run a Cypher query against the CBM graph",
-      "options": [
-        "--json"
-      ]
-    },
-    {
-      "name": "memory index",
-      "description": "Index .graphkit/memory/ into the CBM memory project",
+      "name": "memory",
+      "description": "Memory commands\nSubcommands: index trace touch recall consolidate",
       "options": [
         "--project <project>",
-        "--json"
+        "--json",
+        "--explain",
+        "--html",
+        "--origin <origin>"
       ]
     },
     {
-      "name": "memory trace",
-      "description": "ACT-R score + expire .graphkit/memory/ entries (decay pass)",
+      "name": "models",
+      "description": "Per-target model mapping commands",
       "options": [
+        "--map <k=v,...>",
         "--json"
       ]
     },
     {
-      "name": "memory touch",
-      "description": "Reinforce a memory (bump use_count/last_used_at) so decay keeps it",
-      "options": [
-        "--json"
-      ]
-    },
-    {
-      "name": "memory recall",
-      "description": "Query .graphkit/memory (keyword×salience + validity filters); reinforces survivors",
-      "options": [
-        "--json"
-      ]
-    },
-    {
-      "name": "memory consolidate",
-      "description": "Derive patterns, suggestions, and links from the run ledger",
-      "options": [
-        "--json"
-      ]
-    },
-    {
-      "name": "template pack",
-      "description": "Package a graph.yaml as a reusable GraphTemplate",
+      "name": "template",
+      "description": "Package, list, inspect, and materialize reusable GraphTemplates",
       "options": [
         "--name <name>",
         "--global",
         "--force",
-        "--input <file>"
-      ]
-    },
-    {
-      "name": "template list",
-      "description": "List packaged templates",
-      "options": [
-        "--json"
-      ]
-    },
-    {
-      "name": "template show",
-      "description": "Show a packaged template",
-      "options": [
-        "--json"
-      ]
-    },
-    {
-      "name": "template materialize",
-      "description": "Materialize a template into a session graph",
-      "options": [
+        "--input <file>",
         "--params <json>",
         "--use",
         "--json"
@@ -240,97 +90,41 @@
       ]
     },
     {
-      "name": "models cursor",
-      "description": "Show the Cursor model mapping",
-      "options": [
-        "--json"
-      ]
-    },
-    {
-      "name": "models cursor set",
-      "description": "Set a Cursor model override",
-      "options": [
-        "--map <k=v,...>",
-        "--json"
-      ]
-    },
-    {
-      "name": "models cursor reset",
-      "description": "Remove Cursor model overrides",
-      "options": [
-        "--json"
-      ]
-    },
-    {
-      "name": "run start",
-      "description": "Start a run and write the ledger entry",
-      "options": [
-        "--graph <path>",
-        "--json"
-      ]
-    },
-    {
-      "name": "evidence add",
-      "description": "Record a typed artifact against an evidence key",
+      "name": "evidence",
+      "description": "Evidence commands\nSubcommands: add report",
       "options": [
         "--key <k>",
         "--node <n>",
         "--note <text>",
-        "--json"
-      ]
-    },
-    {
-      "name": "evidence report",
-      "description": "Criterion-first evidence report (markdown, or --html page)",
-      "options": [
         "--html",
         "--json"
       ]
     },
     {
-      "name": "run node",
-      "description": "Append a node trace line to the active run",
+      "name": "status",
+      "description": "Summarize active graph run and evidence coverage",
       "options": [
+        "--json"
+      ]
+    },
+    {
+      "name": "run",
+      "description": "Run ledger commands\nSubcommands: start node end status resume round",
+      "options": [
+        "--graph <path>",
         "--status <status>",
+        "--advisor-fired <round>",
+        "--streak <n>",
         "--wave <n>",
         "--agent <agent>",
         "--model <model>",
         "--evidence <keys>",
         "--duration-ms <n>",
         "--notes <text>",
-        "--json"
-      ]
-    },
-    {
-      "name": "run end",
-      "description": "Finalize the active run and append to index.jsonl",
-      "options": [
-        "--status <status>",
-        "--json"
-      ]
-    },
-    {
-      "name": "run status",
-      "description": "Show the active run directory",
-      "options": [
-        "--json"
-      ]
-    },
-    {
-      "name": "run resume",
-      "description": "Derive a pending-only session graph from a failed/interrupted run and start a child run",
-      "options": [
+        "--json",
         "--from-node <id>",
         "--dry-run",
-        "--force",
-        "--json"
-      ]
-    },
-    {
-      "name": "run round",
-      "description": "Record a completed loop-group round; fingerprint detects no-progress",
-      "options": [
-        "--json"
+        "--force"
       ]
     },
     {

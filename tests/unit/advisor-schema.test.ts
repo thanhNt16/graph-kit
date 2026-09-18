@@ -56,7 +56,36 @@ describe("fan_out schema", () => {
       },
     });
     expect(r.success).toBe(true);
-    if (r.success) expect(r.data.nodes.exec.fan_out).toEqual({ briefs_from: "plan", template: "{brief.body}" });
+    if (r.success)
+      expect(r.data.nodes.exec.fan_out).toEqual({ briefs_from: "plan", template: "{brief.body}", reduce: "append" });
+  });
+
+  test("accepts explicit reduce mode", () => {
+    const r = GraphSchema.safeParse({
+      ...base,
+      nodes: {
+        plan: { agent: "p", objective: "o" },
+        exec: { agent: "b", objective: "o", depend_on: ["plan"], fan_out: { briefs_from: "plan", reduce: "vote" } },
+      },
+    });
+    expect(r.success).toBe(true);
+    if (r.success) expect(r.data.nodes.exec.fan_out?.reduce).toBe("vote");
+  });
+
+  test("rejects unknown reduce mode", () => {
+    const r = GraphSchema.safeParse({
+      ...base,
+      nodes: {
+        plan: { agent: "p", objective: "o" },
+        exec: {
+          agent: "b",
+          objective: "o",
+          depend_on: ["plan"],
+          fan_out: { briefs_from: "plan", reduce: "rank" },
+        },
+      },
+    });
+    expect(r.success).toBe(false);
   });
 
   test("rejects dangling briefs_from", () => {
@@ -89,5 +118,64 @@ describe("fan_out schema", () => {
       },
     });
     expect(r.success).toBe(false);
+  });
+});
+
+describe("orchestration fields", () => {
+  test("retry applies defaults and enforces bounds", () => {
+    const ok = GraphSchema.safeParse({
+      ...base,
+      nodes: { w: { agent: "b", objective: "o", retry: {} } },
+    });
+    expect(ok.success).toBe(true);
+    if (ok.success)
+      expect(ok.data.nodes.w.retry).toEqual({
+        max_attempts: 1,
+        initial_interval_ms: 1000,
+        backoff: 2,
+        non_retryable: [],
+      });
+    for (const retry of [{ max_attempts: 0 }, { initial_interval_ms: 0 }, { backoff: 0.5 }]) {
+      expect(GraphSchema.safeParse({ ...base, nodes: { w: { agent: "b", objective: "o", retry } } }).success).toBe(
+        false,
+      );
+    }
+  });
+
+  test("when, budget_tokens, gate, effort parse and default effort to standard", () => {
+    const r = GraphSchema.safeParse({
+      ...base,
+      nodes: {
+        w: {
+          agent: "b",
+          objective: "o",
+          when: "upstream report contains no blockers",
+          budget_tokens: 4000,
+          gate: { question: "Ship this?", details: "Review the diff" },
+        },
+      },
+    });
+    expect(r.success).toBe(true);
+    if (r.success) {
+      expect(r.data.nodes.w.effort).toBe("standard");
+      expect(r.data.nodes.w.when).toContain("blockers");
+      expect(r.data.nodes.w.gate?.question).toBe("Ship this?");
+    }
+  });
+
+  test("rejects bad effort, empty when, empty gate question, non-positive budget", () => {
+    const cases = [{ effort: "extreme" }, { when: "" }, { gate: { question: "" } }, { budget_tokens: 0 }];
+    for (const extra of cases) {
+      const r = GraphSchema.safeParse({ ...base, nodes: { w: { agent: "b", objective: "o", ...extra } } });
+      expect(r.success, JSON.stringify(extra)).toBe(false);
+    }
+  });
+
+  test("effort accepts all three tiers", () => {
+    for (const effort of ["light", "standard", "deep"] as const) {
+      const r = GraphSchema.safeParse({ ...base, nodes: { w: { agent: "b", objective: "o", effort } } });
+      expect(r.success).toBe(true);
+      if (r.success) expect(r.data.nodes.w.effort).toBe(effort);
+    }
   });
 });

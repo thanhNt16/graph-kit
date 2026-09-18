@@ -4,7 +4,6 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { cac } from "cac";
 import YAML from "yaml";
-import { CLI_COMMANDS } from "../../src/cli/command-registry.js";
 import { registerRunCommands } from "../../src/cli/commands/run.js";
 import { appendNode, endRun, readAdvisorEvents, startRun } from "../../src/memory/ledger.js";
 
@@ -38,14 +37,6 @@ describe("gk run CLI", () => {
     const cli = cac("gk");
     registerRunCommands(cli);
     expect(cli.commands.map((c) => c.name)).toContain("run");
-  });
-  test("command registry lists all run subcommands", () => {
-    const paths = CLI_COMMANDS.map((c) => c.path);
-    expect(paths).toContain("run start");
-    expect(paths).toContain("run node");
-    expect(paths).toContain("run end");
-    expect(paths).toContain("run status");
-    expect(paths).toContain("run round");
   });
 
   test("executes run start, status, node, end lifecycle", () => {

@@ -2,7 +2,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { CAC } from "cac";
 import { GraphKitError } from "../../errors.js";
-import { fail, ok } from "../output.js";
+import { emit, fail, ok } from "../output.js";
 import { type GateResult, gateGraph } from "./gate.js";
 import { loadGraph } from "./graph.js";
 
@@ -18,7 +18,7 @@ export function registerStatusCommand(cli: CAC) {
 
         // No active run → stable success exit 0.
         if (!existsSync(activeMarker)) {
-          console.log(JSON.stringify(ok({ running: false, run: null, coverage: null })));
+          emit(ok({ running: false, run: null, coverage: null }));
           return;
         }
 
@@ -42,23 +42,16 @@ export function registerStatusCommand(cli: CAC) {
           gateError = e instanceof GraphKitError ? e.code : "UNKNOWN";
         }
 
-        console.log(
-          JSON.stringify(
-            ok({
-              running: true,
-              run,
-              coverage,
-              gate_error: gateError,
-            }),
-          ),
+        emit(
+          ok({
+            running: true,
+            run,
+            coverage,
+            gate_error: gateError,
+          }),
         );
       } catch (e) {
-        console.log(
-          JSON.stringify(
-            e instanceof GraphKitError ? fail(e.code, e.message, e.details) : fail("STATUS_ERROR", String(e)),
-          ),
-        );
-        process.exit(1);
+        emit(e instanceof GraphKitError ? fail(e.code, e.message, e.details) : fail("STATUS_ERROR", String(e)));
       }
     });
 }

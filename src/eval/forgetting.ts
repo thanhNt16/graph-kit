@@ -1,5 +1,8 @@
 const DAY_MS = 86_400_000;
 
+/** ACT-R recency half-life, shared with pattern salience. */
+export const HALF_LIFE_DAYS = 14;
+
 function ageDays(lastUsedAt: string, now: string): number {
   const t = Date.parse(lastUsedAt);
   const n = Date.parse(now);
@@ -8,9 +11,7 @@ function ageDays(lastUsedAt: string, now: string): number {
 }
 
 function recencyDecay(lastUsedAt: string, now: string): number {
-  // half-life ~14 days
-  const halfLife = 14;
-  return 0.5 ** (ageDays(lastUsedAt, now) / halfLife);
+  return 0.5 ** (ageDays(lastUsedAt, now) / HALF_LIFE_DAYS);
 }
 
 export interface ActRInput {
@@ -27,6 +28,9 @@ export function actRScore(i: ActRInput): number {
   return Math.max(0, Math.min(1, raw));
 }
 
-export function shouldExpire(score: number, threshold = 0.3): boolean {
+/** A memory expires below this ACT-R operating point. The three sub-one
+ *  factors of actRScore multiply, so scores rarely clear 0.3 — 0.1 is the
+ *  threshold every caller (memory trace) actually uses. */
+export function shouldExpire(score: number, threshold = 0.1): boolean {
   return score < threshold;
 }

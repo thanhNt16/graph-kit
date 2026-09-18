@@ -9,29 +9,31 @@ disable-model-invocation: false
 # gk init-graph
 
 ## Purpose
-Generate a valid `graph.yaml` in the project root, either from a **packaged GraphTemplate** (`--template <name>`) with user-approved capability suggestions, or from one of the canonical topology templates / flow presets. The CLI stays deterministic; this skill owns interpretation and recommendation.
+Generate a new **session graph** — written to `.graphkit/graphs/<YYYY-MM-DD>-<slug>.yaml` and set active via `.graphkit/active` — either from a **packaged GraphTemplate** (`--template <name>`) with user-approved capability suggestions, or from one of the canonical topology templates / flow presets. The CLI stays deterministic; this skill owns interpretation and recommendation.
 
 Invocation:
 ```text
-/gk:init-graph [--template <name>] [--task "<description>"]
+init-graph [--template <name>] [--task "<description>"]
 ```
 
 ## Guardrails
 - **Recommend only installed capabilities.** Suggest bindings only for agents/skills/tools/MCP servers discovered by `gk inventory`. Absent recommended capabilities are marked `install required` and are never bound.
 - **Model changes always require approval.** Never silently change a node model.
 - **Never overwrite an existing graph.yaml without explicit approval.**
-- **Graph authority preserved.** Templates materialize a graph; topology is never modified at runtime.
+- **Session graphs are immutable.** Every creation writes a fresh timestamped file and flips `.graphkit/active`; the overwrite guard applies only to explicit-path writes of a root `graph.yaml`.
 
 ## Process
 
 1. **Resolve the source.**
-   - `--template <name>` names a packaged template: resolve project-local before global:
+   - `--template <name>` names a packaged template: resolve **project-local ⇒ user-global ⇒ bundled gallery** (the `source` column shows which store won):
      ```bash
      gk template list
      gk template show <name>
      ```
    - `--template <name>` names a canonical topology or flow preset: retain existing `gk graph new <name>` behavior.
-   - Without `--template`: compare the task to packaged template descriptions and the topology routing rules, then offer the best two candidates when ambiguous.
+   - Without `--template`: compare the task to packaged template descriptions (including gallery candidates `audit-pr`, `refactor-module`, `bench-eval`, `doc-sweep`) and the topology routing rules, then offer the best two candidates when ambiguous.
+   Run `gk suggest --json` and fold relevant suggestions into the proposal: recurring
+   chains suggest sub-graphs, graph-reuse suggests starting from a template.
 
 2. **Inventory installed capabilities** for the active target:
    ```bash
@@ -51,22 +53,29 @@ Invocation:
 
 5. **Review changes.** Show proposed substitutions and capability/model changes per node. Let the user accept, edit, or reject changes.
 
-6. **Materialize.** Substitute parameters and apply accepted changes to produce a standard graph document:
-   ```bash
-   gk graph new <topology> > graph.yaml   # canonical topology / flow preset
-   ```
-   Refuse an existing `graph.yaml` unless the user explicitly approves replacement.
+6. **Materialize.** Substitute parameters, apply accepted changes, then create a **new session graph** (never rewrite an existing one):
+   - Packaged template path — one command writes the file and sets it active:
+     ```bash
+     gk template materialize <name> --params '{"task":"…"}' [--use]
+     ```
+     Resolution is project-local ⇒ user-global ⇒ bundled gallery; param errors abort before any write.
+   - Canonical topology / flow preset path: emit YAML with `gk graph new <topology>`, save it as `.graphkit/graphs/<today>-<slug>.yaml` (same-day collisions append `-2`, `-3`, …), then activate:
+     ```bash
+     gk graph switch <session-id>
+     ```
+   Refuse to overwrite an existing root `graph.yaml` unless the user explicitly approves replacement.
 
 7. **Verify.** Run:
    ```bash
    gk validate graph.yaml --json
    ```
-   Fix only approved configuration errors, then suggest `/gk:visualize`.
+   Fix only approved configuration errors, then suggest `gk-visualize`.
 
 ## Output
-Writes `graph.yaml` to project root. Refuses to overwrite an existing file without explicit approval. On validation success, suggests `/gk:visualize`.
+Writes a new immutable session graph under `.graphkit/graphs/` and points `.graphkit/active` at it. On validation success, suggests `gk-visualize`.
 
 ## Topology routing (no packaged template)
+Gallery templates are packaged candidates checked first via resolution order; route to a canonical topology only when no packaged template fits.
 - "audit", "review", "research", "migrate" → **diamond**
 - "triage", "route", "categorize" → **classify-and-act**
 - "verify", "fact-check", "security" → **adversarial-verification**
@@ -83,6 +92,8 @@ Run `gk graph topologies` to see all topologies (7 canonical + custom + 3 flow p
 
 ### Custom topology
 Use `topology: custom` to define any graph shape. The `depend_on` field controls execution order — nodes with no pending deps run in parallel. Node-level loops are supported via `loop: { enabled: true }`.
+
+Node fields (all optional, validated at parse): `fan_out: { briefs_from, template, reduce }` fans one dispatch per item of an upstream JSON-array output (`reduce`: `append`|`merge`|`vote`, default `append`; `briefs_from` must be a `depend_on` ancestor); `retry: { max_attempts, initial_interval_ms, backoff, non_retryable }` for transient dispatch failures; `when: "<predicate>"` skips the node when the judged condition is false; `budget_tokens` caps injected upstream context; `gate: { question, details? }` suspends the run for human approval; `effort: light|standard|deep` scales fan-out width, budgets, and loop bounds.
 
 ### Flow presets
 Pre-built DAGs using custom topology:

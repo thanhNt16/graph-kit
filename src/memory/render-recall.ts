@@ -1,3 +1,4 @@
+import { RELATIVE_CUTOFF } from "../eval/memory-recall.js";
 import type { RecallExplanation } from "./explain-recall.js";
 
 function escapeHtml(str: string): string {
@@ -29,7 +30,7 @@ export function renderRecallAscii(exp: RecallExplanation): string {
       const idStr = h.id.padEnd(11, " ");
       let fileStr = h.file;
       if (h.linked_via) {
-        fileStr += `   ← linked via ${h.linked_via} (${h.linked_penalty ?? 0.5}x)`;
+        fileStr += `   ← linked via ${h.linked_via} (ppr ${(h.ppr_mass ?? 0).toFixed(2)})`;
       }
       lines.push(`${num}  ${scoreStr} ${salStr} ${termsStr} ${idStr} ${fileStr}`);
     });
@@ -53,9 +54,13 @@ export function renderRecallAscii(exp: RecallExplanation): string {
           statusStr = "FILTERED";
           detail = r.reason;
           break;
+        case "below_cutoff":
+          statusStr = "BELOW_CUTOFF";
+          detail = `score ${r.final_score.toFixed(3)} is a distractor (< ${RELATIVE_CUTOFF} × top hit)`;
+          break;
         case "outranked":
           statusStr = "OUTRANKED";
-          detail = `score ${r.final_score.toFixed(3)} < cutoff`;
+          detail = `score ${r.final_score.toFixed(3)} < top-k`;
           break;
         case "zero_overlap":
           statusStr = "ZERO_OVERLAP";
@@ -76,7 +81,7 @@ export function renderRecallHtml(exp: RecallExplanation): string {
     .map((h, i) => {
       const widthPct = Math.min(100, Math.round((h.final_score / maxScore) * 100));
       const badge = h.linked_via
-        ? `<span class="badge linked">linked via ${escapeHtml(h.linked_via)} (${h.linked_penalty ?? 0.5}x)</span>`
+        ? `<span class="badge linked">linked via ${escapeHtml(h.linked_via)} (ppr ${(h.ppr_mass ?? 0).toFixed(2)})</span>`
         : `<span class="badge hit">direct match</span>`;
 
       return `
@@ -103,8 +108,10 @@ export function renderRecallHtml(exp: RecallExplanation): string {
       let detail = escapeHtml(r.reason ?? "");
       if (r.reason === "superseded" && r.superseded_by) {
         detail = `superseded by <code>${escapeHtml(r.superseded_by)}</code>`;
+      } else if (r.reason === "below_cutoff") {
+        detail = `score ${r.final_score.toFixed(3)} is a distractor (&lt; ${RELATIVE_CUTOFF} × top hit)`;
       } else if (r.reason === "outranked") {
-        detail = `score ${r.final_score.toFixed(3)} &lt; cutoff`;
+        detail = `score ${r.final_score.toFixed(3)} &lt; top-k`;
       } else if (r.reason === "zero_overlap") {
         detail = "no term overlap with query";
       }

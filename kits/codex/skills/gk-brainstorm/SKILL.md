@@ -21,7 +21,7 @@ Interactively refine a graph.yaml file through conversation.
    - "Should any nodes have internal loops?" → suggest for research/discovery nodes
    - "Are there constraints needed?" → suggest based on task type
 4. Update `graph.yaml` after each decision.
-5. After all changes, run `gk validate graph.yaml --json` again to confirm it passes before suggesting `gk-execute`.
+5. After all changes, run `gk validate graph.yaml --json` again to confirm it passes before suggesting `execute`.
 
 ## Key Interactions
 - Suggest model tiering: "The scouter does deep analysis — opus. The verifier just checks file:line refs — haiku. Save budget."

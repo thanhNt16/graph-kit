@@ -1,4 +1,6 @@
-export type Tier = "opus" | "sonnet" | "haiku" | "fable";
+export const TIERS = ["opus", "sonnet", "haiku", "fable"] as const;
+
+export type Tier = (typeof TIERS)[number];
 
 export type TargetId = "claude" | "cursor" | "opencode" | "codex" | "pi";
 

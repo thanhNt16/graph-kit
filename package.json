@@ -6,8 +6,8 @@
     "gk": "dist/index.js"
   },
   "scripts": {
-    "build": "bun build src/index.ts --target=node --outdir=dist && chmod +x dist/index.js",
-    "build:bin": "bun build --compile src/index.ts --outfile=dist/gk",
+    "build": "rm -rf dist && bun build src/index.ts --target=node --outdir=dist && chmod +x dist/index.js",
+    "build:bin": "bun build --compile src/index.ts --outfile build/gk",
     "typecheck": "tsc --noEmit",
     "lint": "biome check .",
     "test": "bun test",
@@ -15,18 +15,26 @@
     "cbm:parity": "bun run scripts/cbm-parity.ts",
     "prepack": "bun run build",
     "check-changelog": "bun run scripts/check-changelog.ts",
-    "ci:local": "bun run typecheck && bun run lint && bun run build && bun test && bun run cbm:parity && bun run check-changelog",
+    "check-cli-parity": "bun run scripts/check-cli-parity.ts",
+    "gen:kits": "bun run scripts/gen-kits.ts",
+    "gen:kits:check": "bun run scripts/gen-kits.ts --check",
+    "gen:manifest": "bun run scripts/gen-cli-manifest.ts",
+    "sync:omp": "bun run scripts/sync-omp.ts",
+    "sync:omp:check": "bun run scripts/sync-omp.ts --check",
+    "ci:local": "bun run typecheck && bun run lint && bun run build && bun test && bun run check-cli-parity && bun run gen:kits:check && bun run sync:omp:check && bun run check-changelog",
     "eval:memory": "bun run scripts/memory-recall-eval.ts"
   },
   "files": [
     "dist/",
-    "kits/",
+    "kits/claude",
+    "kits/cursor",
+    "kits/opencode",
+    "kits/codex",
+    "kits/pi",
     "templates/gallery"
   ],
   "dependencies": {
     "@dagrejs/dagre": "^3.1.1",
-    "ajv": "^8.17.1",
-    "ajv-formats": "^3.0.1",
     "cac": "^6.7.14",
     "yaml": "^2.8.1",
     "zod": "^4.0.17"

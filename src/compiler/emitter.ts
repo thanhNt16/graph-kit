@@ -1,35 +1,33 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import type { Graph } from "../schemas/graph.schema.js";
+import type { TopologyName } from "../schemas/topology/index.js";
 import { resolveTopologyConfig } from "./resolver.js";
-import type { Graph } from "./validate.js";
 
-// Presets that delegate to the custom executor must also resolve to custom.workflow.js
-const EFFECTIVE_TOPOLOGY: Record<string, string> = {
-  sdd: "custom",
-  superpowers: "custom",
-  "research-and-build": "custom",
-};
-
-const TEMPLATE_FN: Record<string, string> = {
-  diamond: "createDiamondWorkflow",
-  "classify-and-act": "createClassifyWorkflow",
-  "adversarial-verification": "createAdversarialWorkflow",
-  "loop-until-done": "createLoopWorkflow",
-  "generate-and-filter": "createGenerateFilterWorkflow",
-  tournament: "createTournamentWorkflow",
-  "memory-augmented": "createMemoryAugmentedWorkflow",
-  custom: "createCustomWorkflow",
-  sdd: "createCustomWorkflow",
-  superpowers: "createCustomWorkflow",
-  "research-and-build": "createCustomWorkflow",
+// Presets that delegate to the custom executor resolve to custom.workflow.js;
+// `fn` is the workflow factory the emitted script calls. Keyed by TopologyName
+// so adding a topology without an emitter entry is a compile error, not a
+// silent fallback that emits a broken script.
+const TOPOLOGY_TABLE: Record<TopologyName, { effective: string; fn: string }> = {
+  diamond: { effective: "diamond", fn: "createDiamondWorkflow" },
+  "classify-and-act": { effective: "classify-and-act", fn: "createClassifyWorkflow" },
+  "adversarial-verification": { effective: "adversarial-verification", fn: "createAdversarialWorkflow" },
+  "loop-until-done": { effective: "loop-until-done", fn: "createLoopWorkflow" },
+  "generate-and-filter": { effective: "generate-and-filter", fn: "createGenerateFilterWorkflow" },
+  tournament: { effective: "tournament", fn: "createTournamentWorkflow" },
+  "memory-augmented": { effective: "memory-augmented", fn: "createMemoryAugmentedWorkflow" },
+  custom: { effective: "custom", fn: "createCustomWorkflow" },
+  sdd: { effective: "custom", fn: "createCustomWorkflow" },
+  superpowers: { effective: "custom", fn: "createCustomWorkflow" },
+  "research-and-build": { effective: "custom", fn: "createCustomWorkflow" },
 };
 
 export function compileGraph(graph: Graph, templatesDir: string): string {
-  const resolved = resolveTopologyConfig(graph.topology, graph.topology_config, templatesDir);
+  const resolved = resolveTopologyConfig(graph.topology_config, templatesDir);
 
   // Collect the root template + every referenced subgraph template (deduped)
-  const effectiveTopology = EFFECTIVE_TOPOLOGY[graph.topology] ?? graph.topology;
-  const templateFiles = new Set<string>([`${effectiveTopology}.workflow.js`]);
+  const { effective, fn } = TOPOLOGY_TABLE[graph.topology];
+  const templateFiles = new Set<string>([`${effective}.workflow.js`]);
   const collectSubgraphs = (obj: unknown) => {
     if (obj && typeof obj === "object") {
       for (const v of Object.values(obj as Record<string, unknown>)) {
@@ -42,12 +40,9 @@ export function compileGraph(graph: Graph, templatesDir: string): string {
   };
   collectSubgraphs(resolved);
 
-  // Inline all needed template sources (deduped, root last)
+  // Inline all needed template sources (root last).
   // Strip 'export ' keyword — the Workflow tool only allows export on the meta block
-  const sources = [...templateFiles]
-    .filter((f, i, arr) => arr.indexOf(f) === i)
-    .map((f) => readFileSync(join(templatesDir, f), "utf-8").replace(/^export /gm, ""));
-  const fnName = TEMPLATE_FN[graph.topology];
+  const sources = [...templateFiles].map((f) => readFileSync(join(templatesDir, f), "utf-8").replace(/^export /gm, ""));
 
   const config = {
     metadata: graph.metadata,
@@ -72,7 +67,7 @@ export function compileGraph(graph: Graph, templatesDir: string): string {
     `  pipeline: typeof pipeline !== "undefined" ? pipeline : undefined,`,
     `  inputs: typeof inputs !== "undefined" ? inputs : {},`,
     `};`,
-    `const _wf = ${fnName}(graphConfig);`,
+    `const _wf = ${fn}(graphConfig);`,
     `return await _wf(_ctx);`,
   ].join("\n");
 }

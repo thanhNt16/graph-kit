@@ -20,7 +20,7 @@ Storage (via `gk template pack`):
 ## Guardrails
 - **Never modify the source graph.** Packaging is read-only over `graph.yaml`.
 - **Smallest useful parameter set.** Do not parameterize structural values — topology, node IDs, dependency IDs, evidence keys, roles, loop limits — unless the user explicitly requests it.
-- **Recommend only installed capabilities.** Derive recommendation metadata solely from agents/skills/tools/MCP servers actually discovered in the active Cursor installation, or explicitly marked `install required`.
+- **Recommend only installed capabilities.** Derive recommendation metadata solely from agents/skills/tools/MCP servers actually discovered in the active pi installation, or explicitly marked `install required`.
 - **Never expose secrets.** No MCP config values, env vars, credentials, or tokens in any recommendation.
 
 ## Process

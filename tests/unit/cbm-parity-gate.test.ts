@@ -11,18 +11,20 @@ describe("cbm:parity CI gate wiring", () => {
     expect(pkg.scripts["cbm:parity"]).toContain("scripts/cbm-parity.ts");
   });
 
-  test("ci:local chains cbm:parity", () => {
-    expect(pkg.scripts["ci:local"]).toContain("cbm:parity");
+  test("ci:local does NOT chain cbm:parity (CBM_CMD can never be set on fresh checkouts)", () => {
+    expect(pkg.scripts["ci:local"]).not.toContain("cbm:parity");
   });
 });
 
 describe("agent tool-binding wire-up", () => {
+  // Agents must not advertise CBM commands: the backend is unpublished and the
+  // commands exit CBM_UNAVAILABLE — a dead tool in a prompt is worse than none.
   const agents = ["kits/claude/agents/code-reviewer.md", "kits/claude/agents/data-engineer.md"];
 
   for (const rel of agents) {
-    test(`${rel} contains 'gk graph search'`, () => {
+    test(`${rel} does not reference unavailable 'gk graph search'`, () => {
       const content = readFileSync(join(ROOT, rel), "utf8");
-      expect(content).toContain("gk graph search");
+      expect(content).not.toContain("gk graph search");
     });
   }
 });

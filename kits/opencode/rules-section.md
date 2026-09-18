@@ -3,39 +3,29 @@
 
 ### agent-binding
 
-Agent names in graph.yaml must resolve to agent definitions under `.opencode/agent/`.
+Agent names in graph.yaml must resolve to agent fragments under `.opencode/agent/`.
 
-#### Validation
-
-- Every `agent` value in a node must match a definition in `.opencode/agent/` (by its frontmatter `description`-adjacent identity — the filename stem).
-- If a bound agent doesn't exist, fail validation with: "Agent 'X' not found. Available: Y, Z."
-- The agent's `model` field overrides the agent's default from its frontmatter.
-- `tools`, `skills`, and `refs` are additive — they extend the agent's default capabilities, not replace them.
+- Every `agent` value in a node must match `.opencode/agent/<agent>.md`.
+- If a bound agent does not exist, fail validation with: "Agent 'X' not found. Available: Y, Z."
+- `tools`, `skills`, and `refs` extend the agent fragment's capabilities. Node `tools` map to `constraints.tools_allowlist` on `gk_dispatch_agent`; write-free nodes get `constraints.no_write = true`.
 
 ### graph-authority
 
-gk owns graph state. The compiled workflow is the execution plan.
-
-#### Inviolable Rules
+gk owns graph state. The wave structure from graph.yaml is the execution plan.
 
 - Never improvise edges or skip nodes at runtime.
-- Never modify topology after compilation — recompile if needed.
-- The workflow script is deterministic: same graph.yaml → same .workflow.js.
-- If a node fails, the workflow handles it (null filter, error boundary) — do not retry outside the declared loop config.
+- Never modify topology after planning; re-plan instead.
+- Execution is deterministic: same graph.yaml, same wave order.
+- If `gk_dispatch_agent` returns `ok:false`, stop the graph. Do not retry outside declared loop config.
 
 ### topology-routing
 
-Decision tree for suggesting topology in the gk-init-graph skill.
-
-#### Rules
-
-1. User says "audit" or "review" or "verify" → suggest **diamond** (fan-out workers + verification)
-2. User says "triage" or "route" or "categorize" → suggest **classify-and-act**
-3. User says "research" or "discover" or "find" → suggest **loop-until-done**
-4. User says "brainstorm" or "ideas" or "naming" → suggest **generate-and-filter** (keep best K)
-5. User says "compare" or "rank" or "evaluate options" → suggest **tournament**
-6. If ambiguous, show top 2 options with brief descriptions and let user pick.
-
+1. "audit", "review", or "verify": suggest **diamond**.
+2. "triage", "route", or "categorize": suggest **classify-and-act**.
+3. "research", "discover", or "find": suggest **loop-until-done**.
+4. "brainstorm", "ideas", or "naming": suggest **generate-and-filter**.
+5. "compare", "rank", or "evaluate options": suggest **tournament**.
+6. Ambiguous: show the top two options and ask.
 ### Runtime guards (plugin-enforced)
 
 The gk plugin (`.opencode/plugins/gk.ts`) enforces evidence-persist, graph-state-guard, lease-enforce, and memory-persist automatically. Where the plugin cannot see an operation (direct shell edits, subagent internals), these behaviors are explicit instructions you MUST follow:

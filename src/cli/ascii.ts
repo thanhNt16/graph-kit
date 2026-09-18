@@ -1,24 +1,7 @@
-import { readFileSync } from "node:fs";
-import YAML from "yaml";
+import type { Graph } from "../schemas/graph.schema.js";
+import { topoWaves } from "./graph-waves.js";
 
-interface GraphNode {
-  agent: string;
-  model?: string;
-  objective?: string;
-  depend_on?: string[];
-  evidence?: string[];
-  role?: string;
-  loop?: { enabled?: boolean; stop_when?: string; max_rounds?: number };
-}
-
-interface Graph {
-  metadata: { name: string; description?: string };
-  topology: string;
-  nodes: Record<string, GraphNode>;
-  evidence?: { required_keys?: string[] };
-  limits?: Record<string, number>;
-  topology_config?: Record<string, unknown>;
-}
+type GraphNode = Graph["nodes"][string];
 
 // Pure ASCII charset — no Unicode, no emoji. Works in every terminal/markdown/editor.
 const TIER_TAG: Record<string, string> = {
@@ -123,33 +106,18 @@ function fanInConnector(centers: number[]): string[] {
  * Render a graph.yaml as a pure-ASCII diagram.
  * Deterministic layout — no model, no rendering pipeline. Instant.
  */
-export function renderAscii(graphFile: string): string {
-  const raw = readFileSync(graphFile, "utf-8");
-  const graph = YAML.parse(raw) as Graph;
+export function renderAscii(graph: Graph): string {
   const nodes = graph.nodes;
-  const nodeIds = Object.keys(nodes);
 
-  // Topological levels: level = longest path from any root
-  const levels = new Map<string, number>();
-  const computeLevel = (id: string, seen: Set<string>): number => {
-    if (levels.has(id)) return levels.get(id)!;
-    if (seen.has(id)) return 0;
-    seen.add(id);
-    const deps = nodes[id]?.depend_on ?? [];
-    if (deps.length === 0) {
-      levels.set(id, 0);
-      return 0;
-    }
-    const maxDep = Math.max(...deps.map((d) => computeLevel(d, seen)));
-    const lvl = maxDep + 1;
-    levels.set(id, lvl);
-    return lvl;
-  };
-  for (const id of nodeIds) computeLevel(id, new Set());
-
-  const maxLevel = Math.max(...levels.values());
-  const byLevel: string[][] = Array.from({ length: maxLevel + 1 }, () => []);
-  for (const id of nodeIds) byLevel[levels.get(id)!].push(id);
+  // Topological levels — same Kahn computation as the `graph waves` executor
+  // (src/cli/graph-waves.ts), so a rendered diagram cannot disagree with the
+  // run plan. Cycles cannot reach a validated graph; fail loudly if one does.
+  const { waves, unresolved } = topoWaves(nodes);
+  if (unresolved.length > 0) {
+    throw new Error(`cannot render: unresolved nodes after topological sort: ${unresolved.join(", ")}`);
+  }
+  const byLevel = waves;
+  const maxLevel = waves.length - 1;
 
   const out: string[] = [];
   out.push("");
@@ -179,7 +147,7 @@ export function renderAscii(graphFile: string): string {
       }
     } else {
       // Single node — indent and center
-      const box = nodeBox(ids[0], nodes[0] ? nodes[ids[0]] : nodes[ids[0]]);
+      const box = nodeBox(ids[0], nodes[ids[0]]);
       for (const bl of box) out.push(`  ${bl}`);
     }
 

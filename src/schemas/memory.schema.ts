@@ -36,10 +36,12 @@ export const PatternFileSchema = MemoryFileSchema.extend({
   kind: z.enum(PATTERN_KINDS),
   label: z.string().min(1),
   members: z.array(z.string()),
-  runs: z.array(z.string()),
+  runs: z.array(z.string()).min(1),
   count: z.number().int().min(1),
   last_seen: MemoryDate,
   signature: z.string().min(4),
+  /** Provenance: every generated entry cites the ledger runs that produced it. */
+  sources: z.array(z.object({ resource: z.string().min(1) })).min(1),
 });
 
 /** Actionable suggestions under .graphkit/memory/suggestions/. */
@@ -47,8 +49,10 @@ export const SuggestionFileSchema = MemoryFileSchema.extend({
   type: z.literal("suggestion"),
   action: z.enum(SUGGESTION_ACTIONS),
   rationale: z.string().min(1),
-  based_on: z.array(z.string()),
+  based_on: z.array(z.string()).min(1),
   status: z.enum(["proposed", "accepted", "dismissed"]).default("proposed"),
+  /** Provenance: every generated entry cites the ledger runs that produced it. */
+  sources: z.array(z.object({ resource: z.string().min(1) })).min(1),
 });
 
 export const MemoryConfig = z

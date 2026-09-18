@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { cac } from "cac";
 import { registerModelsCommands } from "../../src/cli/commands/models.js";
-import { CURSOR_MODEL_DEFAULTS } from "../../src/models/cursor-map.js";
+import { TARGET_MODEL_DEFAULTS } from "../../src/targets/model-tiers.js";
 
 function fullCli() {
   const cli = cac("gk");
@@ -17,21 +17,19 @@ function runCli(args: string[], cwd: string) {
   const logs: string[] = [];
   const origLog = console.log;
   console.log = (...a: unknown[]) => logs.push(a.map(String).join(" "));
-  let exit = 0;
-  const origExit = process.exit;
-  process.exit = (c?: number) => {
-    exit = c ?? 1;
-  };
+  const origExitCode = process.exitCode;
+  process.exitCode = 0;
   const origCwd = process.cwd;
   process.cwd = () => cwd;
   try {
     cli.parse(["node", "gk", ...args], { run: true });
   } finally {
     console.log = origLog;
-    process.exit = origExit;
     process.cwd = origCwd;
   }
-  return { stdout: logs.join("\n"), code: exit };
+  const code = process.exitCode;
+  process.exitCode = origExitCode;
+  return { stdout: logs.join("\n"), code };
 }
 
 describe("gk models", () => {
@@ -50,8 +48,8 @@ describe("gk models", () => {
     expect(code).toBe(0);
     const parsed = JSON.parse(stdout);
     expect(parsed.status).toBe("ok");
-    expect(parsed.data.opus).toBe(CURSOR_MODEL_DEFAULTS.opus);
-    expect(parsed.data.sonnet).toBe(CURSOR_MODEL_DEFAULTS.sonnet);
+    expect(parsed.data.opus).toBe(TARGET_MODEL_DEFAULTS.cursor.opus);
+    expect(parsed.data.sonnet).toBe(TARGET_MODEL_DEFAULTS.cursor.sonnet);
   });
 
   test("models cursor set writes an override file", () => {
@@ -72,7 +70,7 @@ describe("gk models", () => {
     expect(code).toBe(0);
     const parsed = JSON.parse(stdout);
     expect(parsed.data.sonnet).toBe("Claude Sonnet 4.5");
-    expect(parsed.data.opus).toBe(CURSOR_MODEL_DEFAULTS.opus);
+    expect(parsed.data.opus).toBe(TARGET_MODEL_DEFAULTS.cursor.opus);
   });
 
   test("models cursor garbage exits nonzero with status fail", () => {

@@ -104,7 +104,68 @@ describe("ledger → consolidate", () => {
 
   test("zero runs is a clean no-op", () => {
     const result = consolidate(cwd, "2026-09-03T12:00:00.000Z");
-    expect(result).toEqual({ runs: 0, patterns: 0, suggestions: 0, links: 0, pruned: 0 });
+    expect(result).toEqual({ runs: 0, patterns: 0, suggestions: 0, links: 0, pruned: 0, folded: 0 });
+  });
+
+  test("write gate folds same-shape near-duplicates but never a longer chain into its prefix", () => {
+    // Retry loops produce same-token-set sequences: [plan,build,plan,verify]
+    // and [plan,build,build,verify] both tokenize to {plan,build,verify} —
+    // same kind, same member count, jaccard 1.0 → the gate folds them.
+    // But [plan,build,plan] (3 members) must NOT fold into [plan,build]
+    // (2 members) despite identical tokens: different shapes drive different
+    // suggestions (3-member chains → capture-skill).
+    const runOnce = (day: number, seq: string[]) => {
+      const at = `2026-09-0${day}T10:00:00.000Z`;
+      startRun(cwd, join(cwd, "graph.yaml"), at);
+      for (const [wave, node] of seq.entries()) {
+        appendNode(
+          cwd,
+          { node, wave, agent: "a", model: "sonnet", status: "ok", evidence: [node], duration_ms: 3, notes: null },
+          at,
+        );
+      }
+      endRun(cwd, "merged", at);
+    };
+    const seqA = ["plan", "build", "plan", "verify"];
+    const seqB = ["plan", "build", "build", "verify"];
+    runOnce(1, seqA);
+    runOnce(2, seqA);
+    runOnce(3, seqA);
+    runOnce(4, seqB);
+    runOnce(5, seqB);
+    runOnce(6, seqB);
+
+    const result = consolidate(cwd, "2026-09-07T12:00:00.000Z");
+    // Three folds: the 4-member twins plus the two 3-member twin pairs
+    // ([p,b,p]/[p,b,b] and [b,p,v]/[b,b,v] — identical token sets each).
+    expect(result.folded).toBe(3);
+
+    const patternsDir = join(cwd, ".graphkit", "memory", "patterns");
+    const fms = readdirSync(patternsDir).map(
+      (f) =>
+        YAML.parse(readFileSync(join(patternsDir, f), "utf-8").match(/^---\n([\s\S]*?)\n---/)![1]) as {
+          kind: string;
+          members: string[];
+          count: number;
+          runs: string[];
+          sources: { resource: string }[];
+        },
+    );
+    const seqs = fms.filter((p) => p.kind === "node-sequence");
+
+    // Folded 3-member twin: one survivor, count and runs merged across both seqs.
+    const three = seqs.filter((p) => p.members.length === 3 && p.members[0] === "plan" && p.members[1] === "build");
+    expect(three.length).toBe(1);
+    expect(three[0].count).toBe(6);
+    expect(three[0].runs.length).toBe(6);
+    expect(three[0].sources.length).toBe(6);
+    expect(three[0].sources.every((s) => s.resource.startsWith("run:"))).toBe(true);
+
+    // The guard: [plan,build] (2 members) survives as its own pattern — the
+    // identical-token 3-member chain was not folded into it.
+    const two = seqs.filter((p) => p.members.length === 2 && p.members[0] === "plan" && p.members[1] === "build");
+    expect(two.length).toBe(1);
+    expect(two[0].members).toEqual(["plan", "build"]);
   });
 
   test("stale pattern files whose signature no longer appears are pruned", () => {

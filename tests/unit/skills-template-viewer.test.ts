@@ -65,7 +65,9 @@ describe("gk-init-graph skill", () => {
   });
 
   test("overwrite approval + materialize + validate", () => {
-    expect(claude).toContain("Refuse an existing `graph.yaml` unless the user explicitly approves replacement");
+    expect(claude).toContain(
+      "Refuse to overwrite an existing root `graph.yaml` unless the user explicitly approves replacement",
+    );
     expect(claude).toContain("gk graph new");
     expect(claude).toContain("gk validate graph.yaml --json");
   });
@@ -110,10 +112,10 @@ describe("gk-visualize skill", () => {
     expect(claude).toContain("Cap at 5 cycles");
   });
 
-  test("no interactive viewer remnants", () => {
-    expect(claude).not.toContain("127.0.0.1");
-    expect(claude).not.toContain("Server-Sent Events");
-    expect(cursor).not.toContain("127.0.0.1");
+  test("viewer is legacy fallback, archify stays primary", () => {
+    expect(claude).toContain("Bundled live viewer (legacy)");
+    expect(claude).toContain("Prefer the archify HTML output above");
+    expect(cursor).toContain("Bundled live viewer (legacy)");
   });
 
   test("claude/cursor parity", () => {
@@ -121,6 +123,6 @@ describe("gk-visualize skill", () => {
     expect(cursor).toContain("Archify HTML");
     expect(claude).toContain("archify-ir.md");
     expect(cursor).toContain("archify-ir.md");
-    expect(cursor).toContain("gk-visualize --svg");
+    expect(cursor).toContain("/gk:visualize --svg");
   });
 });

@@ -1,16 +1,13 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import YAML from "yaml";
-import type { z } from "zod";
-import type { GraphSchema } from "../schemas/graph.schema.js";
+import type { Graph } from "../schemas/graph.schema.js";
 
 export interface Finding {
   check: string;
   path: string;
   message: string;
 }
-
-export type Graph = z.infer<typeof GraphSchema>;
 
 // Agent names resolve to kebab-case filenames: "Software Architect" → software-architect.md
 export function agentFileName(agent: string): string {
@@ -62,14 +59,6 @@ export function validateGraph(graph: Graph, projectRoot: string): Finding[] {
       }
     }
 
-    // 3. Loop exit: exit_condition is unsupported; enabled loops need stop_when
-    if (node.loop?.exit_condition !== undefined) {
-      findings.push({
-        check: "unsupported-field",
-        path: `nodes.${id}.loop.exit_condition`,
-        message: "loop.exit_condition is not supported by the runtime; only stop_when is honored",
-      });
-    }
     if (node.loop?.enabled && !node.loop.stop_when) {
       findings.push({
         check: "loop-exit",
@@ -78,18 +67,6 @@ export function validateGraph(graph: Graph, projectRoot: string): Finding[] {
       });
     }
   }
-
-  // 3b. Unsupported limits fields: serialized but never consumed by any runtime
-  for (const key of ["max_workers", "max_iterations", "max_findings", "budget_tokens"] as const) {
-    if (graph.limits[key] !== undefined) {
-      findings.push({
-        check: "unsupported-field",
-        path: `limits.${key}`,
-        message: `limits.${key} is not supported by the runtime; remove it or it will be silently ignored`,
-      });
-    }
-  }
-
   // 4. Evidence keys must be portable basenames; gate maps them directly to files
   for (const key of graph.evidence.required_keys) {
     if (key.length === 0 || key === "." || key === ".." || /[\\/]/.test(key)) {
@@ -175,8 +152,8 @@ export function validateGraph(graph: Graph, projectRoot: string): Finding[] {
 
   // 7. eval-gate node role contract
   for (const [id, node] of Object.entries(graph.nodes)) {
-    if ((node as any).role === "eval-gate") {
-      if (!(node as any).eval) {
+    if (node.role === "eval-gate") {
+      if (!node.eval) {
         findings.push({
           check: "eval-gate-config",
           path: `nodes.${id}.eval`,

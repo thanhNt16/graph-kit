@@ -1,6 +1,6 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import type { Graph } from "../compiler/validate.js";
+import type { Graph } from "../schemas/graph.schema.js";
 import { loadCriteria } from "./criteria.js";
 import { fingerprint } from "./fingerprint.js";
 import { type Freshness, freshnessOf, parseMarker } from "./marker.js";

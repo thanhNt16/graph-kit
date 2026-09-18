@@ -1,5 +1,5 @@
 export function createDiamondWorkflow(config) {
-  const { nodes, limits, topology_config } = config;
+  const { nodes, topology_config } = config;
 
   return async function diamond(context) {
     const scoutResult = await context.agent(nodes.scouter.objective, {

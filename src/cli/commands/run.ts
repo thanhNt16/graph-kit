@@ -16,7 +16,7 @@ import { recordRound } from "../../memory/loops.js";
 import { resumeRun } from "../../memory/resume.js";
 import { GraphSchema } from "../../schemas/graph.schema.js";
 import { subcommandsFor } from "../command-registry.js";
-import { fail, ok } from "../output.js";
+import { emit, fail, ok } from "../output.js";
 
 function errCode(e: unknown): { code: string; message: string } {
   const message = String((e as Error)?.message ?? e);
@@ -28,7 +28,7 @@ export function registerRunCommands(cli: CAC) {
   cli
     .command("run [subcommand] [args...]", `Run ledger commands\nSubcommands: ${subcommandsFor("run")}`)
     .option("--graph <path>", "graph.yaml path (default: ./graph.yaml)")
-    .option("--status <status>", "node: ok|fail — end: merged|blocked|failed")
+    .option("--status <status>", "node: ok|fail|skipped — end: merged|blocked|failed")
     .option("--advisor-fired <round>", "record advisor firing for a node")
     .option("--streak <n>", "advisor failure streak")
     .option("--wave <n>", "wave index")
@@ -51,13 +51,13 @@ export function registerRunCommands(cli: CAC) {
       }
       try {
         if (subcommand === "start") {
-          console.log(JSON.stringify(ok(startRun(cwd, opts.graph ?? join(cwd, "graph.yaml")))));
+          emit(ok(startRun(cwd, opts.graph ?? join(cwd, "graph.yaml"))));
           return;
         }
         if (subcommand === "node") {
           const node = Array.isArray(args) ? args[0] : args;
           if (!node) {
-            console.log(JSON.stringify(fail("MISSING_ARG", "node requires a node id")));
+            emit(fail("MISSING_ARG", "node requires a node id"));
             return;
           }
           // Advisor-fired mode needs no --status: the firing itself is the trace line.
@@ -65,12 +65,12 @@ export function registerRunCommands(cli: CAC) {
             const round = Number(opts.advisorFired);
             // tier is derived from the graph's node.advisor.model (spec §5)
             if (!Number.isInteger(round) || round < 1) {
-              console.log(JSON.stringify(fail("BAD_ADVISOR", "--advisor-fired requires an integer round >= 1")));
+              emit(fail("BAD_ADVISOR", "--advisor-fired requires an integer round >= 1"));
               return;
             }
             const streak = opts.streak == null ? null : Number(opts.streak);
             if (streak !== null && (!Number.isInteger(streak) || streak < 1)) {
-              console.log(JSON.stringify(fail("BAD_ADVISOR", "--streak requires an integer >= 1")));
+              emit(fail("BAD_ADVISOR", "--streak requires an integer >= 1"));
               return;
             }
             // Tier source: the ACTIVE RUN's recorded graph (what the run actually executes) so a
@@ -80,30 +80,28 @@ export function registerRunCommands(cli: CAC) {
             const parsed = GraphSchema.safeParse(YAML.parse(readFileSync(graphPath, "utf-8")));
             if (!parsed.success) {
               const issues = parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; ");
-              console.log(JSON.stringify(fail("SCHEMA_INVALID", issues)));
+              emit(fail("SCHEMA_INVALID", issues));
               return;
             }
             const advisor = parsed.data.nodes[String(node)]?.advisor;
             if (!advisor) {
-              console.log(JSON.stringify(fail("BAD_ADVISOR", `node "${node}" has no advisor config in ${graphPath}`)));
+              emit(fail("BAD_ADVISOR", `node "${node}" has no advisor config in ${graphPath}`));
               return;
             }
-            console.log(
-              JSON.stringify(
-                ok(
-                  appendAdvisor(cwd, {
-                    node: String(node),
-                    round,
-                    tier: advisor.model,
-                    streak,
-                  }),
-                ),
+            emit(
+              ok(
+                appendAdvisor(cwd, {
+                  node: String(node),
+                  round,
+                  tier: advisor.model,
+                  streak,
+                }),
               ),
             );
             return;
           }
-          if (opts.status !== "ok" && opts.status !== "fail") {
-            console.log(JSON.stringify(fail("BAD_STATUS", "node requires --status ok|fail")));
+          if (opts.status !== "ok" && opts.status !== "fail" && opts.status !== "skipped") {
+            emit(fail("BAD_STATUS", "node requires --status ok|fail|skipped"));
             return;
           }
           const result = appendNode(cwd, {
@@ -121,35 +119,31 @@ export function registerRunCommands(cli: CAC) {
             duration_ms: opts.durationMs == null ? null : Number(opts.durationMs),
             notes: opts.notes ?? null,
           });
-          console.log(JSON.stringify(ok(result)));
+          emit(ok(result));
           return;
         }
         if (subcommand === "end") {
           const status = opts.status ?? "merged";
           if (!["merged", "blocked", "failed"].includes(status)) {
-            console.log(JSON.stringify(fail("BAD_STATUS", "end requires --status merged|blocked|failed")));
+            emit(fail("BAD_STATUS", "end requires --status merged|blocked|failed"));
             return;
           }
-          console.log(JSON.stringify(ok(endRun(cwd, status))));
+          emit(ok(endRun(cwd, status)));
           return;
         }
         if (subcommand === "resume") {
           const target = Array.isArray(args) ? args[0] : args;
           if (!target) {
-            process.exitCode = 1;
-            console.log(JSON.stringify(fail("MISSING_ARG", "resume requires a run id")));
+            emit(fail("MISSING_ARG", "resume requires a run id"));
             return;
           }
           try {
-            console.log(
-              JSON.stringify(
-                ok(resumeRun(cwd, String(target), { fromNode: opts.fromNode, dryRun: opts.dryRun, force: opts.force })),
-              ),
+            emit(
+              ok(resumeRun(cwd, String(target), { fromNode: opts.fromNode, dryRun: opts.dryRun, force: opts.force })),
             );
           } catch (e) {
-            process.exitCode = 1;
             const { code, message } = errCode(e);
-            console.log(JSON.stringify(fail(code, message)));
+            emit(fail(code, message));
           }
           return;
         }
@@ -157,21 +151,18 @@ export function registerRunCommands(cli: CAC) {
           const arg = Array.isArray(args) ? args[0] : args;
           const idx = Number(arg);
           if (arg == null || arg === "") {
-            process.exitCode = 1;
-            console.log(JSON.stringify(fail("MISSING_ARG", "round requires a loop-group index")));
+            emit(fail("MISSING_ARG", "round requires a loop-group index"));
             return;
           }
           if (!Number.isInteger(idx) || idx < 0) {
-            process.exitCode = 1;
-            console.log(JSON.stringify(fail("BAD_ARG", "round requires an integer loop-group index >= 0")));
+            emit(fail("BAD_ARG", "round requires an integer loop-group index >= 0"));
             return;
           }
           try {
-            console.log(JSON.stringify(ok(recordRound(cwd, idx))));
+            emit(ok(recordRound(cwd, idx)));
           } catch (e) {
-            process.exitCode = 1;
             const { code, message } = errCode(e);
-            console.log(JSON.stringify(fail(code, message)));
+            emit(fail(code, message));
           }
           return;
         }
@@ -190,19 +181,17 @@ export function registerRunCommands(cli: CAC) {
               cursor = null;
             }
           }
-          console.log(JSON.stringify(ok({ active: dir, advisor_events, resumes_chain: chain })));
+          emit(ok({ active: dir, advisor_events, resumes_chain: chain }));
           return;
         }
-        console.log(
-          JSON.stringify(
-            fail("UNKNOWN_RUN_SUBCOMMAND", `Unknown run subcommand "${subcommand}"`, {
-              available: subcommandsFor("run").split(" "),
-            }),
-          ),
+        emit(
+          fail("UNKNOWN_RUN_SUBCOMMAND", `Unknown run subcommand "${subcommand}"`, {
+            available: subcommandsFor("run").split(" "),
+          }),
         );
       } catch (e) {
         const { code, message } = errCode(e);
-        console.log(JSON.stringify(fail(code, message)));
+        emit(fail(code, message));
       }
     });
 }

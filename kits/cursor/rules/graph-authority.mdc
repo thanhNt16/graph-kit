@@ -5,11 +5,11 @@ alwaysApply: true
 
 # Graph Authority
 
-gk owns graph state. The compiled workflow is the execution plan.
+gk owns graph state. The wave structure from graph.yaml is the execution plan.
 
 ## Inviolable Rules
 
 - Never improvise edges or skip nodes at runtime.
-- Never modify topology after compilation — recompile if needed.
-- The workflow script is deterministic: same graph.yaml → same .workflow.js.
-- If a node fails, the workflow handles it (null filter, error boundary) — do not retry outside the declared loop config.
+- Never modify topology after planning; re-plan instead.
+- Execution is deterministic: same graph.yaml, same wave order.
+- If `gk_dispatch_agent` returns `ok:false`, stop the graph. Do not retry outside declared loop config.

@@ -3,8 +3,7 @@ import { mkdirSync, readFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import YAML from "yaml";
 import { compileGraph } from "../../src/compiler/emitter.js";
-import type { Graph } from "../../src/compiler/validate.js";
-import { GraphSchema } from "../../src/schemas/graph.schema.js";
+import { type Graph, GraphSchema } from "../../src/schemas/graph.schema.js";
 
 const FIXTURES = join(import.meta.dir, "..", "..", "kits", "claude", "templates");
 const YAML_FIXTURES = join(import.meta.dir, "..", "fixtures");
@@ -117,5 +116,48 @@ describe("compileGraph", () => {
       expect(output, `${preset} should use createCustomWorkflow`).toContain("createCustomWorkflow");
       expect(output, `${preset} should have execution shim`).toContain("return await _wf(_ctx)");
     }
+  });
+});
+
+describe("GraphSchema strictness", () => {
+  const base = () => ({
+    apiVersion: "graphkit.dev/v2",
+    kind: "Graph",
+    metadata: { name: "strict-test" },
+    topology: "diamond",
+    nodes: {
+      a: { agent: "x", objective: "do", depend_on: [], evidence: ["out"] },
+    },
+  });
+
+  test("top-level `limits` is rejected (field was removed)", () => {
+    const r = GraphSchema.safeParse({ ...base(), limits: { max_workers: 4 } });
+    expect(r.success).toBe(false);
+  });
+
+  test("node `loop.exit_condition` is rejected (renamed stop_when)", () => {
+    const g = base() as Record<string, any>;
+    g.nodes.a.loop = { enabled: true, exit_condition: "done" };
+    const r = GraphSchema.safeParse(g);
+    expect(r.success).toBe(false);
+  });
+
+  test("node `loop.stop_when` + `max_rounds` still parse", () => {
+    const g = base() as Record<string, any>;
+    g.nodes.a.loop = { enabled: true, stop_when: "done", max_rounds: 5 };
+    const r = GraphSchema.safeParse(g);
+    expect(r.success).toBe(true);
+  });
+
+  test("unknown node field is rejected", () => {
+    const g = base() as Record<string, any>;
+    g.nodes.a.bogus_field = 1;
+    expect(GraphSchema.safeParse(g).success).toBe(false);
+  });
+
+  test("metadata unknown key is rejected", () => {
+    const g = base() as Record<string, any>;
+    g.metadata.typo_key = "x";
+    expect(GraphSchema.safeParse(g).success).toBe(false);
   });
 });

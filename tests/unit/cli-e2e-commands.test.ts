@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { cac } from "cac";
@@ -53,6 +53,7 @@ function runCli(args: string[], cwd: string) {
   const origLog = console.log;
   console.log = (...a: unknown[]) => logs.push(a.map(String).join(" "));
   let exitCode = 0;
+  let code = 0;
   const origExit = process.exit;
   process.exit = (c?: number) => {
     exitCode = c ?? 1;
@@ -65,8 +66,10 @@ function runCli(args: string[], cwd: string) {
     console.log = origLog;
     process.exit = origExit;
     process.cwd = origCwd;
+    code = exitCode || ((process.exitCode as number | undefined) ?? 0);
+    process.exitCode = 0; // emit-fail sets exitCode=1; reset so later tests start clean
   }
-  return { stdout: logs.join("\n"), code: exitCode };
+  return { stdout: logs.join("\n"), code };
 }
 
 describe("CLI end-to-end: template pack/list/show", () => {
@@ -212,5 +215,54 @@ describe("CLI end-to-end: inventory registration", () => {
     const parsed = JSON.parse(stdout);
     expect(parsed.status).toBe("fail");
     expect(parsed.error.code).toBe("BAD_TARGET");
+  });
+});
+
+describe("CLI end-to-end: gk new guards", () => {
+  let root: string;
+  let cwd: string;
+
+  beforeEach(() => {
+    root = join(tmpdir(), `gk-new-cli-${process.pid}-${Date.now()}`);
+    cwd = join(root, "proj");
+    mkdirSync(cwd, { recursive: true });
+  });
+
+  afterEach(() => {
+    process.exitCode = 0;
+    rmSync(root, { recursive: true, force: true });
+  });
+
+  test("missing --dir emits exactly one MISSING_DIR envelope and no crash", () => {
+    const { stdout, code } = runCli(["new"], cwd);
+    expect(code).toBe(1);
+    const lines = stdout.trim().split("\n").filter(Boolean);
+    expect(lines.length).toBe(1); // one envelope — no stack trace, no second emit
+    const parsed = JSON.parse(lines[0]);
+    expect(parsed.status).toBe("fail");
+    expect(parsed.error.code).toBe("MISSING_DIR");
+  });
+
+  test("non-empty --dir emits DIR_NOT_EMPTY and installs nothing", () => {
+    const target = join(root, "occupied");
+    mkdirSync(target, { recursive: true });
+    writeFileSync(join(target, "keep.txt"), "mine");
+    const { stdout, code } = runCli(["new", "--dir", target], cwd);
+    expect(code).toBe(1);
+    const parsed = JSON.parse(stdout.trim());
+    expect(parsed.status).toBe("fail");
+    expect(parsed.error.code).toBe("DIR_NOT_EMPTY");
+    // Guard must actually stop the install — no kit dirs, user file intact.
+    expect(existsSync(join(target, ".claude"))).toBe(false);
+    expect(readFileSync(join(target, "keep.txt"), "utf-8")).toBe("mine");
+  });
+
+  test("invalid --target emits BAD_TARGET before touching the directory", () => {
+    const target = join(root, "fresh");
+    const { stdout, code } = runCli(["new", "--dir", target, "--target", "bogus"], cwd);
+    expect(code).toBe(1);
+    const parsed = JSON.parse(stdout.trim());
+    expect(parsed.error.code).toBe("BAD_TARGET");
+    expect(existsSync(target)).toBe(false);
   });
 });

@@ -21,6 +21,7 @@ function runCli(args: string[], cwd: string) {
   const origLog = console.log;
   console.log = (...a: unknown[]) => logs.push(a.map(String).join(" "));
   let exitCode = 0;
+  let code = 0;
   const origExit = process.exit;
   process.exit = (c?: number) => {
     exitCode = c ?? 1;
@@ -34,8 +35,10 @@ function runCli(args: string[], cwd: string) {
     console.log = origLog;
     process.exit = origExit;
     process.chdir(origCwd);
+    code = exitCode || ((process.exitCode as number | undefined) ?? 0);
+    process.exitCode = 0; // emit-fail sets exitCode=1; reset so later tests start clean
   }
-  return { stdout: logs.join("\n"), code: exitCode, error };
+  return { stdout: logs.join("\n"), code, error };
 }
 
 const MINIMAL_GRAPH = `apiVersion: graphkit.dev/v2

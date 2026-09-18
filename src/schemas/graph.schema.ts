@@ -1,8 +1,10 @@
 import { z } from "zod";
+import { TIERS } from "../targets/types.js";
 import { EvalConfig } from "./eval.schema.js";
 import { MemoryConfig } from "./memory.schema.js";
+import { TOPOLOGY_NAMES } from "./topology/index.js";
 
-const NodeRef = z.enum(["opus", "sonnet", "haiku", "fable"]);
+const NodeRef = z.enum(TIERS);
 
 // Constraints are written in YAML as a list of single-key maps:
 //   constraints:
@@ -22,7 +24,6 @@ const LoopConfig = z
     enabled: z.boolean().default(false),
     stop_when: z.string().optional(),
     max_rounds: z.number().int().min(1).default(3),
-    exit_condition: z.string().optional(),
   })
   .strict();
 const AdvisorConfig = z
@@ -33,10 +34,31 @@ const AdvisorConfig = z
   })
   .strict();
 
+// Retries cover transient dispatch failures only (timeout, crash, transport);
+// prompt/parse/validation errors are never retried — see gk-execute SKILL.md.
+const RetryConfig = z
+  .object({
+    max_attempts: z.number().int().min(1).default(1),
+    initial_interval_ms: z.number().int().min(1).default(1000),
+    backoff: z.number().min(1).default(2),
+    non_retryable: z.array(z.string()).default([]),
+  })
+  .strict();
+
+// The orchestrator suspends the run for human approval before dispatching the
+// node; approval/rejection happens in conversation, resume via `gk run resume`.
+const GateConfig = z
+  .object({
+    question: z.string().min(1),
+    details: z.string().min(1).optional(),
+  })
+  .strict();
+
 const FanOutConfig = z
   .object({
     briefs_from: z.string().min(1),
     template: z.string().min(1).default("{brief.body}"),
+    reduce: z.enum(["append", "merge", "vote"]).default("append"),
   })
   .strict();
 
@@ -63,13 +85,23 @@ const NodeDefSchema = z
     skills: z.array(z.string()).default([]),
     refs: z.array(RefSchema).default([]),
     depend_on: z.array(z.string()).default([]),
-    loop: LoopConfig.optional().default(() => ({ enabled: false, max_rounds: 3 })),
+    loop: LoopConfig.optional(),
     constraints: z.array(ConstraintValue).default([]),
     evidence: z.array(z.string()).default([]),
     role: z.string().optional(),
     eval: EvalConfig.optional(),
     advisor: AdvisorConfig.optional(),
     fan_out: FanOutConfig.optional(),
+    // Natural-language predicate over upstream node results; judged by the
+    // orchestrator (same pattern as stop_when). False → node is skipped.
+    when: z.string().min(1).optional(),
+    // Advisory cap on injected upstream context; the orchestrator compacts
+    // oversized inputs and spills the full text to an artifact file.
+    budget_tokens: z.number().int().positive().optional(),
+    retry: RetryConfig.optional(),
+    gate: GateConfig.optional(),
+    // Scales fan-out width, budgets, and loop bounds (see gk-execute SKILL.md).
+    effort: z.enum(["light", "standard", "deep"]).default("standard"),
   })
   .strict()
   .superRefine((n, ctx) => {
@@ -81,15 +113,6 @@ const NodeDefSchema = z
       });
     }
   });
-
-const LimitsSchema = z
-  .object({
-    max_workers: z.number().int().positive().optional(),
-    max_iterations: z.number().int().positive().optional(),
-    max_findings: z.number().int().positive().optional(),
-    budget_tokens: z.number().int().positive().optional(),
-  })
-  .strict();
 
 const EvidenceSchema = z
   .object({
@@ -115,31 +138,19 @@ const OutputSchema = z
   })
   .strict();
 
-const TopologyName = z.enum([
-  "diamond",
-  "classify-and-act",
-  "adversarial-verification",
-  "loop-until-done",
-  "generate-and-filter",
-  "tournament",
-  "memory-augmented",
-  "custom",
-  "sdd",
-  "superpowers",
-  "research-and-build",
-]);
-
-type NodeDef = z.infer<typeof NodeDefSchema>;
-
-const GraphSchema = z
+export const GraphSchema = z
   .object({
     apiVersion: z.string().default("graphkit.dev/v2"),
     kind: z.literal("Graph").default("Graph"),
-    metadata: z.object({
-      name: z.string(),
-      description: z.string().optional(),
-    }),
-    topology: TopologyName,
+    metadata: z
+      .object({
+        name: z.string(),
+        description: z.string().optional(),
+        // Read by the session-graph store (`gk graph list`).
+        task: z.string().optional(),
+      })
+      .strict(),
+    topology: z.enum(TOPOLOGY_NAMES),
     inputs: z
       .record(
         z.string(),
@@ -151,7 +162,6 @@ const GraphSchema = z
       )
       .default({}),
     nodes: z.record(z.string(), NodeDefSchema).default({}),
-    limits: LimitsSchema.optional().default(() => ({})),
     evidence: EvidenceSchema.optional().default(() => ({
       required_keys: [],
       format: "markdown" as const,
@@ -247,4 +257,5 @@ const GraphSchema = z
     }
   });
 
-export { ConstraintValue, GraphSchema, LoopConfig, NodeDefSchema, RefSchema, TopologyName };
+type NodeDef = z.infer<typeof NodeDefSchema>;
+export type Graph = z.infer<typeof GraphSchema>;

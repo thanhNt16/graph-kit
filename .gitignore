@@ -21,3 +21,5 @@ raw/
 AGENTS.md
 updates.html
 .worktrees/
+.tmp-*/
+build/

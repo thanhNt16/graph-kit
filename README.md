@@ -7,8 +7,6 @@
 [![CI](https://github.com/thanhNt16/graph-kit/actions/workflows/ci.yml/badge.svg)](https://github.com/thanhNt16/graph-kit/actions/workflows/ci.yml)
 [![Release](https://github.com/thanhNt16/graph-kit/actions/workflows/release.yml/badge.svg)](https://github.com/thanhNt16/graph-kit/releases/latest)
 [![GitHub Pages](https://img.shields.io/badge/docs-pages-2ea043?logo=githubpages)](https://thanhnt16.github.io/graph-kit/)
-[![Tests](https://img.shields.io/badge/tests-575_passing-2ea043)](https://github.com/thanhNt16/graph-kit/actions/workflows/ci.yml)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 GraphKit gives Claude Code, Cursor, OpenCode, Codex CLI, and Pi one deterministic execution and verification layer: 11 canonical topologies, wave-ordered subagent dispatch, worktree-isolated parallel edits, machine-checked evidence gates, and durable resume across crashes.
 
@@ -109,6 +107,8 @@ your-project/
     ├── skills/                      # 13 session skills (brainstorm, execute, gate...)
     └── rules/                       # host-native constraints & guardrails
 ```
+
+> **Optional backend:** `gk graph index|search|ask|trace|query` and `gk memory index|trace` require a running `@graphkit/codebase-memory-mcp` server (set `CBM_CMD` to its binary). That package is not yet published to npm — without it these commands exit with a clear `CBM_UNAVAILABLE` error. Everything else works standalone.
 
 ---
 
@@ -316,24 +316,26 @@ One `gk init` command configures all five host targets:
 ```text
 $ gk --help
 
-  gk/0.3.21
+  gk/0.3.0
 
   Usage:
     $ gk <command> [options]
 
   Commands:
-    init                             Install GraphKit into the current project
-    new                              Scaffold a new project with GraphKit
-    gate [file]                      Deterministic evidence gate: MERGE/BLOCK
-    validate [file]                  Validate graph.yaml against 9 static rules
-    compile [file]                   Compile graph.yaml to .workflow.js (Claude)
-    graph [subcommand]               Graph operations (ascii, svg, waves, new...)
-    evidence [subcommand]            Evidence management (add, report)
-    run [subcommand]                 Run ledger (start, node, round, resume, end)
-    template [subcommand]            Template gallery (list, materialize, pack)
-    memory [subcommand]              Project memory (recall, touch, consolidate)
-    inventory                        List installed agents, skills, and tools
-    status                           Active run metadata and evidence coverage
+    init                             Install the GraphKit kit into the current project
+    new                              Scaffold a new project with the GraphKit kit
+    gate [file]                      Deterministic evidence gate: MERGE/BLOCK over required evidence keys
+    validate [file]                  Validate a graph.yaml
+    compile [file]                   Compile graph.yaml to a .workflow.js script
+    graph [subcommand] [args...]     Graph lifecycle commands
+    memory [subcommand] [args...]  Memory commands
+    models [subcommand] [args...]    Per-target model mapping commands
+    template [subcommand] [args...]  Package, list, inspect, and materialize reusable GraphTemplates
+    inventory                        Inventory installed agents, skills, tools, and MCP servers
+    evidence [subcommand] [args...]  Evidence commands
+    status                           Summarize active graph run and evidence coverage
+    run [subcommand] [args...]       Run ledger commands
+    suggest                          Show ranked workflow suggestions from memory
 ```
 
 ---

@@ -1,8 +1,6 @@
 ---
 name: gk:evidence
-description: Produce a markdown evidence report from a completed graph run. Use after gk:run finishes. Trigger: "show evidence", "graph results", "what did the graph produce", "evidence report".
-when_to_use: A graph run has completed (or partially completed) and the user wants the collected evidence.
-user-invocable: true
+description: Produce a markdown evidence report from a completed graph run. Use after gk:execute finishes. Trigger: "show evidence", "graph results", "what did the graph produce", "evidence report".
 disable-model-invocation: false
 ---
 

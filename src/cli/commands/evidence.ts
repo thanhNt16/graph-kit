@@ -5,7 +5,7 @@ import { GraphKitError } from "../../errors.js";
 import { buildViews, renderHtml, renderMarkdown } from "../../evidence/report.js";
 import { addEvidence, maxBytesFromConfig } from "../../evidence/store.js";
 import { subcommandsFor } from "../command-registry.js";
-import { fail, ok } from "../output.js";
+import { emit, fail, ok } from "../output.js";
 import { loadGraph } from "./graph.js";
 
 export function registerEvidenceCommand(cli: CAC) {
@@ -27,8 +27,7 @@ export function registerEvidenceCommand(cli: CAC) {
       if (subcommand === "add") {
         const file = Array.isArray(args) ? args[0] : args;
         if (!file || !opts.key) {
-          console.log(JSON.stringify(fail("MISSING_ARG", "evidence add requires <file> and --key <k>")));
-          process.exit(1);
+          emit(fail("MISSING_ARG", "evidence add requires <file> and --key <k>"));
           return;
         }
         try {
@@ -40,16 +39,13 @@ export function registerEvidenceCommand(cli: CAC) {
             note: opts.note ? String(opts.note) : undefined,
             maxBytes: maxBytesFromConfig(cwd),
           });
-          console.log(JSON.stringify(ok(result)));
+          emit(ok(result));
         } catch (e) {
-          console.log(
-            JSON.stringify(
-              e instanceof GraphKitError
-                ? fail(e.code, e.message, e.details)
-                : fail("EVIDENCE_ERROR", e instanceof Error ? e.message : String(e)),
-            ),
+          emit(
+            e instanceof GraphKitError
+              ? fail(e.code, e.message, e.details)
+              : fail("EVIDENCE_ERROR", e instanceof Error ? e.message : String(e)),
           );
-          process.exit(1);
         }
         return;
       }
@@ -61,29 +57,23 @@ export function registerEvidenceCommand(cli: CAC) {
             const outPath = join(cwd, ".graphkit", "reports", `${graph.metadata.name}-evidence.html`);
             mkdirSync(dirname(outPath), { recursive: true });
             writeFileSync(outPath, renderHtml(graph.metadata.name, views, join(cwd, graph.outputs.evidence_dir)));
-            console.log(JSON.stringify(ok({ written: outPath, keys: views.length })));
+            emit(ok({ written: outPath, keys: views.length }));
           } else {
-            console.log(JSON.stringify(ok({ markdown: renderMarkdown(graph.metadata.name, views), views })));
+            emit(ok({ markdown: renderMarkdown(graph.metadata.name, views), views }));
           }
         } catch (e) {
-          console.log(
-            JSON.stringify(
-              e instanceof GraphKitError
-                ? fail(e.code, e.message, e.details)
-                : fail("EVIDENCE_ERROR", e instanceof Error ? e.message : String(e)),
-            ),
+          emit(
+            e instanceof GraphKitError
+              ? fail(e.code, e.message, e.details)
+              : fail("EVIDENCE_ERROR", e instanceof Error ? e.message : String(e)),
           );
-          process.exit(1);
         }
         return;
       }
-      console.log(
-        JSON.stringify(
-          fail("UNKNOWN_EVIDENCE_SUBCOMMAND", `Unknown evidence subcommand "${subcommand}"`, {
-            hint: `Subcommands: ${subcommandsFor("evidence")}`,
-          }),
-        ),
+      emit(
+        fail("UNKNOWN_EVIDENCE_SUBCOMMAND", `Unknown evidence subcommand "${subcommand}"`, {
+          hint: `Subcommands: ${subcommandsFor("evidence")}`,
+        }),
       );
-      process.exit(1);
     });
 }

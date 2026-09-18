@@ -20,6 +20,7 @@ describe("pattern and suggestion frontmatter", () => {
       count: 3,
       last_seen: "2026-09-02T00:00:00.000Z",
       signature: "1a2b3c4d",
+      sources: [{ resource: "run:r1" }, { resource: "run:r2" }, { resource: "run:r3" }],
     });
     expect(parsed.success).toBe(true);
   });
@@ -40,6 +41,22 @@ describe("pattern and suggestion frontmatter", () => {
     expect(parsed.success).toBe(false);
   });
 
+  test("rejects a generated pattern without run provenance", () => {
+    const parsed = PatternFileSchema.safeParse({
+      ...BASE,
+      id: "p",
+      type: "pattern",
+      kind: "node-sequence",
+      label: "x",
+      members: [],
+      runs: ["r1"],
+      count: 1,
+      last_seen: BASE.created_at,
+      signature: "abcd1234",
+    });
+    expect(parsed.success).toBe(false); // every generated entry must cite ledger runs
+  });
+
   test("accepts a suggestion and defaults status to proposed", () => {
     const parsed = SuggestionFileSchema.safeParse({
       ...BASE,
@@ -48,6 +65,7 @@ describe("pattern and suggestion frontmatter", () => {
       action: "materialize-template",
       rationale: "audit-pr ran 6 times",
       based_on: ["pattern-1a2b3c4d"],
+      sources: [{ resource: "run:r1" }],
     });
     expect(parsed.success).toBe(true);
     if (parsed.success) expect(parsed.data.status).toBe("proposed");

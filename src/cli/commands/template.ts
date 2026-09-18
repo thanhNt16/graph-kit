@@ -1,11 +1,11 @@
 import { existsSync, mkdirSync, renameSync as osRenameSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
 import type { CAC } from "cac";
 import YAML from "yaml";
-import { type Graph, validateGraph } from "../../compiler/validate.js";
+import { validateGraph } from "../../compiler/validate.js";
 import { GraphKitError } from "../../errors.js";
+import type { Graph } from "../../schemas/graph.schema.js";
 import { GraphSchema } from "../../schemas/graph.schema.js";
 import {
   type GraphTemplate,
@@ -15,7 +15,11 @@ import {
   type TemplateValues,
 } from "../../schemas/template.schema.js";
 import { saveSessionGraph, setActiveGraphId } from "../../store/index.js";
-import { fail, ok } from "../output.js";
+import { emit, fail, ok, type Result } from "../output.js";
+import { bundledAssetDir } from "./kit.js";
+
+/** Dispatched leaves of `gk template` — single source for help + unknown-leaf error. */
+const TEMPLATE_SUBCOMMANDS = ["pack", "list", "show", "materialize"] as const;
 
 // ponytail: DI seam mirroring graph.ts — lets tests simulate a rename failure
 // without touching the real filesystem. Restore via _resetWriteSeam.
@@ -43,29 +47,12 @@ type TemplateOrigin = "project" | "global" | "gallery";
 
 /**
  * Bundled templates ship under `<package root>/templates/gallery/`.
- * Same candidate ladder as kit.ts kitSourceDir(): dev tree, npm dist,
- * standalone-binary share layout (~/.graphkit home install), env override last-resort-first.
+ * Candidate ladder shared with kit.ts's kitSourceDir() (dev tree, npm dist,
+ * standalone-binary share layouts, home install, cwd); GK_GALLERY_DIR wins.
  */
 export function galleryTemplatesDir(): string {
   if (process.env.GK_GALLERY_DIR && existsSync(process.env.GK_GALLERY_DIR)) return process.env.GK_GALLERY_DIR;
-  const here = dirname(fileURLToPath(import.meta.url));
-  const exe = dirname(process.execPath);
-  const candidates = [
-    // Dev: src/cli/commands/template.ts -> package root
-    join(here, "..", "..", "..", "templates", "gallery"),
-    // npm package / bun build: dist/index.js -> package root
-    join(here, "templates", "gallery"),
-    join(here, "..", "templates", "gallery"),
-    // Standalone binary: <bin>/../share/gk/templates/gallery (release tarball)
-    join(exe, "..", "share", "gk", "templates", "gallery"),
-    // Standalone binary extracted side-by-side
-    join(exe, "share", "gk", "templates", "gallery"),
-    // User home install
-    join(process.env.HOME ?? "", ".graphkit", "templates", "gallery"),
-    // cwd fallback (repo root)
-    join(process.cwd(), "templates", "gallery"),
-  ];
-  return candidates.find((c) => existsSync(c)) ?? join(here, "..", "..", "..", "templates", "gallery");
+  return bundledAssetDir(join("templates", "gallery"));
 }
 
 /** Resolve a template name against stores, project > global > bundled gallery. */
@@ -159,9 +146,7 @@ function atomicWrite(path: string, content: string): void {
   }
 }
 
-type PackResult =
-  | { status: string; data: Record<string, unknown>; error?: never }
-  | { status: string; error: { code: string; message: string; details?: Record<string, unknown> }; data?: never };
+type PackResult = Result<Record<string, unknown>>;
 
 export function runTemplatePack(opts: {
   cwd: string;
@@ -279,10 +264,6 @@ function levenshtein(a: string, b: string): number {
   return dp[n];
 }
 
-type ShowResult =
-  | { status: string; data: Record<string, unknown>; error?: never }
-  | { status: string; error: { code: string; message: string; details?: Record<string, unknown> }; data?: never };
-
 type MaterializeSuccess = {
   id: string;
   path: string;
@@ -355,7 +336,7 @@ export function materializeTemplate(
   return out;
 }
 
-export function runTemplateShow(opts: { cwd: string; home: string; name: string }): ShowResult {
+export function runTemplateShow(opts: { cwd: string; home: string; name: string }): Result<Record<string, unknown>> {
   try {
     if (!TEMPLATE_NAME_RE.test(opts.name)) {
       return fail("BAD_TEMPLATE_NAME", `Template name must match ^[a-z0-9]+(?:-[a-z0-9]+)*$`, { name: opts.name });
@@ -430,20 +411,18 @@ export function registerTemplateCommands(cli: CAC) {
         if (!subcommand) {
           // Bare `gk template` prints usage and exits 0 — same surface as `gk memory`.
           console.log(
-            `gk template — GraphTemplate commands\n\nUsage:\n  gk template <subcommand> [args...]\n\nSubcommands: list, show, pack, materialize, close\n\nOptions:\n  --name <name>   Template name (pack)\n  --params <json>  Parameters (materialize)\n  --use            Set active session pointer after materialize\n  --force          Overwrite existing template\n  --input <file>   Complete GraphTemplate input file\n  --global         User-global store\n  --json           JSON output (always emitted; flag accepted for parity)`,
+            `gk template — GraphTemplate commands\n\nUsage:\n  gk template <subcommand> [args...]\n\nSubcommands: ${TEMPLATE_SUBCOMMANDS.join(", ")}\n\nOptions:\n  --name <name>   Template name (pack)\n  --params <json>  Parameters (materialize)\n  --use            Set active session pointer after materialize\n  --force          Overwrite existing template\n  --input <file>   Complete GraphTemplate input file\n  --global         User-global store\n  --json           JSON output (always emitted; flag accepted for parity)`,
           );
           return;
         }
         if (subcommand === "pack") {
           const file = argAt(0);
           if (!file) {
-            console.log(JSON.stringify(fail("MISSING_FILE", "template pack requires a <file> argument")));
-            process.exit(1);
+            emit(fail("MISSING_FILE", "template pack requires a <file> argument"));
             return;
           }
           if (!opts.name) {
-            console.log(JSON.stringify(fail("MISSING_NAME", "--name is required")));
-            process.exit(1);
+            emit(fail("MISSING_NAME", "--name is required"));
             return;
           }
           const res = runTemplatePack({
@@ -455,32 +434,28 @@ export function registerTemplateCommands(cli: CAC) {
             force: opts.force,
             global: opts.global,
           });
-          console.log(JSON.stringify(res));
-          if (res.status === "fail") process.exit(1);
+          emit(res);
           return;
         }
         if (subcommand === "list") {
           const res = runTemplateList({ cwd: cwd(), home: home() });
-          console.log(JSON.stringify(res));
+          emit(res);
           return;
         }
         if (subcommand === "show") {
           const name = argAt(0);
           if (!name) {
-            console.log(JSON.stringify(fail("MISSING_NAME", "template show requires a <name> argument")));
-            process.exit(1);
+            emit(fail("MISSING_NAME", "template show requires a <name> argument"));
             return;
           }
           const res = runTemplateShow({ cwd: cwd(), home: home(), name });
-          console.log(JSON.stringify(res));
-          if (res.status === "fail") process.exit(1);
+          emit(res);
           return;
         }
         if (subcommand === "materialize") {
           const name = argAt(0);
           if (!name) {
-            console.log(JSON.stringify(fail("MISSING_NAME", "template materialize requires a <name> argument")));
-            process.exit(1);
+            emit(fail("MISSING_NAME", "template materialize requires a <name> argument"));
             return;
           }
           let params: TemplateValues = {};
@@ -488,13 +463,11 @@ export function registerTemplateCommands(cli: CAC) {
             try {
               params = JSON.parse(opts.params as string) as TemplateValues;
             } catch {
-              console.log(JSON.stringify(fail("BAD_PARAMS", "--params must be a JSON object")));
-              process.exit(1);
+              emit(fail("BAD_PARAMS", "--params must be a JSON object"));
               return;
             }
             if (params === null || typeof params !== "object" || Array.isArray(params)) {
-              console.log(JSON.stringify(fail("BAD_PARAMS", "--params must be a JSON object")));
-              process.exit(1);
+              emit(fail("BAD_PARAMS", "--params must be a JSON object"));
               return;
             }
           }
@@ -502,25 +475,19 @@ export function registerTemplateCommands(cli: CAC) {
             const res = materializeTemplate(name, params, { cwd: cwd(), home: home(), use: Boolean(opts.use) });
             const payload: Record<string, unknown> = { id: res.id, path: res.path, origin: res.origin };
             if (res.active !== undefined) payload.active = res.active;
-            console.log(JSON.stringify(ok(payload)));
+            emit(ok(payload));
           } catch (e) {
-            console.log(
-              JSON.stringify(
-                e instanceof GraphKitError ? fail(e.code, e.message, e.details) : fail("MATERIALIZE_ERROR", String(e)),
-              ),
+            emit(
+              e instanceof GraphKitError ? fail(e.code, e.message, e.details) : fail("MATERIALIZE_ERROR", String(e)),
             );
-            process.exit(1);
           }
           return;
         }
-        console.log(
-          JSON.stringify(
-            fail("UNKNOWN_TEMPLATE_SUBCOMMAND", `Unknown template subcommand "${subcommand}"`, {
-              available: ["pack", "list", "show", "materialize"],
-            }),
-          ),
+        emit(
+          fail("UNKNOWN_TEMPLATE_SUBCOMMAND", `Unknown template subcommand "${subcommand}"`, {
+            available: TEMPLATE_SUBCOMMANDS,
+          }),
         );
-        process.exit(1);
       },
     );
 }

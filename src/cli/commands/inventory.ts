@@ -5,7 +5,7 @@ import type { CAC } from "cac";
 import YAML from "yaml";
 import { getTarget, isValidTarget, listTargets } from "../../targets/index.js";
 import type { TargetId } from "../../targets/types.js";
-import { fail, ok } from "../output.js";
+import { emit, fail, ok } from "../output.js";
 
 export interface InventoryAgent {
   name: string;
@@ -304,16 +304,14 @@ export function registerInventoryCommands(cli: CAC) {
         const valid = listTargets()
           .map((t) => t.id)
           .join(", ");
-        console.log(JSON.stringify(fail("BAD_TARGET", `Invalid target: ${opts.target}. Must be one of: ${valid}`)));
-        process.exit(1);
+        emit(fail("BAD_TARGET", `Invalid target: ${opts.target}. Must be one of: ${valid}`));
         return;
       }
       try {
         const result = runInventory({ target: opts.target });
-        console.log(JSON.stringify(ok(result)));
+        emit(ok(result));
       } catch (e) {
-        console.log(JSON.stringify(fail("INVENTORY_FAILED", String(e))));
-        process.exit(1);
+        emit(fail("INVENTORY_FAILED", String(e)));
       }
     });
 }

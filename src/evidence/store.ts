@@ -1,9 +1,9 @@
 import { createHash } from "node:crypto";
 import { appendFileSync, copyFileSync, existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { basename, extname, join } from "node:path";
-import type { Graph } from "../compiler/validate.js";
 import { GraphKitError } from "../errors.js";
 import { activeRun } from "../memory/ledger.js";
+import type { Graph } from "../schemas/graph.schema.js";
 import { fingerprint } from "./fingerprint.js";
 import { type MarkerMeta, renderMarker } from "./marker.js";
 

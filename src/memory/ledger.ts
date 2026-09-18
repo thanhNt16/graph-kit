@@ -11,7 +11,7 @@ export interface TraceLine {
   wave: number | null;
   agent: string | null;
   model: string | null;
-  status: "ok" | "fail";
+  status: "ok" | "fail" | "skipped";
   evidence: string[];
   duration_ms: number | null;
   notes: string | null;

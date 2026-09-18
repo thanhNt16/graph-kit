@@ -10,7 +10,7 @@ disable-model-invocation: true
 
 1. If `.graphkit/runs/.active` exists: report "RUNNING" + the `current.json` name + which nodes have evidence files (completed) vs which don't (pending). Read `.graphkit/evidence/.index` if present.
 2. If not running but `.graphkit/runs/{name}-result.json` exists: report the last run's verdict + timestamp.
-3. If neither: report "No graph run found. Create one with /gk:init-graph."
+3. If neither: report "No graph run found. Create one with init-graph."
 4. Output is terminal-friendly: one line per node with ✓ completed / ○ pending / ✗ failed.
 
 ## Output

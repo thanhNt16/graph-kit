@@ -93,6 +93,45 @@ describe("reconcileRun", () => {
     expect(reconcileRun(cwd, id).pending).toEqual(["a", "b", "c"]);
     expect(reconcileRun(cwd, id).skipped).toEqual([]);
   });
+  test("skipped status is terminal: node and its dependents never re-dispatch", () => {
+    const { id } = startRun(cwd, join(cwd, "graph.yaml"), "2026-09-04T10:00:00.000Z");
+    writeEvidence(cwd, "a-out");
+    traceOk(cwd, "a", ["a-out"]);
+    // b was gate-rejected (or `when` false) → recorded skipped; c depends on b.
+    appendNode(cwd, {
+      node: "b",
+      wave: 1,
+      agent: "x",
+      model: null,
+      status: "skipped",
+      evidence: [],
+      duration_ms: 0,
+      notes: null,
+    });
+    endRun(cwd, "merged", "2026-09-04T10:05:00.000Z");
+    const rec = reconcileRun(cwd, id);
+    expect(rec.pending).toEqual([]); // nothing re-dispatches
+    expect(rec.satisfied).toEqual(["a"]);
+    const skippedNodes = rec.skipped.map((s) => s.node);
+    expect(skippedNodes).toContain("b");
+    expect(skippedNodes).toContain("c"); // dependent of a skipped node
+  });
+  test("skipped node does not count as a run failure", () => {
+    startRun(cwd, join(cwd, "graph.yaml"), "2026-09-04T10:00:00.000Z");
+    appendNode(cwd, {
+      node: "a",
+      wave: 0,
+      agent: "x",
+      model: null,
+      status: "skipped",
+      evidence: [],
+      duration_ms: 0,
+      notes: null,
+    });
+    const summary = endRun(cwd, "merged", "2026-09-04T10:05:00.000Z");
+    expect(summary.failures).toBe(0);
+    expect(summary.node_count).toBe(1);
+  });
   test("graph changed since run → RESUME_GRAPH_DRIFT", () => {
     const { id } = startRun(cwd, join(cwd, "graph.yaml"), "2026-09-04T10:00:00.000Z");
     endRun(cwd, "failed", "2026-09-04T10:05:00.000Z");
@@ -196,7 +235,6 @@ describe("deriveResumeGraph", () => {
       enabled: true,
       stop_when: undefined,
       max_rounds: 4,
-      exit_condition: undefined,
     });
     expect(derived.nodes.b!.advisor).toEqual({ model: "fable", after_failed_rounds: 2, max_calls: 1 });
   });
@@ -227,7 +265,7 @@ describe("deriveResumeGraph", () => {
     traceFail(cwd, "b");
     endRun(cwd, "failed", "2026-09-04T10:05:00.000Z");
     const derived = deriveResumeGraph(reconcileRun(cwd, id), id);
-    expect(derived.nodes.b!.fan_out).toEqual({ briefs_from: "a", template: "{brief.body}" });
+    expect(derived.nodes.b!.fan_out).toEqual({ briefs_from: "a", template: "{brief.body}", reduce: "append" });
   });
   test("loops group split across boundary: nodes filtered to pending, gate_evidence pruned, emptied groups dropped", () => {
     const graph =

@@ -1,12 +1,14 @@
 # Topology Routing
 
+1. "audit", "review", or "verify": suggest **diamond**.
+2. "triage", "route", or "categorize": suggest **classify-and-act**.
+3. "research", "discover", or "find": suggest **loop-until-done**.
+4. "brainstorm", "ideas", or "naming": suggest **generate-and-filter**.
+5. "compare", "rank", or "evaluate options": suggest **tournament**.
+6. Ambiguous: show the top two options and ask.
+
 Decision tree for suggesting topology in `/gk:init-graph`.
 
 ## Rules
 
-1. User says "audit" or "review" or "verify" → suggest **diamond** (fan-out workers + verification)
-2. User says "triage" or "route" or "categorize" → suggest **classify-and-act**
-3. User says "research" or "discover" or "find" → suggest **loop-until-done**
-4. User says "brainstorm" or "ideas" or "naming" → suggest **generate-and-filter** (keep best K)
-5. User says "compare" or "rank" or "evaluate options" → suggest **tournament**
-6. If ambiguous, show top 2 options with brief descriptions and let user pick.
+

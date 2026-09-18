@@ -2,40 +2,28 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import type { CAC } from "cac";
 import YAML from "yaml";
-import { CBM_UNAVAILABLE_MSG, type CbmClient, createCbmClient } from "../../cbm/client.js";
+import { CBM_UNAVAILABLE_MSG, type CbmClient } from "../../cbm/client.js";
 import type { QueryResult, SearchResult, TraceResult } from "../../cbm/contract.js";
-import { indexProject } from "../../cbm/index.js";
 import { routeAndRetrieve } from "../../cbm/route.js";
 import { compileGraph } from "../../compiler/emitter.js";
-import { type Graph, validateGraph } from "../../compiler/validate.js";
+import { validateGraph } from "../../compiler/validate.js";
 import { GraphKitError } from "../../errors.js";
+import type { Graph } from "../../schemas/graph.schema.js";
 import { GraphSchema } from "../../schemas/graph.schema.js";
 import { getTopologyConfigKeys, TOPOLOGY_NAMES, type TopologyName } from "../../schemas/topology/index.js";
 import { getActiveGraphId, listSessionGraphs, loadActiveGraph, setActiveGraphId } from "../../store/index.js";
 import { renderAscii } from "../ascii.js";
+import { seamClientFactory, seamIndexProject } from "../cbm-seam.js";
 import { subcommandsFor } from "../command-registry.js";
-import { fail, ok } from "../output.js";
+import { topoWaves } from "../graph-waves.js";
+import { emit, fail, ok } from "../output.js";
 import { renderSvg } from "../svg.js";
 import { templatesDir } from "./kit.js";
-
-// ponytail: DI seam for tests — avoids module-mock bleed across test files.
-let _cbmClientFactory: () => CbmClient = () => createCbmClient();
-let _indexProjectFn: typeof indexProject = indexProject;
-/** @internal test seam — inject client + index implementations. */
-export function _setCbmSeam(opts: { clientFactory?: () => CbmClient; indexProject?: typeof indexProject }) {
-  if (opts.clientFactory) _cbmClientFactory = opts.clientFactory;
-  if (opts.indexProject) _indexProjectFn = opts.indexProject;
-}
-/** @internal test seam — restore real implementations. */
-export function _resetCbmSeam() {
-  _cbmClientFactory = () => createCbmClient();
-  _indexProjectFn = indexProject;
-}
 
 // Own the create→call→close lifecycle so a thrown call can't leak the spawned
 // CBM child process (mirrors memory.ts indexMemory's try/finally).
 async function cbmCall<T>(fn: (client: CbmClient) => Promise<T>): Promise<T> {
-  const client = _cbmClientFactory();
+  const client = seamClientFactory()();
   try {
     return await fn(client);
   } finally {
@@ -618,18 +606,12 @@ export function registerGraphCommands(cli: CAC) {
         const graph = file ? loadGraph(file) : resolveBareValidateGraph();
         const findings = validateGraph(graph, process.cwd());
         if (findings.length > 0) {
-          console.log(JSON.stringify(fail("VALIDATION_FAILED", "graph has findings", { findings })));
-          process.exit(1);
+          emit(fail("VALIDATION_FAILED", "graph has findings", { findings }));
           return;
         }
-        console.log(JSON.stringify(ok({ valid: true, topology: graph.topology })));
+        emit(ok({ valid: true, topology: graph.topology }));
       } catch (e) {
-        console.log(
-          JSON.stringify(
-            e instanceof GraphKitError ? fail(e.code, e.message, e.details) : fail("VALIDATE_ERROR", String(e)),
-          ),
-        );
-        process.exit(1);
+        emit(e instanceof GraphKitError ? fail(e.code, e.message, e.details) : fail("VALIDATE_ERROR", String(e)));
       }
     });
 
@@ -642,8 +624,7 @@ export function registerGraphCommands(cli: CAC) {
         const graph = loadGraph(file ?? join(process.cwd(), "graph.yaml"));
         const findings = validateGraph(graph, process.cwd());
         if (findings.length > 0) {
-          console.log(JSON.stringify(fail("VALIDATION_FAILED", "fix findings before compile", { findings })));
-          process.exit(1);
+          emit(fail("VALIDATION_FAILED", "fix findings before compile", { findings }));
           return;
         }
         const script = compileGraph(graph, templatesDir());
@@ -651,22 +632,16 @@ export function registerGraphCommands(cli: CAC) {
           opts.output ?? join(process.cwd(), ".claude", "workflows", `${graph.metadata.name}.workflow.js`);
         mkdirSync(dirname(outPath), { recursive: true });
         writeFileSync(outPath, script);
-        // F9: human mode voices the artifact path so the build is visible; --json stays structured.
-        if (opts.json) {
-          console.log(JSON.stringify(ok({ compiled: outPath, topology: graph.topology })));
-        } else {
-          console.log(`compiled ${outPath}`);
-        }
+        emit(ok({ compiled: outPath, topology: graph.topology }));
       } catch (e) {
-        console.log(JSON.stringify(fail("COMPILE_ERROR", String(e))));
-        process.exit(1);
+        emit(fail("COMPILE_ERROR", String(e)));
       }
     });
 
   cli
     .command("graph [subcommand] [args...]", `Graph lifecycle commands\nSubcommands: ${subcommandsFor("graph")}`)
     .option("--json", "JSON output")
-    .action((subcommand: string | undefined, args: string | string[] | undefined, opts: { json?: boolean }) => {
+    .action((subcommand: string | undefined, args: string | string[] | undefined, _opts: { json?: boolean }) => {
       if (!subcommand) {
         // Bare `gk graph` prints usage and exits 0 — same surface as `gk memory`.
         console.log(
@@ -684,15 +659,7 @@ export function registerGraphCommands(cli: CAC) {
             config_keys: getTopologyConfigKeys(name),
           };
         });
-        if (opts.json) {
-          console.log(JSON.stringify(ok({ topologies })));
-        } else {
-          const nameW = Math.max("name".length, ...topologies.map((t) => t.name.length));
-          console.log(`${"name".padEnd(nameW)}  description`);
-          for (const t of topologies) {
-            console.log(`${t.name.padEnd(nameW)}  ${t.description}`);
-          }
-        }
+        emit(ok({ topologies }));
       } else if (subcommand === "list") {
         try {
           const skipped: Array<{ id: string; file: string }> = [];
@@ -707,58 +674,26 @@ export function registerGraphCommands(cli: CAC) {
               available: sessions.map((s) => s.id),
             });
           }
-          if (opts.json) {
-            console.log(JSON.stringify(ok({ sessions, active })));
-          } else if (sessions.length === 0) {
-            console.log("no session graphs — run `gk init-graph` or `gk template materialize`");
-          } else {
-            const idW = Math.max("id".length, ...sessions.map((s) => s.id.length));
-            const nameW = Math.max("name".length, ...sessions.map((s) => s.name.length));
-            const taskW = Math.max("task".length, ...sessions.map((s) => (s.task ?? "").length));
-            console.log(
-              `${"id".padEnd(idW)}  ${"name".padEnd(nameW)}  ${"task".padEnd(taskW)}  ${"created".padEnd(24)}  last-run`,
-            );
-            for (const s of sessions) {
-              const mark = s.id === active ? "*" : " ";
-              console.log(
-                `${mark}${s.id.padEnd(idW - 1)}  ${s.name.padEnd(nameW)}  ${(s.task ?? "").padEnd(taskW)}  ${s.createdAt.toISOString().padEnd(24)}  -`,
-              );
-            }
-          }
+          emit(ok({ sessions, active }));
           if (skipped.length > 0) {
             console.warn(
               `warning: skipped ${skipped.length} unparseable session file(s): ${skipped.map((s) => s.file).join(", ")}`,
             );
           }
         } catch (e) {
-          console.log(
-            JSON.stringify(
-              e instanceof GraphKitError ? fail(e.code, e.message, e.details) : fail("LIST_ERROR", String(e)),
-            ),
-          );
-          process.exit(1);
+          emit(e instanceof GraphKitError ? fail(e.code, e.message, e.details) : fail("LIST_ERROR", String(e)));
         }
       } else if (subcommand === "switch") {
         const id = Array.isArray(args) ? args[0] : args;
         try {
           if (!id) {
-            console.log(JSON.stringify(fail("MISSING_ARG", "graph switch requires a session graph id")));
-            process.exit(1);
+            emit(fail("MISSING_ARG", "graph switch requires a session graph id"));
             return;
           }
           setActiveGraphId(id);
-          if (opts.json) {
-            console.log(JSON.stringify(ok({ active: id })));
-          } else {
-            console.log(`active -> ${id}`);
-          }
+          emit(ok({ active: id }));
         } catch (e) {
-          console.log(
-            JSON.stringify(
-              e instanceof GraphKitError ? fail(e.code, e.message, e.details) : fail("SWITCH_ERROR", String(e)),
-            ),
-          );
-          process.exit(1);
+          emit(e instanceof GraphKitError ? fail(e.code, e.message, e.details) : fail("SWITCH_ERROR", String(e)));
         }
       } else if (subcommand === "show") {
         const id = Array.isArray(args) ? args[0] : args;
@@ -784,73 +719,64 @@ export function registerGraphCommands(cli: CAC) {
             resolvedId = active.id;
             resolvedPath = active.path;
           }
-          if (opts.json) {
-            console.log(JSON.stringify(ok({ id: resolvedId, path: resolvedPath, graph: YAML.parse(raw) })));
-          } else {
-            console.log(raw.trimEnd());
-          }
+          emit(ok({ id: resolvedId, path: resolvedPath, graph: YAML.parse(raw) }));
         } catch (e) {
-          console.log(
-            JSON.stringify(
-              e instanceof GraphKitError ? fail(e.code, e.message, e.details) : fail("SHOW_ERROR", String(e)),
-            ),
-          );
-          process.exit(1);
+          emit(e instanceof GraphKitError ? fail(e.code, e.message, e.details) : fail("SHOW_ERROR", String(e)));
         }
       } else if (subcommand === "inspect") {
         const topology = Array.isArray(args) ? args[0] : args;
         if (!topology || !TOPOLOGY_NAMES.includes(topology as TopologyName)) {
-          console.log(
-            JSON.stringify(
-              fail("UNKNOWN_TOPOLOGY", `"${topology ?? ""}" is not a canonical topology`, {
-                available: TOPOLOGY_NAMES,
-              }),
-            ),
+          emit(
+            fail("UNKNOWN_TOPOLOGY", `"${topology ?? ""}" is not a canonical topology`, { available: TOPOLOGY_NAMES }),
           );
-          process.exit(1);
           return;
         }
-        console.log(JSON.stringify(ok({ topology, config_keys: getTopologyConfigKeys(topology as TopologyName) })));
+        emit(ok({ topology, config_keys: getTopologyConfigKeys(topology as TopologyName) }));
       } else if (subcommand === "new") {
         const topology = Array.isArray(args) ? args[0] : args;
         if (!topology || !TOPOLOGY_NAMES.includes(topology as TopologyName)) {
-          console.log(
-            JSON.stringify(
-              fail("UNKNOWN_TOPOLOGY", `"${topology ?? ""}" is not a canonical topology`, {
-                available: TOPOLOGY_NAMES,
-              }),
-            ),
+          emit(
+            fail("UNKNOWN_TOPOLOGY", `"${topology ?? ""}" is not a canonical topology`, { available: TOPOLOGY_NAMES }),
           );
-          process.exit(1);
           return;
         }
         // Emit a valid graph.yaml template for the topology to stdout
         const template = graphTemplate(topology as TopologyName);
         console.log(template);
       } else if (subcommand === "ascii") {
-        // Instant ASCII diagram — no model, no rendering pipeline
+        // Instant ASCII diagram — no model, no rendering pipeline. Validated like
+        // `graph waves` so the renderer sees exactly what the executor would run.
         const file = Array.isArray(args) ? args[0] : args;
         try {
-          const out = renderAscii(file ?? join(process.cwd(), "graph.yaml"));
-          console.log(out);
+          const resolved = file ?? join(process.cwd(), "graph.yaml");
+          const graph = loadGraph(resolved);
+          const findings = validateGraph(graph, process.cwd());
+          if (findings.length > 0) {
+            emit(fail("VALIDATION_FAILED", "graph has findings", { findings }));
+            return;
+          }
+          console.log(renderAscii(graph));
         } catch (e) {
-          console.log(JSON.stringify(fail("ASCII_ERROR", String(e))));
-          process.exit(1);
+          emit(e instanceof GraphKitError ? fail(e.code, e.message, e.details) : fail("ASCII_ERROR", String(e)));
         }
       } else if (subcommand === "svg") {
         const file = Array.isArray(args) ? args[0] : args;
         try {
           const resolved = file ?? join(process.cwd(), "graph.yaml");
-          const svg = renderSvg(resolved);
+          const graph = loadGraph(resolved);
+          const findings = validateGraph(graph, process.cwd());
+          if (findings.length > 0) {
+            emit(fail("VALIDATION_FAILED", "graph has findings", { findings }));
+            return;
+          }
+          const svg = renderSvg(graph);
           const outDir = join(process.cwd(), ".graphkit", "diagrams");
           mkdirSync(outDir, { recursive: true });
-          const graph = YAML.parse(readFileSync(resolved, "utf-8"));
-          const outPath = join(outDir, `${graph.metadata?.name || "graph"}.svg`);
+          const outPath = join(outDir, `${(graph.metadata?.name || "graph").replace(/[^a-zA-Z0-9._-]+/g, "-")}.svg`);
           writeFileSync(outPath, svg);
-          console.log(JSON.stringify(ok({ svg: outPath })));
+          emit(ok({ svg: outPath }));
         } catch (e) {
-          console.log(JSON.stringify(fail("SVG_ERROR", String(e))));
-          process.exit(1);
+          emit(e instanceof GraphKitError ? fail(e.code, e.message, e.details) : fail("SVG_ERROR", String(e)));
         }
       } else if (subcommand === "waves") {
         // Output topological wave structure for direct execution
@@ -861,8 +787,7 @@ export function registerGraphCommands(cli: CAC) {
           const graph = loadGraph(resolved);
           const findings = validateGraph(graph, process.cwd());
           if (findings.length > 0) {
-            console.log(JSON.stringify(fail("VALIDATION_FAILED", "graph has findings", { findings })));
-            process.exit(1);
+            emit(fail("VALIDATION_FAILED", "graph has findings", { findings }));
             return;
           }
           const nodes = graph.nodes || {};
@@ -880,33 +805,17 @@ export function registerGraphCommands(cli: CAC) {
           const hasCurator = curatorName !== null && Object.hasOwn(nodes, curatorName);
           const actionIds = hasCurator ? ids.filter((id) => id !== curatorName) : ids;
 
-          // Kahn's algorithm over action nodes → action waves
-          const completed = new Set<string>();
-          const actionWaves: string[][] = [];
-          while (completed.size < actionIds.length) {
-            const ready = actionIds.filter((id) => {
-              if (completed.has(id)) return false;
-              const deps = nodes[id]?.depend_on || [];
-              return deps.every((d: string) => completed.has(d));
-            });
-            if (ready.length === 0) break;
-            actionWaves.push(ready);
-            ready.forEach((id) => {
-              completed.add(id);
-            });
-          }
-
-          if (completed.size < actionIds.length) {
-            const unresolved = actionIds.filter((id) => !completed.has(id));
-            console.log(
-              JSON.stringify(
-                fail("WAVES_INCOMPLETE", `unresolved nodes after topological sort: ${unresolved.join(", ")}`, {
-                  unresolved,
-                  hint: "cycle or dependency on an excluded node",
-                }),
-              ),
+          // Kahn's algorithm over action nodes → action waves (shared helper so
+          // renderers compute the identical levelization).
+          const actionNodes = Object.fromEntries(actionIds.map((id) => [id, nodes[id]]));
+          const { waves: actionWaves, unresolved } = topoWaves(actionNodes);
+          if (unresolved.length > 0) {
+            emit(
+              fail("WAVES_INCOMPLETE", `unresolved nodes after topological sort: ${unresolved.join(", ")}`, {
+                unresolved,
+                hint: "cycle or dependency on an excluded node",
+              }),
             );
-            process.exit(1);
             return;
           }
 
@@ -954,11 +863,16 @@ export function registerGraphCommands(cli: CAC) {
             tools: nodes[id]?.tools || [],
             skills: nodes[id]?.skills || [],
             refs: nodes[id]?.refs || [],
+            advisor: nodes[id]?.advisor ?? null,
+            fan_out: nodes[id]?.fan_out ?? null,
+            retry: nodes[id]?.retry ?? null,
+            when: nodes[id]?.when ?? null,
+            budget_tokens: nodes[id]?.budget_tokens ?? null,
+            gate: nodes[id]?.gate ?? null,
+            effort: nodes[id]?.effort ?? "standard",
             depend_on: nodes[id]?.depend_on || [],
             loop: nodes[id]?.loop || null,
             evidence: nodes[id]?.evidence || [],
-            advisor: nodes[id]?.advisor ?? null,
-            fan_out: nodes[id]?.fan_out ?? null,
             hooks: nodeHooks,
           });
 
@@ -991,24 +905,18 @@ export function registerGraphCommands(cli: CAC) {
             };
           }
 
-          console.log(JSON.stringify(ok(payload)));
+          emit(ok(payload));
         } catch (e) {
-          console.log(
-            JSON.stringify(
-              e instanceof GraphKitError ? fail(e.code, e.message, e.details) : fail("WAVES_ERROR", String(e)),
-            ),
-          );
-          process.exit(1);
+          emit(e instanceof GraphKitError ? fail(e.code, e.message, e.details) : fail("WAVES_ERROR", String(e)));
         }
       } else if (subcommand === "index") {
         (async () => {
           try {
             const mode = Array.isArray(args) ? (args[0] as "fast" | "moderate" | "full" | undefined) : undefined;
-            const result = await cbmCall((c) => _indexProjectFn(c, { repoPath: process.cwd(), mode }));
-            console.log(JSON.stringify(ok(result)));
+            const result = await cbmCall((c) => seamIndexProject()(c, { repoPath: process.cwd(), mode }));
+            emit(ok(result));
           } catch (e) {
-            console.log(JSON.stringify(cbmFailure(e)));
-            process.exit(1);
+            emit(cbmFailure(e));
           }
         })();
       } else if (subcommand === "search") {
@@ -1016,7 +924,7 @@ export function registerGraphCommands(cli: CAC) {
           try {
             const pattern = Array.isArray(args) ? args[0] : args;
             if (!pattern) {
-              console.log(JSON.stringify(fail("MISSING_ARG", "search requires a pattern argument")));
+              emit(fail("MISSING_ARG", "search requires a pattern argument"));
               return;
             }
             const raw = await cbmCall((c) =>
@@ -1025,10 +933,9 @@ export function registerGraphCommands(cli: CAC) {
                 project: Array.isArray(args) ? args[1] : undefined,
               }),
             );
-            console.log(JSON.stringify(ok(raw)));
+            emit(ok(raw));
           } catch (e) {
-            console.log(JSON.stringify(cbmFailure(e)));
-            process.exit(1);
+            emit(cbmFailure(e));
           }
         })();
       } else if (subcommand === "ask") {
@@ -1036,15 +943,14 @@ export function registerGraphCommands(cli: CAC) {
           try {
             const q = Array.isArray(args) ? args.join(" ") : args;
             if (!q) {
-              console.log(JSON.stringify(fail("MISSING_ARG", "ask requires a natural-language question")));
+              emit(fail("MISSING_ARG", "ask requires a natural-language question"));
               return;
             }
             // project undefined = CBM derives from cwd, same as `graph search`
             const raw = await cbmCall((c) => routeAndRetrieve(c, q));
-            console.log(JSON.stringify(ok(raw)));
+            emit(ok(raw));
           } catch (e) {
-            console.log(JSON.stringify(cbmFailure(e)));
-            process.exit(1);
+            emit(cbmFailure(e));
           }
         })();
       } else if (subcommand === "trace") {
@@ -1052,7 +958,7 @@ export function registerGraphCommands(cli: CAC) {
           try {
             const fn = Array.isArray(args) ? args[0] : args;
             if (!fn) {
-              console.log(JSON.stringify(fail("MISSING_ARG", "trace requires a function_name argument")));
+              emit(fail("MISSING_ARG", "trace requires a function_name argument"));
               return;
             }
             const raw = await cbmCall((c) =>
@@ -1063,10 +969,9 @@ export function registerGraphCommands(cli: CAC) {
                 direction: "both",
               }),
             );
-            console.log(JSON.stringify(ok(raw)));
+            emit(ok(raw));
           } catch (e) {
-            console.log(JSON.stringify(cbmFailure(e)));
-            process.exit(1);
+            emit(cbmFailure(e));
           }
         })();
       } else if (subcommand === "query") {
@@ -1074,7 +979,7 @@ export function registerGraphCommands(cli: CAC) {
           try {
             const q = Array.isArray(args) ? args[0] : args;
             if (!q) {
-              console.log(JSON.stringify(fail("MISSING_ARG", "query requires a Cypher query argument")));
+              emit(fail("MISSING_ARG", "query requires a Cypher query argument"));
               return;
             }
             const raw = await cbmCall((c) =>
@@ -1083,22 +988,15 @@ export function registerGraphCommands(cli: CAC) {
                 project: Array.isArray(args) ? args[1] : undefined,
               }),
             );
-            console.log(JSON.stringify(ok(raw)));
+            emit(ok(raw));
           } catch (e) {
-            console.log(JSON.stringify(cbmFailure(e)));
-            process.exit(1);
+            emit(cbmFailure(e));
           }
         })();
       } else {
-        console.log(
-          JSON.stringify(
-            fail(
-              "UNKNOWN_GRAPH_SUBCOMMAND",
-              `Unknown subcommand "${subcommand}". Available: ${subcommandsFor("graph")}`,
-            ),
-          ),
+        emit(
+          fail("UNKNOWN_GRAPH_SUBCOMMAND", `Unknown subcommand "${subcommand}". Available: ${subcommandsFor("graph")}`),
         );
-        process.exit(1);
       }
     });
 }

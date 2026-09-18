@@ -98,7 +98,11 @@ describe("gk graph waves hook emission", () => {
     }>;
     const exec = nodes.find((n) => n.id === "exec");
     expect(exec?.advisor).toEqual({ model: "opus", after_failed_rounds: 2, max_calls: 2 });
-    expect(exec?.fan_out).toEqual({ briefs_from: "plan", template: "Implement {brief.title}: {brief.body}" });
+    expect(exec?.fan_out).toEqual({
+      briefs_from: "plan",
+      template: "Implement {brief.title}: {brief.body}",
+      reduce: "append",
+    });
     const plan = nodes.find((n) => n.id === "plan");
     expect(plan?.advisor).toBeNull();
     expect(plan?.fan_out).toBeNull();

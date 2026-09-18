@@ -57,17 +57,19 @@ export function applyRecallFilters(entries: RecallEntry[], now: string): RecallE
 // ── the working retriever ────────────────────────────────────────────────────
 // Measured 2026-08-15 (memory-recall eval): CBM search_graph returns 0 hits
 // over markdown-only projects — .md indexes as File/Module shells with no
-// searchable content. Term-overlap × salience over the files themselves is
-// the only working memory retriever; this is it, shared by the CLI and the eval.
+// searchable content. BM25 × salience over the files themselves is the only
+// working memory retriever; shared by the CLI, the explain lens, and the eval.
 
-import { readdirSync, readFileSync } from "node:fs";
-import { resolve as pathResolve } from "node:path";
-import YAML from "yaml";
+import { readdirSync } from "node:fs";
+import { join } from "node:path";
+import { readMemoryFile, tokenize, tokenizeList, walkMemoryFiles } from "../memory/store.js";
 import { MemoryFileSchema } from "../schemas/memory.schema.js";
 
 export interface MemoryDoc extends RecallEntry {
   salience: number;
   terms: Set<string>;
+  /** Within-document term frequencies (BM25 input). */
+  tf: Map<string, number>;
 }
 
 interface LoadedMemories {
@@ -75,6 +77,39 @@ interface LoadedMemories {
   malformed: number;
 }
 
+function termFreqs(text: string): Map<string, number> {
+  const tf = new Map<string, number>();
+  for (const t of tokenizeList(text)) tf.set(t, (tf.get(t) ?? 0) + 1);
+  return tf;
+}
+
+/** Schema-validate frontmatter and build a doc; null = malformed entry. */
+function toDoc(fm: Record<string, unknown>, head: string, body: string, file: string): MemoryDoc | null {
+  // Legacy stores omitted type; infer the historical knowledge type before validation.
+  const candidate = {
+    ...fm,
+    id: typeof fm.id === "string" && fm.id.trim() ? fm.id : file.replace(/^.*\//, "").replace(/\.md$/, ""),
+    type: typeof fm.type === "string" && fm.type.trim() ? fm.type : "knowledge",
+  };
+  const validated = MemoryFileSchema.safeParse(candidate);
+  if (!validated.success) return null;
+  const value = validated.data;
+  const text = `${head}\n${body}`;
+  const tf = termFreqs(text);
+  return {
+    id: value.id,
+    file,
+    valid_from: value.valid_from,
+    valid_to: value.valid_to ?? undefined,
+    expired: value.expired,
+    superseded_by: value.superseded_by ?? undefined,
+    salience: typeof value.salience === "number" ? value.salience : 0.5,
+    terms: new Set(tf.keys()),
+    tf,
+  };
+}
+
+/** Flat single-directory read (the eval fixtures' layout). */
 function readMemories(dir: string): LoadedMemories {
   let files: string[];
   try {
@@ -84,51 +119,37 @@ function readMemories(dir: string): LoadedMemories {
     if (code === "ENOENT" || code === "ENOTDIR") return { docs: [], malformed: 0 };
     throw error;
   }
-
   const docs: MemoryDoc[] = [];
   let malformed = 0;
   for (const file of files.filter((f) => f.endsWith(".md") && f !== "index.md" && f !== "log.md")) {
-    const raw = readFileSync(pathResolve(dir, file), "utf-8");
-    try {
-      const parsedYaml = YAML.parse(raw.match(/^---\n([\s\S]*?)\n---/)?.[1] ?? "{}");
-      const fm = parsedYaml && typeof parsedYaml === "object" ? (parsedYaml as Record<string, unknown>) : {};
-      // Legacy stores omitted type; infer the historical knowledge type before validation.
-      const candidate = {
-        ...fm,
-        id: typeof fm.id === "string" && fm.id.trim() ? fm.id : file.replace(/\.md$/, ""),
-        type: typeof fm.type === "string" && fm.type.trim() ? fm.type : "knowledge",
-      };
-      const validated = MemoryFileSchema.safeParse(candidate);
-      if (!validated.success) {
-        malformed++;
-        continue;
-      }
-      const value = validated.data;
-      docs.push({
-        id: value.id,
-        file,
-        valid_from: value.valid_from,
-        valid_to: value.valid_to ?? undefined,
-        expired: value.expired,
-        superseded_by: value.superseded_by ?? undefined,
-        salience: typeof value.salience === "number" ? value.salience : 0.5,
-        terms: new Set(
-          raw
-            .toLowerCase()
-            .replace(/[^a-z0-9_\s]/g, " ")
-            .split(/\s+/)
-            .filter((t) => t.length > 2),
-        ),
-      });
-    } catch {
+    const { fm, head, body, error } = readMemoryFile(join(dir, file));
+    if (error === "unreadable") continue;
+    const doc = error === "unparseable" ? null : toDoc(fm, head, body, file);
+    if (!doc) {
       malformed++;
+      continue;
     }
+    docs.push(doc);
   }
   return { docs, malformed };
 }
 
-export function loadMemories(dir: string): MemoryDoc[] {
-  return readMemories(dir).docs;
+/** Load the whole store: root + one sublevel (patterns/, suggestions/), with
+ *  store-relative file paths and the real malformed-entry count. */
+export function loadMemories(memDir: string): LoadedMemories {
+  const docs: MemoryDoc[] = [];
+  let malformed = 0;
+  for (const { rel, path } of walkMemoryFiles(memDir)) {
+    const { fm, head, body, error } = readMemoryFile(path);
+    if (error === "unreadable") continue;
+    const doc = error === "unparseable" ? null : toDoc(fm, head, body, rel);
+    if (!doc) {
+      malformed++;
+      continue;
+    }
+    docs.push(doc);
+  }
+  return { docs, malformed };
 }
 
 export interface RecallWithStats {
@@ -138,35 +159,72 @@ export interface RecallWithStats {
 
 export function recallWithStats(dir: string, query: string, k = 5, now = new Date().toISOString()): RecallWithStats {
   const loaded = readMemories(dir);
-  const filtered = applyRecallFilters(rankByOverlap(query, loaded.docs), now) as MemoryDoc[];
+  // rank (BM25×salience) → relative cutoff → validity/supersede filters → top-k
+  // (filters run on the full kept list — supersede resolution needs the
+  // successor even when it ranks low).
+  const kept = applyCutoff(scoreDocs(query, loaded.docs));
+  const filtered = applyRecallFilters(
+    kept.map((s) => s.doc),
+    now,
+  ) as MemoryDoc[];
   return {
     results: filtered.slice(0, k).map((e) => ({ id: e.id, file: e.file, salience: e.salience })),
     malformed: loaded.malformed,
   };
 }
 
-export function rankByOverlap(query: string, docs: MemoryDoc[]): MemoryDoc[] {
-  const q = query
-    .toLowerCase()
-    .split(/\s+/)
-    .filter((t) => t.length > 2);
-  return docs
-    .map((d) => ({ d, s: q.filter((t) => d.terms.has(t)).length * d.salience }))
-    .filter((x) => x.s > 0)
-    .sort((a, b) => b.s - a.s)
-    .map((x) => x.d);
+export interface ScoredDoc {
+  doc: MemoryDoc;
+  score: number;
+  matched: string[];
+}
+
+const BM25_K1 = 1.2;
+const BM25_B = 0.75;
+
+/** Okapi BM25 over the loaded docs (tiny corpus — recompute df per call),
+ *  scaled by each doc's curated salience. Returns docs with score > 0, ranked. */
+export function scoreDocs(query: string, docs: MemoryDoc[]): ScoredDoc[] {
+  const q = [...tokenize(query)];
+  if (q.length === 0 || docs.length === 0) return [];
+  const df = new Map<string, number>();
+  let totalLen = 0;
+  for (const d of docs) {
+    for (const t of d.tf.keys()) df.set(t, (df.get(t) ?? 0) + 1);
+    for (const f of d.tf.values()) totalLen += f;
+  }
+  const avgdl = totalLen / docs.length || 1;
+  const scored = docs.map((d) => {
+    let dl = 0;
+    for (const f of d.tf.values()) dl += f;
+    let bm25 = 0;
+    const matched: string[] = [];
+    for (const t of q) {
+      const f = d.tf.get(t);
+      if (!f) continue;
+      matched.push(t);
+      const dfT = df.get(t) ?? 0;
+      const idf = Math.log(1 + (docs.length - dfT + 0.5) / (dfT + 0.5));
+      bm25 += (idf * f * (BM25_K1 + 1)) / (f + BM25_K1 * (1 - BM25_B + (BM25_B * dl) / avgdl));
+    }
+    return { doc: d, score: bm25 * d.salience, matched };
+  });
+  return scored.filter((s) => s.score > 0).sort((a, b) => b.score - a.score);
+}
+
+/** Hits below this fraction of the top hit's score are distractors — recall
+ *  should return the strong memories, not fill k slots with noise. */
+export const RELATIVE_CUTOFF = 0.3;
+
+/** Keep scored docs within RELATIVE_CUTOFF of the top score. */
+export function applyCutoff(scored: ScoredDoc[], cutoff = RELATIVE_CUTOFF): ScoredDoc[] {
+  if (scored.length === 0) return scored;
+  const floor = scored[0].score * cutoff;
+  return scored.filter((s) => s.score >= floor);
 }
 
 export interface RecallHit {
   id: string;
   file: string;
   salience: number;
-}
-
-/** rank → validity/supersede filters → top-k (filters run on the full ranked
- *  list — supersede resolution needs the successor even when it ranks low). */
-export function recallTopK(dir: string, query: string, k = 5, now = new Date().toISOString()): RecallHit[] {
-  // input is MemoryDoc[]; the filter signatures just carry the base type
-  const filtered = applyRecallFilters(rankByOverlap(query, loadMemories(dir)), now) as MemoryDoc[];
-  return filtered.slice(0, k).map((e) => ({ id: e.id, file: e.file, salience: e.salience }));
 }

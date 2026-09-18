@@ -3,14 +3,15 @@ import { existsSync, mkdirSync, readFileSync, rmSync, unlinkSync, writeFileSync 
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { CbmClient } from "../../cbm/client.js";
-import { _resetMemoryCbmSeam, _setMemoryCbmSeam, indexMemory } from "../../src/cli/commands/memory.js";
+import { resetCbmSeam, setCbmSeam } from "../../src/cli/cbm-seam.js";
+import { indexMemory } from "../../src/cli/commands/memory.js";
 
 const calls: { repoPath: string; name?: string }[] = [];
 const fakeClient = { close: async () => {} } as unknown as CbmClient;
 
 beforeEach(() => {
   calls.length = 0;
-  _setMemoryCbmSeam({
+  setCbmSeam({
     clientFactory: () => fakeClient,
     indexProject: async (_client, opts) => {
       calls.push(opts as { repoPath: string; name?: string });
@@ -18,7 +19,7 @@ beforeEach(() => {
     },
   });
 });
-afterEach(() => _resetMemoryCbmSeam());
+afterEach(() => resetCbmSeam());
 
 describe("gk memory index", () => {
   let cwd: string;

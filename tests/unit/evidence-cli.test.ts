@@ -37,6 +37,7 @@ function runCli(args: string[]) {
   try {
     cli.parse(["node", "gk", ...args], { run: true });
   } finally {
+    code = code || ((process.exitCode as number | undefined) ?? 0);
     process.exitCode = 0; // fail() sets process.exitCode=1 — reset so bun:test exits 0
     console.log = origLog;
     process.exit = origExit;

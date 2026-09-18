@@ -3,9 +3,7 @@ import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { type CAC, cac } from "cac";
-import { registerExecuteCommand } from "../../src/cli/commands/execute.js";
 import { registerStatusCommand } from "../../src/cli/commands/status.js";
-import { registerVisualizeCommand } from "../../src/cli/commands/visualize.js";
 
 function runCli(args: string[], cwd: string, register: (cli: CAC) => void) {
   const cli = cac("gk");
@@ -62,27 +60,5 @@ describe("gk status", () => {
     expect(result.output.data.running).toBe(true);
     expect(result.output.data.run.name).toBe("demo");
     expect(result.output.data.coverage.verdict).toBe("MERGE");
-  });
-});
-
-describe("gk execute/visualize stubs", () => {
-  let root: string;
-  beforeEach(() => {
-    root = join(tmpdir(), `gk-stubs-${process.pid}-${Date.now()}`);
-    mkdirSync(root, { recursive: true });
-  });
-  afterEach(() => {
-    process.exitCode = 0;
-    rmSync(root, { recursive: true, force: true });
-  });
-  test("execute exits 1 with NOT_IMPLEMENTED", () => {
-    const result = runCli(["execute"], root, registerExecuteCommand);
-    expect(result.code).toBe(1);
-    expect(result.output.error.code).toBe("NOT_IMPLEMENTED");
-  });
-  test("visualize exits 1 with NOT_IMPLEMENTED", () => {
-    const result = runCli(["visualize"], root, registerVisualizeCommand);
-    expect(result.code).toBe(1);
-    expect(result.output.error.code).toBe("NOT_IMPLEMENTED");
   });
 });

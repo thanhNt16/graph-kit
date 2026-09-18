@@ -1,8 +1,6 @@
 ---
 name: gk-brainstorm
-description: Refine an existing graph.yaml through interactive dialogue. Use when the user wants to improve their graph definition, adjust agent bindings, add loops or constraints, or explore what topology to use.
-when_to_use: User has an existing graph.yaml and wants to refine it, improve it, or adjust configuration. Trigger: "refine graph", "improve workflow", "brainstorm graph", "adjust graph".
-user-invocable: true
+description: Refine an existing graph.yaml through interactive dialogue. Use when the user wants to improve their graph definition, adjust agent bindings, add loops or constraints, or explore what topology to use. Trigger: "refine graph", "improve workflow", "brainstorm graph", "adjust graph".
 disable-model-invocation: false
 ---
 
@@ -14,6 +12,8 @@ Interactively refine a graph.yaml file through conversation.
 ## Process
 
 1. Read the existing `graph.yaml`.
+   Run `gk suggest --json` and fold relevant suggestions into the proposal: recurring
+   chains suggest sub-graphs, graph-reuse suggests starting from a template.
 2. Run `gk validate graph.yaml --json` to check current state. If there are findings, surface them as the first thing to fix.
 3. Ask focused questions, one at a time:
    - "Which agents should handle which nodes?" → suggest based on topology
@@ -21,7 +21,7 @@ Interactively refine a graph.yaml file through conversation.
    - "Should any nodes have internal loops?" → suggest for research/discovery nodes
    - "Are there constraints needed?" → suggest based on task type
 4. Update `graph.yaml` after each decision.
-5. After all changes, run `gk validate graph.yaml --json` again to confirm it passes before suggesting `/gk:compile`.
+5. After all changes, run `gk validate graph.yaml --json` again to confirm it passes before suggesting `execute`.
 
 ## Key Interactions
 - Suggest model tiering: "The scouter does deep analysis — opus. The verifier just checks file:line refs — haiku. Save budget."

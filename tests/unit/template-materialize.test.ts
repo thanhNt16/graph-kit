@@ -3,7 +3,6 @@ import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import YAML from "yaml";
-import { CLI_COMMANDS } from "../../src/cli/command-registry.js";
 import { materializeTemplate, runTemplatePack } from "../../src/cli/commands/template.js";
 import { getActiveGraphId, setActiveGraphId } from "../../src/store/index.js";
 
@@ -263,11 +262,5 @@ graph:
       const onDisk = YAML.parse(readFileSync(res.path, "utf-8")) as { kind?: string };
       expect(onDisk.kind).toBe("Graph");
     }
-  });
-
-  test("registry exposes the materialize subcommand", () => {
-    const cmd = CLI_COMMANDS.find((c) => c.path === "template materialize");
-    expect(cmd).toBeDefined();
-    expect(cmd?.options.join(" ")).toContain("--use");
   });
 });

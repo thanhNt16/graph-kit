@@ -93,6 +93,8 @@ Run `gk graph topologies` to see all topologies (7 canonical + custom + 3 flow p
 ### Custom topology
 Use `topology: custom` to define any graph shape. The `depend_on` field controls execution order — nodes with no pending deps run in parallel. Node-level loops are supported via `loop: { enabled: true }`.
 
+Node fields (all optional, validated at parse): `fan_out: { briefs_from, template, reduce }` fans one dispatch per item of an upstream JSON-array output (`reduce`: `append`|`merge`|`vote`, default `append`; `briefs_from` must be a `depend_on` ancestor); `retry: { max_attempts, initial_interval_ms, backoff, non_retryable }` for transient dispatch failures; `when: "<predicate>"` skips the node when the judged condition is false; `budget_tokens` caps injected upstream context; `gate: { question, details? }` suspends the run for human approval; `effort: light|standard|deep` scales fan-out width, budgets, and loop bounds.
+
 ### Flow presets
 Pre-built DAGs using custom topology:
 - **sdd** — Spec → Design → Develop → Review cycle

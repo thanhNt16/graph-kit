@@ -1,5 +1,5 @@
 // M4 parity instrument: measures CBM direct vs CBM-via-MCP vs gk CLI search latency
-// Exit 0 always — prints SKIP if CBM_CMD unset
+// Exit 0 on SKIP (CBM_CMD unset) or PASS; exit 1 on FAIL/RENEGOTIATE/error — local dev instrument, not CI.
 
 import { spawn } from "node:child_process";
 import { resolve } from "node:path";
@@ -7,8 +7,7 @@ import { resolve } from "node:path";
 const CBM_CMD = process.env.CBM_CMD;
 const FIXTURES = resolve(import.meta.dir, "..", "eval", "cbm", "code-fixtures");
 const PATTERN = "sampleAdd";
-const _GK_BIN = resolve(import.meta.dir, "..", "node_modules", ".bin", "gk") || "bun";
-const GK_ENTRY = resolve(import.meta.dir, "..", "src", "cli", "index.ts");
+const GK_ENTRY = resolve(import.meta.dir, "..", "src", "index.ts");
 
 if (!CBM_CMD) {
   console.log("CBM not configured — skipping");

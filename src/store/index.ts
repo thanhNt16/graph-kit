@@ -1,8 +1,8 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import YAML from "yaml";
-import type { Graph } from "../compiler/validate.js";
 import { GraphKitError } from "../errors.js";
+import type { Graph } from "../schemas/graph.schema.js";
 import { GraphSchema } from "../schemas/graph.schema.js";
 
 const EXT = ".yaml";

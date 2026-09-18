@@ -2,8 +2,8 @@ import { createHash } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import YAML from "yaml";
-import type { Graph } from "../compiler/validate.js";
 import { parseMarker } from "../evidence/marker.js";
+import type { Graph } from "../schemas/graph.schema.js";
 import { GraphSchema, type LoopGroup } from "../schemas/graph.schema.js";
 import { saveSessionGraph, setActiveGraphId } from "../store/index.js";
 import { activeRun, readRunMeta, readTrace, startRun, type TraceLine } from "./ledger.js";
@@ -144,18 +144,39 @@ export function reconcileRun(
     }
     if (!foreign) satisfied.add(name);
   }
-  const pending = opts.fromNode != null ? [opts.fromNode] : names.filter((n) => !satisfied.has(n));
+  // Nodes recorded `skipped` (gate rejected, `when` false) are terminal: they
+  // must not be re-dispatched on resume, and neither may their dependents —
+  // a skipped dep produces no evidence for downstream nodes to consume.
+  const skippedStatus = new Set<string>();
+  for (const name of names) if (last.get(name)?.status === "skipped") skippedStatus.add(name);
   for (let grew = true; grew; ) {
     grew = false;
     for (const [name, node] of Object.entries(graph.nodes))
-      if (!pending.includes(name) && node.depend_on.some((d) => pending.includes(d))) {
+      if (!skippedStatus.has(name) && node.depend_on.some((d) => skippedStatus.has(d))) {
+        skippedStatus.add(name);
+        grew = true;
+      }
+  }
+  const pending =
+    opts.fromNode != null ? [opts.fromNode] : names.filter((n) => !satisfied.has(n) && !skippedStatus.has(n));
+  for (let grew = true; grew; ) {
+    grew = false;
+    for (const [name, node] of Object.entries(graph.nodes))
+      if (!pending.includes(name) && !skippedStatus.has(name) && node.depend_on.some((d) => pending.includes(d))) {
         pending.push(name);
         grew = true;
       }
   }
   const skipped = names
-    .filter((n) => satisfied.has(n) && !pending.includes(n))
-    .map((node) => ({ node, reason: "passed with evidence on disk" }));
+    .filter((n) => (satisfied.has(n) || skippedStatus.has(n)) && !pending.includes(n))
+    .map((node) => ({
+      node,
+      reason: skippedStatus.has(node)
+        ? last.get(node)?.status === "skipped"
+          ? "skipped in prior run (gate rejected or condition false)"
+          : "depends on a skipped node"
+        : "passed with evidence on disk",
+    }));
   return {
     cwd,
     runId,

@@ -1,9 +1,8 @@
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import type { CAC } from "cac";
-import type { Tier } from "../../targets/index.js";
-import { isValidTarget, listTargets, resolveModel } from "../../targets/index.js";
-import { fail, ok } from "../output.js";
+import { isValidTarget, listTargets, resolveModel, TIERS } from "../../targets/index.js";
+import { emit, fail, ok } from "../output.js";
 
 function overridesPath(cwd: string, target: string): string {
   return join(cwd, ".graphkit", `models.${target}.json`);
@@ -51,22 +50,18 @@ export function registerModelsCommands(cli: CAC): void {
         return;
       }
       if (!isValidTarget(subcommand)) {
-        console.log(
-          JSON.stringify(
-            fail("UNKNOWN_MODELS_SUBCOMMAND", `Unknown models subcommand "${subcommand}"`, {
-              available: listTargets().map((t) => t.id),
-            }),
-          ),
+        emit(
+          fail("UNKNOWN_MODELS_SUBCOMMAND", `Unknown models subcommand "${subcommand}"`, {
+            available: listTargets().map((t) => t.id),
+          }),
         );
-        process.exit(1);
         return;
       }
       const rest = Array.isArray(args) ? args : args == null ? [] : [args];
       const action = rest[0] ?? "";
       if (action === "set") {
         if (!opts.map) {
-          console.log(JSON.stringify(fail("map", "Missing --map k=v pairs")));
-          process.exit(1);
+          emit(fail("map", "Missing --map k=v pairs"));
           return;
         }
         const overrides = loadOverrides(process.cwd(), subcommand);
@@ -74,33 +69,29 @@ export function registerModelsCommands(cli: CAC): void {
           const [k, ...tail] = pair.split("=");
           const v = tail.join("=");
           if (!k || !v) {
-            console.log(JSON.stringify(fail("map", `Invalid mapping '${pair}', expected k=v`)));
-            process.exit(1);
+            emit(fail("map", `Invalid mapping '${pair}', expected k=v`));
             return;
           }
           overrides[k.trim()] = v.trim();
         }
         writeOverrides(process.cwd(), subcommand, overrides);
-        console.log(JSON.stringify(ok(overrides)));
+        emit(ok(overrides));
       } else if (action === "reset") {
         rmSync(overridesPath(process.cwd(), subcommand), { force: true });
-        console.log(JSON.stringify(ok({ reset: true })));
+        emit(ok({ reset: true }));
       } else if (action !== "") {
-        console.log(
-          JSON.stringify(
-            fail("UNKNOWN_MODELS_SUBCOMMAND", `Unknown models subcommand "${action}"`, {
-              available: listTargets().map((t) => t.id),
-            }),
-          ),
+        emit(
+          fail("UNKNOWN_MODELS_SUBCOMMAND", `Unknown models subcommand "${action}"`, {
+            available: listTargets().map((t) => t.id),
+          }),
         );
-        process.exit(1);
       } else {
         const overrides = loadOverrides(process.cwd(), subcommand);
         const data: Record<string, string> = {};
-        for (const tier of ["opus", "sonnet", "haiku", "fable"] as Tier[]) {
+        for (const tier of TIERS) {
           data[tier] = resolveModel(subcommand, tier, overrides);
         }
-        console.log(JSON.stringify(ok(data)));
+        emit(ok(data));
       }
     });
 }

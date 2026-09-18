@@ -23,7 +23,7 @@ Render a graph.yaml as a diagram. Modes:
 **Step 1 — locate archify.** Probe in order; first hit wins:
 
 ```bash
-for d in ./node_modules/archify ~/.codex/skills/archify ~/.agents/skills/archify; do
+for d in ./node_modules/archify ~/.agents/skills/archify; do
   [ -f "$d/bin/archify.mjs" ] && echo "$d" && break
 done
 ```

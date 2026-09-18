@@ -5,49 +5,54 @@ import type { CAC } from "cac";
 import { GraphKitError } from "../../errors.js";
 import { getTarget, isValidTarget, listTargets } from "../../targets/registry.js";
 import type { TargetId } from "../../targets/types.js";
-import { fail, ok } from "../output.js";
+import { emit, fail, ok } from "../output.js";
 
 export type KitTarget = "claude" | "cursor";
+
+// Candidate ladder shared with template.ts's gallery lookup: resolve a bundled
+// asset directory (e.g. "kits/claude", "templates/gallery") relative to however
+// this package was loaded — dev tree, npm package, standalone-binary share
+// layout, user-home install, or repo-root cwd. Returns the first existing
+// candidate, else the dev-tree path (caller decides whether absence is fatal).
+export function bundledAssetDir(relPath: string): string {
+  const here = dirname(fileURLToPath(import.meta.url));
+  const exe = dirname(process.execPath);
+  const candidates = [
+    // Dev: src/cli/commands/ → package root
+    join(here, "..", "..", "..", relPath),
+    // npm package: dist/index.js → package root (npm link, npm install -g)
+    join(here, "..", relPath),
+    // Standalone binary: <bin>/share/gk/<rel>/ (extracted side-by-side with the
+    // binary — wins over ../share, which may be a stale kit left by an earlier
+    // install under a different prefix)
+    join(exe, "share", "gk", relPath),
+    // Standalone binary: <bin>/../share/gk/<rel>/
+    join(exe, "..", "share", "gk", relPath),
+    // User home install: ~/.graphkit/<rel>/
+    join(process.env.HOME ?? "", ".graphkit", relPath),
+    // cwd fallback (works from repo root)
+    join(process.cwd(), relPath),
+  ];
+  const found = candidates.find((c) => existsSync(c));
+  return found ?? join(here, "..", "..", "..", relPath);
+}
 
 // The kit source ships inside the npm package: <package-root>/kits/<target>/
 // Resolve relative to this module, not process.cwd().
 function kitSourceDir(targetId: TargetId = "claude"): string {
-  const t = getTarget(targetId);
-  const here = dirname(fileURLToPath(import.meta.url));
-  const kitName = t.kitDirName;
-
-  // 1. Explicit env override
+  // Explicit env override wins over every candidate
   if (process.env.GK_KIT_DIR && existsSync(process.env.GK_KIT_DIR)) return process.env.GK_KIT_DIR;
 
-  const candidates = [
-    // 2. Dev: src/cli/commands/ → kits/<kit>/
-    join(here, "..", "..", "..", "kits", kitName),
-    join(here, "..", "..", "..", "..", "kits", kitName),
-    // 3. npm package: dist/index.js → package-root/kits/<kit>/ (npm link, npm install -g)
-    join(here, "..", "kits", kitName),
-    join(here, "kits", kitName),
-    // 4. Standalone binary layout: <bin>/share/gk/kits/<kit>/ (extracted
-    // side-by-side with the binary — wins over #5 because it can only come
-    // from the same tarball as this binary, while ../share may be a stale
-    // kit left by an earlier install under a different prefix)
-    join(dirname(process.execPath), "share", "gk", "kits", kitName),
-    // 5. Standalone binary layout: <bin>/../share/gk/kits/<kit>/
-    join(dirname(process.execPath), "..", "share", "gk", "kits", kitName),
-    // 6. User home install: ~/.graphkit/kits/<kit>/
-    join(process.env.HOME ?? "", ".graphkit", "kits", kitName),
-    // 7. cwd fallbacks (works from repo root)
-    join(process.cwd(), "kits", kitName),
-    join(process.cwd(), "apps", "gk", "kits", kitName),
-  ];
-
-  const found = candidates.find((c) => existsSync(c));
-  if (!found) {
+  const t = getTarget(targetId);
+  const kitName = t.kitDirName;
+  const dir = bundledAssetDir(join("kits", kitName));
+  if (!existsSync(dir)) {
     throw new GraphKitError("KIT_SOURCE_MISSING", `Bundled kits/${kitName}/ directory not found`, {
       hint: `Set GK_KIT_DIR to the kits/${kitName}/ directory, or install the kit: sudo cp -r kits/${kitName} /usr/local/share/gk/kits/${kitName}`,
-      tried: candidates,
+      tried: dir,
     });
   }
-  return found;
+  return dir;
 }
 
 // Retired kit assets, listed in the kit's metadata.json as relative paths.
@@ -204,14 +209,12 @@ export function installKit(
   }
   return { installed: readdirSync(destDir) };
 }
-
 function assertValidTarget(opts: { target?: string }) {
   if (!isValidTarget(opts.target ?? "")) {
     const valid = listTargets()
       .map((t) => t.id)
       .join(", ");
-    console.log(JSON.stringify(fail("BAD_TARGET", `Invalid target: ${opts.target}. Must be one of: ${valid}`)));
-    process.exit(1);
+    throw new GraphKitError("BAD_TARGET", `Invalid target: ${opts.target}. Must be one of: ${valid}`);
   }
 }
 
@@ -222,13 +225,12 @@ export function registerKitCommands(cli: CAC) {
     .option("--force", "Remove previous install and install fresh")
     .option("--target <target>", "Kit target: claude, cursor, opencode, codex, or pi", { default: "claude" })
     .action((opts) => {
-      assertValidTarget(opts);
       try {
+        assertValidTarget(opts);
         const result = installKit(process.cwd(), opts.force, opts.target);
-        console.log(JSON.stringify(ok(result)));
+        emit(ok(result));
       } catch (e) {
-        console.log(JSON.stringify(fail("INIT_FAILED", String(e))));
-        process.exit(1);
+        emit(e instanceof GraphKitError ? fail(e.code, e.message, e.details) : fail("INIT_FAILED", String(e)));
       }
     });
 
@@ -238,17 +240,21 @@ export function registerKitCommands(cli: CAC) {
     .option("--json", "JSON output")
     .option("--target <target>", "Kit target: claude, cursor, opencode, codex, or pi", { default: "claude" })
     .action((opts) => {
-      if (!opts.dir) {
-        console.log(JSON.stringify(fail("MISSING_DIR", "--dir is required")));
-        process.exit(1);
+      try {
+        if (!opts.dir) {
+          emit(fail("MISSING_DIR", "--dir is required"));
+          return;
+        }
+        assertValidTarget(opts);
+        if (existsSync(opts.dir) && readdirSync(opts.dir).length > 0) {
+          emit(fail("DIR_NOT_EMPTY", `Directory ${opts.dir} exists and is not empty`));
+          return;
+        }
+        mkdirSync(opts.dir, { recursive: true });
+        const result = installKit(opts.dir, false, opts.target);
+        emit(ok({ created: opts.dir, ...result }));
+      } catch (e) {
+        emit(e instanceof GraphKitError ? fail(e.code, e.message, e.details) : fail("NEW_FAILED", String(e)));
       }
-      assertValidTarget(opts);
-      if (existsSync(opts.dir) && readdirSync(opts.dir).length > 0) {
-        console.log(JSON.stringify(fail("DIR_NOT_EMPTY", `Directory ${opts.dir} exists and is not empty`)));
-        process.exit(1);
-      }
-      mkdirSync(opts.dir, { recursive: true });
-      const result = installKit(opts.dir, false, opts.target);
-      console.log(JSON.stringify(ok({ created: opts.dir, ...result })));
     });
 }

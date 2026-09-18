@@ -7,7 +7,7 @@ import { GraphKitError } from "../../errors.js";
 import { scoreWorkProduct } from "../../eval/rubrics.js";
 import { fingerprint } from "../../evidence/fingerprint.js";
 import { type Freshness, freshnessOf, parseMarker } from "../../evidence/marker.js";
-import { fail, ok } from "../output.js";
+import { emit, fail, ok } from "../output.js";
 import { loadGraph } from "./graph.js";
 
 /**
@@ -77,8 +77,7 @@ export function registerGateCommand(cli: CAC) {
         const graph = loadGraph(resolved);
         const findings = validateGraph(graph, process.cwd());
         if (findings.length > 0) {
-          console.log(JSON.stringify(fail("VALIDATION_FAILED", "graph has findings", { findings })));
-          process.exit(1);
+          emit(fail("VALIDATION_FAILED", "graph has findings", { findings }));
           return;
         }
         const evidenceDir = join(process.cwd(), graph.outputs.evidence_dir);
@@ -92,22 +91,12 @@ export function registerGateCommand(cli: CAC) {
         );
         const stale = Object.keys(freshness).filter((k) => freshness[k] === "stale" && scorecard[k] === "ok");
         if (verdict === "MERGE") {
-          console.log(JSON.stringify(ok({ verdict, scorecard, freshness, manifest })));
+          emit(ok({ verdict, scorecard, freshness, manifest }));
           return;
         }
-        console.log(
-          JSON.stringify(
-            fail("GATE_BLOCK", "evidence gate blocked merge", { missing, stale, scorecard, freshness, manifest }),
-          ),
-        );
-        process.exit(1);
+        emit(fail("GATE_BLOCK", "evidence gate blocked merge", { missing, stale, scorecard, freshness, manifest }));
       } catch (e) {
-        console.log(
-          JSON.stringify(
-            e instanceof GraphKitError ? fail(e.code, e.message, e.details) : fail("GATE_ERROR", String(e)),
-          ),
-        );
-        process.exit(1);
+        emit(e instanceof GraphKitError ? fail(e.code, e.message, e.details) : fail("GATE_ERROR", String(e)));
       }
     });
 }

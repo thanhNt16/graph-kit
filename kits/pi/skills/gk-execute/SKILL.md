@@ -84,7 +84,7 @@ Then continue to the next wave — skip the action-wave steps below for curator 
 Use the `gk_dispatch_agent` tool (provided by the gk-subagent extension) once per node in
 the current wave — issue all calls for the wave, collect every result, then proceed.
 Wave barrier: do NOT start wave N+1 until every node of wave N returned ok:true. The same barrier holds across loop rounds — do not start round N+1 until every node of a loop group's last wave returned.
-A failed node (ok:false) stops the graph: report node name, objective, and error output.
+A failed node (ok:false) stops the graph: report node name, objective, and error output — unless the node declares `retry` for a transient failure (see [Orchestration fields](#orchestration-fields)). Before dispatching a node, check its `when` (skip if false) and `gate` (suspend for approval).
 Pass node constraints: no_write → constraints.no_write=true; tools → constraints.tools_allowlist.
 
 Each dispatch gets:
@@ -121,7 +121,7 @@ When a node's payload carries `fan_out`:
 
 1. Read `briefs.json` (a JSON array of `{id, title, body}`) from the evidence of node `fan_out.briefs_from`. Missing/malformed file = a failed round for this node (normal loop semantics; advisor may then fire).
 2. Dispatch one parallel `gk_dispatch_agent` call per brief (issue all calls for the wave, then collect), objective = `fan_out.template` rendered with the brief (default template `{brief.body}`). Subagents run at the NODE's model tier.
-3. Barrier on all briefs; only `ok:true` results count toward the barrier; consolidate their outputs into this node's evidence and final output. Any failed brief (ok:false) marks the round failed.
+3. Barrier on all briefs; only `ok:true` results count toward the barrier; combine their outputs per `fan_out.reduce` (default `append` — see [Orchestration fields](#orchestration-fields)) into this node's evidence and final output. Any failed brief (ok:false) marks the round failed.
 4. Empty briefs array: node output is "no briefs" — ok status.
 
 4. **Write evidence** — write one non-whitespace file per declared evidence key: `<evidence_dir>/<key>.md`
@@ -162,6 +162,65 @@ gk_dispatch_agent({
 ```
 
 The result is `{ ok, output, exit_code }`. Only `ok:true` counts toward the wave barrier.
+
+## Orchestration fields
+
+Nodes may declare optional orchestration fields. The schema validates them; you enforce them at dispatch time. `gk graph waves` output carries every field verbatim per node — read them from the wave payload, not from graph.yaml.
+
+### `retry` — transient dispatch-failure policy
+
+```yaml
+retry: { max_attempts: 3, initial_interval_ms: 1000, backoff: 2.0, non_retryable: [TIMEOUT] }
+```
+
+Defaults: `max_attempts: 1` (no retry), `initial_interval_ms: 1000`, `backoff: 2.0` (exponential), `non_retryable: []`.
+
+**Retry ONLY transient dispatch failures** — infrastructure errors: the dispatch tool itself errored, agent binary crashed, transport timeout. Prompt, parse, and validation errors are NEVER retried: the input was wrong, retrying repeats it. Before retry N+1 (0-indexed from 1): wait `initial_interval_ms * backoff^(N-1)` ms. An error string matching (case-insensitive, substring) any `non_retryable` entry is fatal even within budget. Attempts exhausted → treat as a failed node (stop the graph, report attempts made). Record attempts in the run report.
+
+### `when` — conditional skip
+
+```yaml
+when: "no security findings were reported by upstream audit"
+```
+
+Natural-language predicate over upstream node results — judge it yourself (same read-and-judge pattern as `stop_when`), evaluated just before the node's dispatch, after its wave barrier. False → **skip the node**: record it via `gk run node <id> --status skipped`, do NOT dispatch, downstream nodes see it as satisfied for the wave barrier with no output to inject. Skips are recorded, never silent.
+
+### `budget_tokens` — advisory context cap
+
+```yaml
+budget_tokens: 4000
+```
+
+Cap on the upstream context injected into the dispatch. Rough-estimate tokens (~chars/4); if injected upstream context exceeds the cap: compact (summarize per upstream node, keep verdicts/decisions/evidence keys, drop prose) and spill the full text to `.graphkit/artifacts/<node-id>-input.md`, passing the file path instead. Budgets are advisory — never truncate a verdict, evidence key, or acceptance recipe below usefulness.
+
+### `gate` — human approval before dispatch
+
+```yaml
+gate: { question: "Deploy to staging?", details: "Runs migrations" }
+```
+
+Before dispatching a gated node, suspend the run: surface the question (+details) to the user and stop the wave loop — do NOT proceed past the barrier. On approval, continue normally; on rejection, record the node `skipped` and continue (downstream nodes judge `when` against that; a skipped node's dependents are skipped too — no evidence exists for them to consume). If the session dies mid-suspension, `gk run end` the stale run first, then `gk run resume` — skipped nodes stay skipped on resume (never re-asked). One gate pause per node.
+
+### `fan_out` with `reduce` — fan out and reduce
+
+```yaml
+fan_out: { briefs_from: plan, template: "Implement {brief.title}: {brief.body}", reduce: merge }
+```
+
+`briefs_from` names an upstream node whose output (evidence key) is a JSON array; you dispatch one subagent per array item with `template` rendered per item (`{brief}` = the JSON item; `{brief.<field>}` = a field). `reduce` controls combining (default `append`):
+- `append` — concatenate per-item outputs in order.
+- `merge` — treat per-item outputs as partial views of one artifact; merge into a single coherent result.
+- `vote` — judge per-item outputs against the node objective and keep the winning one (state the winner and why in the run report).
+
+Record the reduced result as the node's output (and evidence). A fan_out node's dispatch count is items, not 1 — the wave barrier waits for all item dispatches.
+
+### `effort` — dispatch scaling
+
+```yaml
+effort: deep   # node-level; default standard
+```
+
+`light` → single pass, tight `budget_tokens` (≤2000 if unset), 1 attempt, no parallel fan-out widening. `standard` → as declared. `deep` → widen: fan-out width doubles (dispatch up to 2× the `fan_out` items in parallel), loop `max_rounds` ×2 (round up), retry `max_attempts` +1, generous budget (≥8000 if unset). Effort scales the bounds declared on the node; it never overrides explicit user instructions mid-run.
 
 ## Worktree merge protocol (worktree mode)
 

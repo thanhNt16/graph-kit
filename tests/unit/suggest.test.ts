@@ -78,15 +78,19 @@ describe("gk suggest CLI", () => {
   });
   afterEach(() => rmSync(join(memDir, ".."), { recursive: true, force: true }));
 
-  test("lists ranked suggestions in terminal format", () => {
+  test("lists ranked suggestions in the envelope, highest salience first", () => {
     suggestion(memDir, "suggestion-low", 1.5);
     suggestion(memDir, "suggestion-high", 4.2);
     const { stdout, code } = runCli([], join(memDir, "..", ".."));
     expect(code).toBe(0);
-    const lines = stdout.split("\n");
-    expect(lines[0]).toContain("[review-failure] suggestion-high");
-    expect(lines[0]).toContain("salience 4.20");
-    expect(lines[2]).toContain("[review-failure] suggestion-low");
+    const envelope = JSON.parse(stdout) as {
+      status: string;
+      data: { count: number; suggestions: { id: string; salience: number }[] };
+    };
+    expect(envelope.status).toBe("ok");
+    expect(envelope.data.count).toBe(2);
+    expect(envelope.data.suggestions[0].id).toBe("suggestion-high");
+    expect(envelope.data.suggestions[1].id).toBe("suggestion-low");
   });
 
   test("emits ok envelope with --json", () => {
@@ -107,9 +111,11 @@ describe("gk suggest CLI", () => {
     expect(all.data.count).toBe(2);
   });
 
-  test("prints hint on empty suggestions", () => {
+  test("emits an empty ok envelope when no suggestions exist", () => {
     const { stdout } = runCli([], join(memDir, "..", ".."));
-    expect(stdout).toContain("No suggestions");
+    const envelope = JSON.parse(stdout) as { status: string; data: { count: number } };
+    expect(envelope.status).toBe("ok");
+    expect(envelope.data.count).toBe(0);
   });
 
   test("--dismiss flips status via the CLI and reports ok", () => {

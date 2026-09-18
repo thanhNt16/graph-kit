@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { cac } from "cac";
@@ -15,6 +15,7 @@ function runCli(args: string[], cwd: string) {
   const origLog = console.log;
   console.log = (...a: unknown[]) => logs.push(a.map(String).join(" "));
   let exitCode = 0;
+  let code = 0;
   const origExit = process.exit;
   process.exit = (c?: number) => {
     exitCode = c ?? 1;
@@ -27,8 +28,10 @@ function runCli(args: string[], cwd: string) {
     console.log = origLog;
     process.exit = origExit;
     process.cwd = origCwd;
+    code = exitCode || ((process.exitCode as number | undefined) ?? 0);
+    process.exitCode = 0; // fail() sets exitCode=1 via emit — reset so bun:test exits 0
   }
-  return { stdout: logs.join("\n"), code: exitCode };
+  return { stdout: logs.join("\n"), code };
 }
 
 describe("graph subcommand regression (new/ascii/svg/waves)", () => {
@@ -70,6 +73,35 @@ describe("graph subcommand regression (new/ascii/svg/waves)", () => {
     expect(parsed.data.svg).toContain(".graphkit/diagrams/");
     expect(parsed.data.svg).toMatch(/\.svg$/);
     expect(existsSync(parsed.data.svg)).toBe(true);
+  });
+
+  test("graph svg escapes node ids and title (no markup injection)", () => {
+    const evil = join(cwd, "evil.yaml");
+    writeFileSync(
+      evil,
+      `apiVersion: graphkit.dev/v2
+kind: Graph
+metadata:
+  name: '"><script>alert(1)</script>'
+topology: custom
+nodes:
+  'a<b':
+    agent: 'x" onload="y'
+    objective: test
+    depend_on: []
+    evidence: [e]
+`,
+    );
+    const { stdout, code } = runCli(["graph", "svg", evil], cwd);
+    expect(code).toBe(0);
+    const svg = readFileSync(JSON.parse(stdout).data.svg, "utf-8");
+    expect(svg).not.toContain("<script>");
+    expect(svg).not.toContain("a<b");
+    expect(svg).not.toContain('onload="y"');
+    // escapeXml emits numeric entities — valid in text and attribute contexts.
+    expect(svg).toContain("&#60;");
+    expect(svg).toContain("&#62;");
+    expect(svg).toContain("&#34;");
   });
 
   test("graph waves reports the topological wave count for the diamond fixture", () => {

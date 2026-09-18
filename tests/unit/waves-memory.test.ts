@@ -4,7 +4,6 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { cac } from "cac";
 import { registerGraphCommands } from "../../src/cli/commands/graph.js";
-import { registerMemoryCommands } from "../../src/cli/commands/memory.js";
 
 const FIXTURES = join(import.meta.dir, "..", "fixtures");
 
@@ -14,18 +13,16 @@ function runCli(args: string[]) {
   const logs: string[] = [];
   const origLog = console.log;
   console.log = (...a: unknown[]) => logs.push(a.map(String).join(" "));
-  let exitCode = 0;
-  const origExit = process.exit;
-  process.exit = (c?: number) => {
-    exitCode = c ?? 1;
-  };
+  const origExitCode = process.exitCode;
+  process.exitCode = 0;
   try {
     cli.parse(["node", "gk", ...args], { run: true });
   } finally {
     console.log = origLog;
-    process.exit = origExit;
   }
-  return { stdout: logs.join("\n"), code: exitCode };
+  const code = process.exitCode;
+  process.exitCode = origExitCode;
+  return { stdout: logs.join("\n"), code };
 }
 
 const ON_NODE = join(tmpdir(), `gk-waves-mem-on-${process.pid}-${Date.now()}.yaml`);
@@ -230,31 +227,17 @@ describe("memory config allowlist + bare gk memory (exec-tests step 5)", () => {
     writeFileSync(join(cwd, ".graphkit", "memory", "m.md"), "---\nid: m\ntype: knowledge\n---\nbody\n");
     chmodSync(join(cwd, ".graphkit", "memory"), 0o000);
     try {
-      const cli = cac("gk");
-      registerMemoryCommands(cli);
-      const logs: string[] = [];
-      let exitCode = 0;
-      const origLog = console.log;
-      console.log = (...a: unknown[]) => logs.push(a.map(String).join(" "));
-      const origExit = process.exit;
-      process.exit = (c?: number) => {
-        exitCode = c ?? 1;
-      };
-      const previousCwd = process.cwd();
-      try {
-        process.chdir(cwd);
-        cli.parse(["node", "gk", "memory", "recall", "--json", "anything"], { run: true });
-        await new Promise((r) => setTimeout(r, 200));
-      } finally {
-        process.chdir(previousCwd);
-        console.log = origLog;
-        process.exit = origExit;
-      }
-      const out = JSON.parse(logs.join("\n"));
+      // Subprocess, not in-process chdir + console stubs — those are
+      // process-global and race concurrently-running sibling test files.
+      const proc = Bun.spawn(
+        ["bun", "run", join(import.meta.dir, "..", "..", "src", "index.ts"), "memory", "recall", "--json", "anything"],
+        { cwd, stdout: "pipe", stderr: "pipe" },
+      );
+      const out = JSON.parse(await new Response(proc.stdout).text());
+      const code = await proc.exited;
       expect(out.status).toBe("fail");
       expect(out.error.code).toBe("MEMORY_DIR_UNREADABLE");
-      expect(exitCode).toBe(1);
-      process.exitCode = 0;
+      expect(code).toBe(1);
     } finally {
       chmodSync(join(cwd, ".graphkit", "memory"), 0o755);
       rmSync(cwd, { recursive: true, force: true });

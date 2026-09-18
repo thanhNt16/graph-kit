@@ -18,9 +18,11 @@ function walkSkillMd(dir: string, out: string[] = []): string[] {
 }
 
 describe("kit --target self-references", () => {
+  // _core is the canonical source, not a shipped kit — its `--target pi` is the
+  // seed spelling the generator retargets per host.
   const kits = readdirSync(KITS_DIR).filter((d) => {
     const p = join(KITS_DIR, d);
-    return statSync(p).isDirectory();
+    return statSync(p).isDirectory() && d !== "_core";
   });
 
   test("every SKILL.md with `--target <x>` uses its own kit dir name", () => {

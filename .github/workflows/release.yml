@@ -66,6 +66,8 @@ jobs:
           mkdir -p dist/share/gk/kits dist/share/gk/templates
           cp -R kits/. dist/share/gk/kits/
           cp -R templates/. dist/share/gk/templates/
+          # build:bin emits build/gk (outside the npm files glob); stage it next to share/.
+          cp build/gk dist/gk
           tar -C dist -czf "dist/gk-${{ matrix.target }}.tar.gz" \
             gk share
       - uses: actions/upload-artifact@v4

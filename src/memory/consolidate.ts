@@ -9,7 +9,8 @@ import YAML from "yaml";
 import { PatternFileSchema, SuggestionFileSchema } from "../schemas/memory.schema.js";
 import { type AdvisorEvent, listRunIds, readAdvisorEvents, readRunIndex, readTrace, type TraceLine } from "./ledger.js";
 import { buildLinks, writeLinks } from "./links.js";
-import { extractPatterns, type Pattern } from "./patterns.js";
+import { extractPatterns, type Pattern, patternSalience } from "./patterns.js";
+import { tokenize } from "./store.js";
 
 export interface ConsolidateResult {
   runs: number;
@@ -17,6 +18,7 @@ export interface ConsolidateResult {
   suggestions: number;
   links: number;
   pruned: number;
+  folded: number;
 }
 
 export interface SuggestionDraft {
@@ -29,6 +31,56 @@ export interface SuggestionDraft {
 
 const GENERATOR = "process:gk-memory-consolidate";
 const INDEX_MAX_LINES = 200; // Claude Code's cap: an index nobody can read is not an index
+
+/** Deterministic write gate (Mem0-lite): a new entry whose tokens overlap an
+ *  accepted one ≥ 0.8 jaccard is the same memory — fold it in (bump
+ *  count/runs/last_seen) or drop it, instead of appending a near-duplicate. */
+const WRITE_GATE_THRESHOLD = 0.8;
+
+function jaccard(a: Set<string>, b: Set<string>): number {
+  let inter = 0;
+  for (const t of a) if (b.has(t)) inter += 1;
+  const union = a.size + b.size - inter;
+  return union === 0 ? 0 : inter / union;
+}
+
+function foldPatterns(patterns: Pattern[], now: string): { kept: Pattern[]; folded: number } {
+  const accepted: Array<{ p: Pattern; tokens: Set<string> }> = [];
+  let folded = 0;
+  for (const p of patterns) {
+    // Same-kind, same-shape twins only: a 3-member chain is a different memory
+    // than its 2-member prefix (it drives different suggestions).
+    const tokens = tokenize(`${p.label} ${p.members.join(" ")}`);
+    const twin = accepted.find(
+      (a) =>
+        a.p.kind === p.kind &&
+        a.p.members.length === p.members.length &&
+        jaccard(tokens, a.tokens) >= WRITE_GATE_THRESHOLD,
+    );
+    if (!twin) {
+      accepted.push({ p, tokens });
+      continue;
+    }
+    twin.p.count += p.count;
+    twin.p.runs = [...new Set([...twin.p.runs, ...p.runs])];
+    if (p.last_seen > twin.p.last_seen) twin.p.last_seen = p.last_seen;
+    twin.p.salience = patternSalience(twin.p.count, twin.p.last_seen, now);
+    folded += 1;
+  }
+  return { kept: accepted.map((a) => a.p), folded };
+}
+
+/** Suggestions duplicate only when a twin draft already exists — there is no
+ *  counter to bump, so the newcomer is simply dropped. */
+function dedupeSuggestions(drafts: SuggestionDraft[]): SuggestionDraft[] {
+  const kept: Array<{ s: SuggestionDraft; tokens: Set<string> }> = [];
+  for (const s of drafts) {
+    const tokens = tokenize(`${s.action} ${s.rationale}`);
+    if (kept.some((k) => jaccard(tokens, k.tokens) >= WRITE_GATE_THRESHOLD)) continue;
+    kept.push({ s, tokens });
+  }
+  return kept.map((k) => k.s);
+}
 
 /** One suggestion per pattern that implies an action. Deterministic, no model. */
 export function suggestionsFor(patterns: Pattern[]): SuggestionDraft[] {
@@ -98,7 +150,7 @@ export function consolidate(cwd: string, now = new Date().toISOString()): Consol
   mkdirSync(memDir, { recursive: true });
 
   const runs = readRunIndex(cwd);
-  if (runs.length === 0) return { runs: 0, patterns: 0, suggestions: 0, links: 0, pruned: 0 };
+  if (runs.length === 0) return { runs: 0, patterns: 0, suggestions: 0, links: 0, pruned: 0, folded: 0 };
 
   const traces = new Map<string, TraceLine[]>();
   const advisors = new Map<string, AdvisorEvent[]>();
@@ -107,7 +159,7 @@ export function consolidate(cwd: string, now = new Date().toISOString()): Consol
     advisors.set(id, readAdvisorEvents(cwd, id));
   }
 
-  const patterns = extractPatterns(runs, traces, advisors, now);
+  const { kept: patterns, folded } = foldPatterns(extractPatterns(runs, traces, advisors, now), now);
   const patternsDir = join(memDir, "patterns");
   const keptPatterns = new Set<string>();
   for (const p of patterns) {
@@ -123,6 +175,7 @@ export function consolidate(cwd: string, now = new Date().toISOString()): Consol
       count: p.count,
       last_seen: p.last_seen,
       signature: p.signature,
+      sources: p.runs.map((run) => ({ resource: `run:${run}` })),
       created_at: now,
       valid_from: now,
       salience: Number(p.salience.toFixed(4)),
@@ -146,7 +199,8 @@ export function consolidate(cwd: string, now = new Date().toISOString()): Consol
     );
   }
 
-  const drafts = suggestionsFor(patterns);
+  const runsOf = new Map(patterns.map((p) => [`pattern-${p.signature}`, p.runs]));
+  const drafts = dedupeSuggestions(suggestionsFor(patterns));
   const suggestionsDir = join(memDir, "suggestions");
   const keptSuggestions = new Set<string>();
   for (const s of drafts) {
@@ -165,6 +219,9 @@ export function consolidate(cwd: string, now = new Date().toISOString()): Consol
       action: s.action,
       rationale: s.rationale,
       based_on: s.based_on,
+      sources: [...new Set(s.based_on.flatMap((id) => runsOf.get(id) ?? []))].map((run) => ({
+        resource: `run:${run}`,
+      })),
       status,
       created_at: now,
       valid_from: now,
@@ -216,5 +273,6 @@ export function consolidate(cwd: string, now = new Date().toISOString()): Consol
     suggestions: drafts.length,
     links: Object.keys(linkGraph.links).length,
     pruned,
+    folded,
   };
 }

@@ -4,10 +4,11 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { cac } from "cac";
 import { CBM_UNAVAILABLE_MSG } from "../../src/cbm/client.js";
+import { resetCbmSeam, setCbmSeam } from "../../src/cli/cbm-seam.js";
 import { registerGraphCommands } from "../../src/cli/commands/graph.js";
 import { registerInventoryCommands } from "../../src/cli/commands/inventory.js";
 import { registerKitCommands } from "../../src/cli/commands/kit.js";
-import { _resetMemoryCbmSeam, _setMemoryCbmSeam, registerMemoryCommands } from "../../src/cli/commands/memory.js";
+import { registerMemoryCommands } from "../../src/cli/commands/memory.js";
 import { registerTemplateCommands } from "../../src/cli/commands/template.js";
 import { fail } from "../../src/cli/output.js";
 import { APP_VERSION } from "../../src/version.js";
@@ -55,6 +56,8 @@ function runCli(args: string[], cwd: string) {
     console.log = origLog;
     process.exit = origExit;
     process.cwd = origCwd;
+    sink.code = sink.code || ((process.exitCode as number | undefined) ?? 0);
+    process.exitCode = 0; // emit-fail sets exitCode=1; reset so later tests start clean
   }
   return sink;
 }
@@ -81,6 +84,8 @@ async function runCliAsync(args: string[], cwd: string, settleMs = 500) {
     console.log = origLog;
     process.exit = origExit;
     process.cwd = origCwd;
+    sink.code = sink.code || ((process.exitCode as number | undefined) ?? 0);
+    process.exitCode = 0;
   }
   return sink;
 }
@@ -167,7 +172,7 @@ describe("CLI trust: memory index fails honestly with CBM_UNAVAILABLE — F3", (
     mkdirSync(cwd, { recursive: true });
     // Hermetic wiring test: an injected client factory that dies exactly like
     // the real spawn-death (see cbm-client.test.ts for the real-spawn case).
-    _setMemoryCbmSeam({
+    setCbmSeam({
       clientFactory: () => ({
         call: async () => Promise.reject(new Error(CBM_UNAVAILABLE_MSG)),
         close: async () => {},
@@ -179,7 +184,7 @@ describe("CLI trust: memory index fails honestly with CBM_UNAVAILABLE — F3", (
   });
   afterEach(() => {
     process.exitCode = 0;
-    _resetMemoryCbmSeam();
+    resetCbmSeam();
     rmSync(root, { recursive: true, force: true });
   });
 
@@ -199,7 +204,7 @@ describe("CLI trust: memory index fails honestly with CBM_UNAVAILABLE — F3", (
   });
 });
 
-describe("CLI trust: gk compile prints the artifact path in human mode — F9", () => {
+describe("CLI trust: gk compile emits the envelope and writes the artifact", () => {
   let root: string;
   let cwd: string;
   beforeEach(() => {
@@ -214,11 +219,12 @@ describe("CLI trust: gk compile prints the artifact path in human mode — F9", 
     rmSync(root, { recursive: true, force: true });
   });
 
-  test("compile human mode prints a `compiled <path>` line and writes the artifact", () => {
+  test("compile prints the JSON envelope and writes the artifact", () => {
     const { logs, code } = runCli(["compile"], cwd);
     expect(code).toBe(0);
-    const line = logs.find((l) => l.startsWith("compiled ")) ?? "";
-    expect(line).toMatch(/compiled .*\.workflow\.js$/);
+    const parsed = JSON.parse(logs.join("\n"));
+    expect(parsed.status).toBe("ok");
+    expect(parsed.data.compiled).toMatch(/\.workflow\.js$/);
     expect(existsSync(join(cwd, ".claude", "workflows", "trust-audit.workflow.js"))).toBe(true);
   });
 

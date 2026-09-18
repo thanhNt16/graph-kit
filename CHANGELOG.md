@@ -21,11 +21,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Resume reconciliation lineage check: evidence markers must belong to the run's `resumes:` ancestor chain (or be hand-written/no-run markers) to satisfy a node; evidence overwritten by an unrelated run leaves the node pending and is reported in the new `foreign_evidence` result field. Marker frontmatter parsing now tolerates CRLF line endings.
 - `gk memory recall <query> --explain`: deterministic retrieval debugging showing query term overlap, salience math, link penalties (0.5×), and filter/rejection verdicts (`zero_overlap`, `expired`, `not_yet_valid`, `superseded`, `outranked`). Add `--html` to also write an interactive dual-theme report to `.graphkit/diagrams/recall-<query>-<timestamp>.html` (bare `--html` fails with `INVALID_OPTION`).
 - Runtime recall logging: non-explain recalls append JSONL rows (`ts`, `query`, `k`, `origin`, `top`, `injected`, `scanned`) to `.graphkit/memory/.recall-log.jsonl` with `--origin` tagging (default `cli`) for planned-vs-actual comparison.
+- Orchestration fields on nodes (schema + gk-execute contract): `retry` (transient dispatch-failure policy with backoff + non-retryable classes), `when` (judged conditional skip, recorded via `gk run node --status skipped`), `budget_tokens` (advisory upstream-context cap with compact+spill), `gate` (human-approval suspension, resume via `gk run resume`), `fan_out.reduce` (`append|merge|vote`), `effort` (`light|standard|deep` scaling fan-out/budgets/loop bounds). `gk graph waves` carries all fields verbatim per node.
+- Memory retrieval upgrades: BM25 scoring (IDF + TF saturation + length norm) replaces set-overlap; relative-score cutoff (0.3× top) drops distractor hits; Personalized PageRank over `.links.json` replaces flat 0.5 single-hop penalty; deterministic write gate folds same-shape near-duplicate patterns (jaccard ≥ 0.8, same kind + member count) instead of appending; generated memories cite `run:<id>` provenance.
+- `kits/_core/` canonical kit source + `scripts/gen-kits.ts` materializes all 5 host kits (claude/cursor/opencode/codex/pi) with per-host transforms (frontmatter style, install-dir refs, md→toml agents, mdc rules, rules-section guards); `gen:kits:check` in `ci:local` fails on drift. `scripts/sync-omp.ts` mirrors the pi target into `.omp/`.
+- `emit()` result-envelope helper; `cbm-seam.ts` shared test seam; `readMemoryFile`/`walkMemoryFiles` shared memory-store helpers.
 
 ### Changed
 - **Pages landing page rewritten version-free** (`docs/graphkit.html`, renamed from `graphkit-v0.2-report.html`): features ordered as a workflow — lifecycle → install → 11 topologies → per-node binding & validation → dual runtimes → evidence & gates → run ledger & resume → memory & CBM bridge → host table → CLI. All version badges, "shipped in X.Y" labels, dated sections, roadmap, and historical demo/story sections removed. `pages.yml` redirect updated.
 - **Landing page visual pass**: topology cards now carry animated SVG diagrams (traveling signal dots via SMIL `animateMotion`, node pulse, edge dash-flow, hover gradient glow, scroll-driven reveal under `@supports`, `prefers-reduced-motion` fallback; zero JS). "Comprehensive Command Reference" gains "The gk Lifecycle" — a 6-stage orchestration flow diagram (install → compose → validate → execute → evidence & gate → close out) with animated connectors, MERGE/BLOCK/RESUME verdict chips, and a BLOCK→resume loop-back lane — plus per-stage session-skill chips and a 13-card "Session Skills" grid.
 - **Strict graph.yaml schemas**: unknown top-level, node, and nested-config fields now fail validation with the offending key named (`Unrecognized key: "…"` in `SCHEMA_INVALID` issues) instead of being silently stripped. `constraints` records and inputs/metadata stay open by design. All bundled scaffolds, gallery templates, and examples re-validated clean.
+- **BREAKING (CLI output):** all commands emit the JSON envelope unconditionally — human-rendered tables removed; `--json` flags remain accepted no-ops.
+- `cli-manifest.json` is now derived from the cac registration surface (hand-synced `CLI_COMMANDS` list deleted); `check-cli-parity` diffs the on-disk manifest against the derived surface and runs in `ci:local`.
+- `gk run node --status` accepts `skipped` for `when`-predicate skips.
+- `shouldExpire` default threshold 0.3 → 0.1 (the operating point every caller already used); `HALF_LIFE_DAYS` exported once from `eval/forgetting.ts`.
+- `graph ascii`/`graph svg` route through loadGraph+validateGraph (previously raw YAML); SVG output escapes all graph-controlled strings (stored-XSS fix); both renderers share the executor's Kahn wave-level computation.
+- `expandedRecall` is a projection of `explainRecall` (duplicated retriever deleted); ACT-R decay now scans `patterns/`/`suggestions/` subfolders (previously immortal); `malformed_count` populated in explain output.
+- Schema strictness: `limits.max_workers|max_iterations|max_findings|budget_tokens` and `loop.exit_condition` deleted — `.strict()` rejects them at parse on every load path; `metadata` is strict and declares `task`.
+- Single-source-of-truth: topology names (one `TOPOLOGY_NAMES` → zod enum + emitter table), model tiers (one `TIERS` const), `Graph` type exported from `schemas/graph.schema.ts`.
+- `cbm:parity` removed from `ci:local` (CBM_CMD can never be set on fresh checkouts — it was a no-op gate); script fixed to probe `src/index.ts` and documented as a local instrument.
+- `install.sh` `rm -rf` scoped to `$BIN/share/gk` (previously wiped the whole `share/` prefix).
+
+### Removed
+- Dead dependencies `ajv` + `ajv-formats` (zod is the only validator).
+- `gk execute` / `gk visualize` NOT_IMPLEMENTED stub commands.
+- `src/models/` re-export shim, `src/eval/metrics.ts` (unwired), `recallTopK` (production-dead), dead schema exports, `test/` directory (files moved to `tests/unit/`).
+- Stray artifacts: `src/compiler/validate.ts:84-93`, `validate.ts:90`, `dist/gk` (64MB binary no longer inside the npm `files` glob — `build:bin` now emits to `build/`).
+- Repo-root autoresearch experiment files and unlinked internal docs moved to `archive/`; `.tmp-*/` gitignored; `.graphkit/evidence/improve-review.md` untracked.
 
 ## [0.3.8] - 2026-09-05
 ### Fixed

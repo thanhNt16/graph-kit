@@ -23,6 +23,7 @@ function runCli(args: string[], _cwd?: string) {
   console.log = (...a: unknown[]) => logs.push(a.map(String).join(" "));
   console.warn = (...a: unknown[]) => logs.push(a.map(String).join(" "));
   let exitCode = 0;
+  let code = 0;
   const origExit = process.exit;
   process.exit = (c?: number) => {
     exitCode = c ?? 1;
@@ -39,8 +40,10 @@ function runCli(args: string[], _cwd?: string) {
     console.warn = origWarn;
     process.exit = origExit;
     process.cwd = origCwd;
+    code = exitCode || ((process.exitCode as number | undefined) ?? 0);
+    process.exitCode = 0; // emit-fail sets exitCode=1; reset so later tests start clean
   }
-  return { stdout: logs.join("\n"), code: exitCode, error };
+  return { stdout: logs.join("\n"), code, error };
 }
 
 describe("gk graph commands", () => {
@@ -107,10 +110,15 @@ describe("gk graph commands", () => {
                 skills: [],
                 refs: [],
                 depend_on: [],
-                loop: { enabled: false, max_rounds: 3 },
+                loop: null,
                 evidence: ["attack_surface"],
                 advisor: null,
                 fan_out: null,
+                retry: null,
+                when: null,
+                budget_tokens: null,
+                gate: null,
+                effort: "standard",
                 hooks: [],
               },
             ],
@@ -128,10 +136,15 @@ describe("gk graph commands", () => {
                 skills: [],
                 refs: [],
                 depend_on: ["scouter"],
-                loop: { enabled: false, max_rounds: 3 },
+                loop: null,
                 evidence: ["findings"],
                 advisor: null,
                 fan_out: null,
+                retry: null,
+                when: null,
+                budget_tokens: null,
+                gate: null,
+                effort: "standard",
                 hooks: [],
               },
             ],
@@ -149,10 +162,15 @@ describe("gk graph commands", () => {
                 skills: [],
                 refs: [],
                 depend_on: ["worker"],
-                loop: { enabled: false, max_rounds: 3 },
+                loop: null,
                 evidence: ["report"],
                 advisor: null,
                 fan_out: null,
+                retry: null,
+                when: null,
+                budget_tokens: null,
+                gate: null,
+                effort: "standard",
                 hooks: [],
               },
             ],
