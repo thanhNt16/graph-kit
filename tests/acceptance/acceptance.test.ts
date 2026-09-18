@@ -31,8 +31,11 @@ afterAll(() => {
 });
 
 describe("AC01: gk init installs claude/ with all agents, skills, hooks, rules", () => {
-  test("8 agents, 12 gk-* skills, 4 hooks, 3 rules installed", () => {
-    expect(readdirSync(join(TMP, ".claude", "agents")).filter((f) => f.endsWith(".md")).length).toBe(8);
+  test("all core agents, 12 gk-* skills, 4 hooks, 3 rules installed", () => {
+    const coreCount = readdirSync(join(import.meta.dir, "..", "..", "kits", "_core", "agents")).filter((f) =>
+      f.endsWith(".md"),
+    ).length;
+    expect(readdirSync(join(TMP, ".claude", "agents")).filter((f) => f.endsWith(".md")).length).toBe(coreCount);
     const skills = readdirSync(join(TMP, ".claude", "skills")).filter((f) => f.startsWith("gk-"));
     expect(skills.length).toBe(12);
     // Explicit skill set — do not blindly count. gk-compile + gk-run are Claude-only.

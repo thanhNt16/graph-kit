@@ -92,11 +92,11 @@ describe("generated kit parity (all 5 targets from kits/_core)", () => {
     }
   });
 
-  test("every host ships all 8 agents in its native format", () => {
+  test("every host ships all core agents in its native format", () => {
     const slugs = readdirSync(join(CORE, "agents"))
       .map((f) => f.replace(/\.md$/, ""))
       .sort();
-    expect(slugs.length).toBe(8);
+    expect(slugs.length).toBeGreaterThan(0);
     for (const host of HOST_IDS) {
       const ext = host === "codex" ? ".toml" : ".md";
       const dir = join(TMP, host, agentDir(host));

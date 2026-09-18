@@ -103,7 +103,7 @@ your-project/
 │   ├── memory/                      # salience-ranked cross-session project memory
 │   └── diagrams/                    # generated Archify HTML diagrams
 └── .claude/                         # or .cursor/, .omp/, .opencode/, .codex/
-    ├── agents/                      # 8 specialized role agents (architect, reviewer...)
+    ├── agents/                      # 24 specialized role agents (architect, reviewer, arbiter...)
     ├── skills/                      # 13 session skills (brainstorm, execute, gate...)
     └── rules/                       # host-native constraints & guardrails
 ```

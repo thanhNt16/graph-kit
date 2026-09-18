@@ -9,9 +9,9 @@ const ROOT = join(import.meta.dir, "..", "..");
 describe("codex kit", () => {
   const agentsDir = join(ROOT, "kits", "codex", "agents");
 
-  test("8 agents ship as parseable TOML with required fields", () => {
+  test("all agents ship as parseable TOML with required fields", () => {
     const files = readdirSync(agentsDir).filter((f) => f.endsWith(".toml"));
-    expect(files.length).toBe(8);
+    expect(files.length).toBeGreaterThan(0);
     for (const f of files) {
       const raw = readFileSync(join(agentsDir, f), "utf8");
       expect(raw.match(/^name\s*=\s*"(.+)"/m), `${f} name`).toBeTruthy();
@@ -25,7 +25,7 @@ describe("codex kit", () => {
       .filter((f) => f.endsWith(".toml"))
       .map((f) => readFileSync(join(agentsDir, f), "utf8").match(/^name\s*=\s*"(.+)"/m)?.[1]);
     for (const n of names) expect(n).toMatch(/^[a-z_]+$/);
-    expect(new Set(names).size).toBe(8);
+    expect(new Set(names).size).toBe(names.length);
   });
 
   test("read-only agents get read-only sandbox, writers get workspace-write", () => {

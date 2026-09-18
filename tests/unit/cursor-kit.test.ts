@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { installKit, type KitTarget } from "../../src/cli/commands/kit.js";
 
 const TMP = join(import.meta.dir, ".tmp-cursor-kit");
+const ROOT = join(import.meta.dir, "..", "..");
 
 beforeAll(() => {
   if (existsSync(TMP)) rmSync(TMP, { recursive: true });
@@ -35,9 +36,10 @@ describe("Cursor target: gk init --target cursor", () => {
     }
   });
 
-  test("installs 8 agents with Cursor fields (readonly, is_background)", () => {
+  test("installs all core agents with Cursor fields (readonly, is_background)", () => {
     const agents = readdirSync(join(TMP, ".cursor", "agents")).filter((f) => f.endsWith(".md"));
-    expect(agents.length).toBe(8);
+    const coreCount = readdirSync(join(ROOT, "kits", "_core", "agents")).filter((f) => f.endsWith(".md")).length;
+    expect(agents.length).toBe(coreCount);
     for (const a of agents) {
       const body = readFileSync(join(TMP, ".cursor", "agents", a), "utf-8");
       expect(body).toMatch(/readonly:/);

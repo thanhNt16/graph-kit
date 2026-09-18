@@ -28,9 +28,12 @@ describe("Full flow: init -> validate -> compile", () => {
     expect(installed).toContain("skills");
     expect(installed).toContain("hooks");
     expect(installed).toContain("rules");
-    // 8 agents
+    // all core agents
     const agents = readdirSync(join(TMP, ".claude", "agents")).filter((f) => f.endsWith(".md"));
-    expect(agents.length).toBe(8);
+    const coreCount = readdirSync(join(import.meta.dir, "..", "..", "kits", "_core", "agents")).filter((f) =>
+      f.endsWith(".md"),
+    ).length;
+    expect(agents.length).toBe(coreCount);
     // 12 gk-* skills — assert the explicit set (includes gk-compile + gk-run, Claude-only)
     const skills = readdirSync(join(TMP, ".claude", "skills")).filter((f) => f.startsWith("gk-"));
     expect(skills.length).toBe(12);
