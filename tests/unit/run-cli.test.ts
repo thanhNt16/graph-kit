@@ -645,5 +645,4 @@ describe("run dispatch/land/take CLI", () => {
     expect(out.code).toBe(1);
     expect(JSON.parse(out.stdout).error.code).toBe("BAD_VIA");
   });
-
 });

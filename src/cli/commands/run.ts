@@ -45,7 +45,6 @@ function orphanedGkArtifacts(cwd: string): { orphaned_worktrees: string[]; orpha
   } catch {
     return { orphaned_worktrees: [], orphaned_branches: [] };
   }
-
 }
 
 function errCode(e: unknown): { code: string; message: string } {
