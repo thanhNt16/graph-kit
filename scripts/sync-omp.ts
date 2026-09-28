@@ -56,6 +56,12 @@ try {
   const src = join(staging, "pi");
 
   if (check) {
+    // .omp is gitignored — the local dogfood mirror is optional. A fresh
+    // checkout/CI has no .omp; that's "absent", not "drifted".
+    if (!existsSync(OMP)) {
+      console.log("sync-omp --check: no .omp (gitignored) — skipped");
+      process.exit(0);
+    }
     const diffs: string[] = [];
     for (const dir of MIRRORED) {
       const local = snapshot(join(OMP, dir));

@@ -51,7 +51,7 @@ describe("advisor + fan-out e2e smoke over real CLI", () => {
     const agentDir = join(tmpCwd, ".omp", "agents");
     mkdirSync(agentDir, { recursive: true });
     for (const name of ["software-architect.md", "code-reviewer.md"]) {
-      const src = join(REPO_ROOT, ".omp", "agents", name);
+      const src = join(REPO_ROOT, "kits", "pi", "agents", name);
       if (!existsSync(src))
         throw new Error(`e2e fixture missing: ${src} — the agent-binding check needs real repo agents`);
       writeFileSync(join(agentDir, name), readFileSync(src, "utf-8"));

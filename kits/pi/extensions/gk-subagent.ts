@@ -56,6 +56,29 @@ export function buildPrompt(args: DispatchArgs): string {
     .join("\n\n");
 }
 
+/** Append one dispatch-intent line to the active run's dispatch.jsonl under
+ *  <cwd>/.graphkit/runs/.active. Silent no-op when no run is active or the
+ *  write fails — bookkeeping must never fail a dispatch. */
+function recordIntent(args: DispatchArgs, pid: number | null): void {
+  try {
+    const active = join(args.cwd ?? process.cwd(), ".graphkit", "runs", ".active");
+    if (!existsSync(active)) return;
+    const dir = readFileSync(active, "utf-8").trim();
+    appendFileSync(
+      join(dir, "dispatch.jsonl"),
+      `${JSON.stringify({
+        at: new Date().toISOString(),
+        node: args.node ?? null,
+        attempt: args.attempt ?? null,
+        via: "extension",
+        pid,
+      })}\n`,
+    );
+  } catch {
+    /* intent write is best-effort; never fail a dispatch over bookkeeping */
+  }
+}
+
 export async function dispatch(args: DispatchArgs, signal?: AbortSignal): Promise<DispatchResult> {
   const fragment = loadAgentPrompt(args.agent);
   if (!fragment) return { ok: false, output: `Unknown agent: ${args.agent}`, exit_code: 1 };
@@ -76,28 +99,14 @@ export async function dispatch(args: DispatchArgs, signal?: AbortSignal): Promis
     ["-c", 'printf %s "$GK_PROMPT" | exec omp "$@"', "gk-dispatch", ...buildPiArgs(args)],
     { env: { ...process.env, GK_PROMPT: prompt }, detached: true },
   );
-  // Dispatch-intent record: written after spawn returns (child.pid needed)
-  // but before dispatch() awaits the result, so a crashed coordinator
-  // distinguishes "dispatched but quiet" from "never dispatched" on resume.
-  // Best-effort: bookkeeping must never fail a dispatch.
-  try {
-    const active = join(args.cwd ?? process.cwd(), ".graphkit", "runs", ".active");
-    if (existsSync(active)) {
-      const dir = readFileSync(active, "utf-8").trim();
-      appendFileSync(
-        join(dir, "dispatch.jsonl"),
-        `${JSON.stringify({
-          at: new Date().toISOString(),
-          node: args.node ?? null,
-          attempt: args.attempt ?? null,
-          via: "extension",
-          pid: child.pid ?? null,
-        })}\n`,
-      );
-    }
-  } catch {
-    /* intent write is best-effort; never fail a dispatch over bookkeeping */
-  }
+  // Dispatch-intent record: written BEFORE spawn so a crashed coordinator
+  // distinguishes "dispatched but quiet" from "never dispatched" on resume —
+  // and so a racing child cannot observe a missing ledger line. Best-effort:
+  // bookkeeping must never fail a dispatch. pid:null marks "about to launch".
+  recordIntent(args, null);
+  // The 'spawn' event fires once the OS accepts the fork — record the real
+  // pid as a second ledger line so `gk run take` can kill live dispatches.
+  child.once("spawn", () => recordIntent(args, child.pid ?? null));
   const MAX_OUTPUT = 10 * 1024 * 1024;
   let out = "";
   let err = "";

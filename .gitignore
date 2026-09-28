@@ -3,16 +3,8 @@ dist/
 claude/topology/
 .claude/
 .graphkit/
-claude/viewer/*.js
-claude/viewer/*.mjs
-cursor/viewer/*.js
-cursor/viewer/*.mjs
 
 .superpowers/
-kits/claude/viewer/*.js
-kits/claude/viewer/*.mjs
-kits/cursor/viewer/*.js
-kits/cursor/viewer/*.mjs
 
 # memory/CBM runtime artifacts — ignore, never delete
 .fastembed_cache/
@@ -25,4 +17,4 @@ updates.html
 build/
 
 # gk graph agents materialized node agents (regenerated per run)
-.omp/agents/gk-*.md
+.omp/
