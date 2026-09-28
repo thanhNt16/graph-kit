@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GraphKit — OMP Orchestration Adoption: Feature Report + Demo</title>
+<style>
+ :root {
+  --bg: #0d1117; --panel: #161b22; --border: #30363d;
+  --text: #e6edf3; --dim: #8b949e; --accent: #58a6ff;
+  --good: #3fb950; --warn: #d29922; --bad: #f85149; --purple: #bc8cff;
+ }
+ * { box-sizing: border-box; }
+ body { background: var(--bg); color: var(--text); font: 15px/1.55 -apple-system, "Segoe UI", Helvetica, sans-serif; margin: 0; }
+ .wrap { max-width: 960px; margin: 0 auto; padding: 40px 24px 80px; }
+ h1 { font-size: 26px; margin: 0 0 6px; }
+ h2 { font-size: 19px; margin: 40px 0 12px; border-bottom: 1px solid var(--border); padding-bottom: 6px; }
+ h3 { font-size: 15px; margin: 24px 0 8px; }
+ p, li { color: var(--text); }
+ .sub { color: var(--dim); margin-top: 0; }
+ code, pre { font: 12.5px/1.5 "SF Mono", Menlo, monospace; }
+ code { background: #21262d; padding: 1px 5px; border-radius: 4px; }
+ pre { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; overflow-x: auto; color: var(--text); }
+ pre .c { color: var(--dim); }
+ table { width: 100%; border-collapse: collapse; font-size: 13.5px; margin: 12px 0; }
+ th, td { text-align: left; padding: 8px 10px; border: 1px solid var(--border); vertical-align: top; }
+ th { background: var(--panel); font-weight: 600; }
+ .tag { display: inline-block; font-size: 11px; padding: 1px 7px; border-radius: 10px; border: 1px solid var(--border); color: var(--dim); }
+ .tag.schema { border-color: var(--accent); color: var(--accent); }
+ .tag.contract { border-color: var(--purple); color: var(--purple); }
+ .tag.cli { border-color: var(--good); color: var(--good); }
+ .tag.guard { border-color: var(--warn); color: var(--warn); }
+ .good { color: var(--good); }
+ .bad { color: var(--bad); }
+ .warn { color: var(--warn); }
+ .kv { color: var(--dim); font-size: 12px; }
+ .box { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 14px 18px; margin: 14px 0; }
+ .step { border-left: 3px solid var(--accent); padding-left: 14px; margin: 18px 0; }
+ .step h3 { margin-top: 0; }
+ .note { color: var(--dim); font-size: 13px; }
+ footer { margin-top: 48px; color: var(--dim); font-size: 12.5px; border-top: 1px solid var(--border); padding-top: 14px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<h1>OMP Orchestration Adoption — Feature Report</h1>
+<p class="sub">Branch <code>feat/slp-omp-orchestration</code> → merged to <code>main</code>, pushed (<code>82fecd0..d5c7f5c</code>) · 698 tests green · spec <code>docs/superpowers/specs/2026-09-28-omp-orchestration-adoption-design.md</code></p>
+
+<div class="box">
+Adopts the reliability and contract machinery of the OMP orchestration design doc that graph-kit lacked — dispatch intent before launch, landed-vs-reported lifecycle, stale-run takeover, resume judgment carryover, enforced evidence stamping, recorded challenge dispositions, merge-protocol hardening — without importing the parts the doc itself defers (SQLite, adapter layer, fencing). Verified end-to-end by a live CLI demo below (real output, <code>/tmp/gk-orch-demo</code>).
+</div>
+
+<h2>What shipped</h2>
+<table>
+ <tr><th style="width:190px">Capability</th><th style="width:80px">Layer</th><th>Behavior</th></tr>
+ <tr><td>Dispatch intent</td><td><span class="tag cli">cli</span></td><td><code>gk run dispatch &lt;node&gt; --attempt N --via task|extension [--pid]</code> writes <code>dispatch.jsonl</code> <em>before</em> launch; extension auto-writes it too (pid included). A crashed coordinator can now distinguish "dispatched but quiet" from "never dispatched".</td></tr>
+ <tr><td><code>landed</code> lifecycle</td><td><span class="tag schema">schema</span></td><td><code>TraceLine.landed {at, commit}</code> + <code>gk run land &lt;node&gt; --commit</code>. <code>reported</code> (status ok) vs <code>landed</code> (integrated) are now separable facts.</td></tr>
+ <tr><td><code>require_landed</code></td><td><span class="tag guard">gate</span></td><td><code>evidence.require_landed: true</code> → <code>gk gate</code> BLOCKs on ok-but-unlanded nodes; <code>unlanded</code> names them.</td></tr>
+ <tr><td>Stale-run takeover</td><td><span class="tag cli">cli</span></td><td><code>gk run take --from &lt;id&gt;</code> reconciles the dead run, refuses if its recorded pids are alive (<code>TAKEOVER_BLOCKED</code>), clears <code>.active</code>, stamps <code>takes_over</code> via a <code>.takeover</code> handoff file that survives a failed <code>startRun</code>. <code>.active</code> now created with <code>wx</code> (atomic).</td></tr>
+ <tr><td>Resume reconciliation</td><td><span class="tag cli">cli</span></td><td><code>resume</code> returns <code>unresolved[]</code> (dispatched, never resolved) instead of silently re-dispatching; pending nodes inherit unadjudicated challenges + last advisor event as <code>## Resume context</code> in their objective.</td></tr>
+ <tr><td>Evidence supersession</td><td><span class="tag schema">schema</span></td><td>Marker gains <code>superseded</code>; <code>gk evidence invalidate --key</code> marks premise-disproved evidence absent for the gate even when the tree fingerprint is still fresh.</td></tr>
+ <tr><td>Strict freshness</td><td><span class="tag guard">gate</span></td><td><code>freshness: strict</code> now BLOCKs markerless (<code>unknown</code>) evidence with a warning naming the keys — closes the hand-written-evidence hole.</td></tr>
+ <tr><td>Challenge dispositions</td><td><span class="tag contract">contract</span></td><td><code>--notes "disposition=accept|modify|reject|defer reason=…"</code>; <code>CHALLENGE: plan</code> suspends for the human via the existing <code>gate</code> machinery (node challenges stay orchestrator-adjudicated). One shared <code>DISPOSITION_PATTERN</code> in ledger.ts serves resume and analyze.</td></tr>
+ <tr><td>Merge protocol</td><td><span class="tag contract">contract</span></td><td>Wave N+1 worktrees branch after N merges; post-merge <code>owns</code> check (<code>diff --name-only</code> ⊆ globs → abort <code>owns-violation</code>); evidence re-stamped post-merge; final-tree suite + gate; abort recorded <code>merge-conflict:&lt;branch&gt;</code>; <code>run end</code> reports orphaned worktrees/branches.</td></tr>
+ <tr><td>Launch receipts</td><td><span class="tag contract">contract</span></td><td>After each <code>task()</code> batch the orchestrator takes a <code>hub jobs</code> snapshot — one running row per node or <code>--notes launch-lost</code> + stop.</td></tr>
+ <tr><td>Message stamping</td><td><span class="tag contract">contract</span></td><td>Hub sends/briefs open with <code>run: &lt;id&gt; node: &lt;id&gt; rev: &lt;sha[:12]&gt;</code>; <code>gk run start</code> now returns <code>graph_sha256</code>.</td></tr>
+ <tr><td>Analyze metrics</td><td><span class="tag cli">cli</span></td><td><code>challenges.{total, adjudicated, dispositions}</code> + <code>nodes.integration_failures</code>.</td></tr>
+ <tr><td>Constraint provenance</td><td><span class="tag schema">schema</span></td><td><code>constraints[].source: human|author</code> — human constraints are agent-immutable; bad source → advisory.</td></tr>
+ <tr><td><code>cook-plan</code> template</td><td><span class="tag cli">cli</span></td><td><code>templates/gallery/cook-plan.gk.yaml</code>: plan → loop{implement,test} (max_rounds 3, gate_evidence, no_progress_limit 2) → eval-gate → integrate. <code>eval-gate</code> promoted to a known role.</td></tr>
+</table>
+
+<h2>Live demo flow — real output</h2>
+<p class="note">Executed against <code>bun src/index.ts</code> in a scratch repo with two nodes (<code>build</code> → <code>audit</code>, <code>require_landed: true</code>, strict freshness). Script: <code>/tmp/gk-orch-demo.sh</code>.</p>
+
+<div class="step">
+<h3>1–2. Materialize agents</h3>
+<pre><span class="c">$ gk graph agents graph.yaml</span>
+{"status":"ok","data":{"agents":{"build":"gk-build","audit":"gk-audit"},
+ "dir":"/tmp/gk-orch-demo/.omp/agents"}}
+
+<span class="c">$ head -6 .omp/agents/gk-build.md</span>
+---
+name: gk-build
+description: "Graph node 'build' (implementer) — Implement the feature per plan"
+model: "sonnet"
+---</pre>
+</div>
+
+<div class="step">
+<h3>3–6. Run, dispatch intent, stamped evidence, traced node</h3>
+<pre><span class="c">$ gk run start --graph graph.yaml</span>
+{"status":"ok","data":{"id":"20260928-053018-orch-demo","dir":"…","graph_sha256":"37c8a787…"}}
+
+<span class="c">$ gk run dispatch build --attempt 1 --via task</span>   <span class="c"># intent BEFORE launch</span>
+{"status":"ok","data":{"run":"20260928-053018-orch-demo","node":"build"}}
+
+<span class="c">$ gk evidence add impl.md --key impl-report --node build</span>
+{"status":"ok","data":{"key":"impl-report","artifact":"impl-report/95cc8b42….md",…}}
+
+<span class="c">$ gk run node build --status ok --evidence impl-report --attempt 1</span>
+{"status":"ok",…}</pre>
+</div>
+
+<div class="step">
+<h3>7. Challenge with recorded disposition</h3>
+<pre><span class="c">$ gk run node audit --status challenge \
+    --notes "disposition=accept reason=assumption disproven, re-dispatching"</span>
+{"status":"ok",…}   <span class="c"># adjudication is a ledger fact, feeds analyze.dispositions</span></pre>
+</div>
+
+<div class="step">
+<h3>8–11. Gate blocks unlanded → land → re-stamp → MERGE</h3>
+<pre><span class="c">$ gk gate graph.yaml          # before landing</span>
+<span class="bad">{"status":"fail","error":{"code":"GATE_BLOCK",
+ "details":{"unlanded":["build","audit"],"stale":["impl-report"],…}}}</span>
+
+<span class="c">$ git commit -m "merge" && gk run land build --commit $SHA && gk run land audit --commit $SHA</span>
+<span class="c">$ gk evidence add impl.md --key impl-report   # re-stamp post-merge</span>
+<span class="c">$ gk gate graph.yaml          # after landing + re-stamp</span>
+<span class="good">{"status":"ok","data":{"verdict":"MERGE","unlanded":[],
+ "freshness":{"impl-report":"fresh","audit-findings":"fresh"}}}</span></pre>
+</div>
+
+<div class="step">
+<h3>12. Run end — orphan scan</h3>
+<pre><span class="c">$ gk run end --status merged</span>
+{"status":"ok","data":{…,"orphaned_worktrees":[],"orphaned_branches":[]}}</pre>
+</div>
+
+<div class="step">
+<h3>13–16. Crash → take → resume</h3>
+<pre><span class="c"># coordinator dies mid-dispatch: .active + dispatch.jsonl left, no trace line</span>
+<span class="c">$ gk run status</span>
+{"status":"ok","data":{"active":"…/20260928-053019-orch-demo","active_age_ms":149,…}}
+
+<span class="c">$ gk run take --from 20260928-053019-orch-demo</span>
+{"status":"ok","data":{"taken_from":"…-053019-…","unresolved":["build"],
+ "pending":["audit","build"],"active_cleared":true}}
+
+<span class="c">$ gk run resume &lt;id&gt; --dry-run</span>
+{"status":"ok","data":{"resumed":false,"reason":"DRY_RUN",
+ "unresolved":["build"],<span class="good"> ← "dispatched but quiet" is visible, not re-blind-fired</span>
+ "pending":["audit","build"],…}}</pre>
+</div>
+
+<div class="step">
+<h3>17–18. Analyze + invalidate</h3>
+<pre><span class="c">$ gk run analyze</span>
+{"status":"ok","data":{"nodes":{…,"integration_failures":0},
+ "challenges":{"total":0,"adjudicated":0,"dispositions":{}},…}}
+
+<span class="c">$ gk evidence invalidate --key impl-report --note "premise superseded"</span>
+{"status":"ok","data":{"key":"impl-report","superseded":true}}
+<span class="c">$ gk gate graph.yaml</span>
+<span class="bad">{"status":"fail","error":{"code":"GATE_BLOCK",
+ "details":{"missing":["impl-report"],…}}}</span>   <span class="c"># superseded evidence counts as absent</span></pre>
+</div>
+
+<h2>Command reference</h2>
+<table>
+ <tr><th style="width:340px">Command</th><th>Purpose</th></tr>
+ <tr><td><code>gk graph agents &lt;graph&gt;</code></td><td>Materialize <code>.omp/agents/gk-&lt;node&gt;.md</code> (frontmatter + model/tools) — pi only; orchestrator runs it once per graph.</td></tr>
+ <tr><td><code>gk run dispatch &lt;node&gt; --attempt N --via task|extension [--pid]</code></td><td>Record dispatch intent before launch.</td></tr>
+ <tr><td><code>gk run node &lt;id&gt; --attempt N --notes "disposition=…"</code></td><td>Trace lines carry attempt + adjudication.</td></tr>
+ <tr><td><code>gk run land &lt;node&gt; --commit &lt;sha&gt;</code></td><td>Stamp integration commit on the ok line.</td></tr>
+ <tr><td><code>gk run take --from &lt;id&gt;</code></td><td>Reconcile a dead coordinator's run; refuses on live pids.</td></tr>
+ <tr><td><code>gk run status</code></td><td>Now includes <code>active_age_ms</code>.</td></tr>
+ <tr><td><code>gk run resume &lt;id&gt;</code></td><td>Carries <code>unresolved[]</code> + challenge/advisor context into the derived graph.</td></tr>
+ <tr><td><code>gk run end</code></td><td>Reports <code>orphaned_worktrees</code> + <code>orphaned_branches</code>.</td></tr>
+ <tr><td><code>gk evidence add &lt;f&gt; --key k --node n</code></td><td>Stamped evidence (required under strict freshness).</td></tr>
+ <tr><td><code>gk evidence invalidate --key k</code></td><td>Mark evidence superseded → gate treats as absent.</td></tr>
+ <tr><td><code>gk gate</code></td><td>Enforces strict freshness, superseded, <code>require_landed</code>.</td></tr>
+ <tr><td><code>gk run analyze</code></td><td>Dispositions + integration_failures metrics.</td></tr>
+</table>
+
+<h2>Deliberately not built</h2>
+<ul>
+ <li>SQLite store — JSONL ledger is single-writer and covers today's access patterns.</li>
+ <li>Herdr/Orca adapter abstraction — omp <code>task</code>/<code>hub</code> + <code>gk_dispatch_agent</code> IS the platform layer; revisit at a second backend.</li>
+ <li>Per-spawn timeout on native <code>task</code> — runtime lacks it; <code>timeout_ms</code> nodes route to the extension's process-group kill.</li>
+ <li>≤2-writer cap, fencing controller, persistent supervisor, cross-worktree mailboxes, escaped-defect reopening, token-cost estimation.</li>
+</ul>
+
+<footer>
+graph-kit · branch merged & pushed to main · verified: tsc, biome, 698 tests, gen:kits:check, cli-parity · demo output captured live 2026-09-28
+</footer>
+
+</div>
+</body>
+</html>
