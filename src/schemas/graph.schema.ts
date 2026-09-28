@@ -10,6 +10,9 @@ const NodeRef = z.enum(TIERS);
 //   constraints:
 //     - max_files: 50
 //     - no_write: true
+// A constraint may declare provenance via `source`: "human" (operator-declared,
+// agents must never modify it) or "author" (default, graph-author declared).
+// Any other `source` value surfaces an advisory finding in the compiler.
 const ConstraintValue = z.record(z.string(), z.union([z.string(), z.number(), z.boolean()]));
 
 const RefSchema = z

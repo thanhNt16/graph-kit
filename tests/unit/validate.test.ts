@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import YAML from "yaml";
-import { agentFileName, validateGraph } from "../../src/compiler/validate.js";
+import { agentFileName, isBlocking, validateGraph } from "../../src/compiler/validate.js";
 import { GraphSchema } from "../../src/schemas/graph.schema.js";
 
 const FIXTURES = join(import.meta.dir, "..", "fixtures");
@@ -156,6 +156,38 @@ describe("validateGraph structural checks", () => {
     const parsed = GraphSchema.parse(loadYaml("valid-diamond.yaml"));
     const findings = validateGraph(parsed, PROJECT_ROOT);
     expect(findings).toEqual([]);
+  });
+
+  test("constraint source other than human|author emits advisory", () => {
+    const g = GraphSchema.parse({
+      ...baseGraph,
+      topology: "diamond",
+      nodes: {
+        worker: {
+          agent: "Code Reviewer",
+          objective: "x",
+          constraints: [{ no_write: true }, { source: "agent" }],
+        },
+      },
+    });
+    const findings = validateGraph(g, "/nonexistent-root");
+    expect(findings.some((f) => f.check === "constraint-source" && !isBlocking(f))).toBe(true);
+  });
+
+  test("constraint source human|author emits no advisory", () => {
+    const g = GraphSchema.parse({
+      ...baseGraph,
+      topology: "diamond",
+      nodes: {
+        worker: {
+          agent: "Code Reviewer",
+          objective: "x",
+          constraints: [{ source: "human" }, { source: "author" }],
+        },
+      },
+    });
+    const findings = validateGraph(g, "/nonexistent-root");
+    expect(findings.some((f) => f.check === "constraint-source")).toBe(false);
   });
 
   test("zero-nodes: non-custom topology with no nodes rejected", () => {

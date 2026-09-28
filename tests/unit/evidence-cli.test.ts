@@ -1,9 +1,9 @@
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { cac } from "cac";
 import { registerEvidenceCommand } from "../../src/cli/commands/evidence.js";
+import { parseMarker } from "../../src/evidence/marker.js";
 
 let cwd: string;
 const graphYaml = `apiVersion: graphkit.dev/v2
@@ -81,5 +81,30 @@ describe("gk evidence add", () => {
   test("unknown leaf rejected", () => {
     const r = runCli(["evidence", "bogus", "--json"]);
     expect(JSON.parse(r.stdout).error.code).toBe("UNKNOWN_EVIDENCE_SUBCOMMAND");
+  });
+});
+
+describe("gk evidence invalidate", () => {
+  test("writes superseded marker", () => {
+    writeFileSync(join(cwd, "r.json"), "{}");
+    runCli(["evidence", "add", "r.json", "--key", "api-response", "--json"]);
+    const r = runCli(["evidence", "invalidate", "--key", "api-response", "--note", "premise disproved", "--json"]);
+    const env = JSON.parse(r.stdout);
+    expect(env.status).toBe("ok");
+    expect(env.data.superseded).toBe(true);
+    const md = readFileSync(join(cwd, ".graphkit", "evidence", "api-response.md"), "utf-8");
+    expect(parseMarker(md)?.superseded).toBe("premise disproved");
+  });
+
+  test("missing --key fails", () => {
+    const r = runCli(["evidence", "invalidate", "--json"]);
+    expect(r.code).toBe(1);
+    expect(JSON.parse(r.stdout).error.code).toBe("MISSING_ARG");
+  });
+
+  test("unknown key fails EVIDENCE_KEY_MISSING", () => {
+    const r = runCli(["evidence", "invalidate", "--key", "nope", "--json"]);
+    expect(r.code).toBe(1);
+    expect(JSON.parse(r.stdout).error.code).toBe("EVIDENCE_KEY_MISSING");
   });
 });

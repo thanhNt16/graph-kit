@@ -14,6 +14,7 @@ export interface MarkerMeta {
   bytes: number | null;
   ts: string | null;
   note: string | null;
+  superseded: string | null;
 }
 
 const KEYS = [
@@ -27,6 +28,7 @@ const KEYS = [
   "bytes",
   "ts",
   "note",
+  "superseded",
 ] as const;
 
 export function renderMarker(meta: MarkerMeta, body: string): string {
@@ -57,6 +59,7 @@ export function parseMarker(content: string): MarkerMeta | null {
     bytes: typeof raw.bytes === "number" ? raw.bytes : s(raw.bytes) === null ? null : Number(raw.bytes),
     ts: s(raw.ts),
     note: s(raw.note),
+    superseded: s(raw.superseded),
   };
 }
 

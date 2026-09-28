@@ -12,6 +12,7 @@ const meta: MarkerMeta = {
   bytes: 8123,
   ts: "2026-09-05T09:00:00.000Z",
   note: "n",
+  superseded: null,
 };
 
 describe("marker", () => {
@@ -36,5 +37,15 @@ describe("marker", () => {
     expect(freshnessOf(meta, { head: "z".repeat(40), tree: "b".repeat(64) })).toBe("stale");
     expect(freshnessOf(meta, { head: null, tree: null })).toBe("unknown"); // non-git cwd
     expect(freshnessOf(null, cur)).toBe("unknown"); // legacy marker
+  });
+
+  test("renderMarker/parseMarker round-trips superseded", () => {
+    const m = renderMarker({ ...meta, superseded: "premise disproved 2026-09-28" }, "body");
+    expect(parseMarker(m)?.superseded).toBe("premise disproved 2026-09-28");
+  });
+
+  test("fresh marker has null superseded", () => {
+    const md = renderMarker(meta, "body");
+    expect(parseMarker(md)?.superseded).toBeNull();
   });
 });

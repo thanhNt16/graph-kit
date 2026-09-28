@@ -71,6 +71,7 @@ export function addEvidence(
     bytes,
     ts,
     note: opts.note ?? null,
+    superseded: null,
   };
   writeFileSync(
     join(evidenceDir, `${opts.key}.md`),

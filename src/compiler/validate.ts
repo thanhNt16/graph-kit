@@ -170,6 +170,23 @@ export function validateGraph(graph: Graph, projectRoot: string): Finding[] {
     }
   }
 
+  // 7c. Constraint provenance (ADVISORY): a constraint may carry `source` to
+  // mark who declared it — "human" (operator, agents must never modify it) or
+  // "author" (default, graph author). Any other value is a typo surfacing as a
+  // review prompt.
+  for (const [id, node] of Object.entries(graph.nodes)) {
+    for (const c of node.constraints) {
+      if ("source" in c && c.source !== "human" && c.source !== "author") {
+        findings.push({
+          check: "constraint-source",
+          path: `nodes.${id}.constraints`,
+          message: `constraint source "${String(c.source)}" must be "human" or "author" ("human" constraints are agent-immutable)`,
+          severity: "warn",
+        });
+      }
+    }
+  }
+
   // 8. Loop group rules
   if (graph.loops && graph.loops.length > 0) {
     const seenLoopNodes = new Set<string>();

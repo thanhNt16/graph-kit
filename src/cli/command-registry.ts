@@ -46,7 +46,7 @@ const GROUP_SUBCOMMANDS: Record<string, string[]> = {
   models: listTargets().map((t) => t.id),
   template: ["pack", "list", "show", "materialize"],
   run: ["start", "node", "dispatch", "land", "end", "status", "resume", "take", "round", "analyze"],
-  evidence: ["add", "report"],
+  evidence: ["add", "invalidate", "report"],
 };
 
 /** Space-joined leaf names for a command group — injected into group --help and error hints. */
