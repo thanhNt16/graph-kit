@@ -101,6 +101,13 @@ const COLLECT_AND_LOOPS = `2. **Collect results** — when all agents in the wav
    In **worktree mode** a wave is NOT done when agents return — it is done when
    merged and the gate is green (see Worktree merge protocol below).
 3. **Handle loops** — if a node has \`loop.enabled\` and its result doesn't meet the stop condition (\`stop_when\` is advisory), re-dispatch that node (up to \`max_rounds\`). Top-level \`loops:\` (multi-node groups): see [Loop groups](#loop-groups-multi-node-loops) below.`;
+
+// Host-neutral run-ledger contract required by the gk-execute SKILL (Task 8):
+// every host's dispatch section carries dispatch-intent recording, launch
+// verification, message stamping, evidence stamping, landing, and challenge
+// dispositions. Phrase stays dispatch-tool-agnostic; host constants below add
+// their own tool syntax.
+const RUN_LEDGER_CONTRACT = `**Run ledger contract.** Before issuing the wave's dispatches, record each spawn's intent: \`gk run dispatch <node-id> --attempt <n> --via task\`. After the wave starts, verify every spawned node actually launched — a node that never launched is recorded \`gk run node <id> --status fail --notes launch-lost\` and stops the wave. Open every message to a spawned node with the header \`run: <run-id> node: <node-id> rev: <graph_sha256[:12]>\` from the \`gk run start\` payload. Stamp each evidence file via \`gk evidence add <file> --key <key> --node <node-id>\` (markerless evidence fails \`strict\` freshness); after a node's work is committed/merged, record it via \`gk run land <node-id> --commit <sha>\`. Record a challenge and its adjudication in one line: \`gk run node <id> --status challenge --notes "disposition=accept|modify|reject|defer reason=…"\`.`;
 const CLAUDE_DISPATCH = `## Dispatching a wave (Claude Code)
 
 Spawn one parallel subagent per node in the current wave via the **Agent tool** — issue all calls for the wave in a single message (they run in parallel), collect every result, then proceed. Agent definitions live at \`.claude/agents/<agent-name>.md\`; read the node's definition first for identity, rules, and deliverables.
@@ -116,6 +123,8 @@ Each Agent call gets:
    - The node's \`tools\` and \`skills\` constraints
 
    In **worktree mode**: write-capable nodes additionally get \`isolation: "worktree"\` and their prompts must be fully self-contained (background workers cannot ask the user) — include repo conventions, the node's acceptance-check recipe, and landing instructions (commit to the worktree branch, conventional message). Read-only nodes skip worktrees — plain dispatch.
+${RUN_LEDGER_CONTRACT}
+
 ${COLLECT_AND_LOOPS}`;
 
 const CLAUDE_TEMPLATE = `## Agent dispatch template
@@ -152,7 +161,7 @@ Each Task call gets:
    - The node's \`refs\` (read these files and include relevant content)
    - The node's \`tools\` and \`skills\` constraints
 
-   In **worktree mode**: write-capable nodes additionally get \`isolation: "worktree"\` and their prompts must be fully self-contained (background workers cannot ask the user) — include repo conventions, the node's acceptance-check recipe, and landing instructions (commit to the worktree branch, conventional message). Read-only nodes skip worktrees — plain dispatch.
+${RUN_LEDGER_CONTRACT}
 
 ${COLLECT_AND_LOOPS.replaceAll("all agents", "all tasks")}`;
 
@@ -193,6 +202,8 @@ Each Task call gets:
    - The node's \`tools\` and \`skills\` constraints
 
    In **worktree mode**: write-capable nodes additionally get \`isolation: "worktree"\` and their prompts must be fully self-contained (background workers cannot ask the user) — include repo conventions, the node's acceptance-check recipe, and landing instructions (commit to the worktree branch, conventional message). Read-only nodes skip worktrees — plain dispatch.
+
+${RUN_LEDGER_CONTRACT}
 
 ${COLLECT_AND_LOOPS.replaceAll("all agents", "all tasks")}`;
 
@@ -237,6 +248,8 @@ Each spawned agent gets:
    - The node's \`tools\` and \`skills\` constraints
 
    In **worktree mode**: for each write-capable node, create an isolated worktree first (\`git worktree add .graphkit/worktrees/<node-id> -b gk/<node-id>\`), spawn the agent with the worktree path in its prompt, and make prompts fully self-contained (workers cannot ask the user) — include repo conventions, the node's acceptance-check recipe, and landing instructions (commit to the worktree branch, conventional message). Read-only nodes skip worktrees — plain dispatch.
+
+${RUN_LEDGER_CONTRACT}
 
 ${COLLECT_AND_LOOPS}`;
 

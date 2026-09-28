@@ -628,4 +628,22 @@ describe("run dispatch/land/take CLI", () => {
     expect(out.status).toBe("ok");
     expect(readTrace(cwd, out.data.run).at(-1)?.attempt).toBe(2);
   });
+
+  test("run end reports orphaned worktrees/branches (quiet [] off-repo)", () => {
+    startRun(cwd, join(cwd, "graph.yaml"));
+    const out = JSON.parse(runCli(["run", "end", "--status", "merged"], cwd).stdout);
+    expect(out.status).toBe("ok");
+    // The fixture cwd is not a git repo: the best-effort scan must fail soft,
+    // but the SKILL contract promises both fields on every end payload.
+    expect(out.data.orphaned_worktrees).toEqual([]);
+    expect(out.data.orphaned_branches).toEqual([]);
+  });
+
+  test("run dispatch rejects --via outside task|extension", () => {
+    startRun(cwd, join(cwd, "graph.yaml"));
+    const out = runCli(["run", "dispatch", "a", "--via", "wave"], cwd);
+    expect(out.code).toBe(1);
+    expect(JSON.parse(out.stdout).error.code).toBe("BAD_VIA");
+  });
+
 });

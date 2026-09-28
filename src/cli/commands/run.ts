@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import type { CAC } from "cac";
@@ -24,6 +25,28 @@ import { GraphSchema } from "../../schemas/graph.schema.js";
 import { subcommandsFor } from "../command-registry.js";
 import { emit, fail, ok } from "../output.js";
 import { kitVersionWarnings } from "./kit.js";
+
+/** `gk run end` contract: report leftover worktrees/branches so the orchestrator
+ * cleans them before reporting completion. Best-effort: [] on non-git or any
+ * scan failure — ending a run must never block on housekeeping data. */
+function orphanedGkArtifacts(cwd: string): { orphaned_worktrees: string[]; orphaned_branches: string[] } {
+  try {
+    const git = (args: string[]) => execFileSync("git", args, { cwd, encoding: "utf-8" });
+    const worktrees = git(["worktree", "list", "--porcelain"])
+      .split("\n")
+      .filter((l) => l.startsWith("worktree "))
+      .map((l) => l.slice("worktree ".length))
+      .filter((p) => p.includes(".graphkit/worktrees/"));
+    const branches = git(["branch", "--list", "gk/*"])
+      .split("\n")
+      .map((l) => l.replace(/^[\s*+]\s*/, "").trim())
+      .filter(Boolean);
+    return { orphaned_worktrees: worktrees, orphaned_branches: branches };
+  } catch {
+    return { orphaned_worktrees: [], orphaned_branches: [] };
+  }
+
+}
 
 function errCode(e: unknown): { code: string; message: string } {
   const message = String((e as Error)?.message ?? e);
@@ -151,6 +174,10 @@ export function registerRunCommands(cli: CAC) {
             emit(fail("MISSING_ARG", "dispatch requires a node id"));
             return;
           }
+          if (opts.via != null && !["task", "extension"].includes(String(opts.via))) {
+            emit(fail("BAD_VIA", "--via must be task|extension"));
+            return;
+          }
           emit(
             ok(
               appendDispatch(cwd, {
@@ -218,7 +245,7 @@ export function registerRunCommands(cli: CAC) {
             emit(fail("BAD_STATUS", "end requires --status merged|blocked|failed"));
             return;
           }
-          emit(ok(endRun(cwd, status)));
+          emit(ok({ ...endRun(cwd, status), ...orphanedGkArtifacts(cwd) }));
           return;
         }
         if (subcommand === "resume") {

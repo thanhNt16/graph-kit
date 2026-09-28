@@ -107,7 +107,7 @@ Each Task call gets:
    - The node's `refs` (read these files and include relevant content)
    - The node's `tools` and `skills` constraints
 
-   In **worktree mode**: write-capable nodes additionally get `isolation: "worktree"` and their prompts must be fully self-contained (background workers cannot ask the user) — include repo conventions, the node's acceptance-check recipe, and landing instructions (commit to the worktree branch, conventional message). Read-only nodes skip worktrees — plain dispatch.
+**Run ledger contract.** Before issuing the wave's dispatches, record each spawn's intent: `gk run dispatch <node-id> --attempt <n> --via task`. After the wave starts, verify every spawned node actually launched — a node that never launched is recorded `gk run node <id> --status fail --notes launch-lost` and stops the wave. Open every message to a spawned node with the header `run: <run-id> node: <node-id> rev: <graph_sha256[:12]>` from the `gk run start` payload. Stamp each evidence file via `gk evidence add <file> --key <key> --node <node-id>` (markerless evidence fails `strict` freshness); after a node's work is committed/merged, record it via `gk run land <node-id> --commit <sha>`. Record a challenge and its adjudication in one line: `gk run node <id> --status challenge --notes "disposition=accept|modify|reject|defer reason=…"`.
 
 2. **Collect results** — when all tasks in the wave return, collect their outputs.
    In **worktree mode** a wave is NOT done when agents return — it is done when

@@ -100,7 +100,7 @@ export function startRun(
   graphPath: string,
   now = new Date().toISOString(),
   resumes?: string,
-): { id: string; dir: string } {
+): { id: string; dir: string; graph_sha256: string } {
   const existing = activeRun(cwd);
   if (existing) throw new Error(`RUN_ACTIVE: run already active at ${existing}; run \`gk run end\` first`);
   const resolved = isAbsolute(graphPath) ? graphPath : resolve(cwd, graphPath);
@@ -162,7 +162,7 @@ export function startRun(
     throw e;
   }
   if (takesOver) rmSync(takeoverFile, { force: true }); // consume: run is live, provenance committed
-  return { id, dir };
+  return { id, dir, graph_sha256: meta.graph_sha256 as string };
 }
 
 export function appendNode(cwd: string, line: Omit<TraceLine, "at">, now = new Date().toISOString()) {
