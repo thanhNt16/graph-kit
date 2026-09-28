@@ -267,7 +267,12 @@ describe("gk run CLI", () => {
       const before = JSON.parse(runCli(["run", "status"], cwd).stdout);
       expect(before).toEqual({
         status: "ok",
-        data: { active: expect.any(String), active_age_ms: expect.any(Number), advisor_events: 0, resumes_chain: [expect.any(String)] },
+        data: {
+          active: expect.any(String),
+          active_age_ms: expect.any(Number),
+          advisor_events: 0,
+          resumes_chain: [expect.any(String)],
+        },
       });
       runCli(["run", "node", "exec", "--advisor-fired", "1"], cwd);
       const after = JSON.parse(runCli(["run", "status"], cwd).stdout);

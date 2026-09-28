@@ -2,9 +2,9 @@ import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import YAML from "yaml";
+import { isBlocking, validateGraph } from "../../src/compiler/validate";
 import { GraphSchema } from "../../src/schemas/graph.schema";
 import { GraphTemplateSchema, materializeTemplate } from "../../src/schemas/template.schema";
-import { isBlocking, validateGraph } from "../../src/compiler/validate";
 
 function baseGraph() {
   return {

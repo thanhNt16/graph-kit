@@ -72,17 +72,43 @@ export function registerEvidenceCommand(cli: CAC) {
         return;
       }
       if (subcommand === "invalidate") {
-        if (!opts.key) { emit(fail("MISSING_ARG", "evidence invalidate requires --key <k>")); return; }
+        if (!opts.key) {
+          emit(fail("MISSING_ARG", "evidence invalidate requires --key <k>"));
+          return;
+        }
         try {
           const graph = loadGraph(join(cwd, "graph.yaml"));
           const p = join(cwd, graph.outputs.evidence_dir, `${opts.key}.md`);
-          if (!existsSync(p)) { emit(fail("EVIDENCE_KEY_MISSING", `no evidence file for key "${opts.key}"`)); return; }
+          if (!existsSync(p)) {
+            emit(fail("EVIDENCE_KEY_MISSING", `no evidence file for key "${opts.key}"`));
+            return;
+          }
           const content = readFileSync(p, "utf-8");
-          const meta = parseMarker(content) ?? { key: String(opts.key), run_id: null, node: null, fingerprint_head: null, fingerprint_tree: null, artifact: null, artifact_sha256: null, bytes: null, ts: null, note: null, superseded: null };
+          const meta = parseMarker(content) ?? {
+            key: String(opts.key),
+            run_id: null,
+            node: null,
+            fingerprint_head: null,
+            fingerprint_tree: null,
+            artifact: null,
+            artifact_sha256: null,
+            bytes: null,
+            ts: null,
+            note: null,
+            superseded: null,
+          };
           const body = content.replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n*/, "");
-          writeFileSync(p, renderMarker({ ...meta, superseded: opts.note ? String(opts.note) : `invalidated ${new Date().toISOString()}` }, body));
+          writeFileSync(
+            p,
+            renderMarker(
+              { ...meta, superseded: opts.note ? String(opts.note) : `invalidated ${new Date().toISOString()}` },
+              body,
+            ),
+          );
           emit(ok({ key: opts.key, superseded: true }));
-        } catch (e) { emit(fail("EVIDENCE_ERROR", e instanceof Error ? e.message : String(e))); }
+        } catch (e) {
+          emit(fail("EVIDENCE_ERROR", e instanceof Error ? e.message : String(e)));
+        }
         return;
       }
       emit(

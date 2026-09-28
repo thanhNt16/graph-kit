@@ -132,9 +132,7 @@ export function startRun(
   // Read+merge now; the stamp file is deleted only after the run is live (below) so a
   // failed start (RUN_ACTIVE race) never destroys the provenance.
   const takeoverFile = join(runsDir(cwd), ".takeover");
-  const takesOver = existsSync(takeoverFile)
-    ? readFileSync(takeoverFile, "utf-8").trim() || null
-    : null;
+  const takesOver = existsSync(takeoverFile) ? readFileSync(takeoverFile, "utf-8").trim() || null : null;
   if (takesOver) meta.takes_over = takesOver;
   if (resumes) meta.resumes = resumes;
   writeFileSync(join(dir, "meta.json"), `${JSON.stringify(meta, null, 2)}\n`);
@@ -201,7 +199,6 @@ export function appendAdvisor(
   return { event, run: basename(dir) };
 }
 
-
 /** Pre-dispatch intent record — written BEFORE launch so a crashed run can
  *  distinguish "dispatched but quiet" from "never dispatched" on resume. */
 export function appendDispatch(
@@ -222,7 +219,13 @@ export function readDispatches(cwd: string, id: string): DispatchLine[] {
   return readFileSync(f, "utf-8")
     .split("\n")
     .filter((l) => l.trim())
-    .flatMap((l) => { try { return [JSON.parse(l) as DispatchLine]; } catch { return []; } });
+    .flatMap((l) => {
+      try {
+        return [JSON.parse(l) as DispatchLine];
+      } catch {
+        return [];
+      }
+    });
 }
 
 /** Mark the node's last `ok` trace line as integrated ("landed"). Rewrites
@@ -235,10 +238,13 @@ export function landNode(cwd: string, node: string, commit: string, now = new Da
   const trace = readTrace(cwd, id);
   let idx = -1;
   for (let i = trace.length - 1; i >= 0; i--)
-    if (trace[i].node === node && trace[i].status === "ok") { idx = i; break; }
+    if (trace[i].node === node && trace[i].status === "ok") {
+      idx = i;
+      break;
+    }
   if (idx < 0) throw new Error(`LAND_NOT_OK: no ok trace line for node "${node}" in run ${id}`);
   trace[idx] = { ...trace[idx], landed: { at: now, commit } };
-  writeFileSync(join(dir, "trace.jsonl"), trace.map((t) => JSON.stringify(t)).join("\n") + "\n");
+  writeFileSync(join(dir, "trace.jsonl"), `${trace.map((t) => JSON.stringify(t)).join("\n")}\n`);
   return { run: id, node };
 }
 

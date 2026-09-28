@@ -160,8 +160,7 @@ describe("run ledger", () => {
   });
 
   test("appendDispatch without active run fails", () => {
-    expect(() => appendDispatch(cwd, { node: "x", attempt: null, via: "task", pid: null }))
-      .toThrow(/NO_ACTIVE_RUN/);
+    expect(() => appendDispatch(cwd, { node: "x", attempt: null, via: "task", pid: null })).toThrow(/NO_ACTIVE_RUN/);
   });
 
   test("readDispatches on a run with no dispatches returns []", () => {
@@ -171,8 +170,16 @@ describe("run ledger", () => {
 
   test("landNode stamps landed on the node's ok line", () => {
     const { id } = startRun(cwd, join(cwd, "graph.yaml"), "2026-09-28T10:00:00.000Z");
-    appendNode(cwd, { node: "build", wave: 0, agent: null, model: null, status: "ok",
-      evidence: ["k"], duration_ms: 1, notes: null });
+    appendNode(cwd, {
+      node: "build",
+      wave: 0,
+      agent: null,
+      model: null,
+      status: "ok",
+      evidence: ["k"],
+      duration_ms: 1,
+      notes: null,
+    });
     landNode(cwd, "build", "abc123");
     const last = readTrace(cwd, id).at(-1)!;
     expect(last.landed?.commit).toBe("abc123");
@@ -180,8 +187,16 @@ describe("run ledger", () => {
 
   test("landNode rejects a node with no ok trace line", () => {
     startRun(cwd, join(cwd, "graph.yaml"), "2026-09-28T10:00:00.000Z");
-    appendNode(cwd, { node: "audit", wave: 0, agent: null, model: null, status: "fail",
-      evidence: [], duration_ms: 1, notes: null });
+    appendNode(cwd, {
+      node: "audit",
+      wave: 0,
+      agent: null,
+      model: null,
+      status: "fail",
+      evidence: [],
+      duration_ms: 1,
+      notes: null,
+    });
     expect(() => landNode(cwd, "audit", "abc123")).toThrow(/LAND_NOT_OK/);
     expect(() => landNode(cwd, "ghost", "abc123")).toThrow(/LAND_NOT_OK/);
   });

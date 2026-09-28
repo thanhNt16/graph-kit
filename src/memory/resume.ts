@@ -7,13 +7,13 @@ import type { Graph } from "../schemas/graph.schema.js";
 import { GraphSchema, type LoopGroup } from "../schemas/graph.schema.js";
 import { saveSessionGraph, setActiveGraphId } from "../store/index.js";
 import {
+  type AdvisorEvent,
   activeRun,
   readAdvisorEvents,
   readDispatches,
   readRunMeta,
   readTrace,
   startRun,
-  type AdvisorEvent,
   type TraceLine,
 } from "./ledger.js";
 
@@ -309,7 +309,9 @@ export function deriveResumeGraph(rec: Reconciliation, parentRunId: string): Gra
       carry.push(`- unadjudicated CHALLENGE from prior run: ${c.notes ?? "(see trace)"}`);
     const adv = advisorLast.get(name);
     if (adv)
-      carry.push(`- advisor fired at round ${adv.round} (tier ${adv.tier}${adv.streak ? `, streak ${adv.streak}` : ""})`);
+      carry.push(
+        `- advisor fired at round ${adv.round} (tier ${adv.tier}${adv.streak ? `, streak ${adv.streak}` : ""})`,
+      );
     const objective = carry.length ? `${node.objective}\n\n## Resume context\n${carry.join("\n")}` : node.objective;
     nodes[name] = {
       ...nodeRest,

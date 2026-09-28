@@ -111,9 +111,9 @@ describe("pi kit structure", () => {
       join(ROOT, "kits", "pi", "extensions", "gk-subagent.ts"),
     ]) {
       const raw = readFileSync(ext, "utf8");
-      expect(raw, `${ext} node param`).toContain("node: Type.Optional(Type.String(");
-      expect(raw, `${ext} attempt param`).toContain("attempt: Type.Optional(Type.Number(");
-      expect(raw, `${ext} cwd param`).toContain("cwd: Type.Optional(Type.String(");
+      expect(raw, `${ext} node param`).toMatch(/node:\s*Type\.Optional\(\s*Type\.String\(/);
+      expect(raw, `${ext} attempt param`).toMatch(/attempt:\s*Type\.Optional\(\s*Type\.Number\(/);
+      expect(raw, `${ext} cwd param`).toMatch(/cwd:\s*Type\.Optional\(\s*Type\.String\(/);
     }
   });
 
@@ -148,7 +148,7 @@ describe("dispatch-intent write", () => {
   // exists when it starts running — proving the record lands after spawn
   // returns but before dispatch() awaits the result. In-process chdir/env
   // mutations are process-global and race sibling test files.
-  test("writes via:\"extension\" line before spawn resolves; no active run never fails dispatch", async () => {
+  test('writes via:"extension" line before spawn resolves; no active run never fails dispatch', async () => {
     const script = `
       const { mkdtempSync, mkdirSync, writeFileSync, chmodSync, readFileSync } = require("node:fs");
       const { tmpdir } = require("node:os");

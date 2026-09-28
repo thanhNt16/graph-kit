@@ -99,10 +99,16 @@ describe("gateGraph freshness", () => {
       join(runs, "run-2", "trace.jsonl"),
       `${JSON.stringify({ at: "t0", node: "build", model: null, status: "ok", evidence: ["design"], duration_ms: 1, notes: null, landed: { at: "t1", commit: "abc" } })}\n`,
     );
-    writeFileSync(join(runs, "index.jsonl"), `${JSON.stringify({ id: "run-2", graph: "graph.yaml", graph_sha256: "x", started_at: "t0", ended_at: "t1", status: "merged", node_count: 1, failures: 0, evidence_keys: ["design"] })}\n`);
+    writeFileSync(
+      join(runs, "index.jsonl"),
+      `${JSON.stringify({ id: "run-2", graph: "graph.yaml", graph_sha256: "x", started_at: "t0", ended_at: "t1", status: "merged", node_count: 1, failures: 0, evidence_keys: ["design"] })}\n`,
+    );
     expect(gateGraph(["design"], evDir, { cwd: repo, requireLanded: true }).verdict).toBe("MERGE");
     // latest run (index row 2 = run-2) landed → swap to run-1 (unlanded) as last row
-    writeFileSync(join(runs, "index.jsonl"), `${JSON.stringify({ id: "run-1", graph: "graph.yaml", graph_sha256: "x", started_at: "t0", ended_at: "t1", status: "blocked", node_count: 1, failures: 0, evidence_keys: ["design"] })}\n`);
+    writeFileSync(
+      join(runs, "index.jsonl"),
+      `${JSON.stringify({ id: "run-1", graph: "graph.yaml", graph_sha256: "x", started_at: "t0", ended_at: "t1", status: "blocked", node_count: 1, failures: 0, evidence_keys: ["design"] })}\n`,
+    );
     const r = gateGraph(["design"], evDir, { cwd: repo, requireLanded: true });
     expect(r.verdict).toBe("BLOCK");
     expect(r.unlanded).toEqual(["build"]);

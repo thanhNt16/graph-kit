@@ -242,7 +242,9 @@ export default async function gkSubagentExtension(pi: MinimalPiAPI): Promise<voi
       // distinguish "dispatched but quiet" from "never dispatched".
       node: Type.Optional(Type.String({ description: "Graph node id this dispatch belongs to" })),
       attempt: Type.Optional(Type.Number({ description: "Attempt number for this node (recorded in dispatch.jsonl)" })),
-      cwd: Type.Optional(Type.String({ description: "Run root (defaults to process cwd); reads <cwd>/.graphkit/runs/.active" })),
+      cwd: Type.Optional(
+        Type.String({ description: "Run root (defaults to process cwd); reads <cwd>/.graphkit/runs/.active" }),
+      ),
       timeout_ms: Type.Optional(
         Type.Number({
           description:

@@ -7,9 +7,9 @@ import { GraphKitError } from "../../errors.js";
 import { scoreWorkProduct } from "../../eval/rubrics.js";
 import { fingerprint } from "../../evidence/fingerprint.js";
 import { type Freshness, freshnessOf, parseMarker } from "../../evidence/marker.js";
+import { activeRun, readRunIndex, readTrace } from "../../memory/ledger.js";
 import { emit, fail, ok } from "../output.js";
 import { loadGraph } from "./graph.js";
-import { activeRun, readRunIndex, readTrace } from "../../memory/ledger.js";
 
 /**
  * Deterministic evidence gate: MERGE/BLOCK over required evidence keys.
@@ -71,7 +71,12 @@ export function gateGraph(
     const id = activeRun(opts.cwd) ? basename(activeRun(opts.cwd)!) : readRunIndex(opts.cwd).at(-1)?.id;
     if (id)
       for (const t of readTrace(opts.cwd, id))
-        if (t.status === "ok" && !t.landed && t.evidence.some((e) => requiredKeys.includes(e)) && !unlanded.includes(t.node))
+        if (
+          t.status === "ok" &&
+          !t.landed &&
+          t.evidence.some((e) => requiredKeys.includes(e)) &&
+          !unlanded.includes(t.node)
+        )
           unlanded.push(t.node);
   }
   const verdict =

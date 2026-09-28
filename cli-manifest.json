@@ -91,7 +91,7 @@
     },
     {
       "name": "evidence",
-      "description": "Evidence commands\nSubcommands: add report",
+      "description": "Evidence commands\nSubcommands: add invalidate report",
       "options": [
         "--key <k>",
         "--node <n>",
