@@ -369,6 +369,13 @@ describe("deriveResumeGraph", () => {
     const derived = deriveResumeGraph(reconcileRun(cwd, id), id);
     expect(derived.nodes.a!.objective).toBe("Do A");
   });
+  test("typo'd disposition value still counts as adjudicated — no carryover", () => {
+    const { id } = startRun(cwd, join(cwd, "graph.yaml"), "2026-09-04T10:00:00.000Z");
+    traceChallenge(cwd, "a", "judge: impl diverges from spec disposition=accepted");
+    endRun(cwd, "failed", "2026-09-04T10:05:00.000Z");
+    const derived = deriveResumeGraph(reconcileRun(cwd, id), id);
+    expect(derived.nodes.a!.objective).toBe("Do A");
+  });
   test("resume carries last advisor event per pending node", () => {
     const { id } = startRun(cwd, join(cwd, "graph.yaml"), "2026-09-04T10:00:00.000Z");
     appendAdvisor(cwd, { node: "a", round: 1, tier: "fable", streak: null });

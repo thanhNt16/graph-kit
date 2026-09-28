@@ -5,6 +5,8 @@ import { GraphSchema } from "../schemas/graph.schema.js";
 import {
   type AdvisorEvent,
   activeRun,
+  DISPOSITION_PATTERN,
+  hasDisposition,
   listRunIds,
   RUN_ID_PATTERN,
   readAdvisorEvents,
@@ -81,7 +83,7 @@ export function analyzeRun(cwd: string, requested?: string): AnalyzeResult {
   for (const line of trace) {
     counts[line.status]++;
     if (line.status === "challenge") {
-      const m = line.notes?.match(/\bdisposition=(accept|modify|reject|defer)\b/);
+      const m = line.notes?.match(DISPOSITION_PATTERN);
       if (m) {
         adjudicated++;
         dispositions[m[1]] = (dispositions[m[1]] ?? 0) + 1;
@@ -155,9 +157,12 @@ export function analyzeRun(cwd: string, requested?: string): AnalyzeResult {
       suggestions.push(`repeated ${node} failures at ~${median / 1000}s suggest a premise problem, not transient`);
   }
 
-  // (c) a challenge is the node's last word — the orchestrator never adjudicated it
-  for (const [node, ls] of byNode)
-    if (ls[ls.length - 1].status === "challenge") suggestions.push(`challenge raised on ${node} but never adjudicated`);
+  // (c) a challenge is the node's last word with no disposition= stamp — never adjudicated
+  for (const [node, ls] of byNode) {
+    const last = ls[ls.length - 1];
+    if (last.status === "challenge" && !hasDisposition(last.notes))
+      suggestions.push(`challenge raised on ${node} but never adjudicated`);
+  }
 
   // (d) large run, zero dissent — prompt (not alarm) that premises are challengeable
   if (advisors.length === 0 && counts.challenge === 0 && trace.length > 10)

@@ -19,6 +19,15 @@ export interface TraceLine {
   landed?: { at: string; commit: string };
 }
 
+/** Adjudication stamp in a challenge line's notes: `disposition=<value>`.
+ *  Any value counts — a typo'd value is still a recorded decision — so the
+ *  resume carryover and `gk run analyze` share this one predicate; the
+ *  captured value is tallied verbatim (canonical: accept/modify/reject/defer). */
+export const DISPOSITION_PATTERN = /\bdisposition=(\w+)/;
+
+export const hasDisposition = (notes: string | null | undefined): boolean =>
+  notes != null && DISPOSITION_PATTERN.test(notes);
+
 export interface DispatchLine {
   at: string;
   node: string;

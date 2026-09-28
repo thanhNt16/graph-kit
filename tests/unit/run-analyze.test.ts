@@ -137,6 +137,18 @@ describe("analyzeRun telemetry", () => {
     expect(r.suggestions).toEqual([]);
   });
 
+  test("disposition= stamp on the last challenge line — even a typo'd value — counts as adjudicated", () => {
+    seedRun("20260101-000001-a", {
+      trace: [
+        line("p", "challenge", 1, null, "disposition=defer: revisit after the API freeze"),
+        line("q", "challenge", 2, null, "disposition=accepted"),
+      ],
+    });
+    const r = analyzeRun(cwd, "20260101-000001-a");
+    expect(r.suggestions).toEqual([]);
+    expect(r.challenges).toEqual({ total: 2, adjudicated: 2, dispositions: { accepted: 1, defer: 1 } });
+  });
+
   test("clean small run emits no suggestions (no-dissent prompt needs >10 nodes)", () => {
     seedRun("20260101-000001-a", { trace: [line("a", "ok", 1), line("b", "ok", 2), line("c", "ok", 3)] });
     expect(analyzeRun(cwd, "20260101-000001-a").suggestions).toEqual([]);

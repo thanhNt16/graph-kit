@@ -9,6 +9,7 @@ import { saveSessionGraph, setActiveGraphId } from "../store/index.js";
 import {
   type AdvisorEvent,
   activeRun,
+  hasDisposition,
   readAdvisorEvents,
   readDispatches,
   readRunMeta,
@@ -285,7 +286,7 @@ export function deriveResumeGraph(rec: Reconciliation, parentRunId: string): Gra
   // them to the objective so the resumed worker sees them.
   const unadjudicated = new Map<string, TraceLine[]>(); // target → challenges
   for (const line of trace)
-    if (line.status === "challenge" && !(line.notes ?? "").includes("disposition="))
+    if (line.status === "challenge" && !hasDisposition(line.notes))
       unadjudicated.set(line.node, [...(unadjudicated.get(line.node) ?? []), line]);
   const advisorLast = new Map<string, AdvisorEvent>();
   for (const ev of readAdvisorEvents(rec.cwd, rec.runId)) advisorLast.set(ev.node, ev);
