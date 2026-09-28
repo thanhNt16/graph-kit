@@ -67,6 +67,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 ### Fixed
+- npm `gk --version` always reported the dev version (`0.3.0`): the release `publish` job re-checks out the repo, stamped only `package.json`, and `prepack` rebuilt `dist/index.js` with the committed `APP_VERSION`. `src/version.ts` is now stamped in `publish` too, so the npm bundle reports the release tag. Standalone tarballs were unaffected.
 - `gk_dispatch_agent` timeout/abort now kills the child's whole process group (detached spawn + `kill(-pgid)`, SIGTERM then SIGKILL after 5s). Previously `execFile` SIGTERMed only the direct child — a timed-out node kept mutating shared state for 11+ minutes after the orchestrator recorded it failed. Timeout results now carry `timed_out: true` and a `TIMEOUT` marker in `output` (matchable by `retry.non_retryable`), and the tool honors the host abort signal.
 
 ### Removed

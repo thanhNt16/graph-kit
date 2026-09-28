@@ -112,12 +112,18 @@ jobs:
         with:
           bun-version: 1.3.9
       - run: bun install --frozen-lockfile
-      - name: Stamp package version
+      - name: Stamp package and CLI version
         env:
           NEXT: ${{ needs.bundle.outputs.next }}
         run: |
           node -e "const fs=require('fs');const f='package.json';const p=JSON.parse(fs.readFileSync(f,'utf8'));p.version=process.env.NEXT.slice(1);fs.writeFileSync(f,JSON.stringify(p,null,2)+'\n')"
-          echo "package.json -> ${NEXT#v}"
+          # prepack rebuilds dist/index.js from a fresh checkout — without this,
+          # the npm bundle keeps the committed dev APP_VERSION and `gk --version`
+          # reports it instead of the release tag.
+          cat > src/version.ts <<TS
+          export const APP_VERSION = "${NEXT#v}";
+          TS
+          echo "package.json + src/version.ts -> ${NEXT#v}"
       # Prepack builds dist/index.js (1MB bundle); files: dist/ + kits/ +
       # templates/gallery ride along. ~1MB tgz total — 20-40x smaller than
       # the standalone tarballs. npm failure must not block the GitHub release.
