@@ -94,16 +94,18 @@ export async function dispatch(args: DispatchArgs, signal?: AbortSignal): Promis
   // SIGTERMs the direct child — observed in the wild: a timed-out builder kept
   // writing to a shared DB for 11+ minutes after the orchestrator recorded it
   // failed, racing its own resume dispatch.
+  //
+  // Dispatch-intent record: written BEFORE spawn() is invoked — with detached
+  // posix_spawn the child can already be executing by the time spawn()
+  // returns, so a write after the call races the child's own startup checks
+  // (observed on Linux CI). pid:null marks "about to launch"; best-effort,
+  // bookkeeping never fails a dispatch.
+  recordIntent(args, null);
   const child = spawn(
     "/bin/sh",
     ["-c", 'printf %s "$GK_PROMPT" | exec omp "$@"', "gk-dispatch", ...buildPiArgs(args)],
     { env: { ...process.env, GK_PROMPT: prompt }, detached: true },
   );
-  // Dispatch-intent record: written BEFORE spawn so a crashed coordinator
-  // distinguishes "dispatched but quiet" from "never dispatched" on resume —
-  // and so a racing child cannot observe a missing ledger line. Best-effort:
-  // bookkeeping must never fail a dispatch. pid:null marks "about to launch".
-  recordIntent(args, null);
   // The 'spawn' event fires once the OS accepts the fork — record the real
   // pid as a second ledger line so `gk run take` can kill live dispatches.
   child.once("spawn", () => recordIntent(args, child.pid ?? null));
