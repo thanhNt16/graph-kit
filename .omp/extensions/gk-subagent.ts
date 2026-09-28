@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import { existsSync, readFileSync } from "node:fs";
+import { appendFileSync, existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
 export interface DispatchConstraints {
@@ -15,6 +15,11 @@ export interface DispatchArgs {
   context?: string;
   constraints?: DispatchConstraints;
   timeout_ms?: number;
+  /** Ledger identity for the dispatch-intent record (node/attempt) and the
+   *  run root to write it under; defaults to process.cwd(). */
+  node?: string;
+  attempt?: number | null;
+  cwd?: string;
 }
 
 export interface DispatchResult {
@@ -71,6 +76,28 @@ export async function dispatch(args: DispatchArgs, signal?: AbortSignal): Promis
     ["-c", 'printf %s "$GK_PROMPT" | exec omp "$@"', "gk-dispatch", ...buildPiArgs(args)],
     { env: { ...process.env, GK_PROMPT: prompt }, detached: true },
   );
+  // Dispatch-intent record: written after spawn returns (child.pid needed)
+  // but before dispatch() awaits the result, so a crashed coordinator
+  // distinguishes "dispatched but quiet" from "never dispatched" on resume.
+  // Best-effort: bookkeeping must never fail a dispatch.
+  try {
+    const active = join(args.cwd ?? process.cwd(), ".graphkit", "runs", ".active");
+    if (existsSync(active)) {
+      const dir = readFileSync(active, "utf-8").trim();
+      appendFileSync(
+        join(dir, "dispatch.jsonl"),
+        `${JSON.stringify({
+          at: new Date().toISOString(),
+          node: args.node ?? null,
+          attempt: args.attempt ?? null,
+          via: "extension",
+          pid: child.pid ?? null,
+        })}\n`,
+      );
+    }
+  } catch {
+    /* intent write is best-effort; never fail a dispatch over bookkeeping */
+  }
   const MAX_OUTPUT = 10 * 1024 * 1024;
   let out = "";
   let err = "";
@@ -210,6 +237,12 @@ export default async function gkSubagentExtension(pi: MinimalPiAPI): Promise<voi
           { additionalProperties: false },
         ),
       ),
+      // Ledger identity + run root for the dispatch-intent record; without
+      // these the tool path logs node:null and resume reconciliation can't
+      // distinguish "dispatched but quiet" from "never dispatched".
+      node: Type.Optional(Type.String({ description: "Graph node id this dispatch belongs to" })),
+      attempt: Type.Optional(Type.Number({ description: "Attempt number for this node (recorded in dispatch.jsonl)" })),
+      cwd: Type.Optional(Type.String({ description: "Run root (defaults to process cwd); reads <cwd>/.graphkit/runs/.active" })),
       timeout_ms: Type.Optional(
         Type.Number({
           description:

@@ -237,6 +237,12 @@ export default async function gkSubagentExtension(pi: MinimalPiAPI): Promise<voi
           { additionalProperties: false },
         ),
       ),
+      // Ledger identity + run root for the dispatch-intent record; without
+      // these the tool path logs node:null and resume reconciliation can't
+      // distinguish "dispatched but quiet" from "never dispatched".
+      node: Type.Optional(Type.String({ description: "Graph node id this dispatch belongs to" })),
+      attempt: Type.Optional(Type.Number({ description: "Attempt number for this node (recorded in dispatch.jsonl)" })),
+      cwd: Type.Optional(Type.String({ description: "Run root (defaults to process cwd); reads <cwd>/.graphkit/runs/.active" })),
       timeout_ms: Type.Optional(
         Type.Number({
           description:

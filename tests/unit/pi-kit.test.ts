@@ -77,6 +77,22 @@ describe("pi kit structure", () => {
     expect(raw).not.toContain('".pi"');
   });
 
+  test("gk_dispatch_agent tool schema exposes ledger identity fields", () => {
+    // The tool caller must be able to supply node/attempt/cwd — otherwise every
+    // tool-path dispatch logs node:null and unresolved-dispatch reconciliation
+    // silently never sees extension dispatches. typebox isn't installed in this
+    // repo, so assert the schema surface textually on the kit artifacts.
+    for (const ext of [
+      join(ROOT, "kits", "_core", "extensions", "gk-subagent.ts"),
+      join(ROOT, "kits", "pi", "extensions", "gk-subagent.ts"),
+    ]) {
+      const raw = readFileSync(ext, "utf8");
+      expect(raw, `${ext} node param`).toContain("node: Type.Optional(Type.String(");
+      expect(raw, `${ext} attempt param`).toContain("attempt: Type.Optional(Type.Number(");
+      expect(raw, `${ext} cwd param`).toContain("cwd: Type.Optional(Type.String(");
+    }
+  });
+
   test("prompt template routes through gk-status", () => {
     const raw = readFileSync(join(KIT, "prompts", "gk.md"), "utf8");
     expect(raw).toContain(".omp/skills/gk-status/SKILL.md");
