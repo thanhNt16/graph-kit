@@ -35,6 +35,7 @@ const GROUP_SUBCOMMANDS: Record<string, string[]> = {
     "ascii",
     "svg",
     "waves",
+    "agents",
     "index",
     "search",
     "ask",
@@ -44,7 +45,7 @@ const GROUP_SUBCOMMANDS: Record<string, string[]> = {
   memory: ["index", "trace", "touch", "recall", "consolidate"],
   models: listTargets().map((t) => t.id),
   template: ["pack", "list", "show", "materialize"],
-  run: ["start", "node", "end", "status", "resume", "round"],
+  run: ["start", "node", "dispatch", "land", "end", "status", "resume", "take", "round", "analyze"],
   evidence: ["add", "report"],
 };
 

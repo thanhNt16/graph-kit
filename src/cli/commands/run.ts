@@ -2,21 +2,28 @@ import { readFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import type { CAC } from "cac";
 import YAML from "yaml";
+import { analyzeRun } from "../../memory/analyze.js";
 import {
   activeRun,
   activeRunGraph,
   appendAdvisor,
+  appendDispatch,
   appendNode,
+  clearActiveRun,
   endRun,
+  landNode,
   readAdvisorEvents,
+  readDispatches,
   readRunMeta,
+  stampTakeover,
   startRun,
 } from "../../memory/ledger.js";
 import { recordRound } from "../../memory/loops.js";
-import { resumeRun } from "../../memory/resume.js";
+import { reconcileRun, resumeRun } from "../../memory/resume.js";
 import { GraphSchema } from "../../schemas/graph.schema.js";
 import { subcommandsFor } from "../command-registry.js";
 import { emit, fail, ok } from "../output.js";
+import { kitVersionWarnings } from "./kit.js";
 
 function errCode(e: unknown): { code: string; message: string } {
   const message = String((e as Error)?.message ?? e);
@@ -28,7 +35,7 @@ export function registerRunCommands(cli: CAC) {
   cli
     .command("run [subcommand] [args...]", `Run ledger commands\nSubcommands: ${subcommandsFor("run")}`)
     .option("--graph <path>", "graph.yaml path (default: ./graph.yaml)")
-    .option("--status <status>", "node: ok|fail|skipped — end: merged|blocked|failed")
+    .option("--status <status>", "node: ok|fail|skipped|challenge — end: merged|blocked|failed")
     .option("--advisor-fired <round>", "record advisor firing for a node")
     .option("--streak <n>", "advisor failure streak")
     .option("--wave <n>", "wave index")
@@ -41,6 +48,11 @@ export function registerRunCommands(cli: CAC) {
     .option("--from-node <id>", "resume: redo this node + dependents")
     .option("--dry-run", "resume: preview without writing")
     .option("--force", "resume: override graph drift guard")
+    .option("--attempt <n>", "node/dispatch: attempt number")
+    .option("--commit <sha>", "land: integration commit")
+    .option("--via <via>", "dispatch: task|extension")
+    .option("--pid <pid>", "dispatch: child pid")
+    .option("--from <run>", "take: run id to take over")
     .action((subcommand, args, opts) => {
       const cwd = process.cwd();
       if (!subcommand) {
@@ -51,7 +63,12 @@ export function registerRunCommands(cli: CAC) {
       }
       try {
         if (subcommand === "start") {
-          emit(ok(startRun(cwd, opts.graph ?? join(cwd, "graph.yaml"))));
+          const started = startRun(cwd, opts.graph ?? join(cwd, "graph.yaml"));
+          // Stale-kit installs run outdated skills/extensions (observed: a run
+          // executed with a pre-orchestration-fields gk-execute). Surface it at
+          // the one moment the orchestrator is guaranteed to look — run start.
+          const warnings = kitVersionWarnings(cwd);
+          emit(ok(warnings.length ? { ...started, warnings } : started));
           return;
         }
         if (subcommand === "node") {
@@ -100,8 +117,13 @@ export function registerRunCommands(cli: CAC) {
             );
             return;
           }
-          if (opts.status !== "ok" && opts.status !== "fail" && opts.status !== "skipped") {
-            emit(fail("BAD_STATUS", "node requires --status ok|fail|skipped"));
+          if (
+            opts.status !== "ok" &&
+            opts.status !== "fail" &&
+            opts.status !== "skipped" &&
+            opts.status !== "challenge"
+          ) {
+            emit(fail("BAD_STATUS", "node requires --status ok|fail|skipped|challenge"));
             return;
           }
           const result = appendNode(cwd, {
@@ -117,9 +139,77 @@ export function registerRunCommands(cli: CAC) {
                   .filter(Boolean)
               : [],
             duration_ms: opts.durationMs == null ? null : Number(opts.durationMs),
+            attempt: opts.attempt == null ? undefined : Number(opts.attempt),
             notes: opts.notes ?? null,
           });
           emit(ok(result));
+          return;
+        }
+        if (subcommand === "dispatch") {
+          const node = Array.isArray(args) ? args[0] : args;
+          if (!node) {
+            emit(fail("MISSING_ARG", "dispatch requires a node id"));
+            return;
+          }
+          emit(
+            ok(
+              appendDispatch(cwd, {
+                node: String(node),
+                attempt: opts.attempt == null ? null : Number(opts.attempt),
+                via: opts.via ?? "task",
+                pid: opts.pid == null ? null : Number(opts.pid),
+              }),
+            ),
+          );
+          return;
+        }
+        if (subcommand === "land") {
+          const node = Array.isArray(args) ? args[0] : args;
+          if (!node || !opts.commit) {
+            emit(fail("MISSING_ARG", "land requires a node id and --commit <sha>"));
+            return;
+          }
+          emit(ok(landNode(cwd, String(node), String(opts.commit))));
+          return;
+        }
+        if (subcommand === "take") {
+          const target = opts.from ?? (Array.isArray(args) ? args[0] : args);
+          if (!target) {
+            emit(fail("MISSING_ARG", "take requires --from <run-id>"));
+            return;
+          }
+          // Refuse takeover while the old run's recorded pids are alive.
+          const live = readDispatches(cwd, String(target))
+            .filter((d) => d.pid != null && d.pid !== process.pid)
+            .filter((d) => {
+              try {
+                process.kill(d.pid!, 0);
+                return true;
+              } catch {
+                return false;
+              }
+            });
+          if (live.length > 0) {
+            emit(
+              fail("TAKEOVER_BLOCKED", `run ${target} has live dispatch pids: ${live.map((d) => d.pid).join(", ")}`),
+            );
+            return;
+          }
+          // Reconcile first so the takeover payload carries truth, then clear.
+          const rec = reconcileRun(cwd, String(target), { force: opts.force });
+          const active = activeRun(cwd);
+          const cleared = active != null && basename(active) === String(target);
+          if (cleared) clearActiveRun(cwd);
+          stampTakeover(cwd, String(target));
+          emit(
+            ok({
+              taken_from: target,
+              unresolved: rec.unresolved,
+              pending: rec.pending,
+              active_cleared: cleared,
+              active: active ? basename(active) : null,
+            }),
+          );
           return;
         }
         if (subcommand === "end") {
@@ -181,7 +271,25 @@ export function registerRunCommands(cli: CAC) {
               cursor = null;
             }
           }
-          emit(ok({ active: dir, advisor_events, resumes_chain: chain }));
+          const meta = dir ? readRunMeta(cwd, basename(dir)) : null;
+          emit(
+            ok({
+              active: dir,
+              active_age_ms: meta ? Date.now() - Date.parse(meta.started_at) : null,
+              advisor_events,
+              resumes_chain: chain,
+            }),
+          );
+          return;
+        }
+        if (subcommand === "analyze") {
+          const target = Array.isArray(args) ? args[0] : args;
+          try {
+            emit(ok(analyzeRun(cwd, target == null || target === "" ? undefined : String(target))));
+          } catch (e) {
+            const { code, message } = errCode(e);
+            emit(fail(code, message));
+          }
           return;
         }
         emit(

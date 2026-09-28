@@ -1,11 +1,11 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { appendFileSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { cac } from "cac";
 import YAML from "yaml";
 import { registerRunCommands } from "../../src/cli/commands/run.js";
-import { appendNode, endRun, readAdvisorEvents, startRun } from "../../src/memory/ledger.js";
+import { appendNode, endRun, readAdvisorEvents, readTrace, startRun } from "../../src/memory/ledger.js";
 
 function runCli(args: string[], cwd: string) {
   const cli = cac("gk");
@@ -45,7 +45,10 @@ describe("gk run CLI", () => {
     try {
       // 1. Initial status -> inactive
       const initialStatus = JSON.parse(runCli(["run", "status"], cwd).stdout);
-      expect(initialStatus).toEqual({ status: "ok", data: { active: null, advisor_events: 0, resumes_chain: [] } });
+      expect(initialStatus).toEqual({
+        status: "ok",
+        data: { active: null, active_age_ms: null, advisor_events: 0, resumes_chain: [] },
+      });
 
       // 2. Start run without graph file fails with GRAPH_NOT_FOUND
       const startFail = JSON.parse(runCli(["run", "start"], cwd).stdout);
@@ -118,7 +121,10 @@ describe("gk run CLI", () => {
 
       // 10. Status returns null after end
       const finalStatus = JSON.parse(runCli(["run", "status"], cwd).stdout);
-      expect(finalStatus).toEqual({ status: "ok", data: { active: null, advisor_events: 0, resumes_chain: [] } });
+      expect(finalStatus).toEqual({
+        status: "ok",
+        data: { active: null, active_age_ms: null, advisor_events: 0, resumes_chain: [] },
+      });
     } finally {
       rmSync(cwd, { recursive: true, force: true });
     }
@@ -142,7 +148,7 @@ describe("gk run CLI", () => {
     try {
       const res = runCli(["run"], cwd);
       expect(res.stdout).toContain("gk run — run ledger commands");
-      expect(res.stdout).toContain("Subcommands: start node end status");
+      expect(res.stdout).toContain("Subcommands: start node dispatch land end status resume take round analyze");
     } finally {
       rmSync(cwd, { recursive: true, force: true });
     }
@@ -261,7 +267,7 @@ describe("gk run CLI", () => {
       const before = JSON.parse(runCli(["run", "status"], cwd).stdout);
       expect(before).toEqual({
         status: "ok",
-        data: { active: expect.any(String), advisor_events: 0, resumes_chain: [expect.any(String)] },
+        data: { active: expect.any(String), active_age_ms: expect.any(Number), advisor_events: 0, resumes_chain: [expect.any(String)] },
       });
       runCli(["run", "node", "exec", "--advisor-fired", "1"], cwd);
       const after = JSON.parse(runCli(["run", "status"], cwd).stdout);
@@ -514,5 +520,94 @@ describe("run resume CLI", () => {
     const out = JSON.parse(runCli(["run", "resume", r.id], cwd).stdout);
     expect(out.error.code).toBe("RESUME_GRAPH_DRIFT");
     expect(runCli(["run", "resume", r.id], cwd).code).toBe(1);
+  });
+});
+
+describe("run dispatch/land/take CLI", () => {
+  let cwd: string;
+  beforeEach(() => {
+    cwd = join(tmpdir(), `gk-take-${process.pid}-${Date.now()}`);
+    mkdirSync(join(cwd, ".graphkit", "runs"), { recursive: true });
+    writeFileSync(
+      join(cwd, "graph.yaml"),
+      "apiVersion: graphkit.dev/v2\nkind: Graph\nmetadata:\n  name: demo\ntopology: custom\nnodes:\n  a:\n    agent: scout\n    objective: A\n  b:\n    agent: task\n    objective: B\n    depend_on: [a]\n",
+    );
+  });
+  afterEach(() => rmSync(cwd, { recursive: true, force: true }));
+
+  const activeFile = () => join(cwd, ".graphkit", "runs", ".active");
+
+  test("run dispatch records intent and surfaces in take output", () => {
+    const r = startRun(cwd, join(cwd, "graph.yaml"));
+    const out = JSON.parse(runCli(["run", "dispatch", "a", "--via", "task"], cwd).stdout);
+    expect(out.status).toBe("ok");
+    expect(out.data).toEqual({ run: r.id, node: "a" });
+    const rows = readFileSync(join(r.dir, "dispatch.jsonl"), "utf-8")
+      .trim()
+      .split("\n")
+      .map((l) => JSON.parse(l));
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ node: "a", attempt: null, via: "task", pid: null });
+    // A dispatched node with no trace line reconciles as unresolved on takeover.
+    const take = JSON.parse(runCli(["run", "take", "--from", r.id], cwd).stdout);
+    expect(take.status).toBe("ok");
+    expect(take.data.taken_from).toBe(r.id);
+    expect(take.data.unresolved).toEqual(["a"]);
+    expect(take.data.active_cleared).toBe(true);
+    expect(existsSync(activeFile())).toBe(false);
+  });
+
+  test("run land requires --commit and an ok trace line", () => {
+    startRun(cwd, join(cwd, "graph.yaml"));
+    expect(JSON.parse(runCli(["run", "land", "a"], cwd).stdout).error.code).toBe("MISSING_ARG");
+    expect(JSON.parse(runCli(["run", "land", "a", "--commit", "abc123"], cwd).stdout).error.code).toBe("LAND_NOT_OK");
+    runCli(["run", "node", "a", "--status", "ok"], cwd);
+    const landed = JSON.parse(runCli(["run", "land", "a", "--commit", "abc123"], cwd).stdout);
+    expect(landed.status).toBe("ok");
+    expect(readTrace(cwd, landed.data.run).at(-1)?.landed).toMatchObject({ commit: "abc123" });
+  });
+
+  test("run take clears stale .active and stamps takes_over on the next start", () => {
+    const dead = Bun.spawnSync(["true"]).pid; // already exited: liveness check sees it as gone
+    const r1 = startRun(cwd, join(cwd, "graph.yaml"));
+    runCli(["run", "dispatch", "a", "--pid", String(dead)], cwd);
+    const take = JSON.parse(runCli(["run", "take", "--from", r1.id], cwd).stdout);
+    expect(take.status).toBe("ok");
+    expect(existsSync(activeFile())).toBe(false);
+    // The next started run inherits the takeover as provenance in its meta.
+    const r2 = JSON.parse(runCli(["run", "start"], cwd).stdout).data;
+    expect(JSON.parse(readFileSync(join(r2.dir, "meta.json"), "utf-8")).takes_over).toBe(r1.id);
+  });
+
+  test("run take refuses while dispatch pids are alive", () => {
+    const r = startRun(cwd, join(cwd, "graph.yaml"));
+    const sleeper = Bun.spawn(["sleep", "30"]); // foreign live pid: not the harness's own
+    try {
+      runCli(["run", "dispatch", "a", "--pid", String(sleeper.pid)], cwd);
+      const take = JSON.parse(runCli(["run", "take", "--from", r.id], cwd).stdout);
+      expect(take.error.code).toBe("TAKEOVER_BLOCKED");
+      expect(runCli(["run", "take", "--from", r.id], cwd).code).toBe(1);
+      expect(existsSync(activeFile())).toBe(true);
+    } finally {
+      sleeper.kill();
+    }
+  });
+
+  test("run take tolerates .active pointing at a different run", () => {
+    const r1 = startRun(cwd, join(cwd, "graph.yaml"));
+    endRun(cwd, "failed");
+    const r2 = startRun(cwd, join(cwd, "graph.yaml"));
+    const take = JSON.parse(runCli(["run", "take", "--from", r1.id], cwd).stdout);
+    expect(take.status).toBe("ok");
+    expect(take.data.active_cleared).toBe(false);
+    expect(take.data.active).toBe(r2.id);
+    expect(existsSync(activeFile())).toBe(true);
+  });
+
+  test("node --attempt writes attempt field", () => {
+    startRun(cwd, join(cwd, "graph.yaml"));
+    const out = JSON.parse(runCli(["run", "node", "a", "--status", "ok", "--attempt", "2"], cwd).stdout);
+    expect(out.status).toBe("ok");
+    expect(readTrace(cwd, out.data.run).at(-1)?.attempt).toBe(2);
   });
 });

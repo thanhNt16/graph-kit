@@ -44,7 +44,7 @@
     },
     {
       "name": "graph",
-      "description": "Graph lifecycle commands\nSubcommands: topologies list switch show inspect new ascii svg waves index search ask trace query",
+      "description": "Graph lifecycle commands\nSubcommands: topologies list switch show inspect new ascii svg waves agents index search ask trace query",
       "options": [
         "--json"
       ]
@@ -109,7 +109,7 @@
     },
     {
       "name": "run",
-      "description": "Run ledger commands\nSubcommands: start node end status resume round analyze",
+      "description": "Run ledger commands\nSubcommands: start node dispatch land end status resume take round analyze",
       "options": [
         "--graph <path>",
         "--status <status>",
@@ -124,7 +124,12 @@
         "--json",
         "--from-node <id>",
         "--dry-run",
-        "--force"
+        "--force",
+        "--attempt <n>",
+        "--commit <sha>",
+        "--via <via>",
+        "--pid <pid>",
+        "--from <run>"
       ]
     },
     {

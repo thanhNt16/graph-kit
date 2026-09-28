@@ -51,6 +51,17 @@ export function activeRun(cwd: string): string | null {
   return dir && existsSync(dir) ? dir : null;
 }
 
+/** Drop the active-run pointer (idempotent). Takeover clears it only when it names the taken run. */
+export function clearActiveRun(cwd: string): void {
+  rmSync(activeFile(cwd), { force: true });
+}
+
+/** Record a takeover stamp; the next startRun consumes it into meta.takes_over. */
+export function stampTakeover(cwd: string, oldRunId: string): void {
+  mkdirSync(runsDir(cwd), { recursive: true });
+  writeFileSync(join(runsDir(cwd), ".takeover"), oldRunId);
+}
+
 /** Graph path recorded by startRun on the active run, or null (no run / legacy meta). */
 export function activeRunGraph(cwd: string): string | null {
   const dir = activeRun(cwd);
@@ -117,6 +128,13 @@ export function startRun(
     fingerprint: fingerprint(cwd),
     started_at: now,
   };
+  // A prior `run take` left a takeover stamp: the fresh run records it as provenance.
+  const takeoverFile = join(runsDir(cwd), ".takeover");
+  if (existsSync(takeoverFile)) {
+    const old = readFileSync(takeoverFile, "utf-8").trim();
+    rmSync(takeoverFile, { force: true });
+    if (old) meta.takes_over = old;
+  }
   if (resumes) meta.resumes = resumes;
   writeFileSync(join(dir, "meta.json"), `${JSON.stringify(meta, null, 2)}\n`);
   // GBrain layout: compiled truth above the rule, append-only timeline below.
