@@ -1,5 +1,5 @@
-import { execFile } from "node:child_process";
-import { existsSync, readFileSync } from "node:fs";
+import { spawn } from "node:child_process";
+import { appendFileSync, existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
 export interface DispatchConstraints {
@@ -15,17 +15,28 @@ export interface DispatchArgs {
   context?: string;
   constraints?: DispatchConstraints;
   timeout_ms?: number;
+  /** Ledger identity for the dispatch-intent record (node/attempt) and the
+   *  run root to write it under; defaults to process.cwd(). */
+  node?: string;
+  attempt?: number | null;
+  cwd?: string;
 }
 
 export interface DispatchResult {
   ok: boolean;
   output: string;
   exit_code: number;
+  /** true when the run was cut off by timeout_ms (or abort) — retry policies
+   *  can match on this instead of scraping the output text. */
+  timed_out?: boolean;
 }
 
 export function loadAgentPrompt(agent: string): string | null {
   const p = join(process.cwd(), ".omp", "agents", `${agent}.md`);
-  return existsSync(p) ? readFileSync(p, "utf8") : null;
+  if (!existsSync(p)) return null;
+  // Kit agents carry omp task-discovery frontmatter (name/description);
+  // strip it — the dispatch prompt is prose, not YAML.
+  return readFileSync(p, "utf8").replace(/^---\n[\s\S]*?\n---\n*/, "");
 }
 
 export function buildPiArgs(args: DispatchArgs): string[] {
@@ -45,7 +56,7 @@ export function buildPrompt(args: DispatchArgs): string {
     .join("\n\n");
 }
 
-export async function dispatch(args: DispatchArgs): Promise<DispatchResult> {
+export async function dispatch(args: DispatchArgs, signal?: AbortSignal): Promise<DispatchResult> {
   const fragment = loadAgentPrompt(args.agent);
   if (!fragment) return { ok: false, output: `Unknown agent: ${args.agent}`, exit_code: 1 };
   const prompt = `${fragment}\n\n${buildPrompt(args)}`;
@@ -54,22 +65,121 @@ export async function dispatch(args: DispatchArgs): Promise<DispatchResult> {
   // omp -p reads the prompt from piped stdin. Prompt-as-argv and direct
   // stdin pipes both stall omp at readPipedInput (EOF never observed);
   // a shell pipeline closes the pipe reliably and stays async/parallel.
-  execFile(
+  //
+  // detached: the child becomes a process-group leader so timeout/abort kills
+  // the WHOLE tree (omp + any subprocesses it spawned). Plain execFile only
+  // SIGTERMs the direct child — observed in the wild: a timed-out builder kept
+  // writing to a shared DB for 11+ minutes after the orchestrator recorded it
+  // failed, racing its own resume dispatch.
+  const child = spawn(
     "/bin/sh",
     ["-c", 'printf %s "$GK_PROMPT" | exec omp "$@"', "gk-dispatch", ...buildPiArgs(args)],
-    { env: { ...process.env, GK_PROMPT: prompt }, timeout, maxBuffer: 10 * 1024 * 1024 },
-    (err, stdout, _stderr) => {
-      if (err) {
-        resolve({
-          ok: false,
-          output: `${stdout}\n${String(err.message ?? "")}`.trim(),
-          exit_code: err.killed ? 124 : typeof err.code === "number" ? err.code : 1,
-        });
-      } else {
-        resolve({ ok: true, output: stdout.trim(), exit_code: 0 });
-      }
-    },
+    { env: { ...process.env, GK_PROMPT: prompt }, detached: true },
   );
+  // Dispatch-intent record: written after spawn returns (child.pid needed)
+  // but before dispatch() awaits the result, so a crashed coordinator
+  // distinguishes "dispatched but quiet" from "never dispatched" on resume.
+  // Best-effort: bookkeeping must never fail a dispatch.
+  try {
+    const active = join(args.cwd ?? process.cwd(), ".graphkit", "runs", ".active");
+    if (existsSync(active)) {
+      const dir = readFileSync(active, "utf-8").trim();
+      appendFileSync(
+        join(dir, "dispatch.jsonl"),
+        `${JSON.stringify({
+          at: new Date().toISOString(),
+          node: args.node ?? null,
+          attempt: args.attempt ?? null,
+          via: "extension",
+          pid: child.pid ?? null,
+        })}\n`,
+      );
+    }
+  } catch {
+    /* intent write is best-effort; never fail a dispatch over bookkeeping */
+  }
+  const MAX_OUTPUT = 10 * 1024 * 1024;
+  let out = "";
+  let err = "";
+  let truncated = false;
+  const collect = (chunk: Buffer, into: "out" | "err") => {
+    const cur = into === "out" ? out : err;
+    if (cur.length >= MAX_OUTPUT) {
+      truncated = true;
+      return;
+    }
+    const next = cur + chunk.toString("utf8");
+    if (next.length > MAX_OUTPUT) truncated = true;
+    if (into === "out") out = next.slice(0, MAX_OUTPUT);
+    else err = next.slice(0, MAX_OUTPUT);
+  };
+  child.stdout?.on("data", (c: Buffer) => collect(c, "out"));
+  child.stderr?.on("data", (c: Buffer) => collect(c, "err"));
+
+  let timedOut = false;
+  let settled = false;
+  const killGroup = (sig: NodeJS.Signals) => {
+    try {
+      // Negative pid = the child's whole process group (detached leader).
+      process.kill(-child.pid!, sig);
+    } catch {
+      try {
+        child.kill(sig);
+      } catch {
+        /* already gone */
+      }
+    }
+  };
+  const escalate = () => {
+    // SIGTERM first; if the tree is still alive after the grace window,
+    // SIGKILL the group. A graceful shutdown that outlives the grace window
+    // would otherwise keep mutating shared state after we reported failure.
+    killGroup("SIGTERM");
+    const t = setTimeout(() => killGroup("SIGKILL"), 5_000);
+    t.unref?.();
+  };
+  const timer = setTimeout(() => {
+    timedOut = true;
+    escalate();
+  }, timeout);
+  const onAbort = () => {
+    timedOut = true;
+    escalate();
+  };
+  signal?.addEventListener("abort", onAbort, { once: true });
+
+  child.on("error", (e) => {
+    if (settled) return;
+    settled = true;
+    clearTimeout(timer);
+    signal?.removeEventListener("abort", onAbort);
+    resolve({ ok: false, output: String(e.message ?? e), exit_code: 1 });
+  });
+  child.on("close", (code, sig) => {
+    if (settled) return;
+    settled = true;
+    clearTimeout(timer);
+    signal?.removeEventListener("abort", onAbort);
+    const suffix = truncated ? "\n[output truncated at 10MB]" : "";
+    if (timedOut) {
+      // "TIMEOUT" marker is contractual: retry.non_retryable entries and the
+      // orchestrator match on it. exit_code 124 mirrors GNU timeout.
+      resolve({
+        ok: false,
+        output: `${out}\nTIMEOUT: killed after ${timeout}ms (process group terminated)${suffix}`.trim(),
+        exit_code: 124,
+        timed_out: true,
+      });
+    } else if (code === 0) {
+      resolve({ ok: true, output: `${out.trim()}${suffix}`, exit_code: 0 });
+    } else {
+      resolve({
+        ok: false,
+        output: `${out}\n${err}\nexit ${code ?? sig ?? "unknown"}${suffix}`.trim(),
+        exit_code: typeof code === "number" ? code : 1,
+      });
+    }
+  });
   return promise;
 }
 
@@ -128,11 +238,14 @@ export default async function gkSubagentExtension(pi: MinimalPiAPI): Promise<voi
         ),
       ),
       timeout_ms: Type.Optional(
-        Type.Number({ description: "Kill budget; on timeout returns ok:false, exit_code 124" }),
+        Type.Number({
+          description:
+            "Kill budget in ms (default 600000). On timeout the whole child process group is terminated and the result is { ok:false, exit_code:124, timed_out:true } with a TIMEOUT marker in output.",
+        }),
       ),
     }),
-    async execute(_toolCallId, params) {
-      const result = await dispatch(params);
+    async execute(_toolCallId, params, signal) {
+      const result = await dispatch(params, signal);
       return {
         content: [{ type: "text", text: JSON.stringify(result) }],
         details: result,

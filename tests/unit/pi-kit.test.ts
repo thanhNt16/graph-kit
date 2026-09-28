@@ -7,21 +7,22 @@ const ROOT = join(import.meta.dir, "..", "..");
 const KIT = join(ROOT, "kits", "pi");
 
 describe("pi kit structure", () => {
-  test("all agent fragments carry a role header", () => {
+  test("all agent fragments carry discovery frontmatter and a role header", () => {
     const dir = join(KIT, "agents");
     const files = readdirSync(dir).filter((f) => f.endsWith(".md"));
     expect(files.length).toBeGreaterThan(0);
     for (const f of files) {
       const raw = readFileSync(join(dir, f), "utf8");
       const name = f.replace(/\.md$/, "");
-      expect(raw.split("\n")[0], `${f} role header`).toContain(`You are ${name}, acting as an isolated subagent.`);
+      // omp task discovery requires name + description frontmatter.
+      expect(raw, `${f} frontmatter`).toMatch(new RegExp(`^---\\nname: ${name}\\ndescription: .+\\n---`));
+      expect(raw, `${f} role header`).toContain(`You are ${name}, acting as an isolated subagent.`);
     }
   });
 
-  test("fragments carry the claude agent bodies (frontmatter stripped)", () => {
+  test("fragments carry the claude agent bodies", () => {
     const raw = (f: string) => readFileSync(join(KIT, "agents", f), "utf8");
     expect(raw("data-engineer.md")).toContain("# Data Engineer Agent");
-    expect(raw("code-reviewer.md")).not.toMatch(/^---/);
     expect(raw("memory-curator.md")).toContain("# Memory Curator Agent");
   });
 
@@ -41,12 +42,12 @@ describe("pi kit structure", () => {
     }
   });
 
-  test("gk-execute carries gk_dispatch_agent wave protocol", () => {
+  test("gk-execute carries native task wave protocol", () => {
     const raw = readFileSync(join(KIT, "skills", "gk-execute", "SKILL.md"), "utf8");
     expect(raw).toContain("## Dispatching a wave (pi)");
-    expect(raw).toContain("gk_dispatch_agent");
-    expect(raw).toContain("ok:true");
-    expect(raw).toContain("constraints.no_write=true");
+    expect(raw).toContain("gk graph agents");
+    expect(raw).toContain("gk-<node-id>");
+    expect(raw).toContain("gk_dispatch_agent"); // fallback path for timeout_ms
     expect(raw).not.toContain("/gk:");
   });
 
@@ -99,5 +100,51 @@ describe("dispatch guard rails", () => {
     expect(result.ok).toBe(false);
     expect(result.exit_code).toBe(1);
     expect(result.output).toContain("__nonexistent_agent__");
+  });
+});
+
+describe("dispatch-intent write", () => {
+  // Subprocess-isolated: the stub omp itself asserts the intent line already
+  // exists when it starts running — proving the record lands after spawn
+  // returns but before dispatch() awaits the result. In-process chdir/env
+  // mutations are process-global and race sibling test files.
+  test("writes via:\"extension\" line before spawn resolves; no active run never fails dispatch", async () => {
+    const script = `
+      const { mkdtempSync, mkdirSync, writeFileSync, chmodSync, readFileSync } = require("node:fs");
+      const { tmpdir } = require("node:os");
+      const { join } = require("node:path");
+      const tmp = mkdtempSync(join(tmpdir(), "gk-dispatch-"));
+      const run = join(tmp, ".graphkit", "runs", "r1");
+      mkdirSync(run, { recursive: true });
+      writeFileSync(join(tmp, ".graphkit", "runs", ".active"), run);
+      const stubDir = join(tmp, "bin");
+      mkdirSync(stubDir);
+      const omp = join(stubDir, "omp");
+      writeFileSync(omp, '#!/bin/sh\\ncat > /dev/null\\ntest -s "$GK_RUN_DIR/dispatch.jsonl" || { echo "no intent line before child ran" >&2; exit 7; }\\nexit 0\\n');
+      chmodSync(omp, 0o755);
+      process.env.PATH = stubDir + ":" + process.env.PATH;
+      process.env.GK_RUN_DIR = run;
+      const { dispatch } = await import(process.env.GK_ROOT + "/kits/_core/extensions/gk-subagent.ts");
+      const r = await dispatch({ agent: "debugger", objective: "x", node: "n1", attempt: 2, cwd: tmp });
+      if (r.exit_code !== 0) throw new Error("dispatch failed: " + r.output);
+      const line = JSON.parse(readFileSync(join(run, "dispatch.jsonl"), "utf8").trim().split("\\n").pop());
+      if (line.via !== "extension") throw new Error("via: " + line.via);
+      if (line.node !== "n1" || line.attempt !== 2) throw new Error("node/attempt: " + line.node + "/" + line.attempt);
+      if (typeof line.pid !== "number" || line.pid <= 0) throw new Error("pid: " + line.pid);
+      if (typeof line.at !== "string" || isNaN(Date.parse(line.at))) throw new Error("at: " + line.at);
+      // No active run: bookkeeping stays silent, dispatch still succeeds.
+      const tmp2 = mkdtempSync(join(tmpdir(), "gk-dispatch-"));
+      const r2 = await dispatch({ agent: "debugger", objective: "x", cwd: tmp2 });
+      if (!r2.ok) throw new Error("dispatch without active run failed: " + r2.output);
+      console.log("OK");
+    `;
+    const proc = Bun.spawnSync(["bun", "-e", script], {
+      cwd: ROOT,
+      env: { ...process.env, GK_ROOT: ROOT },
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    expect(proc.stderr.toString()).toBe("");
+    expect(proc.stdout.toString().trim()).toBe("OK");
   });
 });
