@@ -11,10 +11,20 @@ export interface TraceLine {
   wave: number | null;
   agent: string | null;
   model: string | null;
-  status: "ok" | "fail" | "skipped";
+  status: "ok" | "fail" | "skipped" | "challenge";
   evidence: string[];
   duration_ms: number | null;
   notes: string | null;
+  attempt?: number;
+  landed?: { at: string; commit: string };
+}
+
+export interface DispatchLine {
+  at: string;
+  node: string;
+  attempt: number | null;
+  via: string;
+  pid: number | null;
 }
 
 export interface RunIndexLine {
@@ -126,7 +136,14 @@ export function startRun(
       "",
     ].join("\n"),
   );
-  writeFileSync(activeFile(cwd), dir);
+  try {
+    writeFileSync(activeFile(cwd), dir, { flag: "wx" }); // atomic: no check-then-write window
+  } catch (e) {
+    rmSync(dir, { recursive: true, force: true }); // don't orphan the fresh run dir
+    if ((e as NodeJS.ErrnoException).code === "EEXIST")
+      throw new Error(`RUN_ACTIVE: run already active at ${activeRun(cwd) ?? "(unreadable .active)"}`);
+    throw e;
+  }
   return { id, dir };
 }
 
@@ -162,6 +179,46 @@ export function appendAdvisor(
   const event: AdvisorEvent = { at: now, ...ev };
   appendFileSync(join(dir, "advisor.jsonl"), `${JSON.stringify(event)}\n`);
   return { event, run: basename(dir) };
+}
+
+
+/** Pre-dispatch intent record — written BEFORE launch so a crashed run can
+ *  distinguish "dispatched but quiet" from "never dispatched" on resume. */
+export function appendDispatch(
+  cwd: string,
+  line: Omit<DispatchLine, "at">,
+  now = new Date().toISOString(),
+): { run: string; node: string } {
+  const dir = activeRun(cwd);
+  if (!dir) throw new Error("NO_ACTIVE_RUN: start a run with `gk run start` before recording dispatches");
+  const entry: DispatchLine = { at: now, ...line };
+  appendFileSync(join(dir, "dispatch.jsonl"), `${JSON.stringify(entry)}\n`);
+  return { run: basename(dir), node: line.node };
+}
+
+export function readDispatches(cwd: string, id: string): DispatchLine[] {
+  const f = join(runsDir(cwd), id, "dispatch.jsonl");
+  return readFileSync(f, "utf-8")
+    .split("\n")
+    .filter((l) => l.trim())
+    .flatMap((l) => { try { return [JSON.parse(l) as DispatchLine]; } catch { return []; } });
+}
+
+/** Mark the node's last `ok` trace line as integrated ("landed"). Rewrites
+ *  trace.jsonl in place — the only multi-line ledger write; single-writer run
+ *  makes this safe. */
+export function landNode(cwd: string, node: string, commit: string, now = new Date().toISOString()) {
+  const dir = activeRun(cwd);
+  if (!dir) throw new Error("NO_ACTIVE_RUN: start a run before landing nodes");
+  const id = basename(dir);
+  const trace = readTrace(cwd, id);
+  let idx = -1;
+  for (let i = trace.length - 1; i >= 0; i--)
+    if (trace[i].node === node && trace[i].status === "ok") { idx = i; break; }
+  if (idx < 0) throw new Error(`LAND_NOT_OK: no ok trace line for node "${node}" in run ${id}`);
+  trace[idx] = { ...trace[idx], landed: { at: now, commit } };
+  writeFileSync(join(dir, "trace.jsonl"), trace.map((t) => JSON.stringify(t)).join("\n") + "\n");
+  return { run: id, node };
 }
 
 export function readAdvisorEvents(cwd: string, id: string): AdvisorEvent[] {
@@ -244,11 +301,12 @@ export function endRun(cwd: string, status: RunIndexLine["status"], now = new Da
 }
 
 /** Run ids present on disk, oldest first — ids are timestamp-prefixed so lexical == chronological. */
+export const RUN_ID_PATTERN = /^\d{8}-\d{6}-[\w.-]+$/;
 export function listRunIds(cwd: string): string[] {
   const d = runsDir(cwd);
   if (!existsSync(d)) return [];
   return readdirSync(d, { withFileTypes: true })
-    .filter((e) => e.isDirectory())
+    .filter((e) => e.isDirectory() && RUN_ID_PATTERN.test(e.name))
     .map((e) => e.name)
     .sort();
 }
@@ -264,7 +322,7 @@ export interface RunMeta {
 }
 export function readRunMeta(cwd: string, id: string): RunMeta {
   const file = join(runsDir(cwd), id, "meta.json");
-  if (!/^\d{8}-\d{6}-[\w.-]+$/.test(id) || !existsSync(file))
+  if (!RUN_ID_PATTERN.test(id) || !existsSync(file))
     throw new Error(`RESUME_RUN_NOT_FOUND: no run "${id}" under ${runsDir(cwd)}`);
   return JSON.parse(readFileSync(file, "utf-8")) as RunMeta;
 }

@@ -5,9 +5,12 @@ import { join } from "node:path";
 import {
   activeRun,
   appendAdvisor,
+  appendDispatch,
   appendNode,
   endRun,
+  landNode,
   readAdvisorEvents,
+  readDispatches,
   readRunIndex,
   readTrace,
   startRun,
@@ -145,5 +148,42 @@ describe("run ledger", () => {
     const meta = JSON.parse(readFileSync(join(second.dir, "meta.json"), "utf-8"));
     expect(meta.resumes).toBe(first.id);
     expect(readFileSync(join(second.dir, "run.md"), "utf-8")).toContain(`- resumes: ${first.id}`);
+  });
+
+  test("appendDispatch writes dispatch.jsonl; readDispatches round-trips", () => {
+    const { id } = startRun(cwd, join(cwd, "graph.yaml"), "2026-09-28T10:00:00.000Z");
+    appendDispatch(cwd, { node: "build", attempt: 1, via: "task", pid: null });
+    appendDispatch(cwd, { node: "build", attempt: 2, via: "extension", pid: 4242 });
+    const rows = readDispatches(cwd, id);
+    expect(rows.map((r) => r.attempt)).toEqual([1, 2]);
+    expect(rows[1].via).toBe("extension");
+  });
+
+  test("appendDispatch without active run fails", () => {
+    expect(() => appendDispatch(cwd, { node: "x", attempt: null, via: "task", pid: null }))
+      .toThrow(/NO_ACTIVE_RUN/);
+  });
+
+  test("landNode stamps landed on the node's ok line", () => {
+    const { id } = startRun(cwd, join(cwd, "graph.yaml"), "2026-09-28T10:00:00.000Z");
+    appendNode(cwd, { node: "build", wave: 0, agent: null, model: null, status: "ok",
+      evidence: ["k"], duration_ms: 1, notes: null });
+    landNode(cwd, "build", "abc123");
+    const last = readTrace(cwd, id).at(-1)!;
+    expect(last.landed?.commit).toBe("abc123");
+  });
+
+  test("landNode rejects a node with no ok trace line", () => {
+    startRun(cwd, join(cwd, "graph.yaml"), "2026-09-28T10:00:00.000Z");
+    appendNode(cwd, { node: "audit", wave: 0, agent: null, model: null, status: "fail",
+      evidence: [], duration_ms: 1, notes: null });
+    expect(() => landNode(cwd, "audit", "abc123")).toThrow(/LAND_NOT_OK/);
+    expect(() => landNode(cwd, "ghost", "abc123")).toThrow(/LAND_NOT_OK/);
+  });
+
+  test("second startRun while .active exists fails atomically (EEXIST path)", () => {
+    startRun(cwd, join(cwd, "graph.yaml"), "2026-09-28T10:00:00.000Z");
+    // Simulate a crash: .active left behind, dir exists
+    expect(() => startRun(cwd, join(cwd, "graph.yaml"), "2026-09-28T11:00:00.000Z")).toThrow(/RUN_ACTIVE/);
   });
 });
