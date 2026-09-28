@@ -164,6 +164,11 @@ describe("run ledger", () => {
       .toThrow(/NO_ACTIVE_RUN/);
   });
 
+  test("readDispatches on a run with no dispatches returns []", () => {
+    const { id } = startRun(cwd, join(cwd, "graph.yaml"), "2026-09-28T10:00:00.000Z");
+    expect(readDispatches(cwd, id)).toEqual([]);
+  });
+
   test("landNode stamps landed on the node's ok line", () => {
     const { id } = startRun(cwd, join(cwd, "graph.yaml"), "2026-09-28T10:00:00.000Z");
     appendNode(cwd, { node: "build", wave: 0, agent: null, model: null, status: "ok",

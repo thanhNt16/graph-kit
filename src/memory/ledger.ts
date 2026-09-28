@@ -198,6 +198,7 @@ export function appendDispatch(
 
 export function readDispatches(cwd: string, id: string): DispatchLine[] {
   const f = join(runsDir(cwd), id, "dispatch.jsonl");
+  if (!existsSync(f)) return [];
   return readFileSync(f, "utf-8")
     .split("\n")
     .filter((l) => l.trim())
