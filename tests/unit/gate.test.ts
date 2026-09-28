@@ -137,6 +137,32 @@ describe("gk gate command", () => {
     expect(parsed.error.details.missing).toContain("design");
   });
 
+  test("require_landed flows from graph schema; payload carries warnings/unlanded", () => {
+    writeFileSync(
+      join(tmp, "graph.yaml"),
+      MINIMAL_GRAPH.replace("required_keys: [design]", "required_keys: [design]\n  require_landed: true"),
+    );
+    const evDir = join(tmp, ".graphkit", "evidence");
+    mkdirSync(evDir, { recursive: true });
+    writeFileSync(join(evDir, "design.md"), "approved\n");
+    const runs = join(tmp, ".graphkit", "runs");
+    mkdirSync(join(runs, "run-1"), { recursive: true });
+    writeFileSync(
+      join(runs, "run-1", "trace.jsonl"),
+      `${JSON.stringify({ at: "t0", node: "build", model: null, status: "ok", evidence: ["design"], duration_ms: 1, notes: null })}\n`,
+    );
+    writeFileSync(
+      join(runs, "index.jsonl"),
+      `${JSON.stringify({ id: "run-1", graph: "graph.yaml", graph_sha256: "x", started_at: "t0", ended_at: "t1", status: "blocked", node_count: 1, failures: 0, evidence_keys: ["design"] })}\n`,
+    );
+    const result = runCli(["gate", join(tmp, "graph.yaml")], tmp);
+    expect(result.code).toBe(1);
+    const parsed = JSON.parse(result.stdout);
+    expect(parsed.error.code).toBe("GATE_BLOCK");
+    expect(parsed.error.details.unlanded).toEqual(["build"]);
+    expect(parsed.error.details.warnings).toEqual([]);
+  });
+
   test("default file is graph.yaml in cwd", () => {
     writeFileSync(join(tmp, "graph.yaml"), MINIMAL_GRAPH);
     const evDir = join(tmp, ".graphkit", "evidence");

@@ -133,6 +133,7 @@ const EvidenceSchema = z
     format: z.enum(["markdown", "json"]).default("markdown"),
     criteria: z.array(z.string()).optional(),
     freshness: z.enum(["report", "strict"]).default("report"),
+    require_landed: z.boolean().default(false),
   })
   .strict();
 
@@ -179,6 +180,7 @@ export const GraphSchema = z
       required_keys: [],
       format: "markdown" as const,
       freshness: "report" as const,
+      require_landed: false as const,
     })),
     topology_config: z
       .record(z.string(), z.any())

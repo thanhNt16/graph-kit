@@ -33,6 +33,7 @@ function markerFor(key: string, fp: { head: string | null; tree: string | null }
     bytes: null,
     ts: null,
     note: null,
+    superseded: null,
   };
 }
 
@@ -56,11 +57,57 @@ describe("gateGraph freshness", () => {
     expect(strict.verdict).toBe("BLOCK");
   });
 
-  test("legacy marker (no frontmatter) → unknown, never blocks strict", () => {
+  test("strict freshness BLOCKs markerless (unknown) evidence with warning", () => {
     writeFileSync(join(evDir, "design.md"), "# plain legacy\n");
+    // report mode unchanged
+    expect(gateGraph(["design"], evDir, { cwd: repo }).verdict).toBe("MERGE");
     const r = gateGraph(["design"], evDir, { cwd: repo, strict: true });
-    expect(r.verdict).toBe("MERGE");
+    expect(r.verdict).toBe("BLOCK");
     expect(r.freshness.design).toBe("unknown");
+    expect(r.warnings.length).toBe(1);
+    expect(r.warnings[0]).toContain("design");
+  });
+
+  test("superseded evidence BLOCKs regardless of freshness", () => {
+    const fp = fingerprint(repo);
+    const m = { ...markerFor("design", fp), superseded: "superseded-by-v2" };
+    writeFileSync(join(evDir, "design.md"), renderMarker(m, "body"));
+    for (const strict of [false, true]) {
+      const r = gateGraph(["design"], evDir, { cwd: repo, strict });
+      expect(r.verdict).toBe("BLOCK");
+      expect(r.missing).toEqual(["design"]);
+      expect(r.scorecard.design).toBe("missing");
+    }
+  });
+
+  test("require_landed BLOCKs ok-but-unlanded node evidence", () => {
+    const fp = fingerprint(repo);
+    writeFileSync(join(evDir, "design.md"), renderMarker(markerFor("design", fp), "body"));
+    const runs = join(repo, ".graphkit", "runs");
+    mkdirSync(join(runs, "run-1"), { recursive: true });
+    writeFileSync(
+      join(runs, "run-1", "trace.jsonl"),
+      `${JSON.stringify({ at: "t0", node: "build", model: null, status: "ok", evidence: ["design"], duration_ms: 1, notes: null })}\n`,
+    );
+    writeFileSync(
+      join(runs, "index.jsonl"),
+      `${JSON.stringify({ id: "run-1", graph: "graph.yaml", graph_sha256: "x", started_at: "t0", ended_at: "t1", status: "blocked", node_count: 1, failures: 0, evidence_keys: ["design"] })}\n`,
+    );
+    // landed trace → MERGE
+    mkdirSync(join(runs, "run-2"), { recursive: true });
+    writeFileSync(
+      join(runs, "run-2", "trace.jsonl"),
+      `${JSON.stringify({ at: "t0", node: "build", model: null, status: "ok", evidence: ["design"], duration_ms: 1, notes: null, landed: { at: "t1", commit: "abc" } })}\n`,
+    );
+    writeFileSync(join(runs, "index.jsonl"), `${JSON.stringify({ id: "run-2", graph: "graph.yaml", graph_sha256: "x", started_at: "t0", ended_at: "t1", status: "merged", node_count: 1, failures: 0, evidence_keys: ["design"] })}\n`);
+    expect(gateGraph(["design"], evDir, { cwd: repo, requireLanded: true }).verdict).toBe("MERGE");
+    // latest run (index row 2 = run-2) landed → swap to run-1 (unlanded) as last row
+    writeFileSync(join(runs, "index.jsonl"), `${JSON.stringify({ id: "run-1", graph: "graph.yaml", graph_sha256: "x", started_at: "t0", ended_at: "t1", status: "blocked", node_count: 1, failures: 0, evidence_keys: ["design"] })}\n`);
+    const r = gateGraph(["design"], evDir, { cwd: repo, requireLanded: true });
+    expect(r.verdict).toBe("BLOCK");
+    expect(r.unlanded).toEqual(["build"]);
+    // without requireLanded the same tree MERGEs
+    expect(gateGraph(["design"], evDir, { cwd: repo }).verdict).toBe("MERGE");
   });
 
   test("no cwd option → unknown freshness, verdict unchanged", () => {
