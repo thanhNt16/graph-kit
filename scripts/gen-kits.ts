@@ -71,7 +71,7 @@ interface HostConfig {
 // ---- gk-execute per-host dispatch semantics (sourced from the 2026-09-18 kit diffs) ----
 
 const CORE_PURPOSE_LINE =
-  "Execute a graph.yaml by **dispatching subagent runs through the `gk_dispatch_agent` tool** (provided by the gk-subagent extension) — YOU are the orchestrator. No compiled .workflow.js. Each node becomes one dispatch call you can see and monitor.";
+  "Execute a graph.yaml by **dispatching native subagents via the task tool** — YOU are the orchestrator. `gk graph agents` materializes each node as a discoverable `.omp/agents/gk-<node>.md` agent (model/tools/skills baked in); each node becomes one task spawn you can see and monitor. `gk_dispatch_agent` remains only for nodes needing a hard wall-clock kill (`timeout_ms`).";
 
 const PURPOSE_LINE_BY_HOST: Record<Exclude<HostId, "pi">, string> = {
   claude:
@@ -84,7 +84,7 @@ const PURPOSE_LINE_BY_HOST: Record<Exclude<HostId, "pi">, string> = {
     "Execute a graph.yaml by **directly spawning custom agents by name** — YOU are the orchestrator. No compiled .workflow.js. Each node becomes an agent spawn you can see and monitor.",
 };
 const CORE_RESOLVER_ITEM =
-  "1. **Resolve each node's agent fragment** at `.omp/agents/<agent-name>.md` — `gk_dispatch_agent` loads it automatically; you only need it to check the agent exists and understand its deliverables.";
+  "1. **Materialize node agents** — run `gk graph agents <graph.yaml>` once after `gk run start`. It writes `.omp/agents/gk-<node-id>.md` (frontmatter: name, description, node `model`, constraint-derived `tools`, `autoloadSkills` from node `skills`) so omp's native task discovery can dispatch each node directly. Re-run it if the graph changes mid-run.";
 
 const CURATOR_ITEM_BY_HOST: Record<Exclude<HostId, "pi">, string> = {
   claude:
@@ -839,7 +839,12 @@ function agentBody(raw: string, host: HostId): string {
 function emitAgent(slug: string, raw: string, host: HostId): string {
   const meta = AGENT_META[slug];
   if (!meta) throw new Error(`gen-kits: no AGENT_META entry for agent '${slug}'`);
-  if (host === "pi") return raw;
+  if (host === "pi") {
+    // omp task discovery requires name + description frontmatter; without it
+    // the fragment is invisible to the native task tool and only reachable
+    // through the gk_dispatch_agent child-process path.
+    return `---\nname: ${slug}\ndescription: ${meta.description}\n---\n\n${raw}`;
+  }
   const body = agentBody(raw, host);
   if (host === "codex") {
     // ponytail: TOML escaping covers backslashes and triple-quote runs only; a

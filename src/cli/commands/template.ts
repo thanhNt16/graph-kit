@@ -3,7 +3,7 @@ import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import type { CAC } from "cac";
 import YAML from "yaml";
-import { validateGraph } from "../../compiler/validate.js";
+import { isBlocking, validateGraph } from "../../compiler/validate.js";
 import { GraphKitError } from "../../errors.js";
 import type { Graph } from "../../schemas/graph.schema.js";
 import { GraphSchema } from "../../schemas/graph.schema.js";
@@ -94,7 +94,7 @@ function templateFromSource(file: string, name: string): GraphTemplate {
     });
   }
   const findings = validateGraph(graph.data, dirname(file));
-  if (findings.length > 0) {
+  if (findings.some(isBlocking)) {
     throw new GraphKitError("SOURCE_INVALID", "Source graph has validation findings", { findings });
   }
   return {
@@ -319,7 +319,7 @@ export function materializeTemplate(
   }
 
   const findings = validateGraph(graph, cwd);
-  if (findings.length > 0) {
+  if (findings.some(isBlocking)) {
     throw new GraphKitError(
       "VALIDATION_FAILED",
       `Materialized graph failed validation:\n${findings.map((f) => `- [${f.check}] ${f.path}: ${f.message}`).join("\n")}`,

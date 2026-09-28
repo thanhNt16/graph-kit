@@ -1,13 +1,18 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import YAML from "yaml";
+import { topoWaves } from "../cli/graph-waves.js";
 import type { Graph } from "../schemas/graph.schema.js";
 
 export interface Finding {
   check: string;
   path: string;
   message: string;
+  /** Absent or "error" blocks validate-dependent commands; "warn" is advisory. */
+  severity?: "warn";
 }
+
+export const isBlocking = (f: Finding) => f.severity !== "warn";
 
 // Agent names resolve to kebab-case filenames: "Software Architect" → software-architect.md
 export function agentFileName(agent: string): string {
@@ -150,7 +155,9 @@ export function validateGraph(graph: Graph, projectRoot: string): Finding[] {
     }
   }
 
-  // 7. eval-gate node role contract
+  // 7. Node role contract. eval-gate and supervisor are semantic roles; any
+  // other string is allowed (free-form) but surfaces an advisory warning so
+  // typos like "supervsor" are visible.
   for (const [id, node] of Object.entries(graph.nodes)) {
     if (node.role === "eval-gate") {
       if (!node.eval) {
@@ -165,6 +172,53 @@ export function validateGraph(graph: Graph, projectRoot: string): Finding[] {
           check: "eval-gate-depend_on",
           path: `nodes.${id}.depend_on`,
           message: "eval-gate node must depend_on at least one producer node",
+        });
+      }
+    }
+    if (node.role && node.role !== "eval-gate" && node.role !== "supervisor") {
+      findings.push({
+        check: "unknown-role",
+        path: `nodes.${id}.role`,
+        message: `Unknown role "${node.role}" — advisory warning only; known roles: eval-gate, supervisor`,
+        severity: "warn",
+      });
+    }
+  }
+  // 7b. Owned-scope overlap (HEURISTIC ADVISORY WARNING, not an error): two
+  // nodes in the same topological wave declaring owns globs with a shared
+  // literal ancestor may write the same files concurrently. We compare literal
+  // directory prefixes (text before the first wildcard, cut to the last path
+  // segment) — identical patterns or a root-scoped pattern count as overlap.
+  // A wildcard can still escape these prefixes, so treat findings as review
+  // prompts, not proof.
+  const globsOverlap = (a: string, b: string): boolean => {
+    if (a === b) return true;
+    const anc = (glob: string): string => {
+      const cut = glob.search(/[*?[{]/);
+      const literal = cut === -1 ? glob : glob.slice(0, cut);
+      return literal.slice(0, literal.lastIndexOf("/") + 1);
+    };
+    const [da, db] = [anc(a), anc(b)];
+    if (da === "" || db === "") return true;
+    const [short, long] = da.length <= db.length ? [da, db] : [db, da];
+    return long.startsWith(short);
+  };
+  const { waves } = topoWaves(graph.nodes);
+  const isGated = (id: string) =>
+    graph.nodes[id]?.constraints.some((c) => c.no_write === true || c.no_exec === true) ?? false;
+  for (const wave of waves) {
+    const scoped = wave.filter((id) => (graph.nodes[id]?.owns.length ?? 0) > 0);
+    for (let i = 0; i < scoped.length; i++) {
+      for (let j = i + 1; j < scoped.length; j++) {
+        const a = scoped[i];
+        const b = scoped[j];
+        if (isGated(a) || isGated(b)) continue;
+        if (!graph.nodes[a].owns.some((ga) => graph.nodes[b].owns.some((gb) => globsOverlap(ga, gb)))) continue;
+        findings.push({
+          check: "owns-overlap",
+          path: `nodes.${a}.owns`,
+          message: `Nodes "${a}" and "${b}" in the same wave declare potentially overlapping owns globs (heuristic advisory) and neither has no_write/no_exec`,
+          severity: "warn",
         });
       }
     }

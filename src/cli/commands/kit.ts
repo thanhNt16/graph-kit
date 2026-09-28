@@ -5,7 +5,32 @@ import type { CAC } from "cac";
 import { GraphKitError } from "../../errors.js";
 import { getTarget, isValidTarget, listTargets } from "../../targets/registry.js";
 import type { TargetId } from "../../targets/types.js";
+import { APP_VERSION } from "../../version.js";
 import { emit, fail, ok } from "../output.js";
+
+/** kitVersion recorded into .gk.json at install time; compared against the
+ *  running CLI version so stale kit installs are visible instead of silent. */
+export function kitVersionWarnings(cwd: string): string[] {
+  const warnings: string[] = [];
+  for (const t of listTargets()) {
+    const cfg = join(cwd, t.installDir, ".gk.json");
+    if (!existsSync(cfg)) continue;
+    let recorded: string | null = null;
+    try {
+      const parsed = JSON.parse(readFileSync(cfg, "utf8")) as Record<string, unknown>;
+      if (typeof parsed.kitVersion === "string") recorded = parsed.kitVersion;
+    } catch {
+      /* unreadable config is not a staleness signal */
+      continue;
+    }
+    if (recorded !== APP_VERSION) {
+      warnings.push(
+        `${t.installDir}/.gk.json kitVersion=${recorded ?? "unrecorded"} predates gk ${APP_VERSION} — run \`gk init --target ${t.id}\` to refresh kit files (skills/extensions/rules) before executing graphs`,
+      );
+    }
+  }
+  return warnings;
+}
 
 export type KitTarget = "claude" | "cursor";
 
@@ -204,9 +229,21 @@ export function installKit(
   }
 
   const gkConfig = join(destDir, ".gk.json");
-  if (!existsSync(gkConfig)) {
-    writeFileSync(gkConfig, JSON.stringify({ codingLevel: 0, statusline: "full" }, null, 2));
+  // Merge (never clobber user keys): record which kit version wrote the files
+  // so `gk run start` can warn when the install predates the running binary.
+  let existing: Record<string, unknown> = {};
+  if (existsSync(gkConfig)) {
+    try {
+      const parsed = JSON.parse(readFileSync(gkConfig, "utf8")) as Record<string, unknown>;
+      if (parsed && typeof parsed === "object") existing = parsed;
+    } catch {
+      /* corrupt user config: rewrite defaults below */
+    }
   }
+  writeFileSync(
+    gkConfig,
+    JSON.stringify({ codingLevel: 0, statusline: "full", ...existing, kitVersion: APP_VERSION }, null, 2),
+  );
   return { installed: readdirSync(destDir) };
 }
 function assertValidTarget(opts: { target?: string }) {

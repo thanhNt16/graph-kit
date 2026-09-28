@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { appendFileSync, existsSync, mkdirSync, readFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import YAML from "yaml";
 import { GraphSchema } from "../schemas/graph.schema.js";
@@ -32,7 +32,7 @@ export interface RoundResult {
   stop_reason: "no_progress" | "max_rounds" | null;
 }
 
-interface JournalLine {
+export interface JournalLine {
   round: number;
   at: string;
   fingerprint: string;
@@ -55,6 +55,19 @@ function readJournal(cwd: string, id: string, group: number): JournalLine[] {
         return []; // skip a torn line rather than abort the whole scan
       }
     });
+}
+
+/** All round journals of a run, group order ascending — the read-only view `gk run analyze` audits. */
+export function readRoundJournals(cwd: string, id: string): { group: number; lines: JournalLine[] }[] {
+  const dir = roundsDir(cwd, id);
+  if (!existsSync(dir)) return [];
+  return readdirSync(dir)
+    .filter((f) => f.endsWith(".jsonl"))
+    .map((f) => {
+      const group = Number(f.slice(0, -".jsonl".length));
+      return { group, lines: readJournal(cwd, id, group) };
+    })
+    .sort((a, b) => a.group - b.group);
 }
 
 export function recordRound(cwd: string, groupIdx: number, now = new Date().toISOString()): RoundResult {

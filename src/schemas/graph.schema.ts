@@ -90,6 +90,12 @@ const NodeDefSchema = z
     depend_on: z.array(z.string()).default([]),
     loop: LoopConfig.optional(),
     constraints: z.array(ConstraintValue).default([]),
+    // Challengeable premises the orchestrator may contest (CHALLENGE output
+    // contract); materialized into the agent body, never hard requirements.
+    assumptions: z.array(z.string()).default([]),
+    // Declared write scope as path globs ('src/foo/**'); advisory, surfaced to
+    // the agent and to the owns-overlap validation heuristic.
+    owns: z.array(z.string()).default([]),
     evidence: z.array(z.string()).default([]),
     role: z.string().optional(),
     eval: EvalConfig.optional(),
@@ -105,6 +111,10 @@ const NodeDefSchema = z
     gate: GateConfig.optional(),
     // Scales fan-out width, budgets, and loop bounds (see gk-execute SKILL.md).
     effort: z.enum(["light", "standard", "deep"]).default("standard"),
+    // Per-node dispatch kill budget in ms; forwarded to gk_dispatch_agent's
+    // timeout_ms. Unset → the dispatch default (600000). Set explicitly for
+    // nodes whose work is known to exceed 10 min (bulk ingestion, builds).
+    timeout_ms: z.number().int().positive().optional(),
   })
   .strict()
   .superRefine((n, ctx) => {

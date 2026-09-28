@@ -6,7 +6,7 @@ import { CBM_UNAVAILABLE_MSG, type CbmClient } from "../../cbm/client.js";
 import type { QueryResult, SearchResult, TraceResult } from "../../cbm/contract.js";
 import { routeAndRetrieve } from "../../cbm/route.js";
 import { compileGraph } from "../../compiler/emitter.js";
-import { validateGraph } from "../../compiler/validate.js";
+import { isBlocking, validateGraph } from "../../compiler/validate.js";
 import { GraphKitError } from "../../errors.js";
 import type { Graph } from "../../schemas/graph.schema.js";
 import { GraphSchema } from "../../schemas/graph.schema.js";
@@ -16,6 +16,7 @@ import { renderAscii } from "../ascii.js";
 import { seamClientFactory, seamIndexProject } from "../cbm-seam.js";
 import { subcommandsFor } from "../command-registry.js";
 import { topoWaves } from "../graph-waves.js";
+import { materializeNodeAgents } from "../node-agents.js";
 import { emit, fail, ok } from "../output.js";
 import { renderSvg } from "../svg.js";
 import { templatesDir } from "./kit.js";
@@ -605,11 +606,11 @@ export function registerGraphCommands(cli: CAC) {
       try {
         const graph = file ? loadGraph(file) : resolveBareValidateGraph();
         const findings = validateGraph(graph, process.cwd());
-        if (findings.length > 0) {
+        if (findings.some(isBlocking)) {
           emit(fail("VALIDATION_FAILED", "graph has findings", { findings }));
           return;
         }
-        emit(ok({ valid: true, topology: graph.topology }));
+        emit(ok({ valid: true, topology: graph.topology, warnings: findings.filter((f) => !isBlocking(f)) }));
       } catch (e) {
         emit(e instanceof GraphKitError ? fail(e.code, e.message, e.details) : fail("VALIDATE_ERROR", String(e)));
       }
@@ -623,7 +624,7 @@ export function registerGraphCommands(cli: CAC) {
       try {
         const graph = loadGraph(file ?? join(process.cwd(), "graph.yaml"));
         const findings = validateGraph(graph, process.cwd());
-        if (findings.length > 0) {
+        if (findings.some(isBlocking)) {
           emit(fail("VALIDATION_FAILED", "fix findings before compile", { findings }));
           return;
         }
@@ -751,7 +752,7 @@ export function registerGraphCommands(cli: CAC) {
           const resolved = file ?? join(process.cwd(), "graph.yaml");
           const graph = loadGraph(resolved);
           const findings = validateGraph(graph, process.cwd());
-          if (findings.length > 0) {
+          if (findings.some(isBlocking)) {
             emit(fail("VALIDATION_FAILED", "graph has findings", { findings }));
             return;
           }
@@ -765,7 +766,7 @@ export function registerGraphCommands(cli: CAC) {
           const resolved = file ?? join(process.cwd(), "graph.yaml");
           const graph = loadGraph(resolved);
           const findings = validateGraph(graph, process.cwd());
-          if (findings.length > 0) {
+          if (findings.some(isBlocking)) {
             emit(fail("VALIDATION_FAILED", "graph has findings", { findings }));
             return;
           }
@@ -786,7 +787,7 @@ export function registerGraphCommands(cli: CAC) {
           const resolved = file ?? join(process.cwd(), "graph.yaml");
           const graph = loadGraph(resolved);
           const findings = validateGraph(graph, process.cwd());
-          if (findings.length > 0) {
+          if (findings.some(isBlocking)) {
             emit(fail("VALIDATION_FAILED", "graph has findings", { findings }));
             return;
           }
@@ -870,6 +871,10 @@ export function registerGraphCommands(cli: CAC) {
             budget_tokens: nodes[id]?.budget_tokens ?? null,
             gate: nodes[id]?.gate ?? null,
             effort: nodes[id]?.effort ?? "standard",
+            timeout_ms: nodes[id]?.timeout_ms ?? null,
+            constraints: nodes[id]?.constraints || [],
+            assumptions: nodes[id]?.assumptions || [],
+            owns: nodes[id]?.owns || [],
             depend_on: nodes[id]?.depend_on || [],
             loop: nodes[id]?.loop || null,
             evidence: nodes[id]?.evidence || [],
@@ -908,6 +913,24 @@ export function registerGraphCommands(cli: CAC) {
           emit(ok(payload));
         } catch (e) {
           emit(e instanceof GraphKitError ? fail(e.code, e.message, e.details) : fail("WAVES_ERROR", String(e)));
+        }
+      } else if (subcommand === "agents") {
+        // Materialize .omp/agents/gk-<node>.md files so omp's native task
+        // discovery can dispatch graph nodes without the gk_dispatch_agent
+        // child-process path. Run after `gk run start`, before wave dispatch.
+        const file = Array.isArray(args) ? args[0] : args;
+        try {
+          const resolved = file ?? join(process.cwd(), "graph.yaml");
+          const graph = loadGraph(resolved);
+          const findings = validateGraph(graph, process.cwd());
+          if (findings.some(isBlocking)) {
+            emit(fail("VALIDATION_FAILED", "graph has findings", { findings }));
+            return;
+          }
+          const agents = materializeNodeAgents(process.cwd(), graph);
+          emit(ok({ agents, dir: join(process.cwd(), ".omp", "agents") }));
+        } catch (e) {
+          emit(e instanceof GraphKitError ? fail(e.code, e.message, e.details) : fail("AGENTS_ERROR", String(e)));
         }
       } else if (subcommand === "index") {
         (async () => {

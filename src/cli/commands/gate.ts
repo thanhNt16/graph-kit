@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { CAC } from "cac";
-import { validateGraph } from "../../compiler/validate.js";
+import { isBlocking, validateGraph } from "../../compiler/validate.js";
 import { GraphKitError } from "../../errors.js";
 import { scoreWorkProduct } from "../../eval/rubrics.js";
 import { fingerprint } from "../../evidence/fingerprint.js";
@@ -76,7 +76,7 @@ export function registerGateCommand(cli: CAC) {
         const resolved = file ?? join(process.cwd(), "graph.yaml");
         const graph = loadGraph(resolved);
         const findings = validateGraph(graph, process.cwd());
-        if (findings.length > 0) {
+        if (findings.some(isBlocking)) {
           emit(fail("VALIDATION_FAILED", "graph has findings", { findings }));
           return;
         }
