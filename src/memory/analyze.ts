@@ -25,8 +25,10 @@ import { readRoundJournals } from "./loops.js";
 export interface AnalyzeResult {
   run_id: string;
   duration_ms: number;
-  nodes: { ok: number; fail: number; skipped: number; challenge: number };
+  nodes: { ok: number; fail: number; skipped: number; challenge: number; integration_failures: number };
   escalations: { advisor_fired: number; advisor_then_ok: number };
+  /** Challenge adjudication over the run — dispositions parsed from `disposition=*` notes. */
+  challenges: { total: number; adjudicated: number; dispositions: Record<string, number> };
   /** Extra trace attempts per node — only nodes executed more than once. */
   retries: Record<string, number>;
   loops: {
@@ -72,9 +74,21 @@ export function analyzeRun(cwd: string, requested?: string): AnalyzeResult {
   const advisors = readAdvisorEvents(cwd, id);
 
   const counts = { ok: 0, fail: 0, skipped: 0, challenge: 0 };
+  let integration_failures = 0;
+  const dispositions: Record<string, number> = {};
+  let adjudicated = 0;
   const byNode = new Map<string, TraceLine[]>();
   for (const line of trace) {
     counts[line.status]++;
+    if (line.status === "challenge") {
+      const m = line.notes?.match(/\bdisposition=(accept|modify|reject|defer)\b/);
+      if (m) {
+        adjudicated++;
+        dispositions[m[1]] = (dispositions[m[1]] ?? 0) + 1;
+      }
+    } else if (line.status === "fail" && line.notes?.startsWith("merge-conflict:")) {
+      integration_failures++;
+    }
     const list = byNode.get(line.node) ?? [];
     list.push(line);
     byNode.set(line.node, list);
@@ -161,7 +175,8 @@ export function analyzeRun(cwd: string, requested?: string): AnalyzeResult {
   return {
     run_id: id,
     duration_ms,
-    nodes: counts,
+    nodes: { ...counts, integration_failures },
+    challenges: { total: counts.challenge, adjudicated, dispositions },
     escalations: { advisor_fired: advisors.length, advisor_then_ok },
     retries,
     loops: {

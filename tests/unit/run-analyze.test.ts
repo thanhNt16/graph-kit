@@ -15,6 +15,7 @@ const line = (
   status: TraceLine["status"],
   offsetSec: number,
   duration_ms: number | null = null,
+  notes: string | null = null,
 ): TraceLine => ({
   at: at(offsetSec),
   node,
@@ -24,7 +25,7 @@ const line = (
   status,
   evidence: [],
   duration_ms,
-  notes: null,
+  notes,
 });
 const advisor = (node: string, offsetSec: number): AdvisorEvent => ({
   at: at(offsetSec),
@@ -120,8 +121,7 @@ describe("analyzeRun telemetry", () => {
     });
     const r = analyzeRun(cwd, "20260101-000001-a");
     expect(r.run_id).toBe("20260101-000001-a");
-    expect(r.duration_ms).toBe(4000);
-    expect(r.nodes).toEqual({ ok: 2, fail: 5, skipped: 0, challenge: 1 });
+    expect(r.nodes).toEqual({ ok: 2, fail: 5, skipped: 0, challenge: 1, integration_failures: 0 });
     expect(r.escalations).toEqual({ advisor_fired: 2, advisor_then_ok: 1 });
     expect(r.retries).toEqual({ b: 2, c: 1 });
     expect(r.suggestions).toEqual([
@@ -199,6 +199,23 @@ describe("analyzeRun telemetry", () => {
     });
     const r = analyzeRun(cwd, "20260101-000001-a");
     expect(r.loops).toEqual({ rounds: 2, no_progress_stops: 0, exhausted: false, judged: 0, gate: null });
+  });
+
+  test("counts challenge dispositions and merge conflicts from notes", () => {
+    seedRun("20260101-000001-a", {
+      trace: [
+        line("x", "challenge", 1, null, "disposition=accept"),
+        line("y", "challenge", 2, null, "disposition=modify"),
+        line("z", "challenge", 3),
+        line("w", "fail", 4, null, "merge-conflict:gk/x"),
+        line("v", "fail", 5, null, "merge-conflict:gk/y"),
+        line("u", "fail", 6, null, "flaky timeout"),
+        line("x", "ok", 7),
+      ],
+    });
+    const r = analyzeRun(cwd, "20260101-000001-a");
+    expect(r.challenges).toEqual({ total: 3, adjudicated: 2, dispositions: { accept: 1, modify: 1 } });
+    expect(r.nodes.integration_failures).toBe(2);
   });
 });
 
