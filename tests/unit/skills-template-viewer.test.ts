@@ -112,10 +112,10 @@ describe("gk-visualize skill", () => {
     expect(claude).toContain("Cap at 5 cycles");
   });
 
-  test("viewer is legacy fallback, archify stays primary", () => {
-    expect(claude).toContain("Bundled live viewer (legacy)");
-    expect(claude).toContain("Prefer the archify HTML output above");
-    expect(cursor).toContain("Bundled live viewer (legacy)");
+  test("bundled viewer section removed; archify stays the only primary path", () => {
+    expect(claude).not.toContain("Bundled live viewer");
+    expect(claude).not.toContain("viewer/server.mjs");
+    expect(cursor).not.toContain("Bundled live viewer");
   });
 
   test("claude/cursor parity", () => {

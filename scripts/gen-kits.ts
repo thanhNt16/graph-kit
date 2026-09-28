@@ -14,7 +14,6 @@
 // | skill SKILL.md    | fm `name: gk-x` → `gk:x`;  | verbatim from _core           | verbatim          | verbatim                  | verbatim    |
 // |                   | rest verbatim              |                               |                   |                           |             |
 // | install-dir refs  | `.omp/agents/` → `<installDir>/<agentsDir>/`, `.omp/skills/` → `<installDir>/<skillsDir>/` in every copied .md (pi: identity) |
-// | gk-visualize      | viewer launch snippet replaced with the host's single `bun <kit>/viewer/server.mjs graph.yaml` line (claude/cursor only; other hosts keep _core verbatim until the viewer ships there) |
 // | agents format     | md frontmatter             | md frontmatter +readonly      | md frontmatter    | TOML                      | bare prompt |
 // |                   | name/description/model:    | name/description/model:tier/  | description/      | name(underscored)/        | verbatim    |
 // |                   | tier/graph_roles/          | graph_roles/evidence_keys/    | mode: subagent/   | description/model/effort/ |             |
@@ -27,7 +26,6 @@
 // | prompts/, extensions/ | —                          | —                          | —                 | —                         | copied verbatim |
 // | extras (checked-in host files, copied verbatim, never synthesized) |
 // |                   | metadata.json settings.json .gk.json templates/ hooks/ schemas/ skills/gk-run skills/gk-compile | metadata.json hooks.json hooks/ | metadata.json command/ plugins/ | — | — |
-// | viewer/           | shipped (source: kits/_core/viewer if present, else the checked-in host copy) | same | — | — | — |
 import { cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
 import { TARGET_MODEL_DEFAULTS } from "../src/targets/model-tiers.js";
@@ -60,7 +58,6 @@ interface HostConfig {
   rules: "rules-dir" | "rules-section";
   ruleFiles?: RuleFile[];
   runtimeGuards?: RuntimeGuards;
-  viewer?: boolean;
   verbatimCoreDirs?: string[];
   extras?: string[];
   extraSkills?: string[];
@@ -274,16 +271,6 @@ Return your output with these evidence keys: {node.evidence}
 
 The agent's \`model\` and \`model_reasoning_effort\` come from its TOML definition — do not override per node.`;
 
-const VIEWER_APPEND = `## Bundled live viewer (legacy)
-
-The kit also ships a self-contained live viewer with a node drawer, search, filters, and live updates over Server-Sent Events — no archify install needed:
-
-\`\`\`bash
-VIEWER_COMMAND
-\`\`\`
-
-Prefer the archify HTML output above; fall back to this viewer when archify is unavailable.`;
-
 const GK_EXECUTE_OVERRIDES: Record<Exclude<HostId, "pi">, SkillOverride> = {
   claude: {
     description:
@@ -321,11 +308,6 @@ const GK_EXECUTE_OVERRIDES: Record<Exclude<HostId, "pi">, SkillOverride> = {
     ],
     sections: { "Dispatching a wave (pi)": CODEX_DISPATCH, "Dispatch call shape": CODEX_TEMPLATE },
   },
-};
-
-const VIEWER_APPEND_BY_HOST: Partial<Record<HostId, string>> = {
-  claude: VIEWER_APPEND.replace("VIEWER_COMMAND", "bun .claude/viewer/server.mjs graph.yaml"),
-  cursor: VIEWER_APPEND.replace("VIEWER_COMMAND", "bun .cursor/viewer/server.mjs graph.yaml"),
 };
 
 // Skill-invocation spelling per host: _core writes `visualize --mode`; claude/cursor
@@ -366,7 +348,7 @@ const HOSTS: Record<HostId, HostConfig> = {
     skillNameStyle: "colon",
     skillOverrides: {
       "gk-execute": GK_EXECUTE_OVERRIDES.claude,
-      "gk-visualize": { append: VIEWER_APPEND_BY_HOST.claude, replaces: VISUALIZE_INVOCATION.claude },
+      "gk-visualize": { replaces: VISUALIZE_INVOCATION.claude },
       "gk-init-graph": { replaces: [["`visualize`", "`/gk:visualize`"]] },
     },
     rules: "rules-dir",
@@ -379,7 +361,6 @@ const HOSTS: Record<HostId, HostConfig> = {
         wrapper: "Decision tree for suggesting topology in `/gk:init-graph`.\n\n## Rules",
       },
     ],
-    viewer: true,
     extras: ["metadata.json", "settings.json", ".gk.json", "templates", "hooks", "schemas"],
     extraSkills: ["gk-run", "gk-compile"],
   },
@@ -391,7 +372,7 @@ const HOSTS: Record<HostId, HostConfig> = {
     skillNameStyle: "dash",
     skillOverrides: {
       "gk-execute": GK_EXECUTE_OVERRIDES.cursor,
-      "gk-visualize": { append: VIEWER_APPEND_BY_HOST.cursor, replaces: VISUALIZE_INVOCATION.cursor },
+      "gk-visualize": { replaces: VISUALIZE_INVOCATION.cursor },
       "gk-init-graph": { replaces: [["`visualize`", "`/gk:visualize`"]] },
     },
     rules: "rules-dir",
@@ -418,7 +399,6 @@ const HOSTS: Record<HostId, HostConfig> = {
           "description: Choose the right GraphKit topology (diamond, classify-and-act, adversarial-verification, loop-until-done, generate-and-filter, tournament, memory-augmented, custom, sdd, superpowers, research-and-build) based on user intent. Use when scaffolding a new graph or selecting a flow preset.\nalwaysApply: false",
       },
     ],
-    viewer: true,
     extras: ["metadata.json", "hooks.json", "hooks"],
   },
   opencode: {
@@ -795,15 +775,12 @@ function substituteInstallDirs(text: string, host: HostId): string {
 //   substitution), for one-off lines like the Step-2 agent-resolution item.
 // - `sections`: exact `## Heading` in _core → replacement body including the
 //   heading line; the section runs to the next `## ` heading or EOF.
-// - `append`: extra section appended at the end (host-only capabilities such as
-//   the bundled viewer, which _core does not mention).
 // - `description`: frontmatter `description:` replacement (mentions the host's
 //   real dispatch tool).
 interface SkillOverride {
   description?: string;
   replaces?: [string, string][];
   sections?: Record<string, string>;
-  append?: string;
 }
 
 function replaceSection(text: string, heading: string, body: string): string {
@@ -832,7 +809,6 @@ function transformSkillMd(raw: string, host: HostId, skillDirName: string): stri
   if (ov) {
     for (const [heading, body] of Object.entries(ov.sections ?? {})) text = replaceSection(text, heading, body);
     if (ov.description) text = text.replace(/^description: .*$/m, `description: ${ov.description}`);
-    if (ov.append) text = `${text.replace(/\n+$/, "")}\n\n${ov.append}\n`;
   }
   if (cfg.skillNameStyle === "colon" && skillDirName.startsWith("gk-")) {
     text = text.replace(/^name: gk-/m, "name: gk:");
@@ -906,14 +882,6 @@ function emitAgent(slug: string, raw: string, host: HostId): string {
 function copyExtra(from: string, to: string): void {
   if (resolve(from) === resolve(to)) return; // in-place regen: extra already lives at the target
   cpSync(from, to, { recursive: true });
-}
-
-function copyViewer(host: HostId, out: string): void {
-  const shared = join(CORE, "viewer");
-  const fallback = join(KITS, host, "viewer");
-  const src = existsSync(shared) ? shared : existsSync(fallback) ? fallback : null;
-  if (!src) throw new Error(`gen-kits: ${host} declares viewer but no kits/_core/viewer or kits/${host}/viewer exists`);
-  cpSync(src, join(out, "viewer"), { recursive: true });
 }
 
 function coreRulesSections(): { name: string; body: string }[] {
@@ -1034,9 +1002,6 @@ export function generateKit(host: HostId, outRoot: string): string {
   for (const dir of cfg.verbatimCoreDirs ?? []) {
     cpSync(join(CORE, dir), join(out, dir), { recursive: true });
   }
-
-  // Bundled viewer (shared copy preferred over the per-host fallback).
-  if (cfg.viewer) copyViewer(host, out);
 
   // Checked-in host extras: copied verbatim, never synthesized.
   for (const extra of cfg.extras ?? []) {

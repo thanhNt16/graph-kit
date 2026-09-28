@@ -5,9 +5,20 @@ import { GraphKitError } from "../../errors.js";
 import { parseMarker, renderMarker } from "../../evidence/marker.js";
 import { buildViews, renderHtml, renderMarkdown } from "../../evidence/report.js";
 import { addEvidence, maxBytesFromConfig } from "../../evidence/store.js";
+import { activeRunGraph } from "../../memory/ledger.js";
 import { subcommandsFor } from "../command-registry.js";
 import { emit, fail, ok } from "../output.js";
 import { loadGraph } from "./graph.js";
+
+// Evidence graph resolution: explicit --graph wins, then the active run's
+// recorded graph, then <cwd>/graph.yaml. The ONE resolved graph feeds both
+// evidence_dir and key-declaration checks so they can never disagree
+// (audit F-01: `run start --graph sub/x.yaml` + bare `gk evidence add`
+// validated keys against an unrelated <cwd>/graph.yaml).
+function resolveGraph(cwd: string, graphOpt: unknown) {
+  const path = graphOpt ? String(graphOpt) : (activeRunGraph(cwd) ?? join(cwd, "graph.yaml"));
+  return loadGraph(path);
+}
 
 export function registerEvidenceCommand(cli: CAC) {
   cli
@@ -16,6 +27,10 @@ export function registerEvidenceCommand(cli: CAC) {
     .option("--node <n>", "add: producing node id")
     .option("--note <text>", "add: free-text provenance note")
     .option("--html", "report: write self-contained HTML page")
+    .option(
+      "--graph <file>",
+      "graph.yaml to resolve evidence keys/dir from (default: active run's graph, then ./graph.yaml)",
+    )
     .option("--json", "JSON output")
     .action((subcommand, args, opts) => {
       const cwd = process.cwd();
@@ -32,11 +47,10 @@ export function registerEvidenceCommand(cli: CAC) {
           return;
         }
         try {
-          const graph = loadGraph(join(cwd, "graph.yaml"));
+          const graph = resolveGraph(cwd, opts.graph);
           const result = addEvidence(cwd, graph, {
             file: join(cwd, String(file)),
             key: String(opts.key),
-            node: opts.node ? String(opts.node) : undefined,
             note: opts.note ? String(opts.note) : undefined,
             maxBytes: maxBytesFromConfig(cwd),
           });
@@ -52,13 +66,12 @@ export function registerEvidenceCommand(cli: CAC) {
       }
       if (subcommand === "report") {
         try {
-          const graph = loadGraph(join(cwd, "graph.yaml"));
+          const graph = resolveGraph(cwd, opts.graph);
           const views = buildViews(cwd, graph);
           if (opts.html) {
             const outPath = join(cwd, ".graphkit", "reports", `${graph.metadata.name}-evidence.html`);
             mkdirSync(dirname(outPath), { recursive: true });
             writeFileSync(outPath, renderHtml(graph.metadata.name, views, join(cwd, graph.outputs.evidence_dir)));
-            emit(ok({ written: outPath, keys: views.length }));
           } else {
             emit(ok({ markdown: renderMarkdown(graph.metadata.name, views), views }));
           }
@@ -77,7 +90,7 @@ export function registerEvidenceCommand(cli: CAC) {
           return;
         }
         try {
-          const graph = loadGraph(join(cwd, "graph.yaml"));
+          const graph = resolveGraph(cwd, opts.graph);
           const p = join(cwd, graph.outputs.evidence_dir, `${opts.key}.md`);
           if (!existsSync(p)) {
             emit(fail("EVIDENCE_KEY_MISSING", `no evidence file for key "${opts.key}"`));

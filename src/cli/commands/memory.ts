@@ -4,6 +4,7 @@ import type { CAC } from "cac";
 import YAML from "yaml";
 import { CBM_UNAVAILABLE_MSG } from "../../cbm/client.js";
 import { actRScore, shouldExpire } from "../../eval/forgetting.js";
+import { docStatusFor, isSuggestionFrontmatter } from "../../eval/memory-recall.js";
 import { consolidate } from "../../memory/consolidate.js";
 import { explainRecall, type RecallExplanation } from "../../memory/explain-recall.js";
 import { expandedRecall } from "../../memory/recall-expanded.js";
@@ -98,6 +99,11 @@ export function traceMemory(
       report.malformed++;
       continue;
     }
+    // Suggestion files keep their proposal lifecycle (proposed|accepted|
+    // dismissed) on disk; the doc-schema parse sees the mapped status and the
+    // expiry write below restores the original.
+    const suggestionShaped = isSuggestionFrontmatter(fm);
+    const suggestionStatus = fm.status;
     // Strict schema parse before rewrites; malformed entries are counted but skipped.
     const base = rel.replace(/^.*\//, "").replace(/\.md$/, "");
     const legacyTags = Array.isArray(fm.tags)
@@ -117,12 +123,14 @@ export function traceMemory(
       tags: legacyTags,
       id: typeof fm.id === "string" && fm.id.trim() ? fm.id : base,
       type: typeof fm.type === "string" && fm.type.trim() ? fm.type : "knowledge",
+      status: docStatusFor(fm),
     });
     if (!validated.success) {
       report.malformed++;
       continue;
     }
     Object.assign(fm, validated.data);
+    if (suggestionShaped) fm.status = suggestionStatus; // disk keeps the suggestion lifecycle
     report.total++;
 
     if (fm.superseded_by) {
@@ -153,7 +161,7 @@ export function traceMemory(
     if (!wasExpired && expireActive && shouldExpire(score)) {
       fm.expired = true;
       fm.valid_to = now;
-      fm.status = "deprecated";
+      if (!suggestionShaped) fm.status = "deprecated"; // suggestions mark decay via expired+valid_to, not status
       writeMemoryFile(path, fm, body);
       report.expired++;
       report.newly_expired++;
@@ -197,9 +205,14 @@ export function touchMemory(
       ...fm,
       id: typeof fm.id === "string" && fm.id.trim() ? fm.id : base,
       type: typeof fm.type === "string" && fm.type.trim() ? fm.type : "knowledge",
+      status: docStatusFor(fm),
     });
     if (!validated.success) continue;
-    writeMemoryFile(path, validated.data, body);
+    // The status mapping is read-side only — persist the file's own suggestion
+    // lifecycle so suggest/consolidate still see a valid SuggestionFileSchema entry.
+    const out: Record<string, unknown> = validated.data;
+    if (isSuggestionFrontmatter(fm)) out.status = fm.status;
+    writeMemoryFile(path, out, body);
     return { id: String(fm.id ?? id), file: base, use_count: useCount, last_used_at: now };
   }
   return null;
@@ -333,7 +346,7 @@ Recall options:\n  --explain            Explain recall scoring and filter decisi
             scanned,
           })}\n`,
         );
-        emit(ok({ query, top_k: results.length, results, linked, recall_topk: topk }));
+        emit(ok({ query, returned: results.length, results, linked, recall_topk: topk }));
         return;
       }
       if (subcommand !== "index") {

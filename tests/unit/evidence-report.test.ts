@@ -104,4 +104,28 @@ describe("evidence report", () => {
     expect(html).not.toContain("data:image/svg");
     expect(html).toContain("shot/abc.svg");
   });
+
+  test("superseded marker → superseded view (gate parity: not present)", () => {
+    const ev = join(cwd, ".graphkit", "evidence");
+    writeFileSync(join(ev, "api-response.md"), `---\nkey: api-response\nsuperseded: invalidated\n---\n\nbody\n`);
+    const views = buildViews(cwd, graph());
+    expect(views[0].status).toBe("superseded");
+    const md = renderMarkdown("t", views);
+    expect(md).toContain("◌ superseded");
+    expect(md).not.toContain("● present");
+  });
+
+  test("html: superseded artifact content not inlined", () => {
+    const ev = join(cwd, ".graphkit", "evidence");
+    const sha = "e".repeat(64);
+    mkdirSync(join(ev, "api-response"), { recursive: true });
+    writeFileSync(join(ev, "api-response", `${sha}.json`), '{"secret":"body"}');
+    writeFileSync(
+      join(ev, "api-response.md"),
+      `---\nkey: api-response\nartifact: api-response/${sha}.json\nsuperseded: invalidated\n---\n\nbody\n`,
+    );
+    const html = renderHtml("t", buildViews(cwd, graph()), ev);
+    expect(html).toContain("◌ superseded");
+    expect(html).not.toContain("secret");
+  });
 });

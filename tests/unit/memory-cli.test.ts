@@ -68,7 +68,7 @@ describe("gk memory recall CLI (explain, html, capture log)", () => {
     const parsed = JSON.parse(out);
     expect(parsed.status).toBe("ok");
     expect(parsed.data.query).toBe("JWT token");
-    expect(parsed.data.top_k).toBe(1);
+    expect(parsed.data.returned).toBe(1);
     expect(parsed.data.results[0].id).toBe("mem-auth");
     expect(parsed.data.linked).toBe(0);
     expect(parsed.data.recall_topk).toBe(5);

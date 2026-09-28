@@ -10,6 +10,7 @@ import { isBlocking, validateGraph } from "../../compiler/validate.js";
 import { GraphKitError } from "../../errors.js";
 import type { Graph } from "../../schemas/graph.schema.js";
 import { GraphSchema } from "../../schemas/graph.schema.js";
+import { GraphTemplateSchema } from "../../schemas/template.schema.js";
 import { getTopologyConfigKeys, TOPOLOGY_NAMES, type TopologyName } from "../../schemas/topology/index.js";
 import { getActiveGraphId, listSessionGraphs, loadActiveGraph, setActiveGraphId } from "../../store/index.js";
 import { renderAscii } from "../ascii.js";
@@ -17,7 +18,7 @@ import { seamClientFactory, seamIndexProject } from "../cbm-seam.js";
 import { subcommandsFor } from "../command-registry.js";
 import { topoWaves } from "../graph-waves.js";
 import { materializeNodeAgents } from "../node-agents.js";
-import { emit, fail, ok } from "../output.js";
+import { emit, fail, ok, type Result } from "../output.js";
 import { renderSvg } from "../svg.js";
 import { templatesDir } from "./kit.js";
 
@@ -42,7 +43,10 @@ function cbmFailure(e: unknown): ReturnType<typeof fail> {
   );
 }
 
-export function loadGraph(file: string) {
+// Read + YAML-parse a graph document, wrapping ENOENT in the canonical
+// GRAPH_FILE_NOT_FOUND envelope. Shared by loadGraph and the template-routing
+// pre-check in `gk validate` so both report missing files identically.
+function readGraphDoc(file: string): unknown {
   let raw: string;
   try {
     raw = readFileSync(file, "utf-8");
@@ -55,7 +59,11 @@ export function loadGraph(file: string) {
     }
     throw e;
   }
-  const doc = YAML.parse(raw);
+  return YAML.parse(raw);
+}
+
+export function loadGraph(file: string) {
+  const doc = readGraphDoc(file);
   const parsed = GraphSchema.safeParse(doc);
   if (!parsed.success) {
     throw new GraphKitError("SCHEMA_INVALID", "graph.yaml failed schema validation", {
@@ -63,6 +71,26 @@ export function loadGraph(file: string) {
     });
   }
   return parsed.data;
+}
+
+// A `kind: GraphTemplate` wrapper is not a graph — running it through
+// GraphSchema surfaced a 4-issue noise wall (audit F3). Detect the kind field
+// before the Graph parse and validate against GraphTemplateSchema instead;
+// the template's inner graph is placeholder-substituted and re-validated
+// against GraphSchema at materialize time.
+function validateTemplateDoc(doc: unknown): Result {
+  const parsed = GraphTemplateSchema.safeParse(doc);
+  if (!parsed.success) {
+    return fail("SCHEMA_INVALID", "graph template failed schema validation", {
+      issues: parsed.error.issues.map((i) => ({ path: i.path.join("."), message: i.message })),
+    });
+  }
+  return ok({
+    valid: true,
+    kind: "template",
+    name: parsed.data.metadata.name,
+    parameters: parsed.data.parameters,
+  });
 }
 // Spec §3.3 — validate-only wiring: bare `gk validate` reads the active session
 // graph when the project is initialized with an active pointer, falling back to
@@ -604,6 +632,16 @@ export function registerGraphCommands(cli: CAC) {
     .option("--json", "JSON output")
     .action((file) => {
       try {
+        // Template wrapper pre-check (audit F3): only explicit file args can be
+        // templates — the bare path resolves the active session graph, which is
+        // always a materialized Graph.
+        if (file) {
+          const doc = readGraphDoc(String(file));
+          if (typeof doc === "object" && doc !== null && "kind" in doc && doc.kind === "GraphTemplate") {
+            emit(validateTemplateDoc(doc));
+            return;
+          }
+        }
         const graph = file ? loadGraph(file) : resolveBareValidateGraph();
         const findings = validateGraph(graph, process.cwd());
         if (findings.some(isBlocking)) {
@@ -792,6 +830,12 @@ export function registerGraphCommands(cli: CAC) {
             return;
           }
           const nodes = graph.nodes || {};
+          // role/eval ride the payload verbatim: GraphSchema.parse materializes
+          // EvalConfig defaults (mode/rubric/abstention_weighted), so the
+          // author's exact eval block is read back from the source YAML, not
+          // from parsed data.
+          const rawNodes = ((readGraphDoc(resolved) as { nodes?: Record<string, unknown> } | null)?.nodes ??
+            {}) as Record<string, { role?: unknown; eval?: unknown }>;
           const ids = Object.keys(nodes);
 
           // Memory-augmented: the Curator node interleaves at cadence (execute-path
@@ -870,6 +914,8 @@ export function registerGraphCommands(cli: CAC) {
             when: nodes[id]?.when ?? null,
             budget_tokens: nodes[id]?.budget_tokens ?? null,
             gate: nodes[id]?.gate ?? null,
+            role: rawNodes[id]?.role ?? null,
+            eval: rawNodes[id]?.eval ?? null,
             effort: nodes[id]?.effort ?? "standard",
             timeout_ms: nodes[id]?.timeout_ms ?? null,
             constraints: nodes[id]?.constraints || [],
@@ -898,6 +944,9 @@ export function registerGraphCommands(cli: CAC) {
             waves: waveData,
             evidence_required: graph.evidence?.required_keys || [],
             on_graph_complete: graph.hooks?.on_graph_complete ?? [],
+            // Advisory findings ride the ok payload (audit F5) — a typo'd
+            // constraint shouldn't require a separate `gk validate` to be seen.
+            warnings: findings.filter((f) => !isBlocking(f)),
           };
           if (hasCurator) {
             payload.memory = {
@@ -928,7 +977,9 @@ export function registerGraphCommands(cli: CAC) {
             return;
           }
           const agents = materializeNodeAgents(process.cwd(), graph);
-          emit(ok({ agents, dir: join(process.cwd(), ".omp", "agents") }));
+          // Same advisory channel as waves (audit F5).
+          const warnings = findings.filter((f) => !isBlocking(f));
+          emit(ok({ agents, dir: join(process.cwd(), ".omp", "agents"), warnings }));
         } catch (e) {
           emit(e instanceof GraphKitError ? fail(e.code, e.message, e.details) : fail("AGENTS_ERROR", String(e)));
         }

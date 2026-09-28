@@ -78,3 +78,48 @@ describe("Graph YAML Schema", () => {
     expect(result.success).toBe(true);
   });
 });
+
+describe("Graph YAML Schema — audit strictness fixes", () => {
+  const base = { metadata: { name: "t" }, topology: "custom" as const, nodes: { a: { agent: "A", objective: "x" } } };
+
+  test("metadata accepts unknown keys (passthrough)", () => {
+    const result = GraphSchema.safeParse({ ...base, metadata: { name: "t", owner: "team-x", labels: { a: 1 } } });
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.metadata.owner).toBe("team-x");
+  });
+
+  test("input definitions accept unknown keys (passthrough)", () => {
+    const result = GraphSchema.safeParse({
+      ...base,
+      inputs: { region: { type: "string", description: "aws region", required: true, ui_hint: "dropdown" } },
+    });
+    expect(result.success).toBe(true);
+  });
+
+  test("node ids reject path separators and traversal", () => {
+    for (const id of ["bad/id", "..", "a b"]) {
+      const result = GraphSchema.safeParse({ ...base, nodes: { [id]: { agent: "A", objective: "x" } } });
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        const messages = JSON.stringify(result.error.issues);
+        expect(messages).toContain(`"${id}"`);
+        expect(messages).toContain("A-Za-z0-9");
+      }
+    }
+  });
+
+  test("node ids accept dots, dashes, underscores, and alphanumerics", () => {
+    const nodes = Object.fromEntries(
+      ["review.v2", "code-review", "fix_it", "Node9"].map((id) => [id, { agent: "A", objective: "x" }]),
+    );
+    expect(GraphSchema.safeParse({ ...base, nodes }).success).toBe(true);
+  });
+
+  test("tools_allowlist constraint accepts a list value", () => {
+    const result = GraphSchema.safeParse({
+      ...base,
+      nodes: { a: { agent: "A", objective: "x", constraints: [{ tools_allowlist: ["Read", "Grep"] }] } },
+    });
+    expect(result.success).toBe(true);
+  });
+});

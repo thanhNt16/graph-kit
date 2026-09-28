@@ -16,8 +16,12 @@ const SOLE_PLACEHOLDER_RE = /^\{\{([^{}]+)\}\}$/;
 const TOKEN_RE = /\{\{([^{}]+)\}\}/g;
 
 const ParamDefSchema = z.object({
-  description: z.string().min(1),
-  required: z.boolean().optional().default(false),
+  // `type` is authorial documentation ("string" | "number" | ...) carried
+  // verbatim into template payloads; substitution uses TemplateValues, so it
+  // does not constrain anything. `description` is recommended but not required.
+  type: z.string().optional(),
+  description: z.string().min(1).optional(),
+  required: z.boolean().optional(),
   default: z.union([z.string(), z.number(), z.boolean()]).optional(),
 });
 

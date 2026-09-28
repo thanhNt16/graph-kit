@@ -10,10 +10,17 @@ const NodeRef = z.enum(TIERS);
 //   constraints:
 //     - max_files: 50
 //     - no_write: true
+//     - tools_allowlist: "Read, Grep"   # list form also valid: [Read, Grep]
 // A constraint may declare provenance via `source`: "human" (operator-declared,
 // agents must never modify it) or "author" (default, graph-author declared).
 // Any other `source` value surfaces an advisory finding in the compiler.
-const ConstraintValue = z.record(z.string(), z.union([z.string(), z.number(), z.boolean()]));
+const ConstraintValue = z.record(z.string(), z.union([z.string(), z.number(), z.boolean(), z.array(z.string())]));
+
+// Node ids become materialized agent filenames (gk-<id>.md), ledger trace
+// anchors, and payload keys — restrict them to filename-safe characters so
+// `gk graph agents` can never crash on a mid-write path separator. Enforced
+// with a named issue in GraphSchema's superRefine.
+export const NODE_ID_RE = /^[A-Za-z0-9._-]+$/;
 
 const RefSchema = z
   .object({
@@ -160,6 +167,8 @@ export const GraphSchema = z
   .object({
     apiVersion: z.string().default("graphkit.dev/v2"),
     kind: z.literal("Graph").default("Graph"),
+    // Open by design (CHANGELOG): host metadata (project labels, versions)
+    // rides along instead of being silently stripped or rejected.
     metadata: z
       .object({
         name: z.string(),
@@ -167,16 +176,20 @@ export const GraphSchema = z
         // Read by the session-graph store (`gk graph list`).
         task: z.string().optional(),
       })
-      .strict(),
+      .passthrough(),
     topology: z.enum(TOPOLOGY_NAMES),
     inputs: z
       .record(
         z.string(),
-        z.object({
-          type: z.enum(["string", "array"]),
-          required: z.boolean().default(false),
-          default: z.any().optional(),
-        }),
+        // Open like metadata: author-defined extra fields on an input
+        // definition pass through rather than being silently stripped.
+        z
+          .object({
+            type: z.enum(["string", "array"]),
+            required: z.boolean().default(false),
+            default: z.any().optional(),
+          })
+          .passthrough(),
       )
       .default({}),
     nodes: z.record(z.string(), NodeDefSchema).default({}),
@@ -213,6 +226,19 @@ export const GraphSchema = z
   .superRefine((graph, ctx) => {
     const nodes = graph.nodes as Record<string, NodeDef>;
     const names = new Set(Object.keys(nodes));
+    // Node ids are filenames in waiting (gk-<id>.md agent fragments): reject
+    // ids that would break materialization mid-write, naming the offender.
+    for (const id of Object.keys(nodes)) {
+      // "." / ".." satisfy the charset but traverse when ids become agent
+      // filenames (gk-<id>.md) — reject them alongside charset violations.
+      if (!NODE_ID_RE.test(id) || id === "." || id === "..") {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["nodes", id],
+          message: `node id "${id}" must match ${NODE_ID_RE.source} and never "." or ".." — ids become agent filenames (gk-<id>.md)`,
+        });
+      }
+    }
     for (const [id, node] of Object.entries(nodes)) {
       for (const dep of node.depend_on) {
         if (!names.has(dep)) {

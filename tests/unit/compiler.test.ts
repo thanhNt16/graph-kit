@@ -155,9 +155,7 @@ describe("GraphSchema strictness", () => {
     expect(GraphSchema.safeParse(g).success).toBe(false);
   });
 
-  test("metadata unknown key is rejected", () => {
-    const g = base() as Record<string, any>;
-    g.metadata.typo_key = "x";
-    expect(GraphSchema.safeParse(g).success).toBe(false);
-  });
+  // metadata is intentionally loose (passthrough) after the audit — the
+  // positive contract is pinned in schema-validation.test.ts
+  // ("metadata accepts unknown keys"); the old rejection pin is obsolete.
 });

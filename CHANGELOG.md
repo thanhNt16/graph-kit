@@ -67,10 +67,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 ### Fixed
+- **CLI parse hardening**: unknown flags / missing option values on every command leaked a raw CACError stack; `cli.parse()` is now guarded (stderr message + help, exit 1), and `gk <bogus>` prints `Unknown command` before the help text.
+- **Ledger node/pid integrity**: `gk run node|land|dispatch` now reject node ids absent from the active run's recorded graph (UNKNOWN_NODE). `take` liveness treats EPERM as alive (foreign-user dispatchers no longer look dead) and skips non-positive/junk pids (BAD_PID at record time). `land` requires the node's LATEST trace to be ok and validates `--commit` as hex (BAD_COMMIT). `take` payload carries `foreign_evidence`. Resume on a deleted recorded graph fails GRAPH_FILE_NOT_FOUND; evidence-less ok traces no longer claim "passed with evidence on disk".
+- **Run start graph resolution**: `--graph` → `./graph.yaml` → active session graph pointer (was: only `--graph`/`./graph.yaml`, so session-switched projects hit GRAPH_NOT_FOUND).
+- **Evidence graph resolution**: `gk evidence add|report|invalidate` accept `--graph` and resolve via the active run's recorded graph before falling back to `<cwd>/graph.yaml` — a run on `--graph sub/x.yaml` can now stamp evidence from repo root. Superseded markers render `◌ superseded` in `gk evidence report` instead of `present` (gate already treated them as missing).
+- **Waves payload completeness**: `role` and `eval` ride `gk graph waves --json` verbatim; computed advisory `warnings` now surface on the ok payload instead of being dropped.
+- **`gk validate` routes `kind: GraphTemplate`** files to GraphTemplateSchema — no more 4-issue Graph-schema noise on gallery templates.
+- **Schema/doc parity**: `metadata` and `inputs.*` defs accept unknown keys (documented open-by-design); node ids constrained to `^[A-Za-z0-9._-]+$` with `.`/`..` rejected (prevents `gk graph agents` mid-write ENOENT).
+- **constraints.tools_allowlist** honors string and array forms and INTERSECTS the flag-derived base (was: union — allowlist could widen a no_write node into bash).
+- **Duplicate-evidence warnings**: concurrent producers of one key warn (route-exclusive handlers, declared fan-out families, and identical-depend_on sibling waves exempt).
+- **`gk run start --input k=v`**: required graph inputs with no default now fail MISSING_INPUTS; provided values recorded into run meta.
+- **`gk init --force` preserves `.gk.json`** user keys (config read before the wipe, merged after); kitVersion warning now compares semver — newer recorded versions say "is newer than" instead of "predates".
+- **Memory suggestions recallable**: suggestion files (proposed|accepted|dismissed) map into doc status space at read time, so `gk memory recall`/`touch`/`trace` see them (previously all malformed). Explain no longer dual-lists PPR neighbors as hit AND rejected; recall envelope `top_k` → `returned` (cap stays `recall_topk`).
 - npm `gk --version` always reported the dev version (`0.3.0`): the release `publish` job re-checks out the repo, stamped only `package.json`, and `prepack` rebuilt `dist/index.js` with the committed `APP_VERSION`. `src/version.ts` is now stamped in `publish` too, so the npm bundle reports the release tag. Standalone tarballs were unaffected.
 - `gk_dispatch_agent` timeout/abort now kills the child's whole process group (detached spawn + `kill(-pgid)`, SIGTERM then SIGKILL after 5s). Previously `execFile` SIGTERMed only the direct child — a timed-out node kept mutating shared state for 11+ minutes after the orchestrator recorded it failed. Timeout results now carry `timed_out: true` and a `TIMEOUT` marker in `output` (matchable by `retry.non_retryable`), and the tool honors the host abort signal.
 
 ### Removed
+- **Bundled live viewer deleted for real**: `kits/{_core,claude,cursor}/viewer/` carried a stale pre-strictness GraphSchema and no build path after src/viewer was removed in 0.3.2; gen-kits viewer clauses and kit metadata deletions entries removed, claude/cursor gk-visualize fragments scrubbed (archify/SVG/ASCII/Excalidraw unaffected).
 - Dead dependencies `ajv` + `ajv-formats` (zod is the only validator).
 - `gk execute` / `gk visualize` NOT_IMPLEMENTED stub commands.
 - `src/models/` re-export shim, `src/eval/metrics.ts` (unwired), `recallTopK` (production-dead), dead schema exports, `test/` directory (files moved to `tests/unit/`).

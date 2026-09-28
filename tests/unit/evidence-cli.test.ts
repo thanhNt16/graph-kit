@@ -107,4 +107,84 @@ describe("gk evidence invalidate", () => {
     expect(r.code).toBe(1);
     expect(JSON.parse(r.stdout).error.code).toBe("EVIDENCE_KEY_MISSING");
   });
+
+  test("invalidated key reports superseded, not present (gate parity)", () => {
+    writeFileSync(join(cwd, "r.json"), "{}");
+    runCli(["evidence", "add", "r.json", "--key", "api-response", "--json"]);
+    runCli(["evidence", "invalidate", "--key", "api-response", "--note", "premise disproved", "--json"]);
+    const r = runCli(["evidence", "report", "--json"]);
+    const env = JSON.parse(r.stdout);
+    expect(env.status).toBe("ok");
+    expect(env.data.views[0].status).toBe("superseded");
+    expect(env.data.markdown).toContain("◌ superseded");
+    expect(env.data.markdown).not.toContain("● present");
+  });
+});
+
+describe("gk evidence --graph", () => {
+  const subGraphYaml = `apiVersion: graphkit.dev/v2
+kind: Graph
+metadata:
+  name: sub
+topology: diamond
+nodes:
+  probe:
+    agent: a
+    objective: o
+    depend_on: []
+    evidence: [sub-only-key]
+evidence:
+  required_keys: [sub-only-key]
+`;
+
+  // Minimal active-run fixture: .active names a run dir whose meta.json
+  // records graph_path — exactly what ledger.startRun writes.
+  function startFakeRun(graphPath: string) {
+    const runDir = join(cwd, ".graphkit", "runs", "r1");
+    mkdirSync(runDir, { recursive: true });
+    writeFileSync(join(cwd, ".graphkit", "runs", ".active"), `${runDir}\n`);
+    writeFileSync(join(runDir, "meta.json"), JSON.stringify({ graph_path: graphPath }));
+  }
+
+  test("add with --graph validates keys against THAT graph, not <cwd>/graph.yaml", () => {
+    mkdirSync(join(cwd, "sub"), { recursive: true });
+    writeFileSync(join(cwd, "sub", "x.yaml"), subGraphYaml);
+    writeFileSync(join(cwd, "r.json"), "{}");
+    const r = runCli(["evidence", "add", "r.json", "--key", "sub-only-key", "--graph", "sub/x.yaml", "--json"]);
+    const env = JSON.parse(r.stdout);
+    expect(env.status).toBe("ok");
+    expect(env.data.key).toBe("sub-only-key");
+  });
+
+  test("fallback order: --graph beats active-run graph beats <cwd>/graph.yaml", () => {
+    mkdirSync(join(cwd, "sub"), { recursive: true });
+    writeFileSync(join(cwd, "sub", "x.yaml"), subGraphYaml);
+    writeFileSync(join(cwd, "r.json"), "{}");
+    // no run, no --graph → cwd graph.yaml (declares api-response only)
+    const bare = runCli(["evidence", "add", "r.json", "--key", "sub-only-key", "--json"]);
+    expect(JSON.parse(bare.stdout).error.code).toBe("EVIDENCE_KEY_NOT_DECLARED");
+    // active run records sub/x.yaml → key resolves with no --graph
+    startFakeRun("sub/x.yaml");
+    const viaRun = runCli(["evidence", "add", "r.json", "--key", "sub-only-key", "--json"]);
+    expect(JSON.parse(viaRun.stdout).status).toBe("ok");
+    // explicit --graph overrides the active-run graph
+    const explicit = runCli(["evidence", "add", "r.json", "--key", "sub-only-key", "--graph", "graph.yaml", "--json"]);
+    expect(JSON.parse(explicit.stdout).error.code).toBe("EVIDENCE_KEY_NOT_DECLARED");
+  });
+
+  test("--graph file missing → GRAPH_FILE_NOT_FOUND", () => {
+    writeFileSync(join(cwd, "r.json"), "{}");
+    const r = runCli(["evidence", "add", "r.json", "--key", "api-response", "--graph", "nope.yaml", "--json"]);
+    expect(r.code).toBe(1);
+    expect(JSON.parse(r.stdout).error.code).toBe("GRAPH_FILE_NOT_FOUND");
+  });
+
+  test("report --graph reads keys and evidence_dir from that graph", () => {
+    mkdirSync(join(cwd, "sub"), { recursive: true });
+    writeFileSync(join(cwd, "sub", "x.yaml"), subGraphYaml);
+    const r = runCli(["evidence", "report", "--graph", "sub/x.yaml", "--json"]);
+    const env = JSON.parse(r.stdout);
+    expect(env.status).toBe("ok");
+    expect(env.data.views.map((v: { id: string }) => v.id)).toEqual(["sub-only-key"]);
+  });
 });

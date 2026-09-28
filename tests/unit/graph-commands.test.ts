@@ -118,6 +118,8 @@ describe("gk graph commands", () => {
                 when: null,
                 budget_tokens: null,
                 gate: null,
+                role: null,
+                eval: null,
                 effort: "standard",
                 timeout_ms: null,
                 constraints: [],
@@ -148,6 +150,8 @@ describe("gk graph commands", () => {
                 when: null,
                 budget_tokens: null,
                 gate: null,
+                role: null,
+                eval: null,
                 effort: "standard",
                 timeout_ms: null,
                 constraints: [],
@@ -178,6 +182,8 @@ describe("gk graph commands", () => {
                 when: null,
                 budget_tokens: null,
                 gate: null,
+                role: null,
+                eval: null,
                 effort: "standard",
                 timeout_ms: null,
                 constraints: [],
@@ -190,6 +196,7 @@ describe("gk graph commands", () => {
         ],
         evidence_required: ["report"],
         on_graph_complete: [],
+        warnings: [],
       },
     });
   });
@@ -213,5 +220,85 @@ describe("gk graph commands", () => {
       code: "WAVES_INCOMPLETE",
       details: { unresolved: ["worker"] },
     });
+  });
+  test("waves payload carries role and eval verbatim plus advisory warnings", () => {
+    const file = join(tmp, "role-eval.yaml");
+    writeFileSync(
+      file,
+      `apiVersion: graphkit.dev/v2\nkind: Graph\nmetadata: { name: role-eval }\ntopology: custom\nnodes:\n  producer:\n    agent: code-reviewer\n    objective: produce\n    evidence: [artifact]\n  gated:\n    agent: code-reviewer\n    objective: gate\n    role: eval-gate\n    depend_on: [producer]\n    eval:\n      prompt: does the artifact hold up?\n      on_fail: revise\n    evidence: []\nevidence: { required_keys: [artifact] }\n`,
+    );
+    const out = runCli(["graph", "waves", file, "--json"], tmp);
+    expect(out.code).toBe(0);
+    const data = JSON.parse(out.stdout).data;
+    const gated = data.waves
+      .flatMap((w: { nodes: Array<{ id: string }> }) => w.nodes)
+      .find((n: { id: string }) => n.id === "gated");
+    expect(gated.role).toBe("eval-gate");
+    expect(gated.eval).toEqual({ prompt: "does the artifact hold up?", on_fail: "revise" });
+    // nodes without the fields still surface them as null, verbatim-passthrough contract
+    const producer = data.waves
+      .flatMap((w: { nodes: Array<{ id: string }> }) => w.nodes)
+      .find((n: { id: string }) => n.id === "producer");
+    expect(producer.role).toBeNull();
+    expect(producer.eval).toBeNull();
+    expect(Array.isArray(data.warnings)).toBe(true);
+  });
+  test("waves ok payload includes advisory warnings for duplicate evidence producers", () => {
+    const file = join(tmp, "dupe.yaml");
+    writeFileSync(
+      file,
+      `apiVersion: graphkit.dev/v2\nkind: Graph\nmetadata: { name: dupe }\ntopology: custom\nnodes:\n  a:\n    agent: code-reviewer\n    objective: a\n    evidence: [same.md]\n  b:\n    agent: code-reviewer\n    objective: b\n    depend_on: [a]\n    evidence: [same.md]\nevidence: { required_keys: [same.md] }\n`,
+    );
+    const out = runCli(["graph", "waves", file, "--json"], tmp);
+    expect(out.code).toBe(0);
+    const warnings = JSON.parse(out.stdout).data.warnings;
+    const producerWarning = warnings.find((w: { check: string }) => w.check === "duplicate-evidence-producer");
+    expect(producerWarning.message).toContain("same.md");
+    expect(producerWarning.message).toContain("a, b");
+  });
+  test("validate routes kind GraphTemplate files to the template schema", () => {
+    const file = join(tmp, "tpl.yaml");
+    writeFileSync(
+      file,
+      `apiVersion: graphkit.dev/v1\nkind: GraphTemplate\nmetadata: { name: kit, description: d, version: 1 }\nparameters:\n  target:\n    type: string\n    required: true\ngraph:\n  metadata: { name: "inner-{{target}}" }\n  topology: custom\n  nodes:\n    step1: { agent: code-reviewer, objective: "review {{target}}" }\n`,
+    );
+    const out = runCli(["validate", file, "--json"], tmp);
+    expect(out.code).toBe(0);
+    expect(JSON.parse(out.stdout).data).toEqual({
+      valid: true,
+      kind: "template",
+      name: "kit",
+      parameters: { target: { type: "string", required: true } },
+    });
+  });
+  test("validate reports template-schema errors, not Graph-schema noise", () => {
+    const file = join(tmp, "tpl-bad.yaml");
+    writeFileSync(
+      file,
+      // Original audit fixture used `parameters: {}` — schema-valid (vacuous)
+      // under any rule that keeps zero-parameter templates (template init from
+      // a static graph) loadable. A bad parameter NAME is the minimal fixture
+      // that provably routes through the template schema: GraphSchema would
+      // have rejected apiVersion v1 / kind GraphTemplate instead.
+      `apiVersion: graphkit.dev/v1\nkind: GraphTemplate\nmetadata: { name: kit, description: d, version: 1 }\nparameters:\n  Bad_Name:\n    description: x\n    required: true\ngraph:\n  metadata: { name: inner }\n  topology: custom\n  nodes:\n    step1: { agent: code-reviewer, objective: x }\n`,
+    );
+    const out = runCli(["validate", file, "--json"], tmp);
+    expect(out.code).toBe(1);
+    const err = JSON.parse(out.stdout).error;
+    expect(err.code).toBe("SCHEMA_INVALID");
+    expect(err.message).toContain("template");
+    // GraphSchema would reject apiVersion v1 and kind GraphTemplate — its absence proves routing
+    expect(JSON.stringify(err.details.issues)).not.toContain("apiVersion");
+  });
+  test("validate ok payload carries advisory warnings", () => {
+    const file = join(tmp, "advisory.yaml");
+    writeFileSync(
+      file,
+      `apiVersion: graphkit.dev/v2\nkind: Graph\nmetadata: { name: advisory }\ntopology: custom\nnodes:\n  a:\n    agent: code-reviewer\n    objective: a\n    constraints:\n      - source: bogus\n    evidence: []\nevidence: { required_keys: [] }\n`,
+    );
+    const out = runCli(["validate", file, "--json"], tmp);
+    expect(out.code).toBe(0);
+    const warnings = JSON.parse(out.stdout).data.warnings;
+    expect(warnings.some((w: { check: string }) => w.check === "constraint-source")).toBe(true);
   });
 });

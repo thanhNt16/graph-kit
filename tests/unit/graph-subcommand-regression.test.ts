@@ -75,7 +75,10 @@ describe("graph subcommand regression (new/ascii/svg/waves)", () => {
     expect(existsSync(parsed.data.svg)).toBe(true);
   });
 
-  test("graph svg escapes node ids and title (no markup injection)", () => {
+  test("graph svg escapes the graph title (no markup injection)", () => {
+    // Node ids like 'a<b' are now unreachable here: GraphSchema's filename-safe
+    // charset check rejects them before render (see schema-validation.test).
+    // metadata.name is free-form, so the title path stays live and testable.
     const evil = join(cwd, "evil.yaml");
     writeFileSync(
       evil,
@@ -85,8 +88,8 @@ metadata:
   name: '"><script>alert(1)</script>'
 topology: custom
 nodes:
-  'a<b':
-    agent: 'x" onload="y'
+  scanner:
+    agent: Software Architect
     objective: test
     depend_on: []
     evidence: [e]
@@ -96,8 +99,6 @@ nodes:
     expect(code).toBe(0);
     const svg = readFileSync(JSON.parse(stdout).data.svg, "utf-8");
     expect(svg).not.toContain("<script>");
-    expect(svg).not.toContain("a<b");
-    expect(svg).not.toContain('onload="y"');
     // escapeXml emits numeric entities — valid in text and attribute contexts.
     expect(svg).toContain("&#60;");
     expect(svg).toContain("&#62;");

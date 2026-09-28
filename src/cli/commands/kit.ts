@@ -23,13 +23,24 @@ export function kitVersionWarnings(cwd: string): string[] {
       /* unreadable config is not a staleness signal */
       continue;
     }
-    if (recorded !== APP_VERSION) {
-      warnings.push(
-        `${t.installDir}/.gk.json kitVersion=${recorded ?? "unrecorded"} predates gk ${APP_VERSION} — run \`gk init --target ${t.id}\` to refresh kit files (skills/extensions/rules) before executing graphs`,
-      );
-    }
+    if (recorded === APP_VERSION) continue;
+    const relation = recorded !== null && compareVersions(recorded, APP_VERSION) > 0 ? "is newer than" : "predates";
+    warnings.push(
+      `${t.installDir}/.gk.json kitVersion=${recorded ?? "unrecorded"} ${relation} gk ${APP_VERSION} — run \`gk init --target ${t.id}\` to refresh kit files (skills/extensions/rules) before executing graphs`,
+    );
   }
   return warnings;
+}
+
+/** Dotted x.y.z compare via split (no semver dependency); missing segments = 0. */
+function compareVersions(a: string, b: string): number {
+  const as = a.split(".");
+  const bs = b.split(".");
+  for (let i = 0; i < Math.max(as.length, bs.length); i++) {
+    const d = (Number(as[i]) || 0) - (Number(bs[i]) || 0);
+    if (d !== 0) return d;
+  }
+  return 0;
 }
 
 export type KitTarget = "claude" | "cursor";
@@ -163,6 +174,18 @@ export function installKit(
   const source = kitSourceDir(target as TargetId);
   const destDir = join(targetDir, t.installDir);
 
+  // User config is read BEFORE the --force wipe below: --force refreshes kit
+  // files but must never destroy user keys (codingLevel/statusline/custom).
+  const gkConfig = join(destDir, ".gk.json");
+  let existing: Record<string, unknown> = {};
+  if (existsSync(gkConfig)) {
+    try {
+      const parsed = JSON.parse(readFileSync(gkConfig, "utf8")) as Record<string, unknown>;
+      if (parsed && typeof parsed === "object") existing = parsed;
+    } catch {
+      /* corrupt user config: rewrite defaults below */
+    }
+  }
   // --force / fresh: wipe old dir and reinstall clean
   if (fresh && existsSync(destDir)) {
     rmSync(destDir, { recursive: true, force: true });
@@ -180,9 +203,10 @@ export function installKit(
   }
   // Kit-owned files always overwrite — re-running `gk init` after upgrading the
   // gk binary must refresh stale skills in existing projects. Only .gk.json
-  // (user config) is preserved below; --force is the only path that removes
-  // files the kit no longer ships — except metadata.json `deletions`, which
-  // prunes named paths on every install so upgrades drop retired kit assets.
+  // (user config) is preserved — read above, before the --force wipe; --force
+  // is the only path that removes files the kit no longer ships — except
+  // metadata.json `deletions`, which prunes named paths on every install so
+  // upgrades drop retired kit assets.
   cpSync(source, destDir, {
     recursive: true,
     force: true,
@@ -215,8 +239,8 @@ export function installKit(
     }
     const section = readFileSync(sectionPath, "utf8");
     const agentsMd = join(targetDir, "AGENTS.md");
-    const existing = existsSync(agentsMd) ? readFileSync(agentsMd, "utf8") : null;
-    writeFileSync(agentsMd, mergeAgentsMd(existing, section));
+    const agentsExisting = existsSync(agentsMd) ? readFileSync(agentsMd, "utf8") : null;
+    writeFileSync(agentsMd, mergeAgentsMd(agentsExisting, section));
   }
 
   // settings.json is kit-owned infrastructure (hook config), always overwrite for claude
@@ -228,18 +252,8 @@ export function installKit(
     }
   }
 
-  const gkConfig = join(destDir, ".gk.json");
   // Merge (never clobber user keys): record which kit version wrote the files
   // so `gk run start` can warn when the install predates the running binary.
-  let existing: Record<string, unknown> = {};
-  if (existsSync(gkConfig)) {
-    try {
-      const parsed = JSON.parse(readFileSync(gkConfig, "utf8")) as Record<string, unknown>;
-      if (parsed && typeof parsed === "object") existing = parsed;
-    } catch {
-      /* corrupt user config: rewrite defaults below */
-    }
-  }
   writeFileSync(
     gkConfig,
     JSON.stringify({ codingLevel: 0, statusline: "full", ...existing, kitVersion: APP_VERSION }, null, 2),

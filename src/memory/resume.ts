@@ -88,7 +88,19 @@ export interface Reconciliation {
   skipped: Array<{ node: string; reason: string }>;
 }
 function parseGraph(path: string): Graph {
-  const parsed = GraphSchema.safeParse(YAML.parse(readFileSync(path, "utf-8")));
+  let raw: string;
+  try {
+    raw = readFileSync(path, "utf-8");
+  } catch (e) {
+    // --force skips the drift guard's existsSync check, so a deleted recorded
+    // graph surfaces here: code it instead of leaking a raw ENOENT.
+    if ((e as NodeJS.ErrnoException).code === "ENOENT")
+      throw new Error(
+        `GRAPH_FILE_NOT_FOUND: recorded graph ${path} is gone — restore it, or recover with \`gk run take --from <id>\``,
+      );
+    throw e;
+  }
+  const parsed = GraphSchema.safeParse(YAML.parse(raw));
   if (!parsed.success)
     throw new Error(
       `RESUME_GRAPH_INVALID: recorded graph ${path} no longer parses: ${parsed.error.issues[0]?.message}`,
@@ -190,7 +202,9 @@ export function reconcileRun(
         ? last.get(node)?.status === "skipped"
           ? "skipped in prior run (gate rejected or condition false)"
           : "depends on a skipped node"
-        : "passed with evidence on disk",
+        : last.get(node)?.evidence.length
+          ? "passed with evidence on disk"
+          : "passed (no evidence declared)",
     }));
   const dispatched = readDispatches(cwd, runId);
   const resolved = new Set([...satisfied, ...skippedStatus]);

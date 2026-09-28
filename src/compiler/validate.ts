@@ -95,6 +95,67 @@ export function validateGraph(graph: Graph, projectRoot: string): Finding[] {
     }
   }
 
+  // 5c. Duplicate required_keys entries (ADVISORY): the gate dedupes before
+  // mapping keys to files, so a repeated entry is harmless — but it is almost
+  // always a copy-paste artifact worth surfacing.
+  const seenRequired = new Set<string>();
+  for (const key of graph.evidence.required_keys) {
+    if (seenRequired.has(key)) {
+      findings.push({
+        check: "duplicate-required-key",
+        path: "evidence.required_keys",
+        message: `Evidence key "${key}" is listed more than once in required_keys`,
+        severity: "warn",
+      });
+    }
+    seenRequired.add(key);
+  }
+
+  // 5d. Duplicate evidence producers (ADVISORY): the gate maps each key to a
+  // single file (.graphkit/evidence/<key>.md) — two nodes writing the same key
+  // in one wave race that file. Late re-stamps across waves are legitimate,
+  // so this stays advisory.
+  const producers = new Map<string, string[]>();
+  for (const [id, node] of Object.entries(graph.nodes)) {
+    for (const key of node.evidence) {
+      const list = producers.get(key) ?? [];
+      list.push(id);
+      producers.set(key, list);
+    }
+  }
+  // Declared fan-out shapes never race the gate file and stay silent:
+  // (a) classify-and-act-family dispatch runs only the matching handler (else
+  // the fallback), so writers listed exclusively under routes[].handler ∪
+  // fallback are mutually exclusive; (b) a topology_config array naming the
+  // family (refuters: [r1, r2], generators: [...], candidates: [...]); (c) a
+  // declared sibling family — every producer hanging off the identical
+  // non-empty depend_on list (custom worker-N scaffolds).
+  const tc = (graph.topology_config ?? {}) as Record<string, unknown>;
+  const routeWriters = new Set<string>(
+    ((Array.isArray(tc.routes) ? tc.routes : []) as Array<{ handler?: unknown }>)
+      .map((r) => (typeof r?.handler === "string" ? r.handler : ""))
+      .concat(typeof tc.fallback === "string" ? tc.fallback : "")
+      .filter(Boolean),
+  );
+  for (const [key, ids] of producers) {
+    const routeExclusive = routeWriters.size > 0 && ids.every((id) => routeWriters.has(id));
+    const familyDeps = JSON.stringify(graph.nodes[ids[0]]?.depend_on ?? []);
+    const declaredFamily =
+      (familyDeps !== "[]" && ids.every((id) => JSON.stringify(graph.nodes[id]?.depend_on ?? []) === familyDeps)) ||
+      Object.values(tc).some(
+        (v) =>
+          Array.isArray(v) && v.every((x) => typeof x === "string") && ids.every((id) => (v as string[]).includes(id)),
+      );
+    if (ids.length > 1 && !routeExclusive && !declaredFamily) {
+      findings.push({
+        check: "duplicate-evidence-producer",
+        path: `nodes.${ids[0]}.evidence`,
+        message: `Evidence key "${key}" is produced by ${ids.length} nodes (${ids.join(", ")}) — concurrent producers race the single gate file for this key`,
+        severity: "warn",
+      });
+    }
+  }
+
   // 5b. criteria: ids must be declared keys, unique, and backed by registry files
   const seenCriteria = new Set<string>();
   for (const id of graph.evidence.criteria ?? []) {
@@ -237,6 +298,32 @@ export function validateGraph(graph: Graph, projectRoot: string): Finding[] {
           message: `constraint source "${String(c.source)}" must be "human" or "author" ("human" constraints are agent-immutable)`,
           severity: "warn",
         });
+      }
+    }
+  }
+
+  // 7d. Constraint value shapes (ADVISORY): recognized keys carry recognized
+  // value shapes — a wrong shape is a silent no-op at materialization time
+  // (nodeTools ignores it), so surface it here. Unknown keys stay free-form
+  // prose (constraints are open by design).
+  for (const [id, node] of Object.entries(graph.nodes)) {
+    for (const c of node.constraints) {
+      for (const [k, v] of Object.entries(c)) {
+        if ((k === "no_write" || k === "no_exec") && typeof v !== "boolean") {
+          findings.push({
+            check: "constraint-value",
+            path: `nodes.${id}.constraints`,
+            message: `constraint ${k} expects true or false, got ${JSON.stringify(v)} — non-boolean values are ignored`,
+            severity: "warn",
+          });
+        } else if (k === "tools_allowlist" && typeof v !== "string" && !Array.isArray(v)) {
+          findings.push({
+            check: "constraint-value",
+            path: `nodes.${id}.constraints`,
+            message: `constraint tools_allowlist expects "Read, Grep" or a list of tool names, got ${JSON.stringify(v)} — other shapes are ignored`,
+            severity: "warn",
+          });
+        }
       }
     }
   }

@@ -122,4 +122,36 @@ describe("materializeNodeAgents", () => {
     });
     expect(() => materializeNodeAgents(dir, graph)).toThrow(/Agent 'ghost' not found/);
   });
+
+  test("tools_allowlist honors comma-separated string values", () => {
+    const dir = fixture();
+    const graph = GraphSchema.parse({
+      apiVersion: "graphkit.dev/v2",
+      kind: "Graph",
+      metadata: { name: "t" },
+      topology: "custom",
+      nodes: { n: { ...baseNode, constraints: [{ tools_allowlist: "WebSearch, Read" }] } },
+    });
+    materializeNodeAgents(dir, graph);
+    const out = readFileSync(join(dir, ".omp", "agents", "gk-n.md"), "utf8");
+    expect(out).toContain('tools: ["web_search", "read"]');
+  });
+
+  test("tools_allowlist honors array values and narrows a flag-derived base", () => {
+    const dir = fixture();
+    const graph = GraphSchema.parse({
+      apiVersion: "graphkit.dev/v2",
+      kind: "Graph",
+      metadata: { name: "t" },
+      topology: "custom",
+      nodes: {
+        list: { ...baseNode, constraints: [{ tools_allowlist: ["WebSearch", "Bash"] }] },
+        narrowed: { ...baseNode, constraints: [{ no_write: true }, { tools_allowlist: ["Read", "Bash", "Grep"] }] },
+      },
+    });
+    materializeNodeAgents(dir, graph);
+    expect(readFileSync(join(dir, ".omp", "agents", "gk-list.md"), "utf8")).toContain('tools: ["web_search", "bash"]');
+    // no_write base (read/grep/glob/bash) ∩ allowlist drops bash
+    expect(readFileSync(join(dir, ".omp", "agents", "gk-narrowed.md"), "utf8")).toContain('tools: ["read", "grep"]');
+  });
 });

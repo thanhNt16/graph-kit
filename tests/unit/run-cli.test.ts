@@ -55,7 +55,10 @@ describe("gk run CLI", () => {
       expect(startFail.status).toBe("fail");
       expect(startFail.error.code).toBe("GRAPH_NOT_FOUND");
       // 3. Start valid run with graph.yaml
-      writeFileSync(join(cwd, "graph.yaml"), "metadata:\n  name: test-graph\n");
+      writeFileSync(
+        join(cwd, "graph.yaml"),
+        "apiVersion: graphkit.dev/v2\nkind: Graph\nmetadata:\n  name: test-graph\ntopology: custom\nnodes:\n  review:\n    agent: code-reviewer\n    objective: review changes\n",
+      );
       const startOk = JSON.parse(runCli(["run", "start"], cwd).stdout);
       expect(startOk.status).toBe("ok");
       expect(startOk.data.id).toMatch(/test-graph$/);

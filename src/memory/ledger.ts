@@ -217,6 +217,10 @@ export function appendDispatch(
 ): { run: string; node: string } {
   const dir = activeRun(cwd);
   if (!dir) throw new Error("NO_ACTIVE_RUN: start a run with `gk run start` before recording dispatches");
+  // A junk pid poisons `take` forever (pid 0 signals our own process group and
+  // always looks alive), so dispatch.jsonl only ever holds real pids.
+  if (line.pid != null && (!Number.isInteger(line.pid) || line.pid <= 0))
+    throw new Error(`BAD_PID: --pid must be a positive integer, got ${line.pid}`);
   const entry: DispatchLine = { at: now, ...line };
   appendFileSync(join(dir, "dispatch.jsonl"), `${JSON.stringify(entry)}\n`);
   return { run: basename(dir), node: line.node };
@@ -237,21 +241,30 @@ export function readDispatches(cwd: string, id: string): DispatchLine[] {
     });
 }
 
-/** Mark the node's last `ok` trace line as integrated ("landed"). Rewrites
- *  trace.jsonl in place — the only multi-line ledger write; single-writer run
- *  makes this safe. */
+/** Mark the node's LATEST trace line as integrated ("landed") — refused unless
+ *  that line is `ok`. Rewrites trace.jsonl in place — the only multi-line
+ *  ledger write; single-writer run makes this safe. */
 export function landNode(cwd: string, node: string, commit: string, now = new Date().toISOString()) {
   const dir = activeRun(cwd);
   if (!dir) throw new Error("NO_ACTIVE_RUN: start a run before landing nodes");
   const id = basename(dir);
+  // The stamp ties the node to its integration commit — a non-sha silently
+  // poisons the audit trail the run report is built on.
+  if (!/^[0-9a-f]{4,40}$/i.test(commit))
+    throw new Error(`BAD_COMMIT: --commit must be a 4-40 char hex sha, got "${commit}"`);
   const trace = readTrace(cwd, id);
+  // Latest status wins: a node whose most recent round failed is not landable,
+  // even if an earlier `ok` line exists — a stale-ok stamp asserts an
+  // integration that never happened.
   let idx = -1;
   for (let i = trace.length - 1; i >= 0; i--)
-    if (trace[i].node === node && trace[i].status === "ok") {
+    if (trace[i].node === node) {
       idx = i;
       break;
     }
-  if (idx < 0) throw new Error(`LAND_NOT_OK: no ok trace line for node "${node}" in run ${id}`);
+  if (idx < 0) throw new Error(`LAND_NOT_OK: no trace line for node "${node}" in run ${id}`);
+  if (trace[idx].status !== "ok")
+    throw new Error(`LAND_NOT_OK: latest trace for node "${node}" in run ${id} is "${trace[idx].status}", not ok`);
   trace[idx] = { ...trace[idx], landed: { at: now, commit } };
   writeFileSync(join(dir, "trace.jsonl"), `${trace.map((t) => JSON.stringify(t)).join("\n")}\n`);
   return { run: id, node };

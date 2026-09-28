@@ -9,13 +9,13 @@ export interface CriterionView {
   id: string;
   description: string | null;
   kind: "report" | "screenshot" | "json" | "metrics" | "text";
-  status: "present" | "missing";
+  status: "present" | "missing" | "superseded";
   freshness: Freshness;
   artifact: string | null;
   provenance: string | null;
 }
 
-const BADGE = { present: "● present", missing: "○ missing" } as const;
+const BADGE = { present: "● present", missing: "○ missing", superseded: "◌ superseded" } as const;
 const FRESH_TAG: Record<Freshness, string> = { fresh: "", stale: " · ◐ stale", unknown: " · ? unknown" };
 
 export function buildViews(cwd: string, graph: Graph): CriterionView[] {
@@ -42,7 +42,14 @@ export function buildViews(cwd: string, graph: Graph): CriterionView[] {
       id,
       description: c?.description || null,
       kind: c?.kind ?? "report",
-      status: content.trim().length > 0 ? ("present" as const) : ("missing" as const),
+      // Gate parity (audit F-01): a superseded marker ≡ missing for gating
+      // (gate.ts scores it "missing") — label it distinctly instead of
+      // reporting present.
+      status: m?.superseded
+        ? ("superseded" as const)
+        : content.trim().length > 0
+          ? ("present" as const)
+          : ("missing" as const),
       freshness: freshnessOf(m, cur),
       artifact: m?.artifact ?? null,
       provenance: m
@@ -80,7 +87,7 @@ function artifactAbs(evidenceDir: string, rel: string | null): string | null {
 export function renderHtml(name: string, views: CriterionView[], evidenceDir: string): string {
   const cards: string[] = [];
   for (const v of views) {
-    const badge = v.status === "present" ? "&#9679; present" : "&#9675; missing";
+    const badge = BADGE[v.status];
     const fresh =
       v.freshness === "stale"
         ? ' <span class="stale">&#9682; stale</span>'

@@ -1,8 +1,9 @@
 import { execFileSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import type { CAC } from "cac";
 import YAML from "yaml";
+import { GraphKitError } from "../../errors.js";
 import { analyzeRun } from "../../memory/analyze.js";
 import {
   activeRun,
@@ -11,6 +12,7 @@ import {
   appendDispatch,
   appendNode,
   clearActiveRun,
+  type DispatchLine,
   endRun,
   landNode,
   readAdvisorEvents,
@@ -22,7 +24,9 @@ import {
 import { recordRound } from "../../memory/loops.js";
 import { reconcileRun, resumeRun } from "../../memory/resume.js";
 import { GraphSchema } from "../../schemas/graph.schema.js";
+import { getActiveGraphId, loadActiveGraph } from "../../store/index.js";
 import { subcommandsFor } from "../command-registry.js";
+import { parseInputs, recordRunInputs, requiredMissing } from "../graph-inputs.js";
 import { emit, fail, ok } from "../output.js";
 import { kitVersionWarnings } from "./kit.js";
 
@@ -53,10 +57,76 @@ function errCode(e: unknown): { code: string; message: string } {
   return { code, message };
 }
 
+/** ENOENT on a graph is a coded condition, not a raw errno leaking into the envelope. */
+function readGraphFile(path: string): string {
+  try {
+    return readFileSync(path, "utf-8");
+  } catch (e) {
+    if ((e as NodeJS.ErrnoException).code === "ENOENT") throw new Error(`GRAPH_FILE_NOT_FOUND: ${path}`);
+    throw e;
+  }
+}
+
+/** Schema-validated graph document, failing with the envelope's SCHEMA_INVALID code. */
+function parseGraphData(graphPath: string) {
+  const parsed = GraphSchema.safeParse(YAML.parse(readGraphFile(graphPath)));
+  if (!parsed.success) {
+    const issues = parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; ");
+    throw new Error(`SCHEMA_INVALID: ${issues}`);
+  }
+  return parsed.data;
+}
+
+/** Node ids of the graph the run actually executes — same resolution as the
+ *  advisor path: explicit --graph wins, then the active run's recorded graph.
+ *  null when neither resolves (no active run / legacy meta): callers skip
+ *  validation rather than guess a graph the run never recorded. */
+function runGraphNodeIds(cwd: string, flag: string | undefined): { path: string; ids: string[] } | null {
+  const graphPath = flag ?? activeRunGraph(cwd);
+  if (!graphPath) return null;
+  return { path: graphPath, ids: Object.keys(parseGraphData(graphPath).nodes) };
+}
+
+/** `run start` graph resolution, mirroring `gk validate`: explicit --graph →
+ *  ./graph.yaml when present → the session's active graph from the .graphkit
+ *  store (a dangling pointer surfaces ACTIVE_POINTER_DANGLING). Falls through
+ *  to ./graph.yaml so startRun's GRAPH_NOT_FOUND stays the legacy error. */
+function resolveStartGraph(cwd: string, flag?: string): string {
+  if (flag) return flag;
+  const local = join(cwd, "graph.yaml");
+  if (existsSync(local)) return local;
+  if (existsSync(join(cwd, ".graphkit")) && getActiveGraphId(cwd) !== null) return loadActiveGraph(cwd).path;
+  return local;
+}
+
+/** Pids of `dispatches` that still have a live process. Only ESRCH means gone:
+ *  EPERM is a live pid we may not signal (foreign user) and must block
+ *  takeover. Non-positive pids are legacy junk (pid 0 signals our own process
+ *  group) and never count as live. Exported for tests — the EPERM/ESRCH split
+ *  is the takeover safety contract. */
+export function liveDispatchPids(
+  dispatches: DispatchLine[],
+  isAlive: (pid: number) => boolean = (pid) => {
+    try {
+      process.kill(pid, 0);
+      return true;
+    } catch (e) {
+      return (e as NodeJS.ErrnoException).code === "EPERM";
+    }
+  },
+): number[] {
+  return dispatches
+    .filter((d) => d.pid != null && Number.isInteger(d.pid) && d.pid > 0 && d.pid !== process.pid)
+    .map((d) => d.pid!)
+    .filter((pid) => isAlive(pid));
+}
+
 export function registerRunCommands(cli: CAC) {
   cli
     .command("run [subcommand] [args...]", `Run ledger commands\nSubcommands: ${subcommandsFor("run")}`)
     .option("--graph <path>", "graph.yaml path (default: ./graph.yaml)")
+    // ==== FixGraph slice (audit F4): --input wiring — helpers in cli/graph-inputs.ts ====
+    .option("--input <pair>", "run input as k=v (repeatable; enforced against graph.inputs)")
     .option("--status <status>", "node: ok|fail|skipped|challenge — end: merged|blocked|failed")
     .option("--advisor-fired <round>", "record advisor firing for a node")
     .option("--streak <n>", "advisor failure streak")
@@ -85,7 +155,28 @@ export function registerRunCommands(cli: CAC) {
       }
       try {
         if (subcommand === "start") {
-          const started = startRun(cwd, opts.graph ?? join(cwd, "graph.yaml"));
+          let graphPath: string;
+          try {
+            graphPath = resolveStartGraph(cwd, opts.graph);
+          } catch (e) {
+            if (!(e instanceof GraphKitError)) throw e;
+            emit(fail(e.code, e.message, e.details));
+            return;
+          }
+          // ==== FixGraph slice (audit F4): --input enforcement — the only
+          // ==== run.ts lines this slice touches (helpers: cli/graph-inputs.ts).
+          const provided = parseInputs(opts.input);
+          const missing = requiredMissing(graphPath, provided);
+          if (missing.length > 0) {
+            emit(
+              fail("MISSING_INPUTS", `required input(s) have no default and no --input value: ${missing.join(", ")}`, {
+                missing,
+              }),
+            );
+            return;
+          }
+          const started = startRun(cwd, graphPath);
+          if (Object.keys(provided).length > 0) recordRunInputs(started.dir, provided);
           // Stale-kit installs run outdated skills/extensions (observed: a run
           // executed with a pre-orchestration-fields gk-execute). Surface it at
           // the one moment the orchestrator is guaranteed to look — run start.
@@ -116,13 +207,8 @@ export function registerRunCommands(cli: CAC) {
             // run started with `--graph sub/x.yaml` needs no repeated flag; explicit --graph wins,
             // falling back to cwd/graph.yaml for legacy runs without a recorded path.
             const graphPath = opts.graph ?? activeRunGraph(cwd) ?? join(cwd, "graph.yaml");
-            const parsed = GraphSchema.safeParse(YAML.parse(readFileSync(graphPath, "utf-8")));
-            if (!parsed.success) {
-              const issues = parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; ");
-              emit(fail("SCHEMA_INVALID", issues));
-              return;
-            }
-            const advisor = parsed.data.nodes[String(node)]?.advisor;
+            const parsedData = parseGraphData(graphPath);
+            const advisor = parsedData.nodes[String(node)]?.advisor;
             if (!advisor) {
               emit(fail("BAD_ADVISOR", `node "${node}" has no advisor config in ${graphPath}`));
               return;
@@ -146,6 +232,13 @@ export function registerRunCommands(cli: CAC) {
             opts.status !== "challenge"
           ) {
             emit(fail("BAD_STATUS", "node requires --status ok|fail|skipped|challenge"));
+            return;
+          }
+          // Phantom nodes corrupt the ledger and inflate node_count: every
+          // traced id must exist in the graph the active run recorded.
+          const g = runGraphNodeIds(cwd, opts.graph);
+          if (g && !g.ids.includes(String(node))) {
+            emit(fail("UNKNOWN_NODE", `node '${node}' not in graph ${g.path}`, { available: g.ids }));
             return;
           }
           const result = appendNode(cwd, {
@@ -177,6 +270,11 @@ export function registerRunCommands(cli: CAC) {
             emit(fail("BAD_VIA", "--via must be task|extension"));
             return;
           }
+          const g = runGraphNodeIds(cwd, opts.graph);
+          if (g && !g.ids.includes(String(node))) {
+            emit(fail("UNKNOWN_NODE", `node '${node}' not in graph ${g.path}`, { available: g.ids }));
+            return;
+          }
           emit(
             ok(
               appendDispatch(cwd, {
@@ -195,6 +293,11 @@ export function registerRunCommands(cli: CAC) {
             emit(fail("MISSING_ARG", "land requires a node id and --commit <sha>"));
             return;
           }
+          const g = runGraphNodeIds(cwd, opts.graph);
+          if (g && !g.ids.includes(String(node))) {
+            emit(fail("UNKNOWN_NODE", `node '${node}' not in graph ${g.path}`, { available: g.ids }));
+            return;
+          }
           emit(ok(landNode(cwd, String(node), String(opts.commit))));
           return;
         }
@@ -205,20 +308,9 @@ export function registerRunCommands(cli: CAC) {
             return;
           }
           // Refuse takeover while the old run's recorded pids are alive.
-          const live = readDispatches(cwd, String(target))
-            .filter((d) => d.pid != null && d.pid !== process.pid)
-            .filter((d) => {
-              try {
-                process.kill(d.pid!, 0);
-                return true;
-              } catch {
-                return false;
-              }
-            });
+          const live = liveDispatchPids(readDispatches(cwd, String(target)));
           if (live.length > 0) {
-            emit(
-              fail("TAKEOVER_BLOCKED", `run ${target} has live dispatch pids: ${live.map((d) => d.pid).join(", ")}`),
-            );
+            emit(fail("TAKEOVER_BLOCKED", `run ${target} has live dispatch pids: ${live.join(", ")}`));
             return;
           }
           // Reconcile first so the takeover payload carries truth, then clear.
@@ -232,6 +324,7 @@ export function registerRunCommands(cli: CAC) {
               taken_from: target,
               unresolved: rec.unresolved,
               pending: rec.pending,
+              foreign_evidence: rec.foreign_evidence,
               active_cleared: cleared,
               active: active ? basename(active) : null,
             }),

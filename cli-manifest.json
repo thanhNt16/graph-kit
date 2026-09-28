@@ -97,6 +97,7 @@
         "--node <n>",
         "--note <text>",
         "--html",
+        "--graph <file>",
         "--json"
       ]
     },
@@ -112,6 +113,7 @@
       "description": "Run ledger commands\nSubcommands: start node dispatch land end status resume take round analyze",
       "options": [
         "--graph <path>",
+        "--input <pair>",
         "--status <status>",
         "--advisor-fired <round>",
         "--streak <n>",

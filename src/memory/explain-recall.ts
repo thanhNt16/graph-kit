@@ -171,7 +171,9 @@ export function explainRecall(memDir: string, query: string, k = 5, now = new Da
 
   // Zero-overlap docs that are high salience can be added to rejected if needed
   const scoredIds = new Set(scored.map((s) => s.doc.id));
-  const zeroOverlap = docs.filter((d) => !scoredIds.has(d.id)).sort((a, b) => b.salience - a.salience);
+  const zeroOverlap = docs
+    .filter((d) => !scoredIds.has(d.id) && !seen.has(d.id))
+    .sort((a, b) => b.salience - a.salience);
   for (const doc of zeroOverlap) {
     if (rejectedOrFiltered.length >= REJECTED_POOL_MAX) break;
     rejectedOrFiltered.push({

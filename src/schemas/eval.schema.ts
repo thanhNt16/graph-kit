@@ -13,5 +13,9 @@ export const EvalConfig = z.strictObject({
   mode: z.enum(["work_product", "memory", "both"]).default("work_product"),
   rubric: z.enum(["strict", "lenient"]).default("strict"),
   abstention_weighted: z.boolean().default(true),
+  // eval-gate node authoring: judge instruction and on-block action. Carried
+  // verbatim into the waves payload (raw-doc read) rather than defaulted.
+  prompt: z.string().optional(),
+  on_fail: z.string().optional(),
   llm_as_judge: LlmAsJudge.optional(),
 });

@@ -144,12 +144,11 @@ describe("generated kit parity (all 5 targets from kits/_core)", () => {
     }
   });
 
-  test("viewer hosts get their single launch line; others keep _core verbatim", () => {
-    expect(skillMd("claude", "gk-visualize")).toContain("bun .claude/viewer/server.mjs graph.yaml");
-    expect(skillMd("cursor", "gk-visualize")).toContain("bun .cursor/viewer/server.mjs graph.yaml");
-    expect(skillMd("claude", "gk-visualize")).not.toContain("or cursor kit");
-    // codex ships no viewer — it must not reference another host's viewer path.
-    expect(skillMd("codex", "gk-visualize")).not.toContain("viewer/server.mjs");
+  test("no host references the removed bundled viewer", () => {
+    for (const host of HOST_IDS) {
+      expect(skillMd(host, "gk-visualize")).not.toContain("Bundled live viewer");
+      expect(skillMd(host, "gk-visualize")).not.toContain("viewer/server.mjs");
+    }
   });
 
   test("host-only skill files are preserved (gk-visualize/references)", () => {

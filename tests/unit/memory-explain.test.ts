@@ -181,4 +181,26 @@ describe("explainRecall", () => {
     expect(explanation.rejected_top_n.find((d) => d.id === "d2")?.reason).toBe("superseded");
     expect(explanation.rejected_top_n.find((d) => d.id === "d6")?.reason).toBe("zero_overlap");
   });
+
+  it("never reports a PPR-admitted hit as rejected/zero_overlap", () => {
+    writeFileSync(
+      join(TEST_DIR, "root.md"),
+      `---\nid: mem-root\nsalience: 0.8\nstatus: stable\n---\nDatabase connection pool configuration.`,
+    );
+    // Zero term overlap with the query — reachable only through the link graph.
+    writeFileSync(
+      join(TEST_DIR, "neighbor.md"),
+      `---\nid: mem-neighbor\nsalience: 0.6\nstatus: stable\n---\nQuery timeout tuning.`,
+    );
+    writeFileSync(
+      join(TEST_DIR, ".links.json"),
+      JSON.stringify({ generated_at: "2026-09-10T00:00:00Z", links: { "mem-root": ["mem-neighbor"] } }),
+    );
+
+    const explanation = explainRecall(TEST_DIR, "database connection", 2, "2026-09-10T00:00:00Z");
+    expect(explanation.hits.map((h) => h.id)).toContain("mem-neighbor");
+
+    const hitIds = new Set(explanation.hits.map((h) => h.id));
+    expect(explanation.rejected_top_n.some((r) => hitIds.has(r.id))).toBe(false);
+  });
 });

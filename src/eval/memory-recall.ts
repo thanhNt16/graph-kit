@@ -82,6 +82,32 @@ function termFreqs(text: string): Map<string, number> {
   for (const t of tokenizeList(text)) tf.set(t, (tf.get(t) ?? 0) + 1);
   return tf;
 }
+/** True for suggestion-shaped frontmatter: the consolidate writer's markers
+ *  (type: "suggestion", or the action+rationale pair). No doc-native entry
+ *  carries them together with a proposal status. */
+export function isSuggestionFrontmatter(fm: Record<string, unknown>): boolean {
+  return fm.type === "suggestion" || ("action" in fm && "rationale" in fm);
+}
+
+/** Status to validate against MemoryFileSchema. Generated suggestions
+ *  (SuggestionFileSchema) carry a proposal lifecycle — proposed|accepted|
+ *  dismissed — the doc reader can't parse; map it read-side onto the doc
+ *  equivalents (proposed→draft, accepted→stable, dismissed→deprecated).
+ *  Doc-native statuses and everything else pass through untouched, and the
+ *  files on disk keep their suggestion statuses. */
+export function docStatusFor(fm: Record<string, unknown>): unknown {
+  if (!isSuggestionFrontmatter(fm)) return fm.status;
+  switch (fm.status) {
+    case "proposed":
+      return "draft";
+    case "accepted":
+      return "stable";
+    case "dismissed":
+      return "deprecated";
+    default:
+      return fm.status;
+  }
+}
 
 /** Schema-validate frontmatter and build a doc; null = malformed entry. */
 function toDoc(fm: Record<string, unknown>, head: string, body: string, file: string): MemoryDoc | null {
@@ -90,6 +116,7 @@ function toDoc(fm: Record<string, unknown>, head: string, body: string, file: st
     ...fm,
     id: typeof fm.id === "string" && fm.id.trim() ? fm.id : file.replace(/^.*\//, "").replace(/\.md$/, ""),
     type: typeof fm.type === "string" && fm.type.trim() ? fm.type : "knowledge",
+    status: docStatusFor(fm),
   };
   const validated = MemoryFileSchema.safeParse(candidate);
   if (!validated.success) return null;

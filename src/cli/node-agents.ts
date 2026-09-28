@@ -28,12 +28,29 @@ function nodeTools(node: Graph["nodes"][string]): string[] | null {
   if (node.tools.length > 0) return node.tools.map(toOmpTool);
   if (node.role === "supervisor") return READ_ONLY_TOOLS;
   const flags = new Set<string>();
+  // tools_allowlist accepts "Read, Grep" (comma-separated) or [Read, Grep];
+  // it narrows any flag-derived restriction rather than widening it.
+  let allow: string[] | null = null;
   for (const c of node.constraints) {
-    for (const [k, v] of Object.entries(c)) if (v === true) flags.add(k);
+    for (const [k, v] of Object.entries(c)) {
+      if (v === true) flags.add(k);
+      if (k === "tools_allowlist" && (typeof v === "string" || Array.isArray(v))) {
+        const list = Array.from(
+          new Set((typeof v === "string" ? v.split(",") : v).map((t) => toOmpTool(t.trim())).filter(Boolean)),
+        );
+        allow = allow === null ? list : allow.filter((t) => list.includes(t));
+      }
+    }
   }
-  if (flags.has("no_exec")) return READ_ONLY_TOOLS;
-  if (flags.has("no_write")) return NO_WRITE_TOOLS;
-  return null;
+  const base = flags.has("no_exec") ? READ_ONLY_TOOLS : flags.has("no_write") ? NO_WRITE_TOOLS : null;
+  if (allow !== null) {
+    if (base === null) return allow;
+    // Allowlist ∩ flag-derived base; a restriction flag also vetoes
+    // re-granting the exec tool through an explicit list (bash rides on
+    // no_write's best-effort grace — a deliberate allowlist may not widen it).
+    return allow.filter((t) => base.includes(t) && t !== "bash");
+  }
+  return base;
 }
 
 function scopeSection(title: string, intro: string, items: string[]): string {
