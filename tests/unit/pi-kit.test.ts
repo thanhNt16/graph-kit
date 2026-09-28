@@ -51,6 +51,30 @@ describe("pi kit structure", () => {
     expect(raw).not.toContain("/gk:");
   });
 
+  test("gk-execute carries the run-ledger dispatch contract", () => {
+    const raw = readFileSync(join(KIT, "skills", "gk-execute", "SKILL.md"), "utf8");
+    // Pre-dispatch intent + launch verification.
+    expect(raw).toContain("gk run dispatch <node-id> --attempt <n> --via task");
+    expect(raw).toContain("--via extension");
+    expect(raw).toContain("hub jobs");
+    expect(raw).toContain("--notes launch-lost");
+    // Message stamping header.
+    expect(raw).toContain("run: <run-id> node: <node-id> rev: <graph_sha256[:12]>");
+    // Evidence stamping + gate freshness.
+    expect(raw).toContain("gk evidence add <file> --key <key> --node <node-id>");
+    expect(raw).toContain("require_landed");
+    // Challenge dispositions.
+    expect(raw).toContain("disposition=accept|modify|reject|defer");
+    // Worktree merge hardening.
+    expect(raw).toContain("gk run land <node-id> --commit <sha>");
+    expect(raw).toContain("--notes owns-violation");
+    expect(raw).toContain("--notes merge-conflict:<branch>");
+    expect(raw).toContain(".graphkit/worktrees/*");
+    // Resume & takeover.
+    expect(raw).toContain("gk run take --from <old-run-id>");
+    expect(raw).toContain("`unresolved`");
+  });
+
   test("no stale host path references in skills", () => {
     const offenders: string[] = [];
     const walk = (d: string) => {

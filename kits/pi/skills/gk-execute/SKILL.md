@@ -69,6 +69,18 @@ After the final wave (and the evidence gate): `gk run end --status merged|blocke
 then `gk memory consolidate --json`. If the payload has `on_graph_complete`, run those
 commands verbatim — `gk run end` + `gk memory consolidate` are what they normally contain.
 
+### Resume & takeover
+
+A run interrupted mid-graph resumes from the ledger, never from memory:
+
+1. `gk run status` inspects the latest run; `gk run resume <run-id>` replays the plan —
+   satisfied nodes stay done, skipped nodes stay skipped. The resume payload carries an
+   `unresolved` list (nodes whose dispatch intent has no trace line): surface it to the
+   user and decide with them BEFORE re-dispatching any of it.
+2. A stale `.active` file (a run died without `gk run end`) blocks `gk run start` with
+   `RUN_ACTIVE`: `gk run take --from <old-run-id>` clears it — refusing while any
+   recorded dispatch pid is still alive — and returns the same `unresolved` list to act on.
+
 ### Step 2: Execute wave by wave
 
 For each wave in the output:
@@ -84,6 +96,10 @@ Then continue to the next wave — skip the action-wave steps below for curator 
 ## Dispatching a wave (pi)
 
 Use the native **task** tool — one batch call per wave: `task({ context: "<shared upstream context>", tasks: [{ name: "<node-id>", agent: "gk-<node-id>", task: "<node.objective + upstream results + refs>" }, ...] })`. All nodes of the wave go in one `tasks[]` array; they run in parallel and results auto-deliver. Collect every result, then proceed.
+
+**Dispatch intent.** Before each `task()` batch, record every spawn's intent: `gk run dispatch <node-id> --attempt <n> --via task` (use `--via extension` immediately before a `gk_dispatch_agent` call, adding `--pid` when the child pid is known). After the batch, snapshot `hub jobs`: it must show one running row per spawned node BEFORE the wave wait. A node with no row never launched — `gk run node <id> --status fail --notes launch-lost` and stop the wave.
+
+**Message stamping.** Every `hub send` to a node and every task brief opens with a header `run: <run-id> node: <node-id> rev: <graph_sha256[:12]>` — run id and hash come straight from the `gk run start` payload, so a relayed message is traceable to its run out-of-band.
 Wave barrier: do NOT start wave N+1 until every node of wave N returned (exitCode 0). The same barrier holds across loop rounds — do not start round N+1 until every node of a loop group's last wave returned.
 A failed node (nonzero exitCode / error / aborted) stops the graph: report node name, objective, and error output — unless the node declares `retry` for a transient failure (see [Orchestration fields](#orchestration-fields)). Before dispatching a node, check its `when` (skip if false) and `gate` (suspend for approval).
 Node `model`, `tools`, `no_write`/`no_exec` constraints, and `skills` are already baked into the materialized `gk-<node>` agent — do not restate them per call.
@@ -113,7 +129,7 @@ CHALLENGE: <node-id|plan> — <evidence>
 
 meaning: evidence found during the work indicates an upstream premise or the plan itself is wrong. Handle one:
 
-1. Record it: `gk run node <challenged-id> --status challenge --evidence <keys>`.
+1. Record it AND the adjudicated disposition in one line: `gk run node <challenged-id> --status challenge --evidence <keys> --notes "disposition=accept|modify|reject|defer reason=…"` — the disposition is what `gk memory consolidate` parses. A `CHALLENGE: plan` (the plan itself challenged) is never auto-adjudicated: suspend the run via a node `gate` for human approval and let the user decide.
 2. Adjudicate:
    - **Decision-changing** — re-dispatch the challenged upstream node's owner with the finding appended under `## Challenged premise`, or fire a `gk_dispatch_agent` advisor to assess when the impact is unclear.
    - **Equally-valid alternative** — note it in the run report and continue.
@@ -146,7 +162,7 @@ When a node's payload carries `fan_out`:
 3. Barrier on all briefs; only successful results count toward the barrier; combine their outputs per `fan_out.reduce` (default `append` — see [Orchestration fields](#orchestration-fields)) into this node's evidence and final output. Any failed brief marks the round failed.
 4. Empty briefs array: node output is "no briefs" — ok status.
 
-4. **Write evidence** — write one non-whitespace file per declared evidence key: `<evidence_dir>/<key>.md`
+4. **Write evidence** — write one non-whitespace file per declared evidence key (`<evidence_dir>/<key>.md`), then stamp each via `gk evidence add <file> --key <key> --node <node-id>`. The stamp carries the repo-fingerprint marker; markerless evidence fails `strict` freshness at the gate (see [Evidence gate](#evidence-gate)).
 
 
 ### Step 3: After all waves complete
@@ -287,11 +303,16 @@ When steering changes direction (not just unblocks a stuck node), record it in t
 
 After all agents in a wave finish (wait on notifications — never assume):
 
-1. `git worktree list` → each worker's branch.
+1. `git worktree list` → each worker's branch. Wave N+1's worktrees branch only after wave N's merges are committed into the main tree — never merge two waves concurrently.
 2. Merge sequentially into the main tree in node order (`git merge --no-commit --no-ff <branch>`):
-   - Conflict (unmerged paths / `UU` in `git status`): `git merge --abort` immediately, stop the graph, and report node id, branch, and conflicting files — never hand-resolve mid-run and never start the next merge. Conflicts on the same lines are a plan smell; the graph should have sequenced those nodes via `depend_on`.
+   - Conflict (unmerged paths / `UU` in `git status`): `git merge --abort` immediately, record `gk run node <id> --status fail --notes merge-conflict:<branch>`, stop the graph, and report node id, branch, and conflicting files — never hand-resolve mid-run and never start the next merge. Conflicts on the same lines are a plan smell; the graph should have sequenced those nodes via `depend_on`.
    - Clean merge: run the repo's test gate; seal with `git commit --no-edit` only while the gate stays green. A failing gate: stop and fix (or `git merge --abort`) before merging the next branch.
+   - Post-merge owns check: `git diff --name-only` over the merge must be ⊆ the node's `owns` globs (when declared). A write outside owned scope → `git merge --abort`, `gk run node <id> --status fail --notes owns-violation`, stop.
+   - Land it: once the merge commit seals, `gk run land <node-id> --commit <sha>` ties the node to its integration commit in the ledger.
+   - Re-stamp evidence: the merge commit changes the repo fingerprint — re-run `gk evidence add <file> --key <key> --node <node-id>` for every key the node produced, or the gate reads it stale.
 3. Remove worktrees (`git worktree remove`); keep branches until the whole graph passes. Open actual PRs only if the user asked.
+4. After the last merge of the graph: rerun the repo suite and `gk gate` on the main tree — per-merge gates verified each branch; the final gate judges the integrated result.
+5. `gk run end` reports orphaned `.graphkit/worktrees/*` directories and `gk/*` branches left on disk — clean them before reporting completion.
 
 Graph authority is unchanged in worktree mode — topology, `depend_on` ordering, and loops still come from graph.yaml; worktrees are transport-level isolation only.
 
@@ -343,8 +364,8 @@ loops:
 
 ## Evidence gate
 
-Before reporting completion, write one non-whitespace file per declared evidence key:
-`<graph.outputs.evidence_dir>/<key>.md`
+Before reporting completion, write one non-whitespace file per declared evidence key —
+`<graph.outputs.evidence_dir>/<key>.md` — and stamp each via `gk evidence add <file> --key <key> --node <node-id>`.
 
 After all producer waves finish, run:
 
@@ -353,3 +374,5 @@ gk gate graph.yaml
 ```
 
 The gate maps each required key `k` to `<evidence_dir>/<k>.md`. Missing or whitespace-only files produce `BLOCK` and exit 1; repair or redispatch only the producer for each missing/empty key, then rerun the gate. Only `MERGE` with exit 0 permits completion. The compiled workflow does not invoke the gate automatically.
+
+Under `strict` freshness an unstamped (markerless) file is also a `BLOCK` — never write evidence by hand; always through `gk evidence add`. With `require_landed` on, evidence from a node recorded `ok` but never landed via `gk run land` BLOCKs too — land the node (or re-run the merge protocol) before the gate can pass. An `eval-gate` role node contributes its own MERGE/BLOCK verdict to this gate.

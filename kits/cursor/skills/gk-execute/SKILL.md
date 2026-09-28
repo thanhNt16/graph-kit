@@ -69,6 +69,18 @@ After the final wave (and the evidence gate): `gk run end --status merged|blocke
 then `gk memory consolidate --json`. If the payload has `on_graph_complete`, run those
 commands verbatim — `gk run end` + `gk memory consolidate` are what they normally contain.
 
+### Resume & takeover
+
+A run interrupted mid-graph resumes from the ledger, never from memory:
+
+1. `gk run status` inspects the latest run; `gk run resume <run-id>` replays the plan —
+   satisfied nodes stay done, skipped nodes stay skipped. The resume payload carries an
+   `unresolved` list (nodes whose dispatch intent has no trace line): surface it to the
+   user and decide with them BEFORE re-dispatching any of it.
+2. A stale `.active` file (a run died without `gk run end`) blocks `gk run start` with
+   `RUN_ACTIVE`: `gk run take --from <old-run-id>` clears it — refusing while any
+   recorded dispatch pid is still alive — and returns the same `unresolved` list to act on.
+
 ### Step 2: Execute wave by wave
 
 For each wave in the output:
@@ -218,11 +230,16 @@ When steering changes direction (not just unblocks a stuck node), record it in t
 
 After all agents in a wave finish (wait on notifications — never assume):
 
-1. `git worktree list` → each worker's branch.
+1. `git worktree list` → each worker's branch. Wave N+1's worktrees branch only after wave N's merges are committed into the main tree — never merge two waves concurrently.
 2. Merge sequentially into the main tree in node order (`git merge --no-commit --no-ff <branch>`):
-   - Conflict (unmerged paths / `UU` in `git status`): `git merge --abort` immediately, stop the graph, and report node id, branch, and conflicting files — never hand-resolve mid-run and never start the next merge. Conflicts on the same lines are a plan smell; the graph should have sequenced those nodes via `depend_on`.
+   - Conflict (unmerged paths / `UU` in `git status`): `git merge --abort` immediately, record `gk run node <id> --status fail --notes merge-conflict:<branch>`, stop the graph, and report node id, branch, and conflicting files — never hand-resolve mid-run and never start the next merge. Conflicts on the same lines are a plan smell; the graph should have sequenced those nodes via `depend_on`.
    - Clean merge: run the repo's test gate; seal with `git commit --no-edit` only while the gate stays green. A failing gate: stop and fix (or `git merge --abort`) before merging the next branch.
+   - Post-merge owns check: `git diff --name-only` over the merge must be ⊆ the node's `owns` globs (when declared). A write outside owned scope → `git merge --abort`, `gk run node <id> --status fail --notes owns-violation`, stop.
+   - Land it: once the merge commit seals, `gk run land <node-id> --commit <sha>` ties the node to its integration commit in the ledger.
+   - Re-stamp evidence: the merge commit changes the repo fingerprint — re-run `gk evidence add <file> --key <key> --node <node-id>` for every key the node produced, or the gate reads it stale.
 3. Remove worktrees (`git worktree remove`); keep branches until the whole graph passes. Open actual PRs only if the user asked.
+4. After the last merge of the graph: rerun the repo suite and `gk gate` on the main tree — per-merge gates verified each branch; the final gate judges the integrated result.
+5. `gk run end` reports orphaned `.graphkit/worktrees/*` directories and `gk/*` branches left on disk — clean them before reporting completion.
 
 Graph authority is unchanged in worktree mode — topology, `depend_on` ordering, and loops still come from graph.yaml; worktrees are transport-level isolation only.
 
@@ -274,8 +291,8 @@ loops:
 
 ## Evidence gate
 
-Before reporting completion, write one non-whitespace file per declared evidence key:
-`<graph.outputs.evidence_dir>/<key>.md`
+Before reporting completion, write one non-whitespace file per declared evidence key —
+`<graph.outputs.evidence_dir>/<key>.md` — and stamp each via `gk evidence add <file> --key <key> --node <node-id>`.
 
 After all producer waves finish, run:
 
@@ -284,3 +301,5 @@ gk gate graph.yaml
 ```
 
 The gate maps each required key `k` to `<evidence_dir>/<k>.md`. Missing or whitespace-only files produce `BLOCK` and exit 1; repair or redispatch only the producer for each missing/empty key, then rerun the gate. Only `MERGE` with exit 0 permits completion. The compiled workflow does not invoke the gate automatically.
+
+Under `strict` freshness an unstamped (markerless) file is also a `BLOCK` — never write evidence by hand; always through `gk evidence add`. With `require_landed` on, evidence from a node recorded `ok` but never landed via `gk run land` BLOCKs too — land the node (or re-run the merge protocol) before the gate can pass. An `eval-gate` role node contributes its own MERGE/BLOCK verdict to this gate.
