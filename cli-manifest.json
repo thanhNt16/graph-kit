@@ -109,7 +109,7 @@
     },
     {
       "name": "run",
-      "description": "Run ledger commands\nSubcommands: start node end status resume round",
+      "description": "Run ledger commands\nSubcommands: start node end status resume round analyze",
       "options": [
         "--graph <path>",
         "--status <status>",

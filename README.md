@@ -285,7 +285,7 @@ One `gk init` command configures all five host targets:
 | **Cursor** | `gk init --target cursor` | `.cursor/rules/*.mdc` | `.cursor/agents/` | `.cursor/skills/` | `/gk:execute` (Task tool dispatch) |
 | **OpenCode** | `gk init --target opencode` | `AGENTS.md` | `.opencode/agent/` | `.opencode/skill/` | `/gk:execute` (Task tool dispatch) |
 | **Codex CLI** | `gk init --target codex` | `AGENTS.md` | `.codex/agents/` | `.agents/skills/` | `/gk:execute` (Spawn-prompt driven) |
-| **Pi (OMP)** | `gk init --target pi` | `AGENTS.md` | `.omp/agents/` | `.omp/skills/` | `/skill:gk-execute` (`gk_dispatch_agent`) |
+| **Pi (OMP)** | `gk init --target pi` | `AGENTS.md` | `.omp/agents/` | `.omp/skills/` | `/skill:gk-execute` (native `task` dispatch) |
 
 ---
 

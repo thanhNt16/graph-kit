@@ -1,6 +1,6 @@
 ---
 name: gk-execute
-description: Execute a graph.yaml by dispatching isolated subagent runs through the gk_dispatch_agent tool — no compilation. Transparent, real-time, interactive. Optional worktree mode (--worktree / "batch") isolates write nodes in git worktrees. Trigger: "execute graph", "run graph directly", "spawn agents for graph", "batch the graph".
+description: Execute a graph.yaml by dispatching native subagents via the task tool (gk_dispatch_agent only for hard timeout_ms budgets) — no compilation. Transparent, real-time, interactive. Optional worktree mode (--worktree / "batch") isolates write nodes in git worktrees. Trigger: "execute graph", "run graph directly", "spawn agents for graph", "batch the graph".
 when_to_use: User wants to execute a graph with full visibility — see each node dispatch and result, watch progress, debug failures. Use worktree mode when a wave has 2+ write nodes with overlapping scopes.
 user-invocable: true
 disable-model-invocation: false
@@ -10,7 +10,7 @@ disable-model-invocation: false
 
 ## Purpose
 
-Execute a graph.yaml by **dispatching subagent runs through the `gk_dispatch_agent` tool** (provided by the gk-subagent extension) — YOU are the orchestrator. No compiled .workflow.js. Each node becomes one dispatch call you can see and monitor.
+Execute a graph.yaml by **dispatching native subagents via the task tool** — YOU are the orchestrator. `gk graph agents` materializes each node as a discoverable `.omp/agents/gk-<node>.md` agent (model/tools/skills baked in); each node becomes one task spawn you can see and monitor. `gk_dispatch_agent` remains only for nodes needing a hard wall-clock kill (`timeout_ms`).
 
 This is direct execution from graph.yaml — there is no compile step in this kit. Use this when you want:
 - Real-time visibility into each node's execution
@@ -46,6 +46,8 @@ gk run start --graph graph.yaml --json
 Before dispatching wave 1, start the ledger. If it fails with `RUN_ACTIVE`, a previous
 run never ended — ask the user, or run `gk run status` to inspect, before proceeding.
 
+If the `gk run start` payload carries `warnings`, read them: a `kitVersion` mismatch means this project's installed kit (skills/extensions/rules) predates the running gk binary — run `gk init --target <target>` to refresh before dispatching, or nodes may execute under outdated semantics.
+
 ### Recording nodes
 
 After EVERY node dispatch returns (ok or fail), append a trace line:
@@ -77,28 +79,48 @@ For each wave in the output:
 
 Then continue to the next wave — skip the action-wave steps below for curator waves.
 
-1. **Resolve each node's agent fragment** at `.omp/agents/<agent-name>.md` — `gk_dispatch_agent` loads it automatically; you only need it to check the agent exists and understand its deliverables.
+1. **Materialize node agents** — run `gk graph agents <graph.yaml>` once after `gk run start`. It writes `.omp/agents/gk-<node-id>.md` (frontmatter: name, description, node `model`, constraint-derived `tools`, `autoloadSkills` from node `skills`) so omp's native task discovery can dispatch each node directly. Re-run it if the graph changes mid-run.
 
 ## Dispatching a wave (pi)
 
-Use the `gk_dispatch_agent` tool (provided by the gk-subagent extension) once per node in
-the current wave — issue all calls for the wave, collect every result, then proceed.
-Wave barrier: do NOT start wave N+1 until every node of wave N returned ok:true. The same barrier holds across loop rounds — do not start round N+1 until every node of a loop group's last wave returned.
-A failed node (ok:false) stops the graph: report node name, objective, and error output — unless the node declares `retry` for a transient failure (see [Orchestration fields](#orchestration-fields)). Before dispatching a node, check its `when` (skip if false) and `gate` (suspend for approval).
-Pass node constraints: no_write → constraints.no_write=true; tools → constraints.tools_allowlist.
+Use the native **task** tool — one batch call per wave: `task({ context: "<shared upstream context>", tasks: [{ name: "<node-id>", agent: "gk-<node-id>", task: "<node.objective + upstream results + refs>" }, ...] })`. All nodes of the wave go in one `tasks[]` array; they run in parallel and results auto-deliver. Collect every result, then proceed.
+Wave barrier: do NOT start wave N+1 until every node of wave N returned (exitCode 0). The same barrier holds across loop rounds — do not start round N+1 until every node of a loop group's last wave returned.
+A failed node (nonzero exitCode / error / aborted) stops the graph: report node name, objective, and error output — unless the node declares `retry` for a transient failure (see [Orchestration fields](#orchestration-fields)). Before dispatching a node, check its `when` (skip if false) and `gate` (suspend for approval).
+Node `model`, `tools`, `no_write`/`no_exec` constraints, and `skills` are already baked into the materialized `gk-<node>` agent — do not restate them per call.
+If the node declares `assumptions`, append to its task text: `Premises listed as challengeable may be reopened with evidence; constraints may not.`
 
-Each dispatch gets:
-   - The node's `agent` (must match a `.omp/agents/<name>.md` fragment)
-   - The node's `objective` as the objective
-   - Any upstream results from `depend_on` nodes (append to the objective or context)
-   - The node's `refs` (mention these files in the context)
-   - The node's `tools` and `no_write` constraints via `constraints`
+**Exception — hard kill budgets:** a node declaring `timeout_ms` needs a wall-clock kill the task tool can't express per-spawn. Dispatch it via `gk_dispatch_agent` (the gk-subagent extension) with `timeout_ms` — it kills the whole child process group on expiry. Everything else uses native `task`.
 
-   In **worktree mode**: for each write-capable node, create an isolated worktree first (`git worktree add .graphkit/worktrees/<node-id> -b gk/<node-id>`), run the dispatch with the worktree path in the objective, and make objectives fully self-contained (workers cannot ask the user) — include repo conventions, the node's acceptance-check recipe, and landing instructions (commit to the worktree branch, conventional message). Read-only nodes skip worktrees — plain dispatch.
+Each task item gets:
+   - `name`: the node id (becomes the agent registry id)
+   - `agent`: `gk-<node-id>` (the materialized agent)
+   - `task`: the node's `objective`, plus upstream results from `depend_on` nodes and its `refs` (mention these files)
+   - shared `context`: run-level background (graph name, evidence dir, prior-wave verdicts)
+
+   In **worktree mode**: for each write-capable node, create an isolated worktree first (`git worktree add .graphkit/worktrees/<node-id> -b gk/<node-id>`), run the dispatch with the worktree path in the task, and make tasks fully self-contained (workers cannot ask the user) — include repo conventions, the node's acceptance-check recipe, and landing instructions (commit to the worktree branch, conventional message). Read-only nodes skip worktrees — plain dispatch.
 
 2. **Collect results** — when all dispatches in the wave return ok:true, collect their outputs.
    In **worktree mode** a wave is NOT done when agents return — it is done when
    merged and the gate is green (see Worktree merge protocol below).
+
+### CHALLENGE verdict — third node outcome
+
+A node's result is ok, fail, or **challenge**. A result MAY end with a final line:
+
+```
+CHALLENGE: <node-id|plan> — <evidence>
+```
+
+meaning: evidence found during the work indicates an upstream premise or the plan itself is wrong. Handle one:
+
+1. Record it: `gk run node <challenged-id> --status challenge --evidence <keys>`.
+2. Adjudicate:
+   - **Decision-changing** — re-dispatch the challenged upstream node's owner with the finding appended under `## Challenged premise`, or fire a `gk_dispatch_agent` advisor to assess when the impact is unclear.
+   - **Equally-valid alternative** — note it in the run report and continue.
+   - **Noise** — ignore.
+3. A re-dispatch carries the original objective PLUS the challenge evidence; its `assumptions` list is fair game to revise.
+
+**Dissent rule:** challenge is a RIGHT gated on concrete evidence (reproduction, citation, measurement), never an obligation. Agents that invent dissent burn tokens; orchestrators that rubber-stamp every challenge create churn.
 
 3. **Handle loops** — per-node `loop.enabled`: if the result doesn't satisfy its `stop_when`, re-dispatch that node (up to `max_rounds`). Top-level `loops:` (multi-node groups): see [Loop groups](#loop-groups-multi-node-loops) below — the hybrid stop ladder replaces the advisory-only rule.
 
@@ -107,7 +129,7 @@ Each dispatch gets:
 When a node's payload carries `advisor`:
 
 1. Track the failed-round streak while looping the node (a round fails when `stop_when` is unmet, the agent exits non-zero, or required evidence is missing).
-2. When streak ≥ `advisor.after_failed_rounds` AND advisor calls this run < `advisor.max_calls`: dispatch a read-only advisor subagent via `gk_dispatch_agent` with `constraints: { no_write: true }` BEFORE the next node round:
+2. When streak ≥ `advisor.after_failed_rounds` AND advisor calls this run < `advisor.max_calls`: dispatch a read-only advisor subagent via `gk_dispatch_agent` with `constraints: { no_write: true }` BEFORE the next node round (advisors stay on the extension path — they need a per-call model override the materialized agents don't carry):
    - model tier = `advisor.model`; tools: none beyond read; MUST NOT edit files.
    - input: the node's objective, the last round's output, and the failure evidence.
    - ask for: a diagnosis and the single next action.
@@ -120,8 +142,8 @@ When a node's payload carries `advisor`:
 When a node's payload carries `fan_out`:
 
 1. Read `briefs.json` (a JSON array of `{id, title, body}`) from the evidence of node `fan_out.briefs_from`. Missing/malformed file = a failed round for this node (normal loop semantics; advisor may then fire).
-2. Dispatch one parallel `gk_dispatch_agent` call per brief (issue all calls for the wave, then collect), objective = `fan_out.template` rendered with the brief (default template `{brief.body}`). Subagents run at the NODE's model tier.
-3. Barrier on all briefs; only `ok:true` results count toward the barrier; combine their outputs per `fan_out.reduce` (default `append` — see [Orchestration fields](#orchestration-fields)) into this node's evidence and final output. Any failed brief (ok:false) marks the round failed.
+2. Dispatch one task item per brief in a single batch call (`agent: "gk-<node-id>"`, `name: "<node-id>-<brief.id>"`), task = `fan_out.template` rendered with the brief (default template `{brief.body}`). Subagents run at the NODE's model tier (baked into the materialized agent).
+3. Barrier on all briefs; only successful results count toward the barrier; combine their outputs per `fan_out.reduce` (default `append` — see [Orchestration fields](#orchestration-fields)) into this node's evidence and final output. Any failed brief marks the round failed.
 4. Empty briefs array: node output is "no briefs" — ok status.
 
 4. **Write evidence** — write one non-whitespace file per declared evidence key: `<evidence_dir>/<key>.md`
@@ -149,19 +171,36 @@ Wave 2: [synthesizer]                 → 1 agent (opus)
 ## Dispatch call shape
 
 ```
+task({
+  context: "<run-level background: graph name, evidence dir, prior verdicts>",
+  tasks: [{
+    name: "<node-id>",              // becomes the agent registry id
+    agent: "gk-<node-id>",          // materialized by `gk graph agents`
+    task: "<node.objective> + <upstream results> + <refs>"
+  }]
+})
+```
+
+Results arrive as async deliveries (or inline when the call settles); each spawn's `exitCode`/`error`/`aborted` decides success. Full output at `agent://<name>`; transcript at `history://<name>`; cancel via `hub`.
+
+**`gk_dispatch_agent` fallback** (only for `timeout_ms` nodes and advisor escalations):
+
+```
 gk_dispatch_agent({
-  agent: "<node.agent>",          // must match .omp/agents/<agent>.md
+  agent: "<node.agent>",          // must match .omp/agents/<name>.md
   objective: "<node.objective>",
   context: "<upstream results, refs, acceptance recipe>",
   constraints: {                  // only when the node declares them
     no_write: true,
     tools_allowlist: ["read", "grep", "bash"]
   },
-  timeout_ms: 600000              // optional budget override
+  timeout_ms: 600000              // node.timeout_ms when declared; else omit (default 600000)
 })
 ```
 
-The result is `{ ok, output, exit_code }`. Only `ok:true` counts toward the wave barrier.
+The result is `{ ok, output, exit_code, timed_out? }`. Only `ok:true` counts toward the wave barrier.
+
+**Timeout semantics.** On timeout the child's whole process group is terminated (SIGTERM, then SIGKILL after ~5s) and the result is `{ ok:false, exit_code:124, timed_out:true }` with a `TIMEOUT` marker in `output`. The kill is of the process, not its side effects: partial work (files written, DB rows, API calls) persists. Before re-dispatching a timed-out node, inspect what landed and make the retry objective resume-aware — never assume a clean slate. For nodes whose work can exceed 10 min (bulk ingestion, builds, migrations), declare `timeout_ms` on the node and instruct the agent to checkpoint progress to a file so a resume dispatch can skip completed work.
 
 ## Orchestration fields
 
@@ -222,6 +261,28 @@ effort: deep   # node-level; default standard
 
 `light` → single pass, tight `budget_tokens` (≤2000 if unset), 1 attempt, no parallel fan-out widening. `standard` → as declared. `deep` → widen: fan-out width doubles (dispatch up to 2× the `fan_out` items in parallel), loop `max_rounds` ×2 (round up), retry `max_attempts` +1, generous budget (≥8000 if unset). Effort scales the bounds declared on the node; it never overrides explicit user instructions mid-run.
 
+### `timeout_ms` — per-node kill budget
+
+```yaml
+timeout_ms: 3600000
+```
+
+Declares a hard wall-clock kill budget. Its presence routes the node to `gk_dispatch_agent` (process-group kill on expiry) instead of native `task` dispatch — the task tool has no per-spawn timeout. Unset → native dispatch. Pair with a checkpoint instruction in the objective so a resume dispatch can skip completed work.
+
+### `role: supervisor` — read-only cross-scope review
+
+```yaml
+role: supervisor
+```
+
+A supervisor node runs read-only across a whole wave's outputs and reviews cross-scope consistency (assumptions of A vs behavior of B). It emits `CHALLENGE:` freely (see [CHALLENGE verdict](#challenge-verdict--third-node-outcome)); it never writes code. It does not gate the wave barrier for other nodes — its own dispatch is a normal node in its wave, alongside the nodes it reviews.
+
+## Steering
+
+During a wave, `hub list` shows live node ids; relay human corrections mid-flight with `hub send <node-id> "<steering>"`.
+
+When steering changes direction (not just unblocks a stuck node), record it in the run report AND write it to the evidence dir (e.g. `<evidence_dir>/steering.md`) so downstream nodes see it through shared state — not only in the steered agent's inbox.
+
 ## Worktree merge protocol (worktree mode)
 
 After all agents in a wave finish (wait on notifications — never assume):
@@ -267,7 +328,7 @@ loops:
 - **Debuggable**: if a node fails (ok:false), you see the error output and can retry
 - **Adaptive**: you can adjust objectives between waves based on results
 - **No compilation**: skip `gk compile` entirely — execute directly from graph.yaml
-- **Native**: uses the pi gk-subagent extension tool, no external orchestrator
+- **Native**: dispatches through omp's own task tool (materialized `gk-<node>` agents), no child processes; `gk_dispatch_agent` only for hard kill budgets
 
 ## vs compiled workflows
 

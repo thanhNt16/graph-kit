@@ -46,6 +46,8 @@ gk run start --graph graph.yaml --json
 Before dispatching wave 1, start the ledger. If it fails with `RUN_ACTIVE`, a previous
 run never ended — ask the user, or run `gk run status` to inspect, before proceeding.
 
+If the `gk run start` payload carries `warnings`, read them: a `kitVersion` mismatch means this project's installed kit (skills/extensions/rules) predates the running gk binary — run `gk init --target <target>` to refresh before dispatching, or nodes may execute under outdated semantics.
+
 ### Recording nodes
 
 After EVERY node dispatch returns (ok or fail), append a trace line:
@@ -191,6 +193,28 @@ effort: deep   # node-level; default standard
 
 `light` → single pass, tight `budget_tokens` (≤2000 if unset), 1 attempt, no parallel fan-out widening. `standard` → as declared. `deep` → widen: fan-out width doubles (dispatch up to 2× the `fan_out` items in parallel), loop `max_rounds` ×2 (round up), retry `max_attempts` +1, generous budget (≥8000 if unset). Effort scales the bounds declared on the node; it never overrides explicit user instructions mid-run.
 
+### `timeout_ms` — per-node kill budget
+
+```yaml
+timeout_ms: 3600000
+```
+
+Declares a hard wall-clock kill budget. Its presence routes the node to `gk_dispatch_agent` (process-group kill on expiry) instead of native `task` dispatch — the task tool has no per-spawn timeout. Unset → native dispatch. Pair with a checkpoint instruction in the objective so a resume dispatch can skip completed work.
+
+### `role: supervisor` — read-only cross-scope review
+
+```yaml
+role: supervisor
+```
+
+A supervisor node runs read-only across a whole wave's outputs and reviews cross-scope consistency (assumptions of A vs behavior of B). It emits `CHALLENGE:` freely (see [CHALLENGE verdict](#challenge-verdict--third-node-outcome)); it never writes code. It does not gate the wave barrier for other nodes — its own dispatch is a normal node in its wave, alongside the nodes it reviews.
+
+## Steering
+
+During a wave, `hub list` shows live node ids; relay human corrections mid-flight with `hub send <node-id> "<steering>"`.
+
+When steering changes direction (not just unblocks a stuck node), record it in the run report AND write it to the evidence dir (e.g. `<evidence_dir>/steering.md`) so downstream nodes see it through shared state — not only in the steered agent's inbox.
+
 ## Worktree merge protocol (worktree mode)
 
 After all agents in a wave finish (wait on notifications — never assume):
@@ -236,7 +260,7 @@ loops:
 - **Debuggable**: if a node fails (ok:false), you see the error output and can retry
 - **Adaptive**: you can adjust objectives between waves based on results
 - **No compilation**: skip `gk compile` entirely — execute directly from graph.yaml
-- **Native**: uses the pi gk-subagent extension tool, no external orchestrator
+- **Native**: dispatches through omp's own task tool (materialized `gk-<node>` agents), no child processes; `gk_dispatch_agent` only for hard kill budgets
 
 ## vs compiled workflows
 

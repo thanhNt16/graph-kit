@@ -23,3 +23,6 @@ updates.html
 .worktrees/
 .tmp-*/
 build/
+
+# gk graph agents materialized node agents (regenerated per run)
+.omp/agents/gk-*.md

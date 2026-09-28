@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GraphKit — SLP Orchestration Report</title>
+<style>
+  :root {
+    --bg: #0d1117; --panel: #161b22; --border: #30363d;
+    --text: #e6edf3; --dim: #8b949e; --accent: #58a6ff;
+    --green: #3fb950; --rose: #f85149; --amber: #d29922; --violet: #bc8cff;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 15px/1.65 -apple-system, "Segoe UI", Helvetica, Arial, sans-serif;
+  }
+  .wrap { max-width: 960px; margin: 0 auto; padding: 48px 32px 96px; }
+  h1 { font-size: 28px; margin: 0 0 4px; }
+  h2 {
+    font-size: 19px; margin: 40px 0 12px; padding-bottom: 8px;
+    border-bottom: 1px solid var(--border); color: var(--accent);
+  }
+  h3 { font-size: 15px; margin: 24px 0 6px; }
+  .sub { color: var(--dim); margin: 0 0 8px; }
+  code, pre {
+    font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+    font-size: 13px; background: var(--panel); border-radius: 4px;
+  }
+  code { padding: 1px 6px; }
+  pre { padding: 14px 18px; overflow-x: auto; border: 1px solid var(--border); line-height: 1.5; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th, td { padding: 8px 12px; border: 1px solid var(--border); text-align: left; vertical-align: top; }
+  th { background: var(--panel); font-weight: 600; }
+  .tag {
+    display: inline-block; padding: 1px 8px; border-radius: 10px;
+    font-size: 12px; font-weight: 600;
+  }
+  .schema { background: rgba(88,166,255,.15); color: var(--accent); }
+  .contract { background: rgba(188,140,255,.15); color: var(--violet); }
+  .cli { background: rgba(63,185,80,.15); color: var(--green); }
+  .guard { background: rgba(210,153,34,.15); color: var(--amber); }
+  .card {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 8px; padding: 16px 20px; margin: 12px 0;
+  }
+  .card h3 { margin-top: 0; }
+  ul { margin: 6px 0; padding-left: 22px; }
+  li { margin: 3px 0; }
+  .kv { color: var(--dim); }
+  .good { color: var(--green); font-weight: 600; }
+  .warn { color: var(--amber); font-weight: 600; }
+  footer { margin-top: 56px; color: var(--dim); font-size: 13px; border-top: 1px solid var(--border); padding-top: 16px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<h1>GraphKit — SLP Orchestration</h1>
+<p class="sub">Implementation report · 2026-09-27 · <code>gk 0.3.0</code> working tree (unreleased)</p>
+
+<div class="card">
+<p><strong>Origin.</strong> vhlam's <em>Supervisor–Lead–Peer</em> article identifies three orchestration failure modes this work addresses: <strong>pre-solve</strong> (main solves the problem before delegating, leaving subagents only confirm/reject), the <strong>parachute</strong> (an early design choice silently becomes a constraint for every later agent), and <strong>plan immunity</strong> (findings from the people doing the work can't change the plan). SLP's answer is operational, not cosmetic: roles are responsibilities + authority + escalation paths, dissent is a right gated on evidence, and the orchestration itself is reviewed by telemetry.</p>
+</div>
+
+<h2>What shipped</h2>
+<table>
+  <tr><th style="width:180px">Mechanism</th><th style="width:110px">Kind</th><th>What it does</th></tr>
+  <tr>
+    <td><code>assumptions:</code></td>
+    <td><span class="tag schema">schema</span></td>
+    <td>New node field — declared challengeable premises, kept separate from mandatory <code>constraints</code>. Materialized into the agent's <code>## Challengeable assumptions</code> section: peers may reopen them with evidence. Kills the parachute: the first agent's design choice is a labeled premise, not an invisible constraint.</td>
+  </tr>
+  <tr>
+    <td><code>owns:</code></td>
+    <td><span class="tag schema">schema</span></td>
+    <td>Glob-declared write scope per node (<code>["src/chute/**"]</code>). Materialized as <code>## Owned scope</code>; <code>validateGraph</code> emits an <code>owns-overlap</code> advisory when two same-wave writers' scopes can collide. Edit rights gate writes; reads stay open — challenge rights preserved.</td>
+  </tr>
+  <tr>
+    <td><code>role: supervisor</code></td>
+    <td><span class="tag schema">schema</span></td>
+    <td>Read-only cross-scope review node. Materializer forces the <code>read/grep/glob</code> toolset regardless of constraints. Reviews assumptions-of-A vs behavior-of-B; emits CHALLENGE freely; never writes code. <code>eval-gate</code> contract preserved; other role strings get a non-blocking <code>unknown-role</code> advisory.</td>
+  </tr>
+  <tr>
+    <td>CHALLENGE verdict</td>
+    <td><span class="tag contract">contract</span></td>
+    <td>Third node outcome beside ok/fail: a result may end with <code>CHALLENGE: &lt;node-id|plan&gt; — &lt;evidence&gt;</code>. Orchestrator records <code>gk run node &lt;id&gt; --status challenge</code>, then adjudicates: decision-changing → re-dispatch the challenged owner with the finding under <code>## Challenged premise</code>; equally-valid → note in report; noise → ignore. Dissent is a right, never an obligation.</td>
+  </tr>
+  <tr>
+    <td>Steering</td>
+    <td><span class="tag contract">contract</span></td>
+    <td><code>hub list</code> surfaces live node ids mid-wave; human corrections relayed via <code>hub send &lt;node-id&gt;</code>; direction changes written to the run report and evidence dir so downstream nodes see them through shared state, not just the steered peer's inbox.</td>
+  </tr>
+  <tr>
+    <td><code>gk run analyze</code></td>
+    <td><span class="tag cli">cli</span></td>
+    <td>Better-SLP telemetry over the ledger: escalation hit-rate (advisor-fired → subsequent ok), repeated-failure detection, unadjudicated challenges, loop stop-reasons, and evidence-gated suggestions — question-form, never alarms.</td>
+  </tr>
+  <tr>
+    <td><code>Finding.severity</code></td>
+    <td><span class="tag guard">guard</span></td>
+    <td><code>warn</code>-severity findings surface in <code>gk validate</code> output without blocking <code>graph agents</code>/<code>waves</code>/<code>validate</code> — previously every finding was fatal.</td>
+  </tr>
+</table>
+<h2>Live scenario tests (multi-agent)</h2>
+<table>
+  <tr><th style="width:170px">Scenario</th><th style="width:200px">Agent</th><th>Result</th></tr>
+  <tr>
+    <td>CHALLENGE verdict</td>
+    <td><code>gk-challenger</code> <span class="kv">(codebase-scout · haiku)</span></td>
+    <td><span class="good">PASS</span> — found both seeded assumptions false and ended its result with <code>CHALLENGE: plan — NodeDefSchema DOES declare owns and assumptions at lines 92, 95</code>, real line numbers cited.</td>
+  </tr>
+  <tr>
+    <td>Supervisor read-only</td>
+    <td><code>gk-reviewer</code> <span class="kv">(code-reviewer + role: supervisor)</span></td>
+    <td><span class="good">PASS</span> — write attempt rejected by tool gating (<code>tools: ["read","grep","glob"]</code>); answered the schema question via reads.</td>
+  </tr>
+  <tr>
+    <td>Advisory findings</td>
+    <td><code>task</code> <span class="kv">(CLI)</span></td>
+    <td><span class="good">PASS</span> — <code>gk validate</code> returns <code>ok</code> with <code>warnings[]</code> for <code>unknown-role</code> + <code>owns-overlap</code>; <code>graph waves</code> not blocked.</td>
+  </tr>
+  <tr>
+    <td><code>run analyze</code></td>
+    <td><code>task</code> <span class="kv">(CLI)</span></td>
+    <td><span class="good">PASS</span> — <code>NO_RUNS</code> envelope; correct metrics + <code>"challenge raised on b but never adjudicated"</code> suggestion on fixture; explicit run-id works.</td>
+  </tr>
+</table>
+<p>Testing caught one real bug: <code>listRunIds</code>/<code>resolveRun</code> accepted any directory name while <code>readRunMeta</code> enforced the <code>YYYYMMDD-HHMMSS-*</code> shape — a malformed run dir resolved then failed cryptically. Fixed via shared <code>RUN_ID_PATTERN</code>; stray dirs are skipped and bad args get a clean <code>RUN_NOT_FOUND</code>.</p>
+
+<h2>Dispatch architecture (also shipped this session)</h2>
+<div class="card">
+<p>Native subagent dispatch replaced the <code>omp -p</code> child-process path:</p>
+<ul>
+  <li><code>gk graph agents</code> materializes <code>.omp/agents/gk-&lt;node&gt;.md</code> — frontmatter bakes <code>name</code>, <code>description</code>, node <code>model</code>, constraint-derived <code>tools</code> (CamelCase→snake_case), <code>autoloadSkills</code>; stale <code>gk-*</code> files pruned.</li>
+  <li>pi kit agents now carry <code>name</code>/<code>description</code> frontmatter → omp's native <code>task</code> discovery sees them.</li>
+  <li>Waves dispatch as one <code>task({context, tasks[]})</code> batch — in-process, parallel, async delivery, <code>agent://</code>/<code>history://</code> artifacts, <code>hub</code> cancellation.</li>
+  <li><code>gk_dispatch_agent</code> retained only for <code>timeout_ms</code> hard-kill budgets (process-group SIGTERM→SIGKILL) and advisor escalations.</li>
+  <li>Fixed while here: <code>waves</code> payload was silently dropping node <code>constraints</code>.</li>
+</ul>
+</div>
+
+<h2>Files</h2>
+<table>
+  <tr><th>File</th><th>Change</th></tr>
+  <tr><td><code>src/schemas/graph.schema.ts</code></td><td><code>assumptions</code>, <code>owns</code>, <code>timeout_ms</code> fields</td></tr>
+  <tr><td><code>src/cli/node-agents.ts</code> <span class="kv">new</span></td><td><code>materializeNodeAgents</code> — frontmatter, challengeable-assumptions / owned-scope sections, supervisor toolset</td></tr>
+  <tr><td><code>src/cli/commands/graph.ts</code></td><td><code>agents</code> subcommand; waves carries <code>constraints</code>, <code>assumptions</code>, <code>owns</code>; warnings surfaced</td></tr>
+  <tr><td><code>src/compiler/validate.ts</code></td><td><code>Finding.severity</code>, <code>isBlocking</code>, owns-overlap + unknown-role advisories; eval-gate checks preserved</td></tr>
+  <tr><td><code>src/cli/commands/run.ts</code> · <code>src/memory/analyze.ts</code> <span class="kv">new</span></td><td><code>run analyze</code> subcommand; <code>--status challenge</code> accepted</td></tr>
+  <tr><td><code>kits/_core/skills/gk-execute/SKILL.md</code></td><td>Native task dispatch, CHALLENGE verdict + adjudication, supervisor semantics, steering protocol, timeout_ms routing</td></tr>
+  <tr><td><code>kits/_core/extensions/gk-subagent.ts</code></td><td>Process-group kill (<code>detached</code> + <code>kill(-pgid)</code>), <code>timed_out</code> flag, host signal forwarding, frontmatter stripping</td></tr>
+  <tr><td><code>tests/unit/node-agents.test.ts</code> · <code>run-analyze.test.ts</code> <span class="kv">new</span> · <code>graph-commands.test.ts</code> · <code>pi-kit.test.ts</code></td><td>Materializer, analyze, golden-waves, frontmatter coverage</td></tr>
+</table>
+
+<h2>Verified</h2>
+<ul>
+  <li><span class="good">660 tests pass</span> · tsc clean · biome clean · gen-kits:check clean</li>
+  <li>Native dispatch proven live: <code>task</code> spawned <code>gk-acceptance</code> → correct result in 32s</li>
+  <li>Fixture graph: <code>owns</code>-overlap advisory fires non-blocking, <code>supervsor</code> typo surfaces, assumptions/owns inject into agent bodies, supervisor forced to <code>read/grep/glob</code></li>
+  <li>Process-group kill: timeout kills grandchildren, <code>exit_code: 124</code>, <code>timed_out: true</code></li>
+</ul>
+
+<h2>Explicit non-goals</h2>
+<div class="card">
+<p>Per the article's own warning — "dissent is a right, not an obligation" — no mandatory review nodes, no challenge quotas, no role-play personas, no new topology. Everything composes into <code>custom</code>.</p>
+</div>
+
+<h2>Caveats</h2>
+<ul>
+  <li><span class="warn">Uncommitted</span> — 92 modified/untracked files in working tree.</li>
+  <li>Sessions hold the kit version loaded at start; running sessions need restart to see new semantics.</li>
+  <li>9router (scout/sonnet routes) had a multi-hour outage during this session; first research wave failed on connectivity. Implementation wave ran clean on the default task agent.</li>
+  <li><code>owns-overlap</code> is a heuristic over literal glob prefixes — a review prompt, not a proof.</li>
+</ul>
+
+<footer>
+GraphKit · SLP model adapted from <a style="color:var(--accent)" href="https://vhlam.com/article/agent-orchestration-multi-agent-slp">vhlam.com</a> · diagram: <code>docs/gk-slp-orchestration.html</code>
+</footer>
+
+</div>
+</body>
+</html>

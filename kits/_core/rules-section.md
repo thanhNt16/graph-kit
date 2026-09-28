@@ -7,7 +7,7 @@ Agent names in graph.yaml must resolve to agent fragments under `.omp/agents/`.
 
 - Every `agent` value in a node must match `.omp/agents/<agent>.md`.
 - If a bound agent does not exist, fail validation with: "Agent 'X' not found. Available: Y, Z."
-- `tools`, `skills`, and `refs` extend the agent fragment's capabilities. Node `tools` map to `constraints.tools_allowlist` on `gk_dispatch_agent`; write-free nodes get `constraints.no_write = true`.
+- `tools`, `skills`, and `refs` extend the agent fragment's capabilities. `gk graph agents` bakes node `tools`/`skills`/`constraints` into materialized `.omp/agents/gk-<node>.md` files for native task dispatch; `gk_dispatch_agent` (fallback path) takes them as `constraints.tools_allowlist` / `constraints.no_write`.
 
 ### graph-authority
 
@@ -16,7 +16,9 @@ gk owns graph state. The wave structure from graph.yaml is the execution plan.
 - Never improvise edges or skip nodes at runtime.
 - Never modify topology after planning; re-plan instead.
 - Execution is deterministic: same graph.yaml, same wave order.
-- If `gk_dispatch_agent` returns `ok:false`, stop the graph. Do not retry outside declared loop config.
+- If a node dispatch fails (task spawn nonzero exit / `gk_dispatch_agent` ok:false), stop the graph. Do not retry outside declared loop/retry config.
+- A node's output may end with `CHALLENGE: <node-id|plan> — <evidence>`: evidence-gated dissent against an upstream premise or the plan. The orchestrator records `--status challenge`, adjudicates, and re-dispatches the owner with the finding — challenge is a right gated on concrete evidence, never an obligation.
+- Mid-flight human steering relays via `hub send <node-id>`; a direction change is recorded in the run report AND the evidence dir, so downstream nodes see it through shared state.
 
 ### topology-routing
 

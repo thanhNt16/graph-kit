@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GraphKit SLP — How to Use</title>
+<style>
+  :root {
+    --bg: #0d1117; --panel: #161b22; --border: #30363d;
+    --text: #e6edf3; --dim: #8b949e; --accent: #58a6ff;
+    --green: #3fb950; --amber: #d29922; --violet: #bc8cff; --rose: #f85149;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 15px/1.65 -apple-system, "Segoe UI", Helvetica, Arial, sans-serif;
+  }
+  .wrap { max-width: 980px; margin: 0 auto; padding: 48px 32px 96px; }
+  h1 { font-size: 28px; margin: 0 0 4px; }
+  h2 {
+    font-size: 19px; margin: 44px 0 12px; padding-bottom: 8px;
+    border-bottom: 1px solid var(--border); color: var(--accent);
+  }
+  h2 .num {
+    display: inline-block; width: 26px; height: 26px; line-height: 26px;
+    text-align: center; border-radius: 50%; background: var(--accent);
+    color: #0d1117; font-size: 13px; margin-right: 8px; vertical-align: 2px;
+  }
+  .sub { color: var(--dim); margin: 0; }
+  code, pre {
+    font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+    font-size: 13px; background: #0a0e14; border-radius: 4px;
+  }
+  code { padding: 1px 6px; }
+  pre { padding: 14px 18px; overflow-x: auto; border: 1px solid var(--border); line-height: 1.55; }
+  pre .c { color: var(--dim); }        /* comments */
+  pre .k { color: var(--violet); }     /* keys */
+  pre .s { color: var(--green); }      /* strings */
+  pre .f { color: var(--amber); }      /* fields */
+  .card {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 8px; padding: 14px 20px; margin: 12px 0;
+  }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th, td { padding: 8px 12px; border: 1px solid var(--border); text-align: left; vertical-align: top; }
+  th { background: var(--panel); }
+  .flow {
+    display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
+    margin: 16px 0;
+  }
+  .flow .step {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 6px; padding: 6px 12px; font-size: 13px;
+    font-family: ui-monospace, monospace;
+  }
+  .flow .arrow { color: var(--dim); }
+  .note { border-left: 3px solid var(--amber); padding: 8px 14px; background: var(--panel); margin: 12px 0; }
+  .good { color: var(--green); font-weight: 600; }
+  .bad  { color: var(--rose); font-weight: 600; }
+  footer { margin-top: 56px; color: var(--dim); font-size: 13px; border-top: 1px solid var(--border); padding-top: 16px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<h1>GraphKit SLP — How to Use</h1>
+<p class="sub">Challengeable premises, ownership scopes, supervisor review, evidence-driven replans — all driven by one <code>graph.yaml</code>.</p>
+
+<h2><span class="num">1</span> Declare fields on nodes</h2>
+<p>Three new optional fields go on a node. All compose into <code>topology: custom</code> — no new topology needed.</p>
+<pre><span class="k">nodes:</span>
+  <span class="k">build-handoff:</span>
+    <span class="f">agent</span>: implementer
+    <span class="f">model</span>: sonnet
+    <span class="f">objective</span>: Implement seamless handoff between cells
+    <span class="f">owns</span>: <span class="s">["src/net/handoff/**"]</span>        <span class="c"># write scope — edit rights</span>
+    <span class="f">assumptions</span>:                          <span class="c"># challengeable premises</span>
+      - <span class="s">"edge layer keeps the connection stable"</span>
+      - <span class="s">"pending inputs drain before state transfer"</span>
+    <span class="f">constraints</span>: <span class="s">[{ no_write: false }]</span>   <span class="c"># mandatory — never challengeable</span>
+    <span class="f">evidence</span>: <span class="s">[handoff-report]</span>
+
+  <span class="k">replication-worker:</span>
+    <span class="f">agent</span>: implementer
+    <span class="f">owns</span>: <span class="s">["src/net/repl/**"]</span>
+    <span class="f">depend_on</span>: <span class="s">[build-handoff]</span>
+    <span class="f">evidence</span>: <span class="s">[repl-report]</span>
+
+  <span class="k">audit:</span>
+    <span class="f">agent</span>: code-reviewer
+    <span class="f">role</span>: supervisor                         <span class="c"># read-only cross-scope review</span>
+    <span class="f">objective</span>: Check handoff assumptions against replication behavior
+    <span class="f">depend_on</span>: <span class="s">[build-handoff, replication-worker]</span>
+    <span class="f">evidence</span>: <span class="s">[audit-findings]</span></pre>
+
+<table>
+  <tr><th>Field</th><th>Meaning</th><th>Effect</th></tr>
+  <tr><td><code>assumptions</code></td><td>What we currently believe</td><td>Materialized into the agent's <code>## Challengeable assumptions</code> — peers may reopen with evidence</td></tr>
+  <tr><td><code>constraints</code></td><td>What must hold</td><td>Never negotiable; enforced at dispatch</td></tr>
+  <tr><td><code>owns</code></td><td>What you may write</td><td><code>## Owned scope</code> in agent; <code>owns-overlap</code> advisory on same-wave collisions; reads stay open</td></tr>
+  <tr><td><code>role: supervisor</code></td><td>Read-only cross-scope review</td><td>Forced <code>read/grep/glob</code> toolset; emits CHALLENGE freely; doesn't gate the wave</td></tr>
+  <tr><td><code>timeout_ms</code></td><td>Hard wall-clock kill budget</td><td>Routes the node to <code>gk_dispatch_agent</code> process-group kill instead of native task</td></tr>
+</table>
+
+<h2><span class="num">2</span> Run it</h2>
+<div class="flow">
+  <div class="step">gk graph agents graph.yaml</div><div class="arrow">→</div>
+  <div class="step">gk run start --graph graph.yaml</div><div class="arrow">→</div>
+  <div class="step">skill gk-execute drives waves</div><div class="arrow">→</div>
+  <div class="step">gk run end</div>
+</div>
+<p><code>graph agents</code> materializes <code>.omp/agents/gk-&lt;node&gt;.md</code> — the frontmatter that lets omp's native <code>task</code> tool dispatch each node. Re-run it if the graph changes mid-run. From then on the gk-execute skill dispatches one <code>task({context, tasks[]})</code> batch per wave — you don't write dispatch code.</p>
+
+<h2><span class="num">3</span> Challenge — evidence reopens a premise</h2>
+<p>A peer that finds a declared assumption wrong ends its output with the terminal line:</p>
+<pre>CHALLENGE: build-handoff — input queue still draining at transfer, see repl-report §3</pre>
+<p>The orchestrator records <code>gk run node &lt;id&gt; --status challenge</code>, adjudicates, and re-dispatches the challenged node's owner with the finding appended under <code>## Challenged premise</code>. The graph re-routes — it doesn't die.</p>
+<div class="note"><strong>Dissent rule:</strong> challenge is a right gated on evidence (reproduction, citation, measurement), never an obligation. "I would have done it differently" is noise; "here's the trace that shows the premise fails" is a challenge.</div>
+
+<h2><span class="num">4</span> Steer mid-wave</h2>
+<pre>hub list                            <span class="c"># live node ids</span>
+hub send replication-worker <span class="s">"skip the legacy path, use baseline v2"</span></pre>
+<p>Direction changes are recorded in the run report and evidence dir — downstream nodes see them through shared state, not just the steered peer's inbox.</p>
+
+<h2><span class="num">5</span> Analyze — Better-SLP telemetry</h2>
+<pre>gk run analyze              <span class="c"># active run, else most recent</span>
+gk run analyze &lt;run-id&gt;     <span class="c"># specific run</span></pre>
+<p>Returns per-run metrics:</p>
+<ul>
+  <li><strong>Escalation hit-rate</strong> — advisor-fired → did the node then pass?</li>
+  <li><strong>Repeated failures</strong> — same node failing N times at similar durations = premise problem, not transient</li>
+  <li><strong>Unadjudicated challenges</strong> — a challenge raised and never answered</li>
+  <li><strong>Loop stop-reasons</strong> — gate / judged / no_progress / exhausted</li>
+  <li><strong>Suggestions</strong> — question-form, grounded in observed data only</li>
+</ul>
+<p>This is the telemetry loop that tells you whether a mechanism earns its tokens or should be removed.</p>
+
+<h2>Rules of thumb</h2>
+<div class="card">
+<table>
+  <tr><th></th><th>Use for</th><th>Don't use for</th></tr>
+  <tr><td><code>assumptions</code></td><td>What we believe today</td><td>Facts you're certain of — noise</td></tr>
+  <tr><td><code>constraints</code></td><td>Hard requirements</td><td>Current design choices</td></tr>
+  <tr><td><code>owns</code></td><td>Write-scoped nodes in parallel waves</td><td>Read-only nodes — they read everything anyway</td></tr>
+  <tr><td>CHALLENGE</td><td>Evidence that a premise fails</td><td>Style disagreements, alternatives, opinions</td></tr>
+  <tr><td>Steering</td><td>Direction changes mid-wave</td><td>Unblocking a stuck peer — use advisor instead</td></tr>
+  <tr><td><code>timeout_ms</code></td><td>Bulk ingestion, builds, migrations</td><td>Default work — absence means no arbitrary kill</td></tr>
+</table>
+</div>
+
+<footer>
+GraphKit · adapted from <a style="color:var(--accent)" href="https://vhlam.com/article/agent-orchestration-multi-agent-slp">vhlam's SLP model</a> · implementation report: <code>gk-slp-report.html</code> · diagram: <code>gk-slp-orchestration.html</code>
+</footer>
+
+</div>
+</body>
+</html>

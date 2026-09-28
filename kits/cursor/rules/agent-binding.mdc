@@ -11,4 +11,4 @@ Agent names in graph.yaml must resolve to agent fragments under `.cursor/agents/
 
 - Every `agent` value in a node must match `.cursor/agents/<agent>.md`.
 - If a bound agent does not exist, fail validation with: "Agent 'X' not found. Available: Y, Z."
-- `tools`, `skills`, and `refs` extend the agent fragment's capabilities. Node `tools` map to `constraints.tools_allowlist` on `gk_dispatch_agent`; write-free nodes get `constraints.no_write = true`.
+- `tools`, `skills`, and `refs` extend the agent fragment's capabilities. `gk graph agents` bakes node `tools`/`skills`/`constraints` into materialized `.cursor/agents/gk-<node>.md` files for native task dispatch; `gk_dispatch_agent` (fallback path) takes them as `constraints.tools_allowlist` / `constraints.no_write`.

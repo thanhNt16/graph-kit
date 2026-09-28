@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 ### Added
+- `jev` omp extension (`kits/_core/extensions/jev.ts` → `.omp/extensions/`): registers a `jev_decide` tool that calls TypeSafe's System One API (`POST /v1/systemone`, Jev model) for calibrated typed decisions — noul/choice/score — instead of asking a chat LLM. Routes through OpenRouter (`https://openrouter.ai/api`) by default; key resolution: `TYPESAFE_API_KEY` → `OPENROUTER_API_KEY` → the openrouter connection stored in 9router's db (`~/.9router/db/data.sqlite`). `TYPESAFE_BASE_URL` overrides the endpoint.
 - One-command installer (`install.sh` in repo root): OS/arch detection, installs to `~/.local/bin` without sudo, clears stale files before extraction, PATH check, `gk --version` verification. `curl -fsSL https://raw.githubusercontent.com/thanhNt16/graph-kit/main/install.sh | sh`
 - npm package `graphkit-gk` published on every release (`npm publish` in release.yml via `NPM_TOKEN` secret); `bun add -g graphkit-gk` / `npm i -g graphkit-gk` installs a ~380 KB JS bundle — 30-100x smaller than the standalone binary tarballs. (`@graphkit` scope was taken; unscoped `graphkit-gk` chosen, binary stays `gk`.)
 - `install.sh` fast path: prefers `bun add -g` / `npm i -g` (~1-2 s) when a runtime exists, falls back to the standalone tarball otherwise (`GRAPHKIT_INSTALL=binary` forces the tarball).
@@ -25,6 +26,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Memory retrieval upgrades: BM25 scoring (IDF + TF saturation + length norm) replaces set-overlap; relative-score cutoff (0.3× top) drops distractor hits; Personalized PageRank over `.links.json` replaces flat 0.5 single-hop penalty; deterministic write gate folds same-shape near-duplicate patterns (jaccard ≥ 0.8, same kind + member count) instead of appending; generated memories cite `run:<id>` provenance.
 - `kits/_core/` canonical kit source + `scripts/gen-kits.ts` materializes all 5 host kits (claude/cursor/opencode/codex/pi) with per-host transforms (frontmatter style, install-dir refs, md→toml agents, mdc rules, rules-section guards); `gen:kits:check` in `ci:local` fails on drift. `scripts/sync-omp.ts` mirrors the pi target into `.omp/`.
 - `emit()` result-envelope helper; `cbm-seam.ts` shared test seam; `readMemoryFile`/`walkMemoryFiles` shared memory-store helpers.
+- `timeout_ms` node field (schema + `gk graph waves` payload + gk-execute contract): per-node dispatch kill budget forwarded to `gk_dispatch_agent`; unset → 600000 default.
+- `.gk.json` now records `kitVersion` at install; `gk run start` emits `warnings` when an installed kit predates the running gk binary (stale skills/extensions otherwise execute silently).
+- `gk graph agents <file>` — materializes `.omp/agents/gk-<node>.md` per graph node (frontmatter: name, description, node `model`, constraint-derived `tools` with CamelCase→snake_case normalization, `autoloadSkills` from node `skills`); prunes stale `gk-*` files. pi kit agents now ship `name`/`description` frontmatter so omp's native task discovery sees them.
+- `gk graph waves` payload now carries node `constraints` verbatim (previously dropped — `no_write`/`no_exec` never reached the dispatcher).
+- SLP (Supervisor-Lead-Peer) orchestration mechanics, adapted from vhlam's model into the DAG contract:
+  - `assumptions` node field — challengeable premises declared separately from mandatory `constraints`; materialized into `gk-<node>` agents as a `## Challengeable assumptions` section so peers know which premises may be reopened with evidence (the "parachute" antidote: first agent's design choice stops silently becoming a constraint for later agents).
+  - `owns` node field — glob-declared write scope, materialized as `## Owned scope`; `validateGraph` emits a heuristic `owns-overlap` advisory when two same-wave write-capable nodes' scopes can collide (edit rights) while any node may still read everything (challenge rights).
+  - `role: supervisor` — read-only cross-scope review node (forced `read/grep/glob` toolset) that reviews assumptions-of-A vs behavior-of-B and emits CHALLENGE freely; `eval-gate` contract preserved; other role strings surface a non-blocking `unknown-role` advisory.
+  - CHALLENGE verdict — third node outcome beside ok/fail: `CHALLENGE: <node-id|plan> — <evidence>` terminal line; orchestrator records `--status challenge`, adjudicates decision-changing / equally-valid / noise, and re-dispatches the challenged node's owner with the finding under `## Challenged premise`. Dissent is a right gated on evidence, never an obligation.
+  - Steering protocol — `hub list`/`hub send <node-id>` relay for mid-wave human correction; direction changes recorded to the run report and evidence dir so downstream nodes see them through shared state.
+  - `gk run analyze` — Better-SLP telemetry over the ledger: escalation hit-rate (advisor-fired → subsequent ok), retry/duplicate-failure detection, unadjudicated challenges, loop stop-reason stats, and evidence-gated suggestions (question-form, never alarms).
+  - `Finding.severity` — `warn`-severity findings (owns-overlap, unknown-role) surface in `gk validate` output without blocking validate-dependent commands.
+  - `listRunIds`/`resolveRun` now share `RUN_ID_PATTERN` — stray or malformed dirs under `.graphkit/runs/` are skipped instead of surfacing as cryptic `RESUME_RUN_NOT_FOUND` (found by the scenario test wave).
 
 ### Changed
 - **Pages landing page rewritten version-free** (`docs/graphkit.html`, renamed from `graphkit-v0.2-report.html`): features ordered as a workflow — lifecycle → install → 11 topologies → per-node binding & validation → dual runtimes → evidence & gates → run ledger & resume → memory & CBM bridge → host table → CLI. All version badges, "shipped in X.Y" labels, dated sections, roadmap, and historical demo/story sections removed. `pages.yml` redirect updated.
@@ -40,6 +54,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Single-source-of-truth: topology names (one `TOPOLOGY_NAMES` → zod enum + emitter table), model tiers (one `TIERS` const), `Graph` type exported from `schemas/graph.schema.ts`.
 - `cbm:parity` removed from `ci:local` (CBM_CMD can never be set on fresh checkouts — it was a no-op gate); script fixed to probe `src/index.ts` and documented as a local instrument.
 - `install.sh` `rm -rf` scoped to `$BIN/share/gk` (previously wiped the whole `share/` prefix).
+- pi gk-execute dispatches nodes through omp's native `task` tool (batch `tasks[]` per wave, `agent: "gk-<node>"`) instead of `omp -p` child processes — in-process spawns, async delivery, `agent://`/`history://` artifacts, hub cancellation. `gk_dispatch_agent` remains for `timeout_ms` hard-kill budgets and advisor escalations.
+
+
+### Fixed
+- `gk_dispatch_agent` timeout/abort now kills the child's whole process group (detached spawn + `kill(-pgid)`, SIGTERM then SIGKILL after 5s). Previously `execFile` SIGTERMed only the direct child — a timed-out node kept mutating shared state for 11+ minutes after the orchestrator recorded it failed. Timeout results now carry `timed_out: true` and a `TIMEOUT` marker in `output` (matchable by `retry.non_retryable`), and the tool honors the host abort signal.
 
 ### Removed
 - Dead dependencies `ajv` + `ajv-formats` (zod is the only validator).
