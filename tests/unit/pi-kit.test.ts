@@ -157,6 +157,12 @@ describe("dispatch-intent write", () => {
       const run = join(tmp, ".graphkit", "runs", "r1");
       mkdirSync(run, { recursive: true });
       writeFileSync(join(tmp, ".graphkit", "runs", ".active"), run);
+      // dispatch() resolves agent fragments at <cwd>/.omp/agents — .omp is
+      // gitignored, so the test seeds its own fragment rather than relying
+      // on the developer's dogfood copy.
+      mkdirSync(join(tmp, ".omp", "agents"), { recursive: true });
+      writeFileSync(join(tmp, ".omp", "agents", "debugger.md"), "You are debugger.\\n");
+      process.chdir(tmp);
       const stubDir = join(tmp, "bin");
       mkdirSync(stubDir);
       const omp = join(stubDir, "omp");
@@ -174,6 +180,8 @@ describe("dispatch-intent write", () => {
       if (typeof line.at !== "string" || isNaN(Date.parse(line.at))) throw new Error("at: " + line.at);
       // No active run: bookkeeping stays silent, dispatch still succeeds.
       const tmp2 = mkdtempSync(join(tmpdir(), "gk-dispatch-"));
+      mkdirSync(join(tmp2, ".omp", "agents"), { recursive: true });
+      writeFileSync(join(tmp2, ".omp", "agents", "debugger.md"), "You are debugger.\\n");
       const r2 = await dispatch({ agent: "debugger", objective: "x", cwd: tmp2 });
       if (!r2.ok) throw new Error("dispatch without active run failed: " + r2.output);
       console.log("OK");

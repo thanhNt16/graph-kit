@@ -31,8 +31,8 @@ export interface DispatchResult {
   timed_out?: boolean;
 }
 
-export function loadAgentPrompt(agent: string): string | null {
-  const p = join(process.cwd(), ".omp", "agents", `${agent}.md`);
+export function loadAgentPrompt(agent: string, cwd = process.cwd()): string | null {
+  const p = join(cwd, ".omp", "agents", `${agent}.md`);
   if (!existsSync(p)) return null;
   // Kit agents carry omp task-discovery frontmatter (name/description);
   // strip it — the dispatch prompt is prose, not YAML.
@@ -80,7 +80,7 @@ function recordIntent(args: DispatchArgs, pid: number | null): void {
 }
 
 export async function dispatch(args: DispatchArgs, signal?: AbortSignal): Promise<DispatchResult> {
-  const fragment = loadAgentPrompt(args.agent);
+  const fragment = loadAgentPrompt(args.agent, args.cwd);
   if (!fragment) return { ok: false, output: `Unknown agent: ${args.agent}`, exit_code: 1 };
   const prompt = `${fragment}\n\n${buildPrompt(args)}`;
   const timeout = args.timeout_ms ?? 600_000;
