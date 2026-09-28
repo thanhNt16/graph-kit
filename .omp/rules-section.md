@@ -7,7 +7,7 @@ Agent names in graph.yaml must resolve to agent fragments under `.omp/agents/`.
 
 - Every `agent` value in a node must match `.omp/agents/<agent>.md`.
 - If a bound agent does not exist, fail validation with: "Agent 'X' not found. Available: Y, Z."
-- `tools`, `skills`, and `refs` extend the agent fragment's capabilities. `gk graph agents` bakes node `tools`/`skills`/`constraints` into materialized `.omp/agents/gk-<node>.md` files for native task dispatch; `gk_dispatch_agent` (fallback path) takes them as `constraints.tools_allowlist` / `constraints.no_write`.
+- `tools`, `skills`, and `refs` extend the agent fragment's capabilities — node `tools`/`skills`/`constraints` travel with every dispatch. On pi, `gk graph agents` additionally bakes them into materialized agents under `.omp/agents` for native task dispatch; `gk_dispatch_agent` (fallback path) takes them as `constraints.tools_allowlist` / `constraints.no_write`.
 
 ### graph-authority
 
