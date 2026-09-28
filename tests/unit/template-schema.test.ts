@@ -1,6 +1,10 @@
 import { describe, expect, test } from "bun:test";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+import YAML from "yaml";
 import { GraphSchema } from "../../src/schemas/graph.schema";
 import { GraphTemplateSchema, materializeTemplate } from "../../src/schemas/template.schema";
+import { isBlocking, validateGraph } from "../../src/compiler/validate";
 
 function baseGraph() {
   return {
@@ -144,7 +148,26 @@ describe("materializeTemplate", () => {
       target: "src",
       focus: "general application security",
     });
+
     const result = GraphSchema.safeParse(graph);
     expect(result.success).toBe(true);
+  });
+});
+
+describe("cook-plan gallery template", () => {
+  const ROOT = join(import.meta.dir, "..", "..");
+  const tpl = GraphTemplateSchema.parse(
+    YAML.parse(readFileSync(join(ROOT, "templates", "gallery", "cook-plan.gk.yaml"), "utf-8")),
+  );
+
+  test("gallery cook-plan.gk.yaml materializes and validates clean", () => {
+    const graph = materializeTemplate(tpl, {});
+    const findings = validateGraph(graph, ROOT).filter(isBlocking);
+    expect(findings).toEqual([]);
+  });
+
+  test("role eval-gate is not an unknown-role advisory", () => {
+    const graph = materializeTemplate(tpl, {});
+    expect(validateGraph(graph, ROOT).filter((f) => f.check === "unknown-role")).toEqual([]);
   });
 });

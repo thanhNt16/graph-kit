@@ -1,0 +1,82 @@
+apiVersion: graphkit.dev/v1
+kind: GraphTemplate
+metadata:
+  name: cook-plan
+  description: Cook Plan execution loop — plan, bounded implement/test repair, eval gate, integrate
+  version: 1
+recommendations:
+  agents:
+    - planner
+    - implementer
+    - test-automator
+    - qa-engineer
+    - release-manager
+  skills:
+    - writing-plans
+    - test-driven-development
+graph:
+  apiVersion: graphkit.dev/v2
+  kind: Graph
+  metadata:
+    name: cook-plan
+    description: Cook Plan execution loop — plan, bounded implement/test repair, eval gate, integrate
+  topology: custom
+  outputs:
+    evidence_dir: .graphkit/evidence
+  evidence:
+    required_keys: [plan-doc, impl-report, test-report, eval-verdict]
+    freshness: strict
+  nodes:
+    plan:
+      agent: planner
+      model: sonnet
+      objective: >-
+        Convert the goal into a phase contract: outcome, acceptance criteria,
+        owned files, predecessor phases, interface contracts, and assumptions
+        open to revision. Separate constraints-with-sources (immutable, source:
+        human) from provisional choices.
+      depend_on: []
+      evidence: [plan-doc]
+    implement:
+      agent: implementer
+      model: sonnet
+      objective: Implement per plan-doc; respect owns and constraints.
+      owns: []
+      assumptions: []
+      depend_on: [plan]
+      evidence: [impl-report]
+    test:
+      agent: test-automator
+      model: sonnet
+      objective: Verify implementation against acceptance criteria; write test-report.
+      depend_on: [implement]
+      evidence: [test-report]
+    evaluate:
+      agent: qa-engineer
+      role: eval-gate
+      model: sonnet
+      objective: >-
+        Evaluate evidence against acceptance criteria. Evidence must match the
+        code being reviewed — stale or unstamped evidence is a BLOCK, not a
+        retry. Emit MERGE or BLOCK verdict.
+      constraints:
+        - no_write: true
+          source: author
+      depend_on: [test]
+      evidence: [eval-verdict]
+      eval:
+        mode: work_product
+        rubric: strict
+    integrate:
+      agent: release-manager
+      model: sonnet
+      objective: >-
+        On MERGE: integrate sequentially, run the full repo suite on the
+        integrated tree, stamp evidence post-merge, land nodes.
+      depend_on: [evaluate]
+      evidence: [integration-report]
+  loops:
+    - nodes: [implement, test]
+      max_rounds: 3
+      gate_evidence: [test-report]
+      no_progress_limit: 2
