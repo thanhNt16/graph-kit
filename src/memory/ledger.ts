@@ -129,12 +129,13 @@ export function startRun(
     started_at: now,
   };
   // A prior `run take` left a takeover stamp: the fresh run records it as provenance.
+  // Read+merge now; the stamp file is deleted only after the run is live (below) so a
+  // failed start (RUN_ACTIVE race) never destroys the provenance.
   const takeoverFile = join(runsDir(cwd), ".takeover");
-  if (existsSync(takeoverFile)) {
-    const old = readFileSync(takeoverFile, "utf-8").trim();
-    rmSync(takeoverFile, { force: true });
-    if (old) meta.takes_over = old;
-  }
+  const takesOver = existsSync(takeoverFile)
+    ? readFileSync(takeoverFile, "utf-8").trim() || null
+    : null;
+  if (takesOver) meta.takes_over = takesOver;
   if (resumes) meta.resumes = resumes;
   writeFileSync(join(dir, "meta.json"), `${JSON.stringify(meta, null, 2)}\n`);
   // GBrain layout: compiled truth above the rule, append-only timeline below.
@@ -162,6 +163,7 @@ export function startRun(
       throw new Error(`RUN_ACTIVE: run already active at ${activeRun(cwd) ?? "(unreadable .active)"}`);
     throw e;
   }
+  if (takesOver) rmSync(takeoverFile, { force: true }); // consume: run is live, provenance committed
   return { id, dir };
 }
 

@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { cac } from "cac";
 import YAML from "yaml";
 import { registerRunCommands } from "../../src/cli/commands/run.js";
-import { appendNode, endRun, readAdvisorEvents, readTrace, startRun } from "../../src/memory/ledger.js";
+import { appendNode, endRun, readAdvisorEvents, readTrace, stampTakeover, startRun } from "../../src/memory/ledger.js";
 
 function runCli(args: string[], cwd: string) {
   const cli = cac("gk");
@@ -577,6 +577,19 @@ describe("run dispatch/land/take CLI", () => {
     // The next started run inherits the takeover as provenance in its meta.
     const r2 = JSON.parse(runCli(["run", "start"], cwd).stdout).data;
     expect(JSON.parse(readFileSync(join(r2.dir, "meta.json"), "utf-8")).takes_over).toBe(r1.id);
+  });
+
+  test("startRun keeps the .takeover stamp when the start fails RUN_ACTIVE", () => {
+    startRun(cwd, join(cwd, "graph.yaml")); // blocks any further start
+    const stamp = join(cwd, ".graphkit", "runs", ".takeover");
+    stampTakeover(cwd, "20260101-000000-old");
+    expect(() => startRun(cwd, join(cwd, "graph.yaml"))).toThrow(/RUN_ACTIVE/);
+    expect(readFileSync(stamp, "utf-8").trim()).toBe("20260101-000000-old");
+    // A later successful start still consumes the surviving stamp.
+    endRun(cwd, "failed");
+    const r = startRun(cwd, join(cwd, "graph.yaml"));
+    expect(JSON.parse(readFileSync(join(r.dir, "meta.json"), "utf-8")).takes_over).toBe("20260101-000000-old");
+    expect(existsSync(stamp)).toBe(false);
   });
 
   test("run take refuses while dispatch pids are alive", () => {
