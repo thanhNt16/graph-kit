@@ -2,7 +2,13 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { appendNode, endRun, startRun } from "../../src/memory/ledger.js";
+import {
+  appendAdvisor,
+  appendDispatch,
+  appendNode,
+  endRun,
+  startRun,
+} from "../../src/memory/ledger.js";
 import { deriveResumeGraph, reconcileRun, resumeRun, validateDerivedGraph } from "../../src/memory/resume.js";
 import { GraphSchema } from "../../src/schemas/graph.schema.js";
 
@@ -54,6 +60,18 @@ function traceFail(dir: string, node: string) {
     evidence: [],
     duration_ms: 10,
     notes: null,
+  });
+}
+function traceChallenge(dir: string, node: string, notes: string | null) {
+  appendNode(dir, {
+    node,
+    wave: 0,
+    agent: "x",
+    model: null,
+    status: "challenge",
+    evidence: [],
+    duration_ms: 10,
+    notes,
   });
 }
 describe("reconcileRun", () => {
@@ -115,6 +133,24 @@ describe("reconcileRun", () => {
     const skippedNodes = rec.skipped.map((s) => s.node);
     expect(skippedNodes).toContain("b");
     expect(skippedNodes).toContain("c"); // dependent of a skipped node
+  });
+  test("dispatched-but-unresolved node surfaces in unresolved, still pending", () => {
+    const { id } = startRun(cwd, join(cwd, "graph.yaml"), "2026-09-04T10:00:00.000Z");
+    appendDispatch(cwd, { node: "a", attempt: 1, via: "wave", pid: 4242 });
+    endRun(cwd, "failed", "2026-09-04T10:05:00.000Z");
+    const rec = reconcileRun(cwd, id);
+    expect(rec.unresolved).toEqual(["a"]);
+    expect(rec.pending).toContain("a");
+  });
+  test("any trace line resolves a dispatch (ok, fail); dispatched-but-quiet is the only unresolved kind", () => {
+    const { id } = startRun(cwd, join(cwd, "graph.yaml"), "2026-09-04T10:00:00.000Z");
+    appendDispatch(cwd, { node: "a", attempt: 1, via: "wave", pid: 4242 });
+    appendDispatch(cwd, { node: "b", attempt: 1, via: "wave", pid: 4243 });
+    writeEvidence(cwd, "a-out");
+    traceOk(cwd, "a", ["a-out"]);
+    traceFail(cwd, "b");
+    endRun(cwd, "failed", "2026-09-04T10:05:00.000Z");
+    expect(reconcileRun(cwd, id).unresolved).toEqual([]);
   });
   test("skipped node does not count as a run failure", () => {
     startRun(cwd, join(cwd, "graph.yaml"), "2026-09-04T10:00:00.000Z");
@@ -321,6 +357,33 @@ describe("deriveResumeGraph", () => {
     expect(derived.evidence.required_keys).toEqual([]); // impl-out replayed from disk, not re-produced
     expect(derived.nodes.gate!.depend_on).toEqual(["research"]); // eval-gate keeps a producer
     expect(() => validateDerivedGraph(derived)).not.toThrow();
+  });
+  test("unadjudicated challenge carries into pending node objective as Resume context", () => {
+    const { id } = startRun(cwd, join(cwd, "graph.yaml"), "2026-09-04T10:00:00.000Z");
+    traceChallenge(cwd, "a", "judge: impl diverges from spec on retry policy");
+    endRun(cwd, "failed", "2026-09-04T10:05:00.000Z");
+    const derived = deriveResumeGraph(reconcileRun(cwd, id), id);
+    expect(derived.nodes.a!.objective).toContain("## Resume context");
+    expect(derived.nodes.a!.objective).toContain(
+      "unadjudicated CHALLENGE from prior run: judge: impl diverges from spec on retry policy",
+    );
+  });
+  test("adjudicated challenge (disposition= in notes) is not carried over", () => {
+    const { id } = startRun(cwd, join(cwd, "graph.yaml"), "2026-09-04T10:00:00.000Z");
+    traceChallenge(cwd, "a", "judge: impl diverges from spec disposition=refuted");
+    endRun(cwd, "failed", "2026-09-04T10:05:00.000Z");
+    const derived = deriveResumeGraph(reconcileRun(cwd, id), id);
+    expect(derived.nodes.a!.objective).toBe("Do A");
+  });
+  test("resume carries last advisor event per pending node", () => {
+    const { id } = startRun(cwd, join(cwd, "graph.yaml"), "2026-09-04T10:00:00.000Z");
+    appendAdvisor(cwd, { node: "a", round: 1, tier: "fable", streak: null });
+    appendAdvisor(cwd, { node: "a", round: 3, tier: "fable", streak: 2 });
+    endRun(cwd, "failed", "2026-09-04T10:05:00.000Z");
+    const derived = deriveResumeGraph(reconcileRun(cwd, id), id);
+    expect(derived.nodes.a!.objective).toContain("## Resume context");
+    expect(derived.nodes.a!.objective).toContain("advisor fired at round 3 (tier fable, streak 2)");
+    expect(derived.nodes.a!.objective).not.toContain("round 1");
   });
   test("repro C: eval-gate whose producers are all satisfied → RESUME_DERIVED_INVALID, nothing written", () => {
     const graph =

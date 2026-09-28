@@ -6,7 +6,16 @@ import { parseMarker } from "../evidence/marker.js";
 import type { Graph } from "../schemas/graph.schema.js";
 import { GraphSchema, type LoopGroup } from "../schemas/graph.schema.js";
 import { saveSessionGraph, setActiveGraphId } from "../store/index.js";
-import { activeRun, readRunMeta, readTrace, startRun, type TraceLine } from "./ledger.js";
+import {
+  activeRun,
+  readAdvisorEvents,
+  readDispatches,
+  readRunMeta,
+  readTrace,
+  startRun,
+  type AdvisorEvent,
+  type TraceLine,
+} from "./ledger.js";
 
 export interface ResumeResult {
   resumed: boolean;
@@ -14,6 +23,7 @@ export interface ResumeResult {
   session?: { id: string; path: string };
   run?: { id: string; dir: string };
   pending: string[];
+  unresolved: string[];
   satisfied: string[];
   foreign_evidence: Array<{ node: string; key: string; marker_run_id: string }>;
   skipped: Array<{ node: string; reason: string }>;
@@ -32,6 +42,7 @@ export function resumeRun(
       resumed: false,
       reason: "NOTHING_TO_RESUME",
       pending: [],
+      unresolved: rec.unresolved,
       satisfied: rec.satisfied,
       foreign_evidence: rec.foreign_evidence,
       skipped: rec.skipped,
@@ -41,6 +52,7 @@ export function resumeRun(
       resumed: false,
       reason: "DRY_RUN",
       pending: rec.pending,
+      unresolved: rec.unresolved,
       satisfied: rec.satisfied,
       foreign_evidence: rec.foreign_evidence,
       skipped: rec.skipped,
@@ -55,6 +67,7 @@ export function resumeRun(
     session,
     run,
     pending: rec.pending,
+    unresolved: rec.unresolved,
     satisfied: rec.satisfied,
     foreign_evidence: rec.foreign_evidence,
     skipped: rec.skipped,
@@ -69,8 +82,9 @@ export interface Reconciliation {
   evidenceDir: string;
   satisfied: string[];
   pending: string[];
-  skipped: Array<{ node: string; reason: string }>;
+  unresolved: string[];
   foreign_evidence: Array<{ node: string; key: string; marker_run_id: string }>;
+  skipped: Array<{ node: string; reason: string }>;
 }
 function parseGraph(path: string): Graph {
   const parsed = GraphSchema.safeParse(YAML.parse(readFileSync(path, "utf-8")));
@@ -177,6 +191,12 @@ export function reconcileRun(
           : "depends on a skipped node"
         : "passed with evidence on disk",
     }));
+  const dispatched = readDispatches(cwd, runId);
+  const resolved = new Set([...satisfied, ...skippedStatus]);
+  for (const line of last.values()) resolved.add(line.node); // any trace line resolves the dispatch intent
+  const unresolved = [...new Set(dispatched.map((d) => d.node))]
+    .filter((n) => !resolved.has(n) && pending.includes(n))
+    .sort();
   return {
     cwd,
     runId,
@@ -185,6 +205,7 @@ export function reconcileRun(
     evidenceDir,
     satisfied: [...satisfied].filter((n) => !pending.includes(n)).sort(),
     pending: pending.sort(),
+    unresolved,
     foreign_evidence,
     skipped,
   };
@@ -259,6 +280,15 @@ export function deriveResumeGraph(rec: Reconciliation, parentRunId: string): Gra
   const lastOk = new Map<string, TraceLine>();
   for (const line of trace) if (line.status === "ok") lastOk.set(line.node, line);
 
+  // Carryover: judgment state the parent run accumulated. Evidence bytes are
+  // replayed as refs below; challenges/advisor diagnoses are prose — append
+  // them to the objective so the resumed worker sees them.
+  const unadjudicated = new Map<string, TraceLine[]>(); // target → challenges
+  for (const line of trace)
+    if (line.status === "challenge" && !(line.notes ?? "").includes("disposition="))
+      unadjudicated.set(line.node, [...(unadjudicated.get(line.node) ?? []), line]);
+  const advisorLast = new Map<string, AdvisorEvent>();
+  for (const ev of readAdvisorEvents(rec.cwd, rec.runId)) advisorLast.set(ev.node, ev);
   const nodes: Graph["nodes"] = {};
   for (const [name, node] of Object.entries(rec.graph.nodes)) {
     if (!pending.has(name)) continue;
@@ -274,8 +304,16 @@ export function deriveResumeGraph(rec: Reconciliation, parentRunId: string): Gra
     // fan_out.briefs_from naming a dropped (satisfied) node would dangle — its
     // evidence was already replayed as refs above, so drop the fan_out config.
     const { fan_out: fanOut, ...nodeRest } = node;
+    const carry: string[] = [];
+    for (const c of unadjudicated.get(name) ?? [])
+      carry.push(`- unadjudicated CHALLENGE from prior run: ${c.notes ?? "(see trace)"}`);
+    const adv = advisorLast.get(name);
+    if (adv)
+      carry.push(`- advisor fired at round ${adv.round} (tier ${adv.tier}${adv.streak ? `, streak ${adv.streak}` : ""})`);
+    const objective = carry.length ? `${node.objective}\n\n## Resume context\n${carry.join("\n")}` : node.objective;
     nodes[name] = {
       ...nodeRest,
+      objective,
       depend_on: carriedDeps,
       ...(fanOut && pending.has(fanOut.briefs_from) ? { fan_out: fanOut } : {}),
       refs: [...node.refs, ...upstreamRefs],
