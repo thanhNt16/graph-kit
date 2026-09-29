@@ -8,6 +8,7 @@ import { analyzeRun } from "../../memory/analyze.js";
 import {
   activeRun,
   activeRunGraph,
+  activeRunPointer,
   appendAdvisor,
   appendDispatch,
   appendNode,
@@ -314,6 +315,26 @@ export function registerRunCommands(cli: CAC) {
             emit(fail("TAKEOVER_BLOCKED", `run ${target} has live dispatch pids: ${live.join(", ")}`));
             return;
           }
+          // Dangling .active: the pointer names this run but its dir is gone.
+          // Nothing to reconcile — clearing the pointer IS the recovery. Gated
+          // on the pointer itself so bogus ids still get RESUME_RUN_NOT_FOUND.
+          const ptr = activeRunPointer(cwd);
+          if (ptr?.dangling && basename(ptr.dir) === String(target)) {
+            clearActiveRun(cwd);
+            emit(
+              ok({
+                taken_from: target,
+                pending: [],
+                unresolved: [],
+                foreign_evidence: [],
+                active_cleared: true,
+                active: null,
+                dangling: true,
+                note: `run ${target} recorded in .graphkit/runs/.active has no run directory — pointer cleared, nothing to reconcile`,
+              }),
+            );
+            return;
+          }
           // Reconcile first so the takeover payload carries truth, then clear.
           const rec = reconcileRun(cwd, String(target), { force: opts.force });
           const active = activeRun(cwd);
@@ -377,7 +398,8 @@ export function registerRunCommands(cli: CAC) {
           return;
         }
         if (subcommand === "status") {
-          const dir = activeRun(cwd);
+          const ptr = activeRunPointer(cwd);
+          const dir = ptr && !ptr.dangling ? ptr.dir : null;
           const advisor_events = dir ? readAdvisorEvents(cwd, basename(dir)).length : 0;
           const chain: string[] = [];
           let cursor: string | null = dir ? basename(dir) : null;
@@ -398,6 +420,7 @@ export function registerRunCommands(cli: CAC) {
               active_age_ms: meta ? Date.now() - Date.parse(meta.started_at) : null,
               advisor_events,
               resumes_chain: chain,
+              ...(ptr?.dangling ? { dangling: true, dangling_run: basename(ptr.dir) } : {}),
             }),
           );
           return;

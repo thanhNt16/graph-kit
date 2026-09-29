@@ -648,4 +648,37 @@ describe("run dispatch/land/take CLI", () => {
     expect(out.code).toBe(1);
     expect(JSON.parse(out.stdout).error.code).toBe("BAD_VIA");
   });
+
+  test("take --from a dangling .active clears the pointer with nothing to reconcile", () => {
+    const r = startRun(cwd, join(cwd, "graph.yaml"));
+    rmSync(r.dir, { recursive: true, force: true }); // run dir gone, .active stale
+    const take = JSON.parse(runCli(["run", "take", "--from", r.id], cwd).stdout);
+    expect(take.status).toBe("ok");
+    expect(take.data.taken_from).toBe(r.id);
+    expect(take.data.dangling).toBe(true);
+    expect(take.data.active_cleared).toBe(true);
+    expect(take.data.unresolved).toEqual([]);
+    expect(take.data.foreign_evidence).toEqual([]);
+    expect(take.data.note).toContain(r.id);
+    expect(existsSync(activeFile())).toBe(false);
+    // The deadlock is gone: a fresh start succeeds without `rm .active`.
+    expect(() => startRun(cwd, join(cwd, "graph.yaml"))).not.toThrow();
+  });
+
+  test("take --from a bogus id still fails RESUME_RUN_NOT_FOUND", () => {
+    const out = runCli(["run", "take", "--from", "20990101-000000-bogus"], cwd);
+    expect(out.code).toBe(1);
+    const body = JSON.parse(out.stdout);
+    expect(body.error.code).toBe("RESUME_RUN_NOT_FOUND");
+  });
+
+  test("run status surfaces a dangling .active pointer", () => {
+    const deadDir = join(cwd, ".graphkit", "runs", "20260101-000000-dead");
+    writeFileSync(activeFile(), deadDir);
+    const status = JSON.parse(runCli(["run", "status"], cwd).stdout);
+    expect(status.status).toBe("ok");
+    expect(status.data.active).toBeNull();
+    expect(status.data.dangling).toBe(true);
+    expect(status.data.dangling_run).toBe("20260101-000000-dead");
+  });
 });

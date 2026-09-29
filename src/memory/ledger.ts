@@ -52,12 +52,23 @@ const runsDir = (cwd: string) => join(cwd, ".graphkit", "runs");
 const activeFile = (cwd: string) => join(runsDir(cwd), ".active");
 const indexFile = (cwd: string) => join(runsDir(cwd), "index.jsonl");
 
-/** Absolute path of the live run dir, or null when no run is active. */
-export function activeRun(cwd: string): string | null {
+/** Raw `.active` state: the pointer file's target dir and whether that dir
+ *  still exists. null when no pointer file (or it is empty). A dangling
+ *  pointer records a run whose dir was deleted/crashed away — the ledger
+ *  treats it as no active run, but the stale file would still deadlock a
+ *  fresh `startRun` (atomic "wx" write hits EEXIST). */
+export function activeRunPointer(cwd: string): { dir: string; dangling: boolean } | null {
   const f = activeFile(cwd);
   if (!existsSync(f)) return null;
   const dir = readFileSync(f, "utf-8").trim();
-  return dir && existsSync(dir) ? dir : null;
+  if (!dir) return null;
+  return { dir, dangling: !existsSync(dir) };
+}
+
+/** Absolute path of the live run dir, or null when no run is active. */
+export function activeRun(cwd: string): string | null {
+  const p = activeRunPointer(cwd);
+  return p && !p.dangling ? p.dir : null;
 }
 
 /** Drop the active-run pointer (idempotent). Takeover clears it only when it names the taken run. */
@@ -112,6 +123,11 @@ export function startRun(
 ): { id: string; dir: string; graph_sha256: string } {
   const existing = activeRun(cwd);
   if (existing) throw new Error(`RUN_ACTIVE: run already active at ${existing}; run \`gk run end\` first`);
+  // A .active naming a deleted run dir is a dangling pointer: the ledger
+  // already treats a vanished dir as no active run, so drop the stale file
+  // here instead of deadlocking the atomic write below (EEXIST with no live
+  // run to name — the "unreadable .active" deadlock).
+  if (existsSync(activeFile(cwd))) clearActiveRun(cwd);
   const resolved = isAbsolute(graphPath) ? graphPath : resolve(cwd, graphPath);
   if (!existsSync(resolved)) throw new Error(`GRAPH_NOT_FOUND: ${graphPath}`);
 

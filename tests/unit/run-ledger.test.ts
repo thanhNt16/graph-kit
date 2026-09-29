@@ -1,9 +1,10 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import {
   activeRun,
+  activeRunPointer,
   appendAdvisor,
   appendDispatch,
   appendNode,
@@ -205,5 +206,22 @@ describe("run ledger", () => {
     startRun(cwd, join(cwd, "graph.yaml"), "2026-09-28T10:00:00.000Z");
     // Simulate a crash: .active left behind, dir exists
     expect(() => startRun(cwd, join(cwd, "graph.yaml"), "2026-09-28T11:00:00.000Z")).toThrow(/RUN_ACTIVE/);
+  });
+  test("startRun clears a dangling .active pointer instead of deadlocking", () => {
+    const { dir } = startRun(cwd, join(cwd, "graph.yaml"), "2026-09-03T10:00:00.000Z");
+    rmSync(dir, { recursive: true, force: true }); // .active survives, target dir gone
+    // Pre-fix this threw RUN_ACTIVE at "(unreadable .active)".
+    const started = startRun(cwd, join(cwd, "graph.yaml"), "2026-09-03T11:00:00.000Z");
+    expect(activeRun(cwd)).toBe(started.dir);
+  });
+
+  test("activeRunPointer distinguishes a dangling pointer from no run", () => {
+    expect(activeRunPointer(cwd)).toBeNull();
+    const { dir, id } = startRun(cwd, join(cwd, "graph.yaml"), "2026-09-03T10:00:00.000Z");
+    expect(activeRunPointer(cwd)).toEqual({ dir, dangling: false });
+    rmSync(dir, { recursive: true, force: true });
+    expect(activeRunPointer(cwd)).toEqual({ dir, dangling: true });
+    expect(basename(activeRunPointer(cwd)!.dir)).toBe(id); // names the dead run
+    expect(activeRun(cwd)).toBeNull();
   });
 });
