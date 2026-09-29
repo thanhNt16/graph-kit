@@ -8,6 +8,7 @@ import { scoreWorkProduct } from "../../eval/rubrics.js";
 import { fingerprint } from "../../evidence/fingerprint.js";
 import { type Freshness, freshnessOf, parseMarker } from "../../evidence/marker.js";
 import { activeRun, readRunIndex, readTrace } from "../../memory/ledger.js";
+import { resumeChain } from "../../memory/resume.js";
 import { emit, fail, ok } from "../output.js";
 import { loadGraph } from "./graph.js";
 
@@ -40,6 +41,11 @@ export function gateGraph(
   const manifest: Record<string, { path: string; sha256: string; bytes: number }> = {};
   const freshness: Record<string, Freshness> = {};
   const cur = opts?.cwd ? fingerprint(opts.cwd) : null;
+  // Lineage scope (GAP-3): active run + its `resumes:` ancestors. Evidence stamped
+  // by a run outside it is foreign; with no active run the check is skipped so the
+  // gate stays usable on fresh checkouts.
+  const activeDir = opts?.cwd ? activeRun(opts.cwd) : null;
+  const lineage = opts?.cwd && activeDir ? resumeChain(opts.cwd, basename(activeDir)) : null;
   for (const key of requiredKeys) {
     const p = join(evidenceDir, `${key}.md`);
     if (!existsSync(p)) {
@@ -50,7 +56,10 @@ export function gateGraph(
     const content = readFileSync(p, "utf-8");
     const marker = parseMarker(content);
     evidence[key] = marker?.superseded ? undefined : content; // superseded → "missing"
-    freshness[key] = freshnessOf(marker, cur ?? { head: null, tree: null });
+    freshness[key] =
+      lineage && marker?.run_id && !lineage.has(marker.run_id)
+        ? "foreign" // stamped by an unrelated run; run_id:null (legacy/hand-written) never foreign
+        : freshnessOf(marker, cur ?? { head: null, tree: null });
     manifest[key] = {
       path: p,
       sha256: createHash("sha256").update(content).digest("hex"),
@@ -60,12 +69,16 @@ export function gateGraph(
   const base = scoreWorkProduct({ required_keys: requiredKeys }, evidence, "strict");
   const stale = requiredKeys.filter((k) => freshness[k] === "stale" && base.scorecard[k] === "ok");
   const unknown = requiredKeys.filter((k) => freshness[k] === "unknown" && base.scorecard[k] === "ok");
-  const warnings =
-    opts?.strict && unknown.length > 0
-      ? [
-          `unstamped evidence (no fingerprint marker) treated as failing under strict freshness: ${unknown.join(", ")} — write evidence via \`gk evidence add\``,
-        ]
-      : [];
+  const foreign = requiredKeys.filter((k) => freshness[k] === "foreign" && base.scorecard[k] === "ok");
+  const warnings: string[] = [];
+  if (foreign.length > 0)
+    warnings.push(
+      `evidence stamped by a run outside the active run's resumes chain: ${foreign.join(", ")} — re-stamp via \`gk evidence add\` inside the active run`,
+    );
+  if (opts?.strict && unknown.length > 0)
+    warnings.push(
+      `unstamped evidence (no fingerprint marker) treated as failing under strict freshness: ${unknown.join(", ")} — write evidence via \`gk evidence add\``,
+    );
   const unlanded: string[] = [];
   if (opts?.requireLanded && opts.cwd) {
     const id = activeRun(opts.cwd) ? basename(activeRun(opts.cwd)!) : readRunIndex(opts.cwd).at(-1)?.id;
@@ -80,7 +93,9 @@ export function gateGraph(
           unlanded.push(t.node);
   }
   const verdict =
-    (opts?.strict && (stale.length > 0 || unknown.length > 0)) || unlanded.length > 0 ? "BLOCK" : base.verdict;
+    (opts?.strict && (stale.length > 0 || unknown.length > 0 || foreign.length > 0)) || unlanded.length > 0
+      ? "BLOCK"
+      : base.verdict;
   return {
     verdict,
     scorecard: base.scorecard,
@@ -118,6 +133,7 @@ export function registerGateCommand(cli: CAC) {
           },
         );
         const stale = Object.keys(freshness).filter((k) => freshness[k] === "stale" && scorecard[k] === "ok");
+        const foreign = Object.keys(freshness).filter((k) => freshness[k] === "foreign" && scorecard[k] === "ok");
         if (verdict === "MERGE") {
           emit(ok({ verdict, scorecard, freshness, warnings, unlanded, manifest }));
           return;
@@ -125,6 +141,7 @@ export function registerGateCommand(cli: CAC) {
         emit(
           fail("GATE_BLOCK", "evidence gate blocked merge", {
             missing,
+            foreign,
             stale,
             warnings,
             unlanded,

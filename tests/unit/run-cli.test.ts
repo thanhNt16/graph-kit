@@ -151,7 +151,7 @@ describe("gk run CLI", () => {
     try {
       const res = runCli(["run"], cwd);
       expect(res.stdout).toContain("gk run — run ledger commands");
-      expect(res.stdout).toContain("Subcommands: start node dispatch land end status resume take round analyze");
+      expect(res.stdout).toContain("dispatch  <node> --via task|extension [--pid N] [--attempt N]");
     } finally {
       rmSync(cwd, { recursive: true, force: true });
     }

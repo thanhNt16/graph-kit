@@ -2,6 +2,7 @@ import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node
 import { dirname, join } from "node:path";
 import type { CAC } from "cac";
 import { isValidTarget, listTargets, resolveModel, TIERS } from "../../targets/index.js";
+import { leafUsageFor } from "../command-registry.js";
 import { emit, fail, ok } from "../output.js";
 
 function overridesPath(cwd: string, target: string): string {
@@ -37,15 +38,12 @@ export function registerModelsCommands(cli: CAC): void {
     .command("models [subcommand] [args...]", "Per-target model mapping commands")
     .option("--map <k=v,...>", "comma-separated model=override pairs")
     .option("--json", "JSON output")
+    .example(leafUsageFor("models"))
     .action((subcommand: string | undefined, args: string | string[] | undefined, opts: { map?: string }) => {
       if (!subcommand) {
         // Bare `gk models` prints usage and exits 0 — same surface as `gk memory`.
         console.log(
-          `gk models — per-target model mapping commands\n\nUsage:\n  gk models <target> [args...]\n\nTargets: ${listTargets()
-            .map((t) => t.id)
-            .join(
-              ", ",
-            )}\n\nOptions:\n  --map <k=v,...>  comma-separated model=override pairs\n  --json           JSON output`,
+          `gk models — per-target model mapping commands\n\nUsage:\n  gk models <target> [args...]\n\nTargets:\n${leafUsageFor("models")}\n\nOptions:\n  --map <k=v,...>  comma-separated model=override pairs\n  --json           JSON output`,
         );
         return;
       }

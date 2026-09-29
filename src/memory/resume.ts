@@ -114,7 +114,7 @@ function evidenceOnDisk(cwd: string, evidenceDir: string, keys: string[]): boole
   });
 }
 /** runId plus its ancestor chain (meta.json `resumes` links), cycle-guarded. */
-function resumeChain(cwd: string, runId: string): Set<string> {
+export function resumeChain(cwd: string, runId: string): Set<string> {
   const chain = new Set<string>();
   let cursor: string | null = runId;
   while (cursor && !chain.has(cursor)) {

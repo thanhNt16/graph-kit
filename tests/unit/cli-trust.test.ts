@@ -5,10 +5,14 @@ import { join } from "node:path";
 import { cac } from "cac";
 import { CBM_UNAVAILABLE_MSG } from "../../src/cbm/client.js";
 import { resetCbmSeam, setCbmSeam } from "../../src/cli/cbm-seam.js";
+import { groupNames, subcommandsFor } from "../../src/cli/command-registry.js";
+import { registerEvidenceCommand } from "../../src/cli/commands/evidence.js";
 import { registerGraphCommands } from "../../src/cli/commands/graph.js";
 import { registerInventoryCommands } from "../../src/cli/commands/inventory.js";
 import { registerKitCommands } from "../../src/cli/commands/kit.js";
 import { registerMemoryCommands } from "../../src/cli/commands/memory.js";
+import { registerModelsCommands } from "../../src/cli/commands/models.js";
+import { registerRunCommands } from "../../src/cli/commands/run.js";
 import { registerTemplateCommands } from "../../src/cli/commands/template.js";
 import { fail } from "../../src/cli/output.js";
 import { APP_VERSION } from "../../src/version.js";
@@ -30,8 +34,11 @@ function fullCli() {
   registerKitCommands(cli);
   registerGraphCommands(cli);
   registerMemoryCommands(cli);
+  registerModelsCommands(cli);
   registerTemplateCommands(cli);
   registerInventoryCommands(cli);
+  registerEvidenceCommand(cli);
+  registerRunCommands(cli);
   cli.help();
   return cli;
 }
@@ -234,5 +241,55 @@ describe("CLI trust: gk compile emits the envelope and writes the artifact", () 
     const parsed = JSON.parse(logs.join("\n"));
     expect(parsed.status).toBe("ok");
     expect(parsed.data.compiled).toMatch(/\.workflow\.js$/);
+  });
+});
+
+describe("CLI trust: group help lists per-leaf usage (AuditCli F3)", () => {
+  let root: string;
+  let cwd: string;
+  beforeEach(() => {
+    root = join(tmpdir(), `gk-trust-leafhelp-${process.pid}-${Date.now()}`);
+    cwd = root;
+    mkdirSync(cwd, { recursive: true });
+  });
+  afterEach(() => {
+    process.exitCode = 0;
+    rmSync(root, { recursive: true, force: true });
+  });
+
+  /** The dispatch usage line, wherever the group help renders it (curated or cac Examples). */
+  function dispatchLine(logs: string[]): string {
+    const line = logs
+      .join("\n")
+      .split("\n")
+      .find((l) => l.trimStart().startsWith("dispatch"));
+    expect(line).toBeDefined();
+    return line as string;
+  }
+
+  test("gk run prints the dispatch leaf line with its flags", () => {
+    const { logs } = runCli(["run"], cwd);
+    const line = dispatchLine(logs);
+    expect(line).toContain("<node> --via task|extension");
+    expect(line).toContain("[--pid N]");
+    expect(line).toContain("[--attempt N]");
+  });
+
+  test("gk run --help (cac path, same surface as `gk run dispatch --help`) prints the dispatch leaf line", () => {
+    const { logs } = runCli(["run", "--help"], cwd);
+    const line = dispatchLine(logs);
+    expect(line).toContain("<node> --via task|extension [--pid N] [--attempt N]");
+  });
+
+  test("every registered leaf name appears in its group's curated and cac help", () => {
+    for (const group of groupNames()) {
+      const curated = runCli([group], cwd).logs.join("\n");
+      const cacHelp = runCli([group, "--help"], cwd).logs.join("\n");
+      for (const name of subcommandsFor(group).split(" ")) {
+        const startsLine = new RegExp(`^\\s{2,}${name}\\b`, "m");
+        expect(curated).toMatch(startsLine);
+        expect(cacHelp).toMatch(startsLine);
+      }
+    }
   });
 });

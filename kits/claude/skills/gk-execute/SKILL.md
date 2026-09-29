@@ -48,6 +48,8 @@ run never ended — ask the user, or run `gk run status` to inspect, before proc
 
 If the `gk run start` payload carries `warnings`, read them: a `kitVersion` mismatch means this project's installed kit (skills/extensions/rules) predates the running gk binary — run `gk init --target <target>` to refresh before dispatching, or nodes may execute under outdated semantics.
 
+Graph `inputs` are enforced at start: required inputs with no default need `gk run start --input name=value` (repeatable). Provided values are recorded in the run's `meta.json` as provenance for the orchestrator — they are NOT interpolated into node objectives automatically; pass them in node `task` text where relevant.
+
 ### Recording nodes
 
 After EVERY node dispatch returns (ok or fail), append a trace line:

@@ -15,7 +15,7 @@ import { getTopologyConfigKeys, TOPOLOGY_NAMES, type TopologyName } from "../../
 import { getActiveGraphId, listSessionGraphs, loadActiveGraph, setActiveGraphId } from "../../store/index.js";
 import { renderAscii } from "../ascii.js";
 import { seamClientFactory, seamIndexProject } from "../cbm-seam.js";
-import { subcommandsFor } from "../command-registry.js";
+import { leafUsageFor, subcommandsFor } from "../command-registry.js";
 import { topoWaves } from "../graph-waves.js";
 import { materializeNodeAgents } from "../node-agents.js";
 import { emit, fail, ok, type Result } from "../output.js";
@@ -680,11 +680,12 @@ export function registerGraphCommands(cli: CAC) {
   cli
     .command("graph [subcommand] [args...]", `Graph lifecycle commands\nSubcommands: ${subcommandsFor("graph")}`)
     .option("--json", "JSON output")
+    .example(leafUsageFor("graph"))
     .action((subcommand: string | undefined, args: string | string[] | undefined, _opts: { json?: boolean }) => {
       if (!subcommand) {
         // Bare `gk graph` prints usage and exits 0 — same surface as `gk memory`.
         console.log(
-          `gk graph — graph lifecycle commands\n\nUsage:\n  gk graph <subcommand> [args...]\n\nSubcommands: ${subcommandsFor("graph")}\n\nOptions:\n  --json  JSON output`,
+          `gk graph — graph lifecycle commands\n\nUsage:\n  gk graph <subcommand> [args...]\n\nSubcommands:\n${leafUsageFor("graph")}\n\nOptions:\n  --json  JSON output`,
         );
         return;
       }

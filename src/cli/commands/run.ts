@@ -25,7 +25,7 @@ import { recordRound } from "../../memory/loops.js";
 import { reconcileRun, resumeRun } from "../../memory/resume.js";
 import { GraphSchema } from "../../schemas/graph.schema.js";
 import { getActiveGraphId, loadActiveGraph } from "../../store/index.js";
-import { subcommandsFor } from "../command-registry.js";
+import { leafUsageFor, subcommandsFor } from "../command-registry.js";
 import { parseInputs, recordRunInputs, requiredMissing } from "../graph-inputs.js";
 import { emit, fail, ok } from "../output.js";
 import { kitVersionWarnings } from "./kit.js";
@@ -145,11 +145,12 @@ export function registerRunCommands(cli: CAC) {
     .option("--via <via>", "dispatch: task|extension")
     .option("--pid <pid>", "dispatch: child pid")
     .option("--from <run>", "take: run id to take over")
+    .example(leafUsageFor("run"))
     .action((subcommand, args, opts) => {
       const cwd = process.cwd();
       if (!subcommand) {
         console.log(
-          `gk run — run ledger commands\n\nUsage:\n  gk run <subcommand> [args...]\n\nSubcommands: ${subcommandsFor("run")}`,
+          `gk run — run ledger commands\n\nUsage:\n  gk run <subcommand> [args...]\n\nSubcommands:\n${leafUsageFor("run")}`,
         );
         return;
       }

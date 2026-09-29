@@ -15,11 +15,9 @@ import {
   type TemplateValues,
 } from "../../schemas/template.schema.js";
 import { saveSessionGraph, setActiveGraphId } from "../../store/index.js";
+import { leafUsageFor, subcommandsFor } from "../command-registry.js";
 import { emit, fail, ok, type Result } from "../output.js";
 import { bundledAssetDir } from "./kit.js";
-
-/** Dispatched leaves of `gk template` — single source for help + unknown-leaf error. */
-const TEMPLATE_SUBCOMMANDS = ["pack", "list", "show", "materialize"] as const;
 
 // ponytail: DI seam mirroring graph.ts — lets tests simulate a rename failure
 // without touching the real filesystem. Restore via _resetWriteSeam.
@@ -392,6 +390,7 @@ export function registerTemplateCommands(cli: CAC) {
     .option("--params <json>", "JSON object of template parameters (materialize)")
     .option("--use", "Set the active session pointer after materializing")
     .option("--json", "JSON output (always emitted; flag accepted for parity)")
+    .example(leafUsageFor("template"))
     .action(
       (
         subcommand: string | undefined,
@@ -411,7 +410,7 @@ export function registerTemplateCommands(cli: CAC) {
         if (!subcommand) {
           // Bare `gk template` prints usage and exits 0 — same surface as `gk memory`.
           console.log(
-            `gk template — GraphTemplate commands\n\nUsage:\n  gk template <subcommand> [args...]\n\nSubcommands: ${TEMPLATE_SUBCOMMANDS.join(", ")}\n\nOptions:\n  --name <name>   Template name (pack)\n  --params <json>  Parameters (materialize)\n  --use            Set active session pointer after materialize\n  --force          Overwrite existing template\n  --input <file>   Complete GraphTemplate input file\n  --global         User-global store\n  --json           JSON output (always emitted; flag accepted for parity)`,
+            `gk template — GraphTemplate commands\n\nUsage:\n  gk template <subcommand> [args...]\n\nSubcommands:\n${leafUsageFor("template")}\n\nOptions:\n  --name <name>   Template name (pack)\n  --params <json>  Parameters (materialize)\n  --use            Set active session pointer after materialize\n  --force          Overwrite existing template\n  --input <file>   Complete GraphTemplate input file\n  --global         User-global store\n  --json           JSON output (always emitted; flag accepted for parity)`,
           );
           return;
         }
@@ -485,7 +484,7 @@ export function registerTemplateCommands(cli: CAC) {
         }
         emit(
           fail("UNKNOWN_TEMPLATE_SUBCOMMAND", `Unknown template subcommand "${subcommand}"`, {
-            available: TEMPLATE_SUBCOMMANDS,
+            available: subcommandsFor("template").split(" "),
           }),
         );
       },

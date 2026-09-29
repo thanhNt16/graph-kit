@@ -16,7 +16,13 @@ export interface CriterionView {
 }
 
 const BADGE = { present: "● present", missing: "○ missing", superseded: "◌ superseded" } as const;
-const FRESH_TAG: Record<Freshness, string> = { fresh: "", stale: " · ◐ stale", unknown: " · ? unknown" };
+// ponytail: gate-only state today — buildViews never emits `foreign`; entry keeps the Record exhaustive.
+const FRESH_TAG: Record<Freshness, string> = {
+  fresh: "",
+  stale: " · ◐ stale",
+  unknown: " · ? unknown",
+  foreign: " · ⚠ foreign",
+};
 
 export function buildViews(cwd: string, graph: Graph): CriterionView[] {
   const criteria = loadCriteria(cwd, graph.evidence.criteria ?? []);

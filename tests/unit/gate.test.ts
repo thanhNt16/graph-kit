@@ -137,6 +137,31 @@ describe("gk gate command", () => {
     expect(parsed.error.details.missing).toContain("design");
   });
 
+  test("strict graph: evidence stamped outside the active run's lineage BLOCKs as foreign", () => {
+    writeFileSync(
+      join(tmp, "graph.yaml"),
+      MINIMAL_GRAPH.replace("required_keys: [design]", "required_keys: [design]\n  freshness: strict"),
+    );
+    const evDir = join(tmp, ".graphkit", "evidence");
+    const runs = join(tmp, ".graphkit", "runs");
+    const run1 = join(runs, "20260929-100000-frn");
+    const run2 = join(runs, "20260929-110000-frn");
+    mkdirSync(evDir, { recursive: true });
+    mkdirSync(run1, { recursive: true });
+    mkdirSync(run2, { recursive: true });
+    writeFileSync(join(run1, "meta.json"), JSON.stringify({ id: "20260929-100000-frn" }, null, 2));
+    writeFileSync(join(run2, "meta.json"), JSON.stringify({ id: "20260929-110000-frn" }, null, 2));
+    writeFileSync(join(runs, ".active"), run2);
+    writeFileSync(join(evDir, "design.md"), `---\nkey: design\nrun_id: 20260929-100000-frn\n---\n\nbody\n`);
+    const result = runCli(["gate", join(tmp, "graph.yaml")], tmp);
+    expect(result.code).toBe(1);
+    const parsed = JSON.parse(result.stdout);
+    expect(parsed.error.code).toBe("GATE_BLOCK");
+    expect(parsed.error.details.foreign).toEqual(["design"]);
+    expect(parsed.error.details.freshness.design).toBe("foreign");
+    expect(parsed.error.details.scorecard.design).toBe("ok");
+  });
+
   test("require_landed flows from graph schema; payload carries warnings/unlanded", () => {
     writeFileSync(
       join(tmp, "graph.yaml"),

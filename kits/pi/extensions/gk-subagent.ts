@@ -100,6 +100,10 @@ export async function dispatch(args: DispatchArgs, signal?: AbortSignal): Promis
   // returns, so a write after the call races the child's own startup checks
   // (observed on Linux CI). pid:null marks "about to launch"; best-effort,
   // bookkeeping never fails a dispatch.
+  // Intent multiplicity is deliberate (audit #6, won't-fix): the orchestrator's
+  // `gk run dispatch --via extension` + this pre-spawn pid:null + the post-spawn
+  // real-pid line give resume/take three monotonic states — declared, launching,
+  // live. Deduping would add read-before-write to a path that must never fail.
   recordIntent(args, null);
   const child = spawn(
     "/bin/sh",

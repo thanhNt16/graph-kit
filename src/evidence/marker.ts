@@ -1,7 +1,8 @@
 import YAML from "yaml";
 import type { Fingerprint } from "./fingerprint.js";
 
-export type Freshness = "fresh" | "stale" | "unknown";
+/** `foreign`: stamped by a run outside the active run's lineage (gate-side lineage check, GAP-3). */
+export type Freshness = "fresh" | "stale" | "unknown" | "foreign";
 
 export interface MarkerMeta {
   key: string;

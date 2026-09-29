@@ -6,7 +6,7 @@ import { parseMarker, renderMarker } from "../../evidence/marker.js";
 import { buildViews, renderHtml, renderMarkdown } from "../../evidence/report.js";
 import { addEvidence, maxBytesFromConfig } from "../../evidence/store.js";
 import { activeRunGraph } from "../../memory/ledger.js";
-import { subcommandsFor } from "../command-registry.js";
+import { leafUsageFor, subcommandsFor } from "../command-registry.js";
 import { emit, fail, ok } from "../output.js";
 import { loadGraph } from "./graph.js";
 
@@ -32,11 +32,12 @@ export function registerEvidenceCommand(cli: CAC) {
       "graph.yaml to resolve evidence keys/dir from (default: active run's graph, then ./graph.yaml)",
     )
     .option("--json", "JSON output")
+    .example(leafUsageFor("evidence"))
     .action((subcommand, args, opts) => {
       const cwd = process.cwd();
       if (!subcommand) {
         console.log(
-          `gk evidence — evidence commands\n\nUsage:\n  gk evidence <subcommand> [args...]\n\nSubcommands: ${subcommandsFor("evidence")}`,
+          `gk evidence — evidence commands\n\nUsage:\n  gk evidence <subcommand> [args...]\n\nSubcommands:\n${leafUsageFor("evidence")}`,
         );
         return;
       }

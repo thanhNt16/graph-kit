@@ -130,3 +130,77 @@ describe("gateGraph freshness", () => {
     expect(r.freshness.design).toBe("unknown");
   });
 });
+
+/** Minimal on-disk run: valid id (ledger RUN_ID_PATTERN) + meta.json with optional `resumes` link. */
+function makeRun(id: string, resumes?: string): void {
+  const dir = join(repo, ".graphkit", "runs", id);
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(join(dir, "meta.json"), `${JSON.stringify({ id, ...(resumes ? { resumes } : {}) }, null, 2)}\n`);
+}
+
+function activateRun(id: string): void {
+  mkdirSync(join(repo, ".graphkit", "runs"), { recursive: true });
+  writeFileSync(join(repo, ".graphkit", "runs", ".active"), join(repo, ".graphkit", "runs", id));
+}
+
+describe("gateGraph foreign lineage", () => {
+  const RUN1 = "20260929-100000-lin";
+  const RUN2 = "20260929-110000-lin";
+  const RUN3 = "20260929-120000-lin";
+
+  test("run1-stamped evidence under unrelated active run2: report warns, strict BLOCKs", () => {
+    makeRun(RUN1);
+    makeRun(RUN2);
+    activateRun(RUN2);
+    writeFileSync(
+      join(evDir, "design.md"),
+      renderMarker({ ...markerFor("design", fingerprint(repo)), run_id: RUN1 }, "body"),
+    );
+    const report = gateGraph(["design"], evDir, { cwd: repo });
+    expect(report.verdict).toBe("MERGE"); // report mode: foreign label + warning, verdict unaffected
+    expect(report.freshness.design).toBe("foreign");
+    expect(report.warnings.some((w) => w.includes("design") && w.includes("resumes chain"))).toBe(true);
+    const strict = gateGraph(["design"], evDir, { cwd: repo, strict: true });
+    expect(strict.verdict).toBe("BLOCK");
+    expect(strict.freshness.design).toBe("foreign");
+    expect(strict.scorecard.design).toBe("ok"); // blocked via freshness, not missing
+    expect(strict.warnings.some((w) => w.includes("design") && w.includes("resumes chain"))).toBe(true);
+  });
+
+  test("active run resuming the stamping run (resumes chain): same evidence MERGEs", () => {
+    makeRun(RUN1);
+    makeRun(RUN2, RUN1);
+    makeRun(RUN3, RUN2);
+    activateRun(RUN3);
+    writeFileSync(
+      join(evDir, "design.md"),
+      renderMarker({ ...markerFor("design", fingerprint(repo)), run_id: RUN2 }, "body"),
+    );
+    const r = gateGraph(["design"], evDir, { cwd: repo, strict: true });
+    expect(r.verdict).toBe("MERGE");
+    expect(r.freshness.design).toBe("fresh");
+  });
+
+  test("run_id:null marker (legacy/hand-written) is never foreign", () => {
+    makeRun(RUN1);
+    makeRun(RUN2);
+    activateRun(RUN2);
+    writeFileSync(join(evDir, "design.md"), renderMarker(markerFor("design", fingerprint(repo)), "body"));
+    const r = gateGraph(["design"], evDir, { cwd: repo, strict: true });
+    expect(r.verdict).toBe("MERGE");
+    expect(r.freshness.design).toBe("fresh");
+    expect(r.warnings).toEqual([]);
+  });
+
+  test("no active run: lineage check skipped entirely", () => {
+    makeRun(RUN1); // exists on disk but not active
+    writeFileSync(
+      join(evDir, "design.md"),
+      renderMarker({ ...markerFor("design", fingerprint(repo)), run_id: RUN1 }, "body"),
+    );
+    const r = gateGraph(["design"], evDir, { cwd: repo, strict: true });
+    expect(r.verdict).toBe("MERGE");
+    expect(r.freshness.design).toBe("fresh");
+    expect(r.warnings).toEqual([]);
+  });
+});

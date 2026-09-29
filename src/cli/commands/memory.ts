@@ -12,7 +12,7 @@ import { renderRecallAscii, renderRecallHtml } from "../../memory/render-recall.
 import { readMemoryFile, walkMemoryFiles, writeMemoryFile } from "../../memory/store.js";
 import { MemoryConfig, MemoryFileSchema } from "../../schemas/memory.schema.js";
 import { seamClientFactory, seamIndexProject } from "../cbm-seam.js";
-import { subcommandsFor } from "../command-registry.js";
+import { leafUsageFor, subcommandsFor } from "../command-registry.js";
 import { emit, fail, ok } from "../output.js";
 
 // project precedence: --project flag → graph.yaml topology_config.memory.project → default
@@ -228,13 +228,12 @@ export function registerMemoryCommands(cli: CAC) {
     .option("--explain", "Explain recall scoring and filter decisions (read-only)")
     .option("--html", "With --explain: render the explanation as a standalone HTML report")
     .option("--origin <origin>", "Origin marker for the recall capture log (e.g. cli, curator, agent)")
+    .example(leafUsageFor("memory"))
     .action(async (subcommand, _args, opts) => {
       if (!subcommand) {
         // Bare `gk memory` prints usage and exits 0 — a documented surface, not an error.
         console.log(
-          `gk memory — memory lifecycle commands\n\nUsage:\n  gk memory <subcommand> [args...]\n
-Subcommands: ${subcommandsFor("memory")}\n\nOptions:\n  --project <project>  CBM project name\n  --json               JSON output\n
-Recall options:\n  --explain            Explain recall scoring and filter decisions (read-only)\n  --html               With --explain: render a standalone HTML report to .graphkit/diagrams/\n  --origin <origin>    Origin marker for the recall capture log (e.g. cli, curator, agent)`,
+          `gk memory — memory lifecycle commands\n\nUsage:\n  gk memory <subcommand> [args...]\n\nSubcommands:\n${leafUsageFor("memory")}\n\nOptions:\n  --project <project>  CBM project name\n  --json               JSON output\n\nRecall options:\n  --explain            Explain recall scoring and filter decisions (read-only)\n  --html               With --explain: render a standalone HTML report to .graphkit/diagrams/\n  --origin <origin>    Origin marker for the recall capture log (e.g. cli, curator, agent)`,
         );
         return;
       }

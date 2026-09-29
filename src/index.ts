@@ -20,6 +20,9 @@ function main() {
   // After parse, no matched command + no flags that cac self-printed its own
   // output for (help/version) => print help and exit 1, telling the user to
   // pick a command; "no command" is a usage error, not success.
+  // Note: bare GROUP commands (`gk run`, `gk evidence`, …) intentionally exit 0
+  // with curated help — a namespace probe is not "no command". The asymmetry
+  // is deliberate (audit F7): scripts use `gk run` to test availability.
   const consumed = cli.options.help || cli.options.version;
   if (!cli.matchedCommand && !consumed) {
     // F5: a typo'd command must be distinguishable from bare `gk` — name the
