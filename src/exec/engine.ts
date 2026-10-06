@@ -73,7 +73,11 @@ function retryDelayMs(retry: PlannedNode["retry"], attempt: number): number {
 }
 
 function failNotes(outcome: DispatchOutcome): string {
-  return outcome.timedOut ? `timeout after ${outcome.durationMs}ms` : `exit=${outcome.exitCode}`;
+  if (outcome.timedOut) return `timeout after ${outcome.durationMs}ms`;
+  // A failure that explains itself (e.g. the worktree runner's
+  // `merge-conflict:gk/<id>`) beats a bare exit code in the trace.
+  const head = outcome.output.trim().split("\n")[0]?.trim() ?? "";
+  return head ? head.slice(0, 120) : `exit=${outcome.exitCode}`;
 }
 
 /** Compaction keeps the verdict-relevant skeleton of an upstream node
