@@ -49,7 +49,7 @@ describe("CLI parse errors are loud, not stack leaks", () => {
   });
 
   test("missing option value: stderr names it, exit 1, no stack", async () => {
-    const { stdout, stderr, code } = await spawnCli(["compile", "--output"]);
+    const { stdout, stderr, code } = await spawnCli(["run", "--graph"]);
     expect(code).toBe(1);
     expect(stderr).toContain("value is missing");
     expect(stdout).not.toContain("CACError");
