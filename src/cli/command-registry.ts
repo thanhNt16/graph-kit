@@ -5,8 +5,7 @@
  * manifest cannot drift from the registration surface. Leaf entries under
  * action-dispatched group commands ("graph list" etc.) never reach cac — they
  * live in GROUP_SUBCOMMANDS below as name + terse usage; no prose descriptions
- * exist (the old CLI_COMMANDS copy described `graph index` as "Index memory
- * into CBM" when it indexes the repo — wrong, and now deleted).
+ * exist — terse usage lines are the whole contract.
  */
 import type { CAC } from "cac";
 import { listTargets } from "../targets/index.js";
@@ -44,14 +43,8 @@ const GROUP_SUBCOMMANDS: Record<string, Leaf[]> = {
     { name: "svg", usage: "[graph.yaml]" },
     { name: "waves", usage: "[graph.yaml]" },
     { name: "agents", usage: "[graph.yaml]" },
-    { name: "index", usage: "[fast|moderate|full]" },
-    { name: "search", usage: "<pattern> [project]" },
-    { name: "ask", usage: "<question...>" },
-    { name: "trace", usage: "<function_name> [project]" },
-    { name: "query", usage: "<cypher> [project]" },
   ],
   memory: [
-    { name: "index", usage: "[--project <project>]" },
     { name: "trace", usage: "" },
     { name: "touch", usage: "<id>" },
     { name: "recall", usage: "<query...> [--explain] [--html] [--origin <origin>]" },

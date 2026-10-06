@@ -12,7 +12,6 @@
     "lint": "biome check .",
     "test": "bun test",
     "eval": "bun run src/eval/replay-cli.ts",
-    "cbm:parity": "bun run scripts/cbm-parity.ts",
     "prepack": "bun run build",
     "check-changelog": "bun run scripts/check-changelog.ts",
     "check-cli-parity": "bun run scripts/check-cli-parity.ts",

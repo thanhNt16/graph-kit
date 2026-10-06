@@ -44,16 +44,15 @@
     },
     {
       "name": "graph",
-      "description": "Graph lifecycle commands\nSubcommands: topologies list switch show inspect new ascii svg waves agents index search ask trace query",
+      "description": "Graph lifecycle commands\nSubcommands: topologies list switch show inspect new ascii svg waves agents",
       "options": [
         "--json"
       ]
     },
     {
       "name": "memory",
-      "description": "Memory commands\nSubcommands: index trace touch recall consolidate",
+      "description": "Memory commands\nSubcommands: trace touch recall consolidate",
       "options": [
-        "--project <project>",
         "--json",
         "--explain",
         "--html",

@@ -34,7 +34,7 @@ The profile is fail-closed on purpose:
 
 1. **Preflight**: run `gk inventory --target <target>` — if `codebase-memory` is not listed under `mcpServers`, the host has no MCP server configured and every symbol-first node will fail.
 2. **At execution**: the node objective must state the degradation contract (see the example): with no reachable codebase-memory server, the node reports failure immediately — it does **not** fall back to unbounded whole-file reads. A silent fallback would reintroduce exactly the context blow-up the profile exists to prevent.
-3. **CLI bridge reality**: `gk graph index|search|ask|trace|query` exit 1 with `CBM_UNAVAILABLE` unless `CBM_CMD`/`CBM_ARGS` point at a local codebase-memory-mcp build (the npm package is unpublished today — see "CBM boundary" in the README). File-based `gk memory recall` is unaffected.
+3. **CLI surface**: file-based `gk memory recall` works without any MCP server; there is no gk-side codebase bridge — symbol queries reach the host's codebase-memory MCP directly through the skill.
 
 Validation does not check MCP availability — `gk validate` passes any `skills:` list because gk never spawns anything. The guarantee above is behavioral: put it in the objective, as the runnable example does.
 

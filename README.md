@@ -108,8 +108,6 @@ your-project/
     └── rules/                       # host-native constraints & guardrails
 ```
 
-> **Optional backend:** `gk graph index|search|ask|trace|query` and `gk memory index|trace` require a running `@graphkit/codebase-memory-mcp` server (set `CBM_CMD` to its binary). That package is not yet published to npm — without it these commands exit with a clear `CBM_UNAVAILABLE` error. Everything else works standalone.
-
 ---
 
 ## A workflow, end-to-end (The Diamond Pattern)

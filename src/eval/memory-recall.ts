@@ -55,10 +55,8 @@ export function applyRecallFilters(entries: RecallEntry[], now: string): RecallE
 }
 
 // ── the working retriever ────────────────────────────────────────────────────
-// Measured 2026-08-15 (memory-recall eval): CBM search_graph returns 0 hits
-// over markdown-only projects — .md indexes as File/Module shells with no
-// searchable content. BM25 × salience over the files themselves is the only
-// working memory retriever; shared by the CLI, the explain lens, and the eval.
+// BM25 × salience over the memory files themselves; shared by the CLI, the
+// explain lens, and the eval.
 
 import { readdirSync } from "node:fs";
 import { join } from "node:path";

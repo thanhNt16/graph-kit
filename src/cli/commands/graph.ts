@@ -2,9 +2,6 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import type { CAC } from "cac";
 import YAML from "yaml";
-import { CBM_UNAVAILABLE_MSG, type CbmClient } from "../../cbm/client.js";
-import type { QueryResult, SearchResult, TraceResult } from "../../cbm/contract.js";
-import { routeAndRetrieve } from "../../cbm/route.js";
 import { compileGraph } from "../../compiler/emitter.js";
 import { planGraph } from "../../compiler/plan.js";
 import { isBlocking, validateGraph } from "../../compiler/validate.js";
@@ -15,7 +12,6 @@ import { GraphTemplateSchema } from "../../schemas/template.schema.js";
 import { getTopologyConfigKeys, TOPOLOGY_NAMES, type TopologyName } from "../../schemas/topology/index.js";
 import { getActiveGraphId, listSessionGraphs, loadActiveGraph, setActiveGraphId } from "../../store/index.js";
 import { renderAscii } from "../ascii.js";
-import { seamClientFactory, seamIndexProject } from "../cbm-seam.js";
 import { leafUsageFor, subcommandsFor } from "../command-registry.js";
 import { formatZodIssues } from "../diagnostics.js";
 import { resolveGraph, resolveGraphPath } from "../graph-resolve.js";
@@ -23,27 +19,6 @@ import { materializeNodeAgents } from "../node-agents.js";
 import { emit, fail, ok, type Result } from "../output.js";
 import { renderSvg } from "../svg.js";
 import { templatesDir } from "./kit.js";
-
-// Own the create→call→close lifecycle so a thrown call can't leak the spawned
-// CBM child process (mirrors memory.ts indexMemory's try/finally).
-async function cbmCall<T>(fn: (client: CbmClient) => Promise<T>): Promise<T> {
-  const client = seamClientFactory()();
-  try {
-    return await fn(client);
-  } finally {
-    await client.close();
-  }
-}
-
-// Prepend the F3 contract when the rejection isn't already carrying it, so gk
-// always exits with the honest CBM_CMD/CBM_ARGS guidance — never a bare errno.
-function cbmFailure(e: unknown): ReturnType<typeof fail> {
-  const msg = String((e as Error)?.message ?? e);
-  return fail(
-    "CBM_UNAVAILABLE",
-    msg.includes("@graphkit/codebase-memory-mcp") ? msg : `${CBM_UNAVAILABLE_MSG}\n${msg}`,
-  );
-}
 
 // Read + YAML-parse a graph document, wrapping ENOENT in the canonical
 // GRAPH_FILE_NOT_FOUND envelope. Shared by loadGraph and the template-routing
@@ -862,90 +837,6 @@ export function registerGraphCommands(cli: CAC) {
         } catch (e) {
           emit(e instanceof GraphKitError ? fail(e.code, e.message, e.details) : fail("AGENTS_ERROR", String(e)));
         }
-      } else if (subcommand === "index") {
-        (async () => {
-          try {
-            const mode = Array.isArray(args) ? (args[0] as "fast" | "moderate" | "full" | undefined) : undefined;
-            const result = await cbmCall((c) => seamIndexProject()(c, { repoPath: process.cwd(), mode }));
-            emit(ok(result));
-          } catch (e) {
-            emit(cbmFailure(e));
-          }
-        })();
-      } else if (subcommand === "search") {
-        (async () => {
-          try {
-            const pattern = Array.isArray(args) ? args[0] : args;
-            if (!pattern) {
-              emit(fail("MISSING_ARG", "search requires a pattern argument"));
-              return;
-            }
-            const raw = await cbmCall((c) =>
-              c.call<SearchResult>("search_graph", {
-                pattern,
-                project: Array.isArray(args) ? args[1] : undefined,
-              }),
-            );
-            emit(ok(raw));
-          } catch (e) {
-            emit(cbmFailure(e));
-          }
-        })();
-      } else if (subcommand === "ask") {
-        (async () => {
-          try {
-            const q = Array.isArray(args) ? args.join(" ") : args;
-            if (!q) {
-              emit(fail("MISSING_ARG", "ask requires a natural-language question"));
-              return;
-            }
-            // project undefined = CBM derives from cwd, same as `graph search`
-            const raw = await cbmCall((c) => routeAndRetrieve(c, q));
-            emit(ok(raw));
-          } catch (e) {
-            emit(cbmFailure(e));
-          }
-        })();
-      } else if (subcommand === "trace") {
-        (async () => {
-          try {
-            const fn = Array.isArray(args) ? args[0] : args;
-            if (!fn) {
-              emit(fail("MISSING_ARG", "trace requires a function_name argument"));
-              return;
-            }
-            const raw = await cbmCall((c) =>
-              c.call<TraceResult>("trace_path", {
-                function_name: fn,
-                project: Array.isArray(args) ? args[1] : undefined,
-                depth: 3,
-                direction: "both",
-              }),
-            );
-            emit(ok(raw));
-          } catch (e) {
-            emit(cbmFailure(e));
-          }
-        })();
-      } else if (subcommand === "query") {
-        (async () => {
-          try {
-            const q = Array.isArray(args) ? args[0] : args;
-            if (!q) {
-              emit(fail("MISSING_ARG", "query requires a Cypher query argument"));
-              return;
-            }
-            const raw = await cbmCall((c) =>
-              c.call<QueryResult>("query_graph", {
-                query: q,
-                project: Array.isArray(args) ? args[1] : undefined,
-              }),
-            );
-            emit(ok(raw));
-          } catch (e) {
-            emit(cbmFailure(e));
-          }
-        })();
       } else {
         emit(
           fail("UNKNOWN_GRAPH_SUBCOMMAND", `Unknown subcommand "${subcommand}". Available: ${subcommandsFor("graph")}`),

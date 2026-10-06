@@ -8,10 +8,7 @@ disable-model-invocation: false
 
 # gk recall
 
-Memory lives in `.graphkit/memory/` OKF files. Retrieval is `gk memory recall` —
-NOT CBM: `search_graph` over a markdown-only project returns 0 hits (.md indexes
-as File/Module shells with no searchable content; measured 2026-08-15, see
-`scripts/memory-recall-eval.ts`).
+Memory lives in `.graphkit/memory/` OKF files. Retrieval is `gk memory recall`.
 
 ## Process
 

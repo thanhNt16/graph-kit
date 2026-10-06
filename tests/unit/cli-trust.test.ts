@@ -1,10 +1,8 @@
-import { afterAll, afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { cac } from "cac";
-import { CBM_UNAVAILABLE_MSG } from "../../src/cbm/client.js";
-import { resetCbmSeam, setCbmSeam } from "../../src/cli/cbm-seam.js";
 import { groupNames, subcommandsFor } from "../../src/cli/command-registry.js";
 import { registerEvidenceCommand } from "../../src/cli/commands/evidence.js";
 import { registerGraphCommands } from "../../src/cli/commands/graph.js";
@@ -21,13 +19,6 @@ import { APP_VERSION } from "../../src/version.js";
  * Task 1 (executor-product) CLI-trust tests: all 364+ green, no silent exit-0.
  * Goal 1 of the plan — every failure is loud. Mirrors src/index.ts wiring.
  */
-
-// The async CBM handlers cac does not await keep rejecting after the owning
-// test has finished, re-setting process.exitCode=1 via fail(). Clear it once
-// at file end so bun:test exits 0 even if a handler settles last.
-afterAll(() => {
-  process.exitCode = 0;
-});
 
 function fullCli() {
   const cli = cac("gk").version(APP_VERSION);
@@ -65,34 +56,6 @@ function runCli(args: string[], cwd: string) {
     process.cwd = origCwd;
     sink.code = sink.code || ((process.exitCode as number | undefined) ?? 0);
     process.exitCode = 0; // emit-fail sets exitCode=1; reset so later tests start clean
-  }
-  return sink;
-}
-
-// cac does not await async command actions — the handler keeps running after
-// cli.parse returns. Restore the real console.log/process.exit only AFTER the
-// handler settles, or its late process.exit(1) kills the test runner itself.
-async function runCliAsync(args: string[], cwd: string, settleMs = 500) {
-  const cli = fullCli();
-  sink.logs = [];
-  sink.code = 0;
-  const origLog = console.log;
-  console.log = (...a: unknown[]) => sink.logs.push(a.map(String).join(" "));
-  const origExit = process.exit;
-  process.exit = (c?: number) => {
-    sink.code = c ?? 1;
-  };
-  const origCwd = process.cwd;
-  process.cwd = () => cwd;
-  try {
-    cli.parse(["node", "gk", ...args], { run: true });
-    await new Promise((r) => setTimeout(r, settleMs));
-  } finally {
-    console.log = origLog;
-    process.exit = origExit;
-    process.cwd = origCwd;
-    sink.code = sink.code || ((process.exitCode as number | undefined) ?? 0);
-    process.exitCode = 0;
   }
   return sink;
 }
@@ -167,47 +130,6 @@ describe("CLI trust: bare gk (no command) prints help + exits 1 — F1", () => {
     expect(parsed.status).toBe("fail");
     expect(parsed.error.code).toBe("UNKNOWN_TOPOLOGY");
     expect(code).toBe(1);
-  });
-});
-
-describe("CLI trust: memory index fails honestly with CBM_UNAVAILABLE — F3", () => {
-  let root: string;
-  let cwd: string;
-  beforeEach(() => {
-    root = join(tmpdir(), `gk-trust-mem-${process.pid}-${Date.now()}`);
-    cwd = root;
-    mkdirSync(cwd, { recursive: true });
-    // Hermetic wiring test: an injected client factory that dies exactly like
-    // the real spawn-death (see cbm-client.test.ts for the real-spawn case).
-    setCbmSeam({
-      clientFactory: () => ({
-        call: async () => Promise.reject(new Error(CBM_UNAVAILABLE_MSG)),
-        close: async () => {},
-      }),
-      indexProject: async () => {
-        throw new Error(CBM_UNAVAILABLE_MSG);
-      },
-    });
-  });
-  afterEach(() => {
-    process.exitCode = 0;
-    resetCbmSeam();
-    rmSync(root, { recursive: true, force: true });
-  });
-
-  test("memory index --json emits CBM_UNAVAILABLE with CBM_CMD/CBM_ARGS + npm 404, process.exit(1)", async () => {
-    await runCliAsync(["memory", "index", "--json"], cwd);
-    const out = JSON.parse(sink.logs.join("\n"));
-    expect(out.status).toBe("fail");
-    expect(out.error.code).toBe("CBM_UNAVAILABLE");
-    expect(out.error.message).toContain("CBM_CMD");
-    expect(out.error.message).toContain("CBM_ARGS");
-    expect(out.error.message).toContain("npm 404");
-    // The handler's stubbed process.exit(1) fired (not just fail()'s exitCode).
-    expect(sink.code).toBe(1);
-    // The async handler also set the real process.exitCode via fail() — clear it
-    // so this success-path unit test doesn't make bun:test exit non-zero.
-    process.exitCode = 0;
   });
 });
 
