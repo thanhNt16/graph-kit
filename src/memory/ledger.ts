@@ -4,6 +4,7 @@ import { basename, isAbsolute, join, resolve } from "node:path";
 import YAML from "yaml";
 
 import { fingerprint } from "../evidence/fingerprint.js";
+import { GraphKitError } from "../errors.js";
 
 export interface TraceLine {
   at: string;
@@ -122,14 +123,14 @@ export function startRun(
   resumes?: string,
 ): { id: string; dir: string; graph_sha256: string } {
   const existing = activeRun(cwd);
-  if (existing) throw new Error(`RUN_ACTIVE: run already active at ${existing}; run \`gk run end\` first`);
+  if (existing) throw new GraphKitError("RUN_ACTIVE", `run already active at ${existing}; run \`gk run end\` first`);
   // A .active naming a deleted run dir is a dangling pointer: the ledger
   // already treats a vanished dir as no active run, so drop the stale file
   // here instead of deadlocking the atomic write below (EEXIST with no live
   // run to name — the "unreadable .active" deadlock).
   if (existsSync(activeFile(cwd))) clearActiveRun(cwd);
   const resolved = isAbsolute(graphPath) ? graphPath : resolve(cwd, graphPath);
-  if (!existsSync(resolved)) throw new Error(`GRAPH_NOT_FOUND: ${graphPath}`);
+  if (!existsSync(resolved)) throw new GraphKitError("GRAPH_NOT_FOUND", graphPath);
 
   const raw = readFileSync(resolved, "utf-8");
   const name = safeGraphName(graphName(resolved));
@@ -183,7 +184,7 @@ export function startRun(
   } catch (e) {
     rmSync(dir, { recursive: true, force: true }); // don't orphan the fresh run dir
     if ((e as NodeJS.ErrnoException).code === "EEXIST")
-      throw new Error(`RUN_ACTIVE: run already active at ${activeRun(cwd) ?? "(unreadable .active)"}`);
+      throw new GraphKitError("RUN_ACTIVE", `run already active at ${activeRun(cwd) ?? "(unreadable .active)"}`);
     throw e;
   }
   if (takesOver) rmSync(takeoverFile, { force: true }); // consume: run is live, provenance committed
@@ -193,7 +194,7 @@ export function startRun(
 export function appendNode(cwd: string, line: Omit<TraceLine, "at">, now = new Date().toISOString()) {
   const dir = activeRun(cwd);
   // Strict on purpose: an orphan trace line silently corrupts pattern statistics.
-  if (!dir) throw new Error("NO_ACTIVE_RUN: start a run with `gk run start` before recording nodes");
+  if (!dir) throw new GraphKitError("NO_ACTIVE_RUN", "start a run with `gk run start` before recording nodes");
   const entry: TraceLine = { at: now, ...line };
   appendFileSync(join(dir, "trace.jsonl"), `${JSON.stringify(entry)}\n`);
   const detail = [line.agent, line.duration_ms == null ? null : `${line.duration_ms}ms`, line.notes]
@@ -218,7 +219,7 @@ export function appendAdvisor(
 ): { event: AdvisorEvent; run: string } {
   const dir = activeRun(cwd);
   // Same strictness as appendNode: an advisor event with no live run is a bug, not noise.
-  if (!dir) throw new Error("NO_ACTIVE_RUN: start a run with `gk run start` before recording advisor events");
+  if (!dir) throw new GraphKitError("NO_ACTIVE_RUN", "start a run with `gk run start` before recording advisor events");
   const event: AdvisorEvent = { at: now, ...ev };
   appendFileSync(join(dir, "advisor.jsonl"), `${JSON.stringify(event)}\n`);
   return { event, run: basename(dir) };
@@ -232,11 +233,11 @@ export function appendDispatch(
   now = new Date().toISOString(),
 ): { run: string; node: string } {
   const dir = activeRun(cwd);
-  if (!dir) throw new Error("NO_ACTIVE_RUN: start a run with `gk run start` before recording dispatches");
+  if (!dir) throw new GraphKitError("NO_ACTIVE_RUN", "start a run with `gk run start` before recording dispatches");
   // A junk pid poisons `take` forever (pid 0 signals our own process group and
   // always looks alive), so dispatch.jsonl only ever holds real pids.
   if (line.pid != null && (!Number.isInteger(line.pid) || line.pid <= 0))
-    throw new Error(`BAD_PID: --pid must be a positive integer, got ${line.pid}`);
+    throw new GraphKitError("BAD_PID", `--pid must be a positive integer, got ${line.pid}`);
   const entry: DispatchLine = { at: now, ...line };
   appendFileSync(join(dir, "dispatch.jsonl"), `${JSON.stringify(entry)}\n`);
   return { run: basename(dir), node: line.node };
@@ -262,12 +263,12 @@ export function readDispatches(cwd: string, id: string): DispatchLine[] {
  *  ledger write; single-writer run makes this safe. */
 export function landNode(cwd: string, node: string, commit: string, now = new Date().toISOString()) {
   const dir = activeRun(cwd);
-  if (!dir) throw new Error("NO_ACTIVE_RUN: start a run before landing nodes");
+  if (!dir) throw new GraphKitError("NO_ACTIVE_RUN", "start a run before landing nodes");
   const id = basename(dir);
   // The stamp ties the node to its integration commit — a non-sha silently
   // poisons the audit trail the run report is built on.
   if (!/^[0-9a-f]{4,40}$/i.test(commit))
-    throw new Error(`BAD_COMMIT: --commit must be a 4-40 char hex sha, got "${commit}"`);
+    throw new GraphKitError("BAD_COMMIT", `--commit must be a 4-40 char hex sha, got "${commit}"`);
   const trace = readTrace(cwd, id);
   // Latest status wins: a node whose most recent round failed is not landable,
   // even if an earlier `ok` line exists — a stale-ok stamp asserts an
@@ -278,9 +279,9 @@ export function landNode(cwd: string, node: string, commit: string, now = new Da
       idx = i;
       break;
     }
-  if (idx < 0) throw new Error(`LAND_NOT_OK: no trace line for node "${node}" in run ${id}`);
+  if (idx < 0) throw new GraphKitError("LAND_NOT_OK", `no trace line for node "${node}" in run ${id}`);
   if (trace[idx].status !== "ok")
-    throw new Error(`LAND_NOT_OK: latest trace for node "${node}" in run ${id} is "${trace[idx].status}", not ok`);
+    throw new GraphKitError("LAND_NOT_OK", `latest trace for node "${node}" in run ${id} is "${trace[idx].status}", not ok`);
   trace[idx] = { ...trace[idx], landed: { at: now, commit } };
   writeFileSync(join(dir, "trace.jsonl"), `${trace.map((t) => JSON.stringify(t)).join("\n")}\n`);
   return { run: id, node };
@@ -333,7 +334,7 @@ export function readRunIndex(cwd: string): RunIndexLine[] {
 
 export function endRun(cwd: string, status: RunIndexLine["status"], now = new Date().toISOString()): RunIndexLine {
   const dir = activeRun(cwd);
-  if (!dir) throw new Error("NO_ACTIVE_RUN: nothing to end");
+  if (!dir) throw new GraphKitError("NO_ACTIVE_RUN", "nothing to end");
   const id = basename(dir);
   const meta = JSON.parse(readFileSync(join(dir, "meta.json"), "utf-8"));
   const trace = readTrace(cwd, id);
@@ -388,6 +389,6 @@ export interface RunMeta {
 export function readRunMeta(cwd: string, id: string): RunMeta {
   const file = join(runsDir(cwd), id, "meta.json");
   if (!RUN_ID_PATTERN.test(id) || !existsSync(file))
-    throw new Error(`RESUME_RUN_NOT_FOUND: no run "${id}" under ${runsDir(cwd)}`);
+    throw new GraphKitError("RESUME_RUN_NOT_FOUND", `no run "${id}" under ${runsDir(cwd)}`);
   return JSON.parse(readFileSync(file, "utf-8")) as RunMeta;
 }

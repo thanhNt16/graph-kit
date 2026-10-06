@@ -1,8 +1,6 @@
 import { execFileSync } from "node:child_process";
-import { readFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import type { CAC } from "cac";
-import YAML from "yaml";
 import { GraphKitError } from "../../errors.js";
 import { analyzeRun } from "../../memory/analyze.js";
 import {
@@ -23,11 +21,12 @@ import {
 } from "../../memory/ledger.js";
 import { recordRound } from "../../memory/loops.js";
 import { reconcileRun, resumeRun } from "../../memory/resume.js";
-import { GraphSchema } from "../../schemas/graph.schema.js";
 import { leafUsageFor, subcommandsFor } from "../command-registry.js";
+import { toGraphKitError } from "../diagnostics.js";
 import { parseInputs, recordRunInputs, requiredMissing } from "../graph-inputs.js";
 import { resolveGraphPath } from "../graph-resolve.js";
 import { emit, fail, ok } from "../output.js";
+import { loadGraph } from "./graph.js";
 import { kitVersionWarnings } from "./kit.js";
 
 /** `gk run end` contract: report leftover worktrees/branches so the orchestrator
@@ -51,31 +50,6 @@ function orphanedGkArtifacts(cwd: string): { orphaned_worktrees: string[]; orpha
   }
 }
 
-function errCode(e: unknown): { code: string; message: string } {
-  const message = String((e as Error)?.message ?? e);
-  const code = message.match(/^([A-Z_]+):/)?.[1] ?? "RUN_ERROR";
-  return { code, message };
-}
-
-/** ENOENT on a graph is a coded condition, not a raw errno leaking into the envelope. */
-function readGraphFile(path: string): string {
-  try {
-    return readFileSync(path, "utf-8");
-  } catch (e) {
-    if ((e as NodeJS.ErrnoException).code === "ENOENT") throw new Error(`GRAPH_FILE_NOT_FOUND: ${path}`);
-    throw e;
-  }
-}
-
-/** Schema-validated graph document, failing with the envelope's SCHEMA_INVALID code. */
-function parseGraphData(graphPath: string) {
-  const parsed = GraphSchema.safeParse(YAML.parse(readGraphFile(graphPath)));
-  if (!parsed.success) {
-    const issues = parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; ");
-    throw new Error(`SCHEMA_INVALID: ${issues}`);
-  }
-  return parsed.data;
-}
 
 /** Node ids of the graph the run actually executes — resolved through the ONE
  *  graph resolver: explicit --graph (file or session id) wins, then the active
@@ -85,7 +59,7 @@ function parseGraphData(graphPath: string) {
 function runGraphNodeIds(cwd: string, flag: string | undefined): { path: string; ids: string[] } | null {
   try {
     const graphPath = resolveGraphPath(cwd, flag).path;
-    return { path: graphPath, ids: Object.keys(parseGraphData(graphPath).nodes) };
+    return { path: graphPath, ids: Object.keys(loadGraph(graphPath).nodes) };
   } catch (e) {
     if (e instanceof GraphKitError && e.code === "NO_ACTIVE_GRAPH") return null;
     throw e;
@@ -201,7 +175,7 @@ export function registerRunCommands(cli: CAC) {
             // --graph wins, then the active run's recorded graph (what the run
             // actually executes), then session pointer / root graph.yaml.
             const graphPath = resolveGraphPath(cwd, opts.graph).path;
-            const parsedData = parseGraphData(graphPath);
+            const parsedData = loadGraph(graphPath);
             const advisor = parsedData.nodes[String(node)]?.advisor;
             if (!advisor) {
               emit(fail("BAD_ADVISOR", `node "${node}" has no advisor config in ${graphPath}`));
@@ -365,8 +339,8 @@ export function registerRunCommands(cli: CAC) {
               ok(resumeRun(cwd, String(target), { fromNode: opts.fromNode, dryRun: opts.dryRun, force: opts.force })),
             );
           } catch (e) {
-            const { code, message } = errCode(e);
-            emit(fail(code, message));
+            const gke = toGraphKitError(e, "RUN_ERROR");
+            emit(fail(gke.code, gke.message, gke.details));
           }
           return;
         }
@@ -384,8 +358,8 @@ export function registerRunCommands(cli: CAC) {
           try {
             emit(ok(recordRound(cwd, idx)));
           } catch (e) {
-            const { code, message } = errCode(e);
-            emit(fail(code, message));
+            const gke = toGraphKitError(e, "RUN_ERROR");
+            emit(fail(gke.code, gke.message, gke.details));
           }
           return;
         }
@@ -422,8 +396,8 @@ export function registerRunCommands(cli: CAC) {
           try {
             emit(ok(analyzeRun(cwd, target == null || target === "" ? undefined : String(target))));
           } catch (e) {
-            const { code, message } = errCode(e);
-            emit(fail(code, message));
+            const gke = toGraphKitError(e, "RUN_ERROR");
+            emit(fail(gke.code, gke.message, gke.details));
           }
           return;
         }
@@ -433,8 +407,8 @@ export function registerRunCommands(cli: CAC) {
           }),
         );
       } catch (e) {
-        const { code, message } = errCode(e);
-        emit(fail(code, message));
+        const gke = toGraphKitError(e, "RUN_ERROR");
+        emit(fail(gke.code, gke.message, gke.details));
       }
     });
 }

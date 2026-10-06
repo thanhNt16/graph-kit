@@ -16,6 +16,7 @@ import {
 } from "../../schemas/template.schema.js";
 import { saveSessionGraph, setActiveGraphId } from "../../store/index.js";
 import { leafUsageFor, subcommandsFor } from "../command-registry.js";
+import { closeMatches, formatZodIssues } from "../diagnostics.js";
 import { emit, fail, ok, type Result } from "../output.js";
 import { bundledAssetDir } from "./kit.js";
 
@@ -70,7 +71,7 @@ function readTemplate(path: string): GraphTemplate {
   const parsed = GraphTemplateSchema.safeParse(doc);
   if (!parsed.success) {
     throw new GraphKitError("TEMPLATE_INVALID", `Template at ${path} failed validation`, {
-      issues: parsed.error.issues.map((i) => ({ path: i.path.join("."), message: i.message })),
+      issues: formatZodIssues(parsed.error, GraphTemplateSchema),
     });
   }
   return parsed.data;
@@ -88,12 +89,12 @@ function templateFromSource(file: string, name: string): GraphTemplate {
   const graph = GraphSchema.safeParse(doc);
   if (!graph.success) {
     throw new GraphKitError("SOURCE_INVALID", "Source graph failed schema validation", {
-      issues: graph.error.issues.map((i) => ({ path: i.path.join("."), message: i.message })),
+      issues: formatZodIssues(graph.error, GraphSchema),
     });
   }
   const findings = validateGraph(graph.data, dirname(file));
   if (findings.some(isBlocking)) {
-    throw new GraphKitError("SOURCE_INVALID", "Source graph has validation findings", { findings });
+    throw new GraphKitError("SOURCE_INVALID", "Source graph has validation findings", { issues: findings });
   }
   return {
     apiVersion: "graphkit.dev/v1",
@@ -116,7 +117,7 @@ function templateFromInput(input: string): GraphTemplate {
   const parsed = GraphTemplateSchema.safeParse(doc);
   if (!parsed.success) {
     throw new GraphKitError("TEMPLATE_INVALID", "Prepared template input failed validation", {
-      issues: parsed.error.issues.map((i) => ({ path: i.path.join("."), message: i.message })),
+      issues: formatZodIssues(parsed.error, GraphTemplateSchema),
     });
   }
   return parsed.data;
@@ -234,33 +235,6 @@ export function runTemplateList(opts: { cwd: string; home: string }): {
   return ok({ templates });
 }
 
-/** Levenshtein-ish close-match scoring for unknown-name suggestions. */
-function closeMatches(name: string, available: string[]): string[] {
-  const scored = available
-    .map((candidate) => ({ candidate, score: levenshtein(name, candidate) }))
-    .sort((a, b) => a.score - b.score);
-  return scored
-    .slice(0, 3)
-    .filter((s) => s.score <= 3)
-    .map((s) => s.candidate);
-}
-
-function levenshtein(a: string, b: string): number {
-  const m = a.length;
-  const n = b.length;
-  const dp = new Array<number>(n + 1);
-  for (let j = 0; j <= n; j++) dp[j] = j;
-  for (let i = 1; i <= m; i++) {
-    let prev = dp[0];
-    dp[0] = i;
-    for (let j = 1; j <= n; j++) {
-      const tmp = dp[j];
-      dp[j] = Math.min(dp[j] + 1, dp[j - 1] + 1, prev + (a[i - 1] === b[j - 1] ? 0 : 1));
-      prev = tmp;
-    }
-  }
-  return dp[n];
-}
 
 type MaterializeSuccess = {
   id: string;
@@ -319,9 +293,9 @@ export function materializeTemplate(
   const findings = validateGraph(graph, cwd);
   if (findings.some(isBlocking)) {
     throw new GraphKitError(
-      "VALIDATION_FAILED",
+      "MATERIALIZED_INVALID",
       `Materialized graph failed validation:\n${findings.map((f) => `- [${f.check}] ${f.path}: ${f.message}`).join("\n")}`,
-      { findings },
+      { issues: findings },
     );
   }
 

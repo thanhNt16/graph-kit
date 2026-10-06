@@ -235,7 +235,7 @@ describe("gk graph session commands", () => {
       expect(parsed.data.valid).toBe(true);
     });
 
-    it("surfaces findings from the active session graph over a valid root graph.yaml", () => {
+    it("surfaces issues from the active session graph over a valid root graph.yaml", () => {
       const doc = {
         apiVersion: "graphkit.dev/v2",
         kind: "Graph",
@@ -259,7 +259,7 @@ describe("gk graph session commands", () => {
       const parsed = JSON.parse(stdout);
       expect(parsed.status).toBe("fail");
       expect(parsed.error.code).toBe("VALIDATION_FAILED");
-      expect(parsed.error.details.findings.map((f: { check: string }) => f.check)).toContain("refs-exist");
+      expect(parsed.error.details.issues.map((f: { check: string }) => f.check)).toContain("refs-exist");
     });
 
     it("fails with ACTIVE_POINTER_DANGLING when the pointer names a missing graph", () => {

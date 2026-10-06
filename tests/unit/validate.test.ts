@@ -1,7 +1,11 @@
-import { describe, expect, test } from "bun:test";
-import { readFileSync } from "node:fs";
+import { afterEach, describe, expect, test } from "bun:test";
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { cac } from "cac";
 import YAML from "yaml";
+import { registerGraphCommands } from "../../src/cli/commands/graph.js";
+import { formatZodIssues } from "../../src/cli/diagnostics.js";
 import { agentFileName, isBlocking, validateGraph } from "../../src/compiler/validate.js";
 import { GraphSchema } from "../../src/schemas/graph.schema.js";
 
@@ -220,4 +224,104 @@ describe("validateGraph structural checks", () => {
       expect(validateGraph(g, PROJECT_ROOT)).toContainEqual(expect.objectContaining({ check: "evidence-key-path" }));
     });
   }
+});
+
+// Task 2: one diagnostic envelope. Schema and semantic failures share the
+// same `details.issues: Issue[]` shape ({path,message,hint?} + check/severity
+// on semantic entries); the details.findings alias is gone.
+describe("one diagnostic envelope", () => {
+  const TMP = join(import.meta.dir, ".tmp-validate-envelope");
+
+  afterEach(() => {
+    process.exitCode = 0; // fail() sets exitCode=1; reset so bun:test exits 0
+    rmSync(TMP, { recursive: true, force: true });
+  });
+
+  function runValidateCli(args: string[], cwd: string) {
+    const cli = cac("gk");
+    registerGraphCommands(cli);
+    const logs: string[] = [];
+    const origLog = console.log;
+    console.log = (...a: unknown[]) => logs.push(a.map(String).join(" "));
+    let exitCode = 0;
+    let code = 0;
+    const origExit = process.exit;
+    process.exit = (c?: number) => {
+      exitCode = c ?? 1;
+    };
+    const origCwd = process.cwd;
+    process.cwd = () => cwd;
+    try {
+      cli.parse(["node", "gk", ...args], { run: true });
+    } finally {
+      console.log = origLog;
+      process.exit = origExit;
+      process.cwd = origCwd;
+      code = exitCode || ((process.exitCode as number | undefined) ?? 0);
+      process.exitCode = 0;
+    }
+    return { stdout: logs.join("\n"), code };
+  }
+
+  function writeGraph(mutate: (doc: Record<string, unknown>) => void) {
+    mkdirSync(TMP, { recursive: true });
+    const doc = YAML.parse(readFileSync(join(FIXTURES, "valid-diamond.yaml"), "utf-8")) as Record<string, unknown>;
+    mutate(doc);
+    writeFileSync(join(TMP, "graph.yaml"), YAML.stringify(doc), "utf-8");
+  }
+
+  test("formatZodIssues maps zod issues to {path,message}", () => {
+    const parsed = GraphSchema.safeParse({ apiVersion: "graphkit.dev/v2" });
+    if (parsed.success) throw new Error("expected schema failure");
+    const issues = formatZodIssues(parsed.error);
+    expect(issues.length).toBeGreaterThan(0);
+    for (const issue of issues) {
+      expect(issue).toHaveProperty("path");
+      expect(issue).toHaveProperty("message");
+    }
+  });
+
+  test("unrecognized key carries a did-you-mean hint", () => {
+    const doc = YAML.parse(readFileSync(join(FIXTURES, "valid-diamond.yaml"), "utf-8")) as Record<string, unknown>;
+    (doc.nodes as Record<string, unknown>).worker = { ...(doc.nodes as Record<string, unknown>).worker, modle: "opus" };
+    const parsed = GraphSchema.safeParse(doc);
+    if (parsed.success) throw new Error("expected schema failure");
+    const hit = formatZodIssues(parsed.error, GraphSchema).find((i) => i.message.includes("modle"));
+    expect(hit?.hint).toBe('did you mean "model"?');
+  });
+
+  test("schema-invalid graph through gk validate yields details.issues, not findings", () => {
+    writeGraph((doc) => {
+      doc.polic_ref = true;
+    });
+    const { stdout, code } = runValidateCli(["validate", "--json"], TMP);
+    expect(code).toBe(1);
+    const parsed = JSON.parse(stdout);
+    expect(parsed.status).toBe("fail");
+    expect(parsed.error.code).toBe("SCHEMA_INVALID");
+    expect(Array.isArray(parsed.error.details.issues)).toBe(true);
+    expect(JSON.stringify(parsed.error.details.issues)).toContain("polic_ref");
+    expect(parsed.error.details.findings).toBeUndefined();
+  });
+
+  test("semantic failure yields details.issues entries with check+severity", () => {
+    writeGraph((doc) => {
+      doc.evidence = { required_keys: ["report", "report"] }; // duplicate → advisory
+      (doc.nodes as Record<string, unknown>).worker = {
+        ...(doc.nodes as Record<string, unknown>).worker,
+        refs: [{ path: "missing.md", purpose: "audit" }], // blocking refs-exist
+      };
+    });
+    const { stdout, code } = runValidateCli(["validate", "--json"], TMP);
+    expect(code).toBe(1);
+    const parsed = JSON.parse(stdout);
+    expect(parsed.status).toBe("fail");
+    expect(parsed.error.code).toBe("VALIDATION_FAILED");
+    const issues = parsed.error.details.issues;
+    expect(issues.some((i: { check: string }) => i.check === "refs-exist")).toBe(true);
+    expect(
+      issues.some((i: { check: string; severity?: string }) => i.check === "duplicate-required-key" && i.severity === "warn"),
+    ).toBe(true);
+    expect(parsed.error.details.findings).toBeUndefined();
+  });
 });

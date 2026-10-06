@@ -5,6 +5,8 @@ import { join } from "node:path";
 import { cac } from "cac";
 import YAML from "yaml";
 import { registerRunCommands } from "../../src/cli/commands/run.js";
+import { GraphKitError } from "../../src/errors.js";
+
 import { appendNode, endRun, readAdvisorEvents, readTrace, stampTakeover, startRun } from "../../src/memory/ledger.js";
 
 function runCli(args: string[], cwd: string) {
@@ -240,7 +242,8 @@ describe("gk run CLI", () => {
       const fired = JSON.parse(runCli(["run", "node", "exec", "--advisor-fired", "1"], cwd).stdout);
       expect(fired.status).toBe("fail");
       expect(fired.error.code).toBe("SCHEMA_INVALID");
-      expect(fired.error.message).toContain("polic_ref");
+      // Task 2 envelope: the offending key lives in details.issues, not the message.
+      expect(JSON.stringify(fired.error.details.issues)).toContain("polic_ref");
     } finally {
       rmSync(cwd, { recursive: true, force: true });
     }
@@ -591,7 +594,14 @@ describe("run dispatch/land/take CLI", () => {
     startRun(cwd, join(cwd, "graph.yaml")); // blocks any further start
     const stamp = join(cwd, ".graphkit", "runs", ".takeover");
     stampTakeover(cwd, "20260101-000000-old");
-    expect(() => startRun(cwd, join(cwd, "graph.yaml"))).toThrow(/RUN_ACTIVE/);
+    // Task 2 envelope: the code is a structured GraphKitError field now.
+    try {
+      startRun(cwd, join(cwd, "graph.yaml"));
+      throw new Error("expected RUN_ACTIVE");
+    } catch (e) {
+      expect(e).toBeInstanceOf(GraphKitError);
+      expect((e as GraphKitError).code).toBe("RUN_ACTIVE");
+    }
     expect(readFileSync(stamp, "utf-8").trim()).toBe("20260101-000000-old");
     // A later successful start still consumes the surviving stamp.
     endRun(cwd, "failed");

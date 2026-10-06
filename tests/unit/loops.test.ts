@@ -3,6 +3,7 @@ import { appendFileSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import YAML from "yaml";
+import { GraphKitError } from "../../src/errors.js";
 import { appendNode, startRun } from "../../src/memory/ledger.js";
 import { recordRound } from "../../src/memory/loops.js";
 import { GraphSchema } from "../../src/schemas/graph.schema.js";
@@ -303,10 +304,24 @@ describe("recordRound", () => {
   test("missing group or run fails with typed errors", () => {
     const cwd = setup("errors");
     try {
-      expect(() => recordRound(cwd, 3)).toThrow(/^LOOP_GROUP_MISSING:/);
+      // Task 2 envelope: coded failures are GraphKitError with a stable code,
+      // not a message text prefix.
+      try {
+        recordRound(cwd, 3);
+        throw new Error("expected LOOP_GROUP_MISSING");
+      } catch (e) {
+        expect(e).toBeInstanceOf(GraphKitError);
+        expect((e as GraphKitError).code).toBe("LOOP_GROUP_MISSING");
+      }
       const orphan = join(tmpdir(), `gk-loops-orphan-${process.pid}-${Date.now()}`);
       mkdirSync(orphan, { recursive: true });
-      expect(() => recordRound(orphan, 0)).toThrow(/^NO_ACTIVE_RUN:/);
+      try {
+        recordRound(orphan, 0);
+        throw new Error("expected NO_ACTIVE_RUN");
+      } catch (e) {
+        expect(e).toBeInstanceOf(GraphKitError);
+        expect((e as GraphKitError).code).toBe("NO_ACTIVE_RUN");
+      }
       rmSync(orphan, { recursive: true, force: true });
     } finally {
       rmSync(cwd, { recursive: true, force: true });

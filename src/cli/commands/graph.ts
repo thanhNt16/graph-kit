@@ -14,6 +14,7 @@ import { GraphTemplateSchema } from "../../schemas/template.schema.js";
 import { getTopologyConfigKeys, TOPOLOGY_NAMES, type TopologyName } from "../../schemas/topology/index.js";
 import { getActiveGraphId, listSessionGraphs, loadActiveGraph, setActiveGraphId } from "../../store/index.js";
 import { renderAscii } from "../ascii.js";
+import { formatZodIssues } from "../diagnostics.js";
 import { seamClientFactory, seamIndexProject } from "../cbm-seam.js";
 import { leafUsageFor, subcommandsFor } from "../command-registry.js";
 import { resolveGraph, resolveGraphPath } from "../graph-resolve.js";
@@ -68,7 +69,7 @@ export function loadGraph(file: string) {
   const parsed = GraphSchema.safeParse(doc);
   if (!parsed.success) {
     throw new GraphKitError("SCHEMA_INVALID", "graph.yaml failed schema validation", {
-      issues: parsed.error.issues.map((i) => ({ path: i.path.join("."), message: i.message })),
+      issues: formatZodIssues(parsed.error, GraphSchema),
     });
   }
   return parsed.data;
@@ -83,7 +84,7 @@ function validateTemplateDoc(doc: unknown): Result {
   const parsed = GraphTemplateSchema.safeParse(doc);
   if (!parsed.success) {
     return fail("SCHEMA_INVALID", "graph template failed schema validation", {
-      issues: parsed.error.issues.map((i) => ({ path: i.path.join("."), message: i.message })),
+      issues: formatZodIssues(parsed.error, GraphTemplateSchema),
     });
   }
   return ok({
@@ -631,7 +632,7 @@ export function registerGraphCommands(cli: CAC) {
         const graph = resolveGraph(process.cwd(), file);
         const findings = validateGraph(graph, process.cwd());
         if (findings.some(isBlocking)) {
-          emit(fail("VALIDATION_FAILED", "graph has findings", { findings }));
+          emit(fail("VALIDATION_FAILED", "graph has findings", { issues: findings }));
           return;
         }
         emit(ok({ valid: true, topology: graph.topology, warnings: findings.filter((f) => !isBlocking(f)) }));
@@ -649,7 +650,7 @@ export function registerGraphCommands(cli: CAC) {
         const graph = resolveGraph(process.cwd(), file);
         const findings = validateGraph(graph, process.cwd());
         if (findings.some(isBlocking)) {
-          emit(fail("VALIDATION_FAILED", "fix findings before compile", { findings }));
+          emit(fail("VALIDATION_FAILED", "fix findings before compile", { issues: findings }));
           return;
         }
         const script = compileGraph(graph, templatesDir());
@@ -777,7 +778,7 @@ export function registerGraphCommands(cli: CAC) {
           const graph = resolveGraph(process.cwd(), file);
           const findings = validateGraph(graph, process.cwd());
           if (findings.some(isBlocking)) {
-            emit(fail("VALIDATION_FAILED", "graph has findings", { findings }));
+            emit(fail("VALIDATION_FAILED", "graph has findings", { issues: findings }));
             return;
           }
           console.log(renderAscii(graph));
@@ -790,7 +791,7 @@ export function registerGraphCommands(cli: CAC) {
           const graph = resolveGraph(process.cwd(), file);
           const findings = validateGraph(graph, process.cwd());
           if (findings.some(isBlocking)) {
-            emit(fail("VALIDATION_FAILED", "graph has findings", { findings }));
+            emit(fail("VALIDATION_FAILED", "graph has findings", { issues: findings }));
             return;
           }
           const svg = renderSvg(graph);
@@ -811,7 +812,7 @@ export function registerGraphCommands(cli: CAC) {
           const graph = loadGraph(resolved);
           const findings = validateGraph(graph, process.cwd());
           if (findings.some(isBlocking)) {
-            emit(fail("VALIDATION_FAILED", "graph has findings", { findings }));
+            emit(fail("VALIDATION_FAILED", "graph has findings", { issues: findings }));
             return;
           }
           const nodes = graph.nodes || {};
@@ -957,7 +958,7 @@ export function registerGraphCommands(cli: CAC) {
           const graph = resolveGraph(process.cwd(), file);
           const findings = validateGraph(graph, process.cwd());
           if (findings.some(isBlocking)) {
-            emit(fail("VALIDATION_FAILED", "graph has findings", { findings }));
+            emit(fail("VALIDATION_FAILED", "graph has findings", { issues: findings }));
             return;
           }
           const agents = materializeNodeAgents(process.cwd(), graph);

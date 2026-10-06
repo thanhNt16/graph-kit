@@ -2,6 +2,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSy
 import { join } from "node:path";
 import YAML from "yaml";
 import { GraphKitError } from "../errors.js";
+import { formatZodIssues } from "../cli/diagnostics.js";
 import type { Graph } from "../schemas/graph.schema.js";
 import { GraphSchema } from "../schemas/graph.schema.js";
 
@@ -153,10 +154,7 @@ export function loadActiveGraph(baseDir: string = process.cwd()): { id: string; 
   const parsed = GraphSchema.safeParse(YAML.parse(readFileSync(path, "utf-8")));
   if (!parsed.success) {
     throw new GraphKitError("SCHEMA_INVALID", `Session graph ${id} failed schema validation`, {
-      issues: parsed.error.issues.map((issue) => ({
-        path: issue.path.join("."),
-        message: issue.message,
-      })),
+      issues: formatZodIssues(parsed.error, GraphSchema),
     });
   }
   return { id, graph: parsed.data, path };

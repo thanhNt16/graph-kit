@@ -1,5 +1,6 @@
 import { existsSync, readFileSync } from "node:fs";
 import { basename, join } from "node:path";
+import { GraphKitError } from "../errors.js";
 import YAML from "yaml";
 import { GraphSchema } from "../schemas/graph.schema.js";
 import {
@@ -48,13 +49,13 @@ const runsDir = (cwd: string) => join(cwd, ".graphkit", "runs");
 function resolveRun(cwd: string, requested?: string): string {
   if (requested) {
     const valid = RUN_ID_PATTERN.test(requested) && existsSync(join(runsDir(cwd), requested));
-    if (!valid) throw new Error(`RUN_NOT_FOUND: no run "${requested}" under ${runsDir(cwd)}`);
+    if (!valid) throw new GraphKitError("RUN_NOT_FOUND", `no run "${requested}" under ${runsDir(cwd)}`);
     return requested;
   }
   const active = activeRun(cwd);
   if (active) return basename(active);
   const all = listRunIds(cwd);
-  if (all.length === 0) throw new Error(`NO_RUNS: no runs under ${runsDir(cwd)} — start one with \`gk run start\``);
+  if (all.length === 0) throw new GraphKitError("NO_RUNS", `no runs under ${runsDir(cwd)} — start one with \`gk run start\``);
   return all[all.length - 1];
 }
 

@@ -293,3 +293,38 @@ describe("CLI trust: group help lists per-leaf usage (AuditCli F3)", () => {
     }
   });
 });
+
+// Task 2: every `run` error is a GraphKitError code flowing through
+// toGraphKitError — coded throws keep their SCREAMING_SNAKE code and details;
+// only genuinely uncoded errors fall back to RUN_ERROR.
+describe("CLI trust: run errors are GraphKitError codes (Task 2 envelope)", () => {
+  let root: string;
+  beforeEach(() => {
+    root = join(tmpdir(), `gk-trust-runerr-${process.pid}-${Date.now()}`);
+    mkdirSync(root, { recursive: true });
+  });
+  afterEach(() => {
+    process.exitCode = 0;
+    rmSync(root, { recursive: true, force: true });
+  });
+
+  test("coded throw keeps its SCREAMING_SNAKE code — no RUN_ERROR fallback", () => {
+    const parsed = JSON.parse(runCli(["run", "analyze"], root).logs.join("\n")) as {
+      status: string;
+      error: { code: string };
+    };
+    expect(parsed.status).toBe("fail");
+    expect(parsed.error.code).toBe("NO_RUNS");
+    expect(parsed.error.code).toMatch(/^[A-Z][A-Z0-9_]*$/);
+    expect(parsed.error.code).not.toBe("RUN_ERROR");
+  });
+
+  test("deep-module coded errors pass through the catch unwrapped", () => {
+    const parsed = JSON.parse(runCli(["run", "round", "0"], root).logs.join("\n")) as {
+      status: string;
+      error: { code: string };
+    };
+    expect(parsed.status).toBe("fail");
+    expect(parsed.error.code).toBe("NO_ACTIVE_RUN");
+  });
+});

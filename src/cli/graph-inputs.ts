@@ -1,6 +1,7 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import YAML from "yaml";
+import { GraphKitError } from "../errors.js";
 
 // `gk run start --input k=v` enforcement (audit F4): graphs declare
 // `inputs.<name>.required/default`, but nothing ever read them — a run started
@@ -20,7 +21,7 @@ export function parseInputs(pairs: string | string[] | undefined): Record<string
   for (const pair of list) {
     const eq = pair.indexOf("=");
     if (eq <= 0) {
-      throw new Error(`BAD_INPUT: --input expects k=v, got "${pair}"`);
+      throw new GraphKitError("BAD_INPUT", `--input expects k=v, got "${pair}"`);
     }
     provided[pair.slice(0, eq)] = pair.slice(eq + 1);
   }

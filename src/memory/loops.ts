@@ -3,6 +3,8 @@ import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync } from
 import { basename, join } from "node:path";
 import YAML from "yaml";
 import { resolveGraphPath } from "../cli/graph-resolve.js";
+import { formatZodIssues } from "../cli/diagnostics.js";
+import { GraphKitError } from "../errors.js";
 import { GraphSchema } from "../schemas/graph.schema.js";
 import { activeRun, readTrace, type TraceLine } from "./ledger.js";
 
@@ -73,7 +75,7 @@ export function readRoundJournals(cwd: string, id: string): { group: number; lin
 
 export function recordRound(cwd: string, groupIdx: number, now = new Date().toISOString()): RoundResult {
   const dir = activeRun(cwd);
-  if (!dir) throw new Error("NO_ACTIVE_RUN: start a run with `gk run start` before recording rounds");
+  if (!dir) throw new GraphKitError("NO_ACTIVE_RUN", "start a run with `gk run start` before recording rounds");
   const id = basename(dir);
 
   // Tier source: the ONE graph resolver — the active run's recorded graph, then
@@ -82,11 +84,12 @@ export function recordRound(cwd: string, groupIdx: number, now = new Date().toIS
   const graphPath = resolveGraphPath(cwd).path;
   const parsed = GraphSchema.safeParse(YAML.parse(readFileSync(graphPath, "utf-8")));
   if (!parsed.success) {
-    const issues = parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; ");
-    throw new Error(`SCHEMA_INVALID: ${graphPath} — ${issues}`);
+    throw new GraphKitError("SCHEMA_INVALID", `${graphPath} failed schema validation`, {
+      issues: formatZodIssues(parsed.error, GraphSchema),
+    });
   }
   const group = parsed.data.loops?.[groupIdx];
-  if (!group) throw new Error(`LOOP_GROUP_MISSING: graph has no loop group ${groupIdx}`);
+  if (!group) throw new GraphKitError("LOOP_GROUP_MISSING", `graph has no loop group ${groupIdx}`);
   const evidenceDir = parsed.data.outputs?.evidence_dir ?? ".graphkit/evidence/";
 
   const journal = readJournal(cwd, id, groupIdx);

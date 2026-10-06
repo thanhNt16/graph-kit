@@ -118,7 +118,7 @@ export function registerGateCommand(cli: CAC) {
         const graph = resolveGraph(process.cwd(), file);
         const findings = validateGraph(graph, process.cwd());
         if (findings.some(isBlocking)) {
-          emit(fail("VALIDATION_FAILED", "graph has findings", { findings }));
+          emit(fail("VALIDATION_FAILED", "graph has findings", { issues: findings }));
           return;
         }
         const evidenceDir = join(process.cwd(), graph.outputs.evidence_dir);
