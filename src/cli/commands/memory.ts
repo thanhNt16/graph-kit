@@ -13,17 +13,22 @@ import { readMemoryFile, walkMemoryFiles, writeMemoryFile } from "../../memory/s
 import { MemoryConfig, MemoryFileSchema } from "../../schemas/memory.schema.js";
 import { seamClientFactory, seamIndexProject } from "../cbm-seam.js";
 import { leafUsageFor, subcommandsFor } from "../command-registry.js";
+import { resolveGraphPath } from "../graph-resolve.js";
 import { emit, fail, ok } from "../output.js";
 
-// project precedence: --project flag → graph.yaml topology_config.memory.project → default
+// project precedence: --project flag → resolved graph's topology_config.memory.project → default
+/** Project name for memory scoping: the resolved graph's topology_config.memory
+ *  project, falling back to "graph-kit-memory" when unresolvable/unset. The
+ *  resolved graph may come from --graph, the active run, the session pointer,
+ *  or ./graph.yaml. */
 function resolveProject(cwd: string, override?: string): string {
   if (override) return override;
   try {
-    const graph = YAML.parse(readFileSync(join(cwd, "graph.yaml"), "utf-8"));
-    const fromCfg = graph?.topology_config?.memory?.project;
-    if (typeof fromCfg === "string" && fromCfg) return fromCfg;
+    const doc = YAML.parse(readFileSync(resolveGraphPath(cwd).path, "utf-8"));
+    const project = doc?.topology_config?.memory?.project;
+    return typeof project === "string" && project.length > 0 ? project : "graph-kit-memory";
   } catch {
-    /* no graph.yaml — fall back to default */
+    /* Unreadable/unset graph falls back to default */
   }
   return "graph-kit-memory";
 }
@@ -273,11 +278,11 @@ export function registerMemoryCommands(cli: CAC) {
         // Configured recall_topk takes precedence (graph.yaml topology_config.memory).
         let topk = 5;
         try {
-          const graph = YAML.parse(readFileSync(join(process.cwd(), "graph.yaml"), "utf-8"));
+          const graph = YAML.parse(readFileSync(resolveGraphPath(process.cwd()).path, "utf-8"));
           const memCfg = MemoryConfig.safeParse(graph?.topology_config?.memory);
           if (memCfg.success) topk = memCfg.data.recall_topk;
         } catch {
-          /* no graph.yaml — default topk */
+          /* nothing resolvable — default topk */
         }
         if (opts.explain) {
           // Explain mode is a read-only lens: no touchMemory reinforcement, no

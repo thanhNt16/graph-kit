@@ -172,11 +172,11 @@ evidence:
     expect(JSON.parse(explicit.stdout).error.code).toBe("EVIDENCE_KEY_NOT_DECLARED");
   });
 
-  test("--graph file missing → GRAPH_FILE_NOT_FOUND", () => {
+  test("--graph that is neither a file nor a session id -> GRAPH_NOT_FOUND", () => {
     writeFileSync(join(cwd, "r.json"), "{}");
     const r = runCli(["evidence", "add", "r.json", "--key", "api-response", "--graph", "nope.yaml", "--json"]);
     expect(r.code).toBe(1);
-    expect(JSON.parse(r.stdout).error.code).toBe("GRAPH_FILE_NOT_FOUND");
+    expect(JSON.parse(r.stdout).error.code).toBe("GRAPH_NOT_FOUND");
   });
 
   test("report --graph reads keys and evidence_dir from that graph", () => {

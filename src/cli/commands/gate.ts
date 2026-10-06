@@ -9,8 +9,8 @@ import { fingerprint } from "../../evidence/fingerprint.js";
 import { type Freshness, freshnessOf, parseMarker } from "../../evidence/marker.js";
 import { activeRun, readRunIndex, readTrace } from "../../memory/ledger.js";
 import { resumeChain } from "../../memory/resume.js";
+import { resolveGraph } from "../graph-resolve.js";
 import { emit, fail, ok } from "../output.js";
-import { loadGraph } from "./graph.js";
 
 /**
  * Deterministic evidence gate: MERGE/BLOCK over required evidence keys.
@@ -115,8 +115,7 @@ export function registerGateCommand(cli: CAC) {
     .option("--json", "JSON output")
     .action((file) => {
       try {
-        const resolved = file ?? join(process.cwd(), "graph.yaml");
-        const graph = loadGraph(resolved);
+        const graph = resolveGraph(process.cwd(), file);
         const findings = validateGraph(graph, process.cwd());
         if (findings.some(isBlocking)) {
           emit(fail("VALIDATION_FAILED", "graph has findings", { findings }));

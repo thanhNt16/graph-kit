@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import type { CAC } from "cac";
 import YAML from "yaml";
@@ -16,6 +16,7 @@ import { getActiveGraphId, listSessionGraphs, loadActiveGraph, setActiveGraphId 
 import { renderAscii } from "../ascii.js";
 import { seamClientFactory, seamIndexProject } from "../cbm-seam.js";
 import { leafUsageFor, subcommandsFor } from "../command-registry.js";
+import { resolveGraph, resolveGraphPath } from "../graph-resolve.js";
 import { topoWaves } from "../graph-waves.js";
 import { materializeNodeAgents } from "../node-agents.js";
 import { emit, fail, ok, type Result } from "../output.js";
@@ -91,21 +92,6 @@ function validateTemplateDoc(doc: unknown): Result {
     name: parsed.data.metadata.name,
     parameters: parsed.data.parameters,
   });
-}
-// Spec §3.3 — validate-only wiring: bare `gk validate` reads the active session
-// graph when the project is initialized with an active pointer, falling back to
-// root ./graph.yaml otherwise. compile/gate/ascii/waves stay explicit-path.
-function resolveBareValidateGraph(): Graph {
-  const baseDir = process.cwd();
-  if (!existsSync(join(baseDir, ".graphkit"))) return loadGraph(join(baseDir, "graph.yaml"));
-  const active = getActiveGraphId();
-  if (active !== null) return loadActiveGraph().graph; // dangling → ACTIVE_POINTER_DANGLING with available ids
-  if (existsSync(join(baseDir, "graph.yaml"))) return loadGraph(join(baseDir, "graph.yaml"));
-  throw new GraphKitError(
-    "NO_ACTIVE_GRAPH",
-    "No active graph and no graph.yaml — run `gk template materialize --use` or `gk init` first",
-    { baseDir },
-  );
 }
 
 // Valid graph.yaml templates for each topology — emitted by `gk graph new <topology>`
@@ -642,7 +628,7 @@ export function registerGraphCommands(cli: CAC) {
             return;
           }
         }
-        const graph = file ? loadGraph(file) : resolveBareValidateGraph();
+        const graph = resolveGraph(process.cwd(), file);
         const findings = validateGraph(graph, process.cwd());
         if (findings.some(isBlocking)) {
           emit(fail("VALIDATION_FAILED", "graph has findings", { findings }));
@@ -660,7 +646,7 @@ export function registerGraphCommands(cli: CAC) {
     .option("--json", "JSON output")
     .action((file, opts) => {
       try {
-        const graph = loadGraph(file ?? join(process.cwd(), "graph.yaml"));
+        const graph = resolveGraph(process.cwd(), file);
         const findings = validateGraph(graph, process.cwd());
         if (findings.some(isBlocking)) {
           emit(fail("VALIDATION_FAILED", "fix findings before compile", { findings }));
@@ -788,8 +774,7 @@ export function registerGraphCommands(cli: CAC) {
         // `graph waves` so the renderer sees exactly what the executor would run.
         const file = Array.isArray(args) ? args[0] : args;
         try {
-          const resolved = file ?? join(process.cwd(), "graph.yaml");
-          const graph = loadGraph(resolved);
+          const graph = resolveGraph(process.cwd(), file);
           const findings = validateGraph(graph, process.cwd());
           if (findings.some(isBlocking)) {
             emit(fail("VALIDATION_FAILED", "graph has findings", { findings }));
@@ -802,8 +787,7 @@ export function registerGraphCommands(cli: CAC) {
       } else if (subcommand === "svg") {
         const file = Array.isArray(args) ? args[0] : args;
         try {
-          const resolved = file ?? join(process.cwd(), "graph.yaml");
-          const graph = loadGraph(resolved);
+          const graph = resolveGraph(process.cwd(), file);
           const findings = validateGraph(graph, process.cwd());
           if (findings.some(isBlocking)) {
             emit(fail("VALIDATION_FAILED", "graph has findings", { findings }));
@@ -823,7 +807,7 @@ export function registerGraphCommands(cli: CAC) {
         // Each wave = nodes that can run in parallel (all deps satisfied)
         const file = Array.isArray(args) ? args[0] : args;
         try {
-          const resolved = file ?? join(process.cwd(), "graph.yaml");
+          const resolved = resolveGraphPath(process.cwd(), file).path;
           const graph = loadGraph(resolved);
           const findings = validateGraph(graph, process.cwd());
           if (findings.some(isBlocking)) {
@@ -970,8 +954,7 @@ export function registerGraphCommands(cli: CAC) {
         // child-process path. Run after `gk run start`, before wave dispatch.
         const file = Array.isArray(args) ? args[0] : args;
         try {
-          const resolved = file ?? join(process.cwd(), "graph.yaml");
-          const graph = loadGraph(resolved);
+          const graph = resolveGraph(process.cwd(), file);
           const findings = validateGraph(graph, process.cwd());
           if (findings.some(isBlocking)) {
             emit(fail("VALIDATION_FAILED", "graph has findings", { findings }));

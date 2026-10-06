@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { existsSync, readFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import type { CAC } from "cac";
 import YAML from "yaml";
@@ -7,7 +7,6 @@ import { GraphKitError } from "../../errors.js";
 import { analyzeRun } from "../../memory/analyze.js";
 import {
   activeRun,
-  activeRunGraph,
   activeRunPointer,
   appendAdvisor,
   appendDispatch,
@@ -25,9 +24,9 @@ import {
 import { recordRound } from "../../memory/loops.js";
 import { reconcileRun, resumeRun } from "../../memory/resume.js";
 import { GraphSchema } from "../../schemas/graph.schema.js";
-import { getActiveGraphId, loadActiveGraph } from "../../store/index.js";
 import { leafUsageFor, subcommandsFor } from "../command-registry.js";
 import { parseInputs, recordRunInputs, requiredMissing } from "../graph-inputs.js";
+import { resolveGraphPath } from "../graph-resolve.js";
 import { emit, fail, ok } from "../output.js";
 import { kitVersionWarnings } from "./kit.js";
 
@@ -78,26 +77,19 @@ function parseGraphData(graphPath: string) {
   return parsed.data;
 }
 
-/** Node ids of the graph the run actually executes — same resolution as the
- *  advisor path: explicit --graph wins, then the active run's recorded graph.
- *  null when neither resolves (no active run / legacy meta): callers skip
- *  validation rather than guess a graph the run never recorded. */
+/** Node ids of the graph the run actually executes — resolved through the ONE
+ *  graph resolver: explicit --graph (file or session id) wins, then the active
+ *  run's recorded graph. null when nothing resolves (no active run / legacy
+ *  meta): callers skip validation rather than guess a graph the run never
+ *  recorded. */
 function runGraphNodeIds(cwd: string, flag: string | undefined): { path: string; ids: string[] } | null {
-  const graphPath = flag ?? activeRunGraph(cwd);
-  if (!graphPath) return null;
-  return { path: graphPath, ids: Object.keys(parseGraphData(graphPath).nodes) };
-}
-
-/** `run start` graph resolution, mirroring `gk validate`: explicit --graph →
- *  ./graph.yaml when present → the session's active graph from the .graphkit
- *  store (a dangling pointer surfaces ACTIVE_POINTER_DANGLING). Falls through
- *  to ./graph.yaml so startRun's GRAPH_NOT_FOUND stays the legacy error. */
-function resolveStartGraph(cwd: string, flag?: string): string {
-  if (flag) return flag;
-  const local = join(cwd, "graph.yaml");
-  if (existsSync(local)) return local;
-  if (existsSync(join(cwd, ".graphkit")) && getActiveGraphId(cwd) !== null) return loadActiveGraph(cwd).path;
-  return local;
+  try {
+    const graphPath = resolveGraphPath(cwd, flag).path;
+    return { path: graphPath, ids: Object.keys(parseGraphData(graphPath).nodes) };
+  } catch (e) {
+    if (e instanceof GraphKitError && e.code === "NO_ACTIVE_GRAPH") return null;
+    throw e;
+  }
 }
 
 /** Pids of `dispatches` that still have a live process. Only ESRCH means gone:
@@ -159,7 +151,7 @@ export function registerRunCommands(cli: CAC) {
         if (subcommand === "start") {
           let graphPath: string;
           try {
-            graphPath = resolveStartGraph(cwd, opts.graph);
+            graphPath = resolveGraphPath(cwd, opts.graph).path;
           } catch (e) {
             if (!(e instanceof GraphKitError)) throw e;
             emit(fail(e.code, e.message, e.details));
@@ -205,10 +197,10 @@ export function registerRunCommands(cli: CAC) {
               emit(fail("BAD_ADVISOR", "--streak requires an integer >= 1"));
               return;
             }
-            // Tier source: the ACTIVE RUN's recorded graph (what the run actually executes) so a
-            // run started with `--graph sub/x.yaml` needs no repeated flag; explicit --graph wins,
-            // falling back to cwd/graph.yaml for legacy runs without a recorded path.
-            const graphPath = opts.graph ?? activeRunGraph(cwd) ?? join(cwd, "graph.yaml");
+            // Tier source: resolved through the ONE graph resolver — explicit
+            // --graph wins, then the active run's recorded graph (what the run
+            // actually executes), then session pointer / root graph.yaml.
+            const graphPath = resolveGraphPath(cwd, opts.graph).path;
             const parsedData = parseGraphData(graphPath);
             const advisor = parsedData.nodes[String(node)]?.advisor;
             if (!advisor) {

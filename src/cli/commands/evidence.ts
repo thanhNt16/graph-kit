@@ -5,20 +5,9 @@ import { GraphKitError } from "../../errors.js";
 import { parseMarker, renderMarker } from "../../evidence/marker.js";
 import { buildViews, renderHtml, renderMarkdown } from "../../evidence/report.js";
 import { addEvidence, maxBytesFromConfig } from "../../evidence/store.js";
-import { activeRunGraph } from "../../memory/ledger.js";
 import { leafUsageFor, subcommandsFor } from "../command-registry.js";
+import { resolveGraph } from "../graph-resolve.js";
 import { emit, fail, ok } from "../output.js";
-import { loadGraph } from "./graph.js";
-
-// Evidence graph resolution: explicit --graph wins, then the active run's
-// recorded graph, then <cwd>/graph.yaml. The ONE resolved graph feeds both
-// evidence_dir and key-declaration checks so they can never disagree
-// (audit F-01: `run start --graph sub/x.yaml` + bare `gk evidence add`
-// validated keys against an unrelated <cwd>/graph.yaml).
-function resolveGraph(cwd: string, graphOpt: unknown) {
-  const path = graphOpt ? String(graphOpt) : (activeRunGraph(cwd) ?? join(cwd, "graph.yaml"));
-  return loadGraph(path);
-}
 
 export function registerEvidenceCommand(cli: CAC) {
   cli

@@ -116,6 +116,9 @@ describe("phantom node guards (UNKNOWN_NODE)", () => {
     delete meta.graph_path;
     delete meta.graph_sha256;
     writeFileSync(join(active, "meta.json"), JSON.stringify(meta, null, 2));
+    // One-resolver contract: a resolvable root would now be trusted. Strip it so
+    // nothing resolves (NO_ACTIVE_GRAPH) and the node command skips validation.
+    rmSync(join(cwd, "graph.yaml"));
     expect(JSON.parse(runCli(["run", "node", "zz", "--status", "ok"], cwd).stdout).status).toBe("ok");
   });
 });
@@ -310,10 +313,12 @@ describe("run start graph resolution", () => {
     expect(startedMetaGraphPath(["run", "start"])).toBe(join(cwd, ".graphkit", "graphs", "2026-09-28-sessgraph.yaml"));
   });
 
-  test("prefers ./graph.yaml over the session pointer, flag wins over both", () => {
+  test("session pointer beats ./graph.yaml (SB F2); explicit --graph wins over both", () => {
     seedSessionGraph("2026-09-28-sessgraph");
     writeFileSync(join(cwd, "graph.yaml"), GRAPH_YAML);
-    expect(startedMetaGraphPath(["run", "start"])).toBe(join(cwd, "graph.yaml"));
+    expect(startedMetaGraphPath(["run", "start"])).toBe(
+      join(cwd, ".graphkit", "graphs", "2026-09-28-sessgraph.yaml"),
+    );
     endRun(cwd, "failed", "2026-09-04T10:05:00.000Z");
     const alt = join(cwd, "alt.yaml");
     writeFileSync(alt, GRAPH_YAML);
@@ -332,10 +337,10 @@ describe("run start graph resolution", () => {
     expect(out.error.message).toContain("2026-09-28-gone");
   });
 
-  test("no graph.yaml and no pointer keeps the legacy GRAPH_NOT_FOUND error", () => {
+  test("no graph.yaml, no pointer, no active run fails with NO_ACTIVE_GRAPH", () => {
     const out = JSON.parse(runCli(["run", "start"], cwd).stdout) as { status: string; error: { code: string } };
     expect(out.status).toBe("fail");
-    expect(out.error.code).toBe("GRAPH_NOT_FOUND");
+    expect(out.error.code).toBe("NO_ACTIVE_GRAPH");
   });
 });
 

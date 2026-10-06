@@ -2,9 +2,9 @@ import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { CAC } from "cac";
 import { GraphKitError } from "../../errors.js";
+import { resolveGraph } from "../graph-resolve.js";
 import { emit, fail, ok } from "../output.js";
 import { type GateResult, gateGraph } from "./gate.js";
-import { loadGraph } from "./graph.js";
 
 export function registerStatusCommand(cli: CAC) {
   cli
@@ -31,11 +31,11 @@ export function registerStatusCommand(cli: CAC) {
           // .active exists but current.json missing — still running.
         }
 
-        // Gate evidence coverage via existing loadGraph + gateGraph.
+        // Gate evidence coverage via the one graph resolver + gateGraph.
         let coverage: GateResult | null = null;
         let gateError: string | null = null;
         try {
-          const graph = loadGraph(join(cwd, "graph.yaml"));
+          const graph = resolveGraph(cwd);
           const evidenceDir = join(cwd, graph.outputs.evidence_dir);
           coverage = gateGraph(graph.evidence.required_keys, evidenceDir, { cwd });
         } catch (e) {

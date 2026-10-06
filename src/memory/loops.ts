@@ -2,8 +2,9 @@ import { createHash } from "node:crypto";
 import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import YAML from "yaml";
+import { resolveGraphPath } from "../cli/graph-resolve.js";
 import { GraphSchema } from "../schemas/graph.schema.js";
-import { activeRun, activeRunGraph, readTrace, type TraceLine } from "./ledger.js";
+import { activeRun, readTrace, type TraceLine } from "./ledger.js";
 
 /**
  * Durable loop-group round tracking (graph `loops:` spans).
@@ -75,8 +76,10 @@ export function recordRound(cwd: string, groupIdx: number, now = new Date().toIS
   if (!dir) throw new Error("NO_ACTIVE_RUN: start a run with `gk run start` before recording rounds");
   const id = basename(dir);
 
-  // Tier source mirrors the advisor path: the ACTIVE RUN's recorded graph.
-  const graphPath = activeRunGraph(cwd) ?? join(cwd, "graph.yaml");
+  // Tier source: the ONE graph resolver — the active run's recorded graph, then
+  // the session pointer, then ./graph.yaml. Schema errors keep this module's
+  // own shape (Task 2 owns error-envelope migration).
+  const graphPath = resolveGraphPath(cwd).path;
   const parsed = GraphSchema.safeParse(YAML.parse(readFileSync(graphPath, "utf-8")));
   if (!parsed.success) {
     const issues = parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; ");

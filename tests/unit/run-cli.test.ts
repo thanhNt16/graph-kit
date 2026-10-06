@@ -50,10 +50,10 @@ describe("gk run CLI", () => {
         data: { active: null, active_age_ms: null, advisor_events: 0, resumes_chain: [] },
       });
 
-      // 2. Start run without graph file fails with GRAPH_NOT_FOUND
+      // 2. Start run without anything resolvable fails with NO_ACTIVE_GRAPH
       const startFail = JSON.parse(runCli(["run", "start"], cwd).stdout);
       expect(startFail.status).toBe("fail");
-      expect(startFail.error.code).toBe("GRAPH_NOT_FOUND");
+      expect(startFail.error.code).toBe("NO_ACTIVE_GRAPH");
       // 3. Start valid run with graph.yaml
       writeFileSync(
         join(cwd, "graph.yaml"),
