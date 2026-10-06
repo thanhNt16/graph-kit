@@ -13,8 +13,6 @@ describe("gk inventory", () => {
   beforeAll(() => {
     tmp = mkdtempSync(join(tmpdir(), "gk-inventory-test-"));
     cpSync(fixtureRoot(), tmp, { recursive: true });
-    // collectAgents has no existsSync guard: pi's user-global agents dir must exist.
-    mkdirSync(join(tmp, "user", ".omp", "agents"), { recursive: true });
   });
   afterAll(() => {
     rmSync(tmp, { recursive: true, force: true });

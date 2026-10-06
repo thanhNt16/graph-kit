@@ -90,6 +90,7 @@ function parseFrontmatterModel(content: string): { model?: string; name?: string
 
 function collectAgents(dir: string, format: string, warnings: string[]): Map<string, InventoryAgent> {
   const out = new Map<string, InventoryAgent>();
+  if (!existsSync(dir)) return out;
   for (const entry of readdirSync(dir)) {
     if (!entry.endsWith(".md")) continue;
     const base = entry.replace(/\.md$/, "");
