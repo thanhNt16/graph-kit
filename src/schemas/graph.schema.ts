@@ -45,7 +45,7 @@ const AdvisorConfig = z
   .strict();
 
 // Retries cover transient dispatch failures only (timeout, crash, transport);
-// prompt/parse/validation errors are never retried — see gk-execute SKILL.md.
+// prompt/parse/validation errors are never retried — enforced by src/exec/engine.ts.
 const RetryConfig = z
   .object({
     max_attempts: z.number().int().min(1).default(1),
@@ -120,7 +120,7 @@ const NodeDefSchema = z
     budget_tokens: z.number().int().positive().optional(),
     retry: RetryConfig.optional(),
     gate: GateConfig.optional(),
-    // Scales fan-out width, budgets, and loop bounds (see gk-execute SKILL.md).
+    // Scales fan-out width, budgets, and loop bounds (enforced by src/exec/engine.ts).
     effort: z.enum(["light", "standard", "deep"]).default("standard"),
     // Per-node dispatch kill budget in ms; forwarded to gk_dispatch_agent's
     // timeout_ms. Unset → the dispatch default (600000). Set explicitly for

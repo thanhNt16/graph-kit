@@ -251,7 +251,7 @@ export default async function gkSubagentExtension(pi: MinimalPiAPI): Promise<voi
     name: "gk_dispatch_agent",
     label: "Dispatch Agent",
     description:
-      "Dispatch an isolated subagent run: loads .omp/agents/<agent>.md as the role prompt, appends objective/context, and runs a headless `omp -p` child process. Returns { ok, output, exit_code }. Honor wave barriers from gk-execute: treat ok:false as graph-stopping.",
+      "Dispatch an isolated subagent run: loads .omp/agents/<agent>.md as the role prompt, appends objective/context, and runs a headless `omp -p` child process. Returns { ok, output, exit_code }. The exec engine (src/exec/engine.ts) owns wave barriers and graph-stop rules; `gk exec --help` documents the headless path this tool backs.",
     parameters: Type.Object({
       agent: Type.String({ description: "Agent fragment name (file stem under .omp/agents/, e.g. data-engineer)" }),
       model: Type.Optional(Type.String({ description: "Model tier or ID passed to omp --model" })),

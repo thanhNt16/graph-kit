@@ -63,82 +63,27 @@ interface HostConfig {
   skillOverrides?: Record<string, SkillOverride>;
 }
 
-// ---- gk-execute per-host dispatch semantics (sourced from the 2026-09-18 kit diffs) ----
+// ---- gk-execute per-host dispatch semantics ----
+// The _core skill is host-neutral except the dispatch call shape; hosts with a
+// different dispatch tool replace that one section (see SkillOverride below).
 
-const CORE_PURPOSE_LINE =
-  "Execute a graph.yaml by **dispatching native subagents via the task tool** — YOU are the orchestrator. `gk graph agents` materializes each node as a discoverable `.omp/agents/gk-<node>.md` agent (model/tools/skills baked in); each node becomes one task spawn you can see and monitor. `gk_dispatch_agent` remains only for nodes needing a hard wall-clock kill (`timeout_ms`).";
+const CLAUDE_DISPATCH_SHAPE = `## Dispatch call shape
 
-const PURPOSE_LINE_BY_HOST: Record<Exclude<HostId, "pi">, string> = {
-  claude:
-    "Execute a graph.yaml by **directly spawning parallel subagents via the Agent tool** — YOU are the orchestrator. No compiled .workflow.js. Each node becomes one Agent call you can see and monitor.",
-};
-const CORE_RESOLVER_ITEM =
-  "1. **Materialize node agents** — run `gk graph agents <graph.yaml>` once after `gk run start`. It writes `.omp/agents/gk-<node-id>.md` (frontmatter: name, description, node `model`, constraint-derived `tools`, `autoloadSkills` from node `skills`) so omp's native task discovery can dispatch each node directly. Re-run it if the graph changes mid-run.";
-
-const CURATOR_ITEM_BY_HOST: Record<Exclude<HostId, "pi">, string> = {
-  claude:
-    "1. **Read each node's agent definition** from `.claude/agents/<agent-name>.md` — this gives you the agent's identity, rules, and deliverables.",
-};
-
-const COLLECT_AND_LOOPS = `2. **Collect results** — when all agents in the wave return, collect their outputs.
-   In **worktree mode** a wave is NOT done when agents return — it is done when
-   merged and the gate is green (see Worktree merge protocol below).
-3. **Handle loops** — if a node has \`loop.enabled\` and its result doesn't meet the stop condition (\`stop_when\` is advisory), re-dispatch that node (up to \`max_rounds\`). Top-level \`loops:\` (multi-node groups): see [Loop groups](#loop-groups-multi-node-loops) below.`;
-
-// Host-neutral run-ledger contract required by the gk-execute SKILL (Task 8):
-// every host's dispatch section carries dispatch-intent recording, launch
-// verification, message stamping, evidence stamping, landing, and challenge
-// dispositions. Phrase stays dispatch-tool-agnostic; host constants below add
-// their own tool syntax.
-const RUN_LEDGER_CONTRACT = `**Run ledger contract.** Before issuing the wave's dispatches, record each spawn's intent: \`gk run dispatch <node-id> --attempt <n> --via task\`. After the wave starts, verify every spawned node actually launched — a node that never launched is recorded \`gk run node <id> --status fail --notes launch-lost\` and stops the wave. Open every message to a spawned node with the header \`run: <run-id> node: <node-id> rev: <graph_sha256[:12]>\` from the \`gk run start\` payload. Stamp each evidence file via \`gk evidence add <file> --key <key> --node <node-id>\` (markerless evidence fails \`strict\` freshness); after a node's work is committed/merged, record it via \`gk run land <node-id> --commit <sha>\`. Record a challenge and its adjudication in one line: \`gk run node <id> --status challenge --notes "disposition=accept|modify|reject|defer reason=…"\`.`;
-const CLAUDE_DISPATCH = `## Dispatching a wave (Claude Code)
-
-Spawn one parallel subagent per node in the current wave via the **Agent tool** — issue all calls for the wave in a single message (they run in parallel), collect every result, then proceed. Agent definitions live at \`.claude/agents/<agent-name>.md\`; read the node's definition first for identity, rules, and deliverables.
-Wave barrier: do NOT start wave N+1 until every agent of wave N returned. The same barrier holds across loop rounds — do not start round N+1 until every node of a loop group's last wave returned.
-A failed agent stops the graph: report node name, objective, and error output — unless the node declares \`retry\` for a transient failure (see [Orchestration fields](#orchestration-fields)). Before dispatching a node, check its \`when\` (skip if false) and \`gate\` (suspend for approval).
+Spawn one parallel subagent per node via the **Agent tool** — all calls for the wave in a single message, collect every result, then proceed. Each node's definition lives at \`.claude/agents/gk-<node-id>.md\` (materialized by \`gk graph agents\`); read it first for identity, rules, and deliverables.
 
 Each Agent call gets:
-   - \`subagent_type: "general-purpose"\` plus the agent definition (identity, rules) as context
-   - The node's \`objective\` as its task
-   - The node's \`model\` tier
-   - Any upstream results from \`depend_on\` nodes (append to the objective)
-   - The node's \`refs\` (read these files and include relevant content)
-   - The node's \`tools\` and \`skills\` constraints
+- \`subagent_type: "general-purpose"\` plus the node's agent definition as context
+- prompt: the node's \`objective\`, upstream results from \`depend_on\` nodes, and its \`refs\`
+- \`model\` set to the node's \`model\` tier
 
-   In **worktree mode**: write-capable nodes additionally get \`isolation: "worktree"\` and their prompts must be fully self-contained (background workers cannot ask the user) — include repo conventions, the node's acceptance-check recipe, and landing instructions (commit to the worktree branch, conventional message). Read-only nodes skip worktrees — plain dispatch.
-${RUN_LEDGER_CONTRACT}
-
-${COLLECT_AND_LOOPS}`;
-
-const CLAUDE_TEMPLATE = `## Agent dispatch template
-
-For each node, construct the Agent prompt:
-
-\`\`\`
-You are {agent_name} from .claude/agents/{agent-file}.md.
-
-Your task: {node.objective}
-
-{if upstream results:}
-Upstream results from dependencies:
-{for each dep: dep_id: dep_result}
-
-Constraints: {node.constraints}
-Required evidence: {node.evidence}
-Return your output with these evidence keys: {node.evidence}
-\`\`\`
-
-Set the Agent's \`model\` to the node's \`model\` tier. Use \`general-purpose\` as the agent type.`;
+Results arrive as async deliveries; full output at \`agent://<name>\`, transcript at \`history://<name>\`.
+`;
 
 const GK_EXECUTE_OVERRIDES: Record<Exclude<HostId, "pi">, SkillOverride> = {
   claude: {
     description:
-      'Execute a graph.yaml by directly spawning parallel subagents via the Agent tool — no compilation, no Workflow tool. Transparent, real-time, interactive. Optional worktree mode (--worktree / "batch") isolates write nodes in git worktrees. Trigger: "execute graph", "run graph directly", "spawn agents for graph", "batch the graph".',
-    replaces: [
-      [CORE_PURPOSE_LINE, PURPOSE_LINE_BY_HOST.claude],
-      [CORE_RESOLVER_ITEM, CURATOR_ITEM_BY_HOST.claude],
-    ],
-    sections: { "Dispatching a wave (pi)": CLAUDE_DISPATCH, "Dispatch call shape": CLAUDE_TEMPLATE },
+      'Execute a graph.yaml by directly spawning parallel subagents via the Agent tool — you apply judgment (CHALLENGE adjudication, gate questions, worktree escalation); deterministic protocol is engine-owned, `gk exec` runs it headless. Trigger: "execute graph", "run graph directly", "spawn agents for graph", "batch the graph".',
+    sections: { "Dispatch call shape": CLAUDE_DISPATCH_SHAPE },
   },
 };
 // Skill-invocation spelling per host: _core writes `visualize --mode`; claude

@@ -42,37 +42,33 @@ describe("pi kit structure", () => {
     }
   });
 
-  test("gk-execute carries native task wave protocol", () => {
+  test("gk-execute is the interactive adapter over the exec engine", () => {
     const raw = readFileSync(join(KIT, "skills", "gk-execute", "SKILL.md"), "utf8");
-    expect(raw).toContain("## Dispatching a wave (pi)");
+    // Engine-owned headless path is named; the skill stays the interactive seam.
+    expect(raw).toContain("gk exec");
+    expect(raw).toContain("src/exec/engine.ts");
+    // Interactive recipe survives: waves -> agents -> batch dispatch -> ledger line.
+    expect(raw).toContain("gk graph waves");
     expect(raw).toContain("gk graph agents");
     expect(raw).toContain("gk-<node-id>");
-    expect(raw).toContain("gk_dispatch_agent"); // fallback path for timeout_ms
+    expect(raw).toContain("gk run node <node-id> --status");
     expect(raw).not.toContain("/gk:");
   });
 
-  test("gk-execute carries the run-ledger dispatch contract", () => {
+  test("gk-execute keeps only the judgment seam (deterministic protocol deleted)", () => {
     const raw = readFileSync(join(KIT, "skills", "gk-execute", "SKILL.md"), "utf8");
-    // Pre-dispatch intent + launch verification.
-    expect(raw).toContain("gk run dispatch <node-id> --attempt <n> --via task");
-    expect(raw).toContain("--via extension");
-    expect(raw).toContain("hub jobs");
-    expect(raw).toContain("--notes launch-lost");
-    // Message stamping header.
-    expect(raw).toContain("run: <run-id> node: <node-id> rev: <graph_sha256[:12]>");
-    // Evidence stamping + gate freshness.
-    expect(raw).toContain("gk evidence add <file> --key <key> --node <node-id>");
-    expect(raw).toContain("require_landed");
-    // Challenge dispositions.
+    // Judgment parts kept.
     expect(raw).toContain("disposition=accept|modify|reject|defer");
-    // Worktree merge hardening.
-    expect(raw).toContain("gk run land <node-id> --commit <sha>");
-    expect(raw).toContain("--notes owns-violation");
-    expect(raw).toContain("--notes merge-conflict:<branch>");
-    expect(raw).toContain(".graphkit/worktrees/*");
-    // Resume & takeover.
-    expect(raw).toContain("gk run take --from <old-run-id>");
-    expect(raw).toContain("`unresolved`");
+    expect(raw).toContain("INJECTION:");
+    expect(raw).toContain("budget_tokens");
+    expect(raw).toContain("gk exec --worktree");
+    // Deterministic protocol prose is engine-owned — gone from the skill.
+    expect(raw).not.toContain("initial_interval_ms");
+    expect(raw).not.toContain("no_progress_limit");
+    expect(raw).not.toContain("hub jobs");
+    expect(raw).not.toContain("--notes merge-conflict");
+    // The deliverable is the shrink.
+    expect(raw.split("\n").length).toBeLessThan(120);
   });
 
   test("no stale host path references in skills", () => {
