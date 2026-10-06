@@ -56,13 +56,15 @@ beforeEach(() => {
 afterEach(() => rmSync(cwd, { recursive: true, force: true }));
 
 describe("gk evidence add", () => {
-  test("adds artifact via CLI", () => {
+  test("adds artifact via CLI and stamps node in marker", () => {
     writeFileSync(join(cwd, "r.json"), "{}");
     const r = runCli(["evidence", "add", "r.json", "--key", "api-response", "--node", "probe", "--json"]);
     const env = JSON.parse(r.stdout);
     expect(env.status).toBe("ok");
     expect(env.data.key).toBe("api-response");
     expect(env.data.sha256).toMatch(/^[0-9a-f]{64}$/);
+    const marker = parseMarker(readFileSync(join(cwd, ".graphkit/evidence/api-response.md"), "utf-8"));
+    expect(marker?.node).toBe("probe");
   });
 
   test("undeclared key exits 1 with code", () => {

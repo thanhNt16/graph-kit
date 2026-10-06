@@ -41,6 +41,7 @@ export function registerEvidenceCommand(cli: CAC) {
           const result = addEvidence(cwd, graph, {
             file: join(cwd, String(file)),
             key: String(opts.key),
+            node: opts.node ? String(opts.node) : undefined,
             note: opts.note ? String(opts.note) : undefined,
             maxBytes: maxBytesFromConfig(cwd),
           });
