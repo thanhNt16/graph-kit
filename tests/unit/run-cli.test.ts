@@ -135,6 +135,40 @@ describe("gk run CLI", () => {
     }
   });
 
+  test("run start on invalid graph fails VALIDATION_FAILED before any ledger state", () => {
+    const cwd = join(tmpdir(), `gk-run-invalid-${process.pid}-${Date.now()}`);
+    mkdirSync(join(cwd, ".omp", "agents"), { recursive: true });
+    writeFileSync(join(cwd, ".omp", "agents", "scout.md"), "x\n");
+    writeFileSync(
+      join(cwd, "graph.yaml"),
+      [
+        "apiVersion: graphkit.dev/v2",
+        "kind: Graph",
+        "metadata:",
+        "  name: invalid-graph",
+        "topology: custom",
+        "nodes:",
+        "  review:",
+        "    agent: ghost-agent",
+        "    objective: review changes",
+      ].join("\n"),
+    );
+    try {
+      const res = runCli(["run", "start"], cwd);
+      expect(res.code).toBe(1);
+      const body = JSON.parse(res.stdout);
+      expect(body.status).toBe("fail");
+      expect(body.error.code).toBe("VALIDATION_FAILED");
+      const issues = body.error.details.issues as { check: string; path: string }[];
+      expect(issues.some((i) => i.check === "agent-binding" && i.path === "nodes.review.agent")).toBe(true);
+      // Audit CS#1: validation gates state creation — no runs dir, no pointer.
+      expect(existsSync(join(cwd, ".graphkit", "runs"))).toBe(false);
+      expect(existsSync(join(cwd, ".graphkit", "runs", ".active"))).toBe(false);
+    } finally {
+      rmSync(cwd, { recursive: true, force: true });
+    }
+  });
+
   test("handles unknown subcommand", () => {
     const cwd = join(tmpdir(), `gk-run-unknown-${process.pid}-${Date.now()}`);
     mkdirSync(cwd, { recursive: true });
@@ -175,7 +209,7 @@ describe("gk run CLI", () => {
           "  exec:",
           "    agent: haiku",
           "    objective: do the thing",
-          "    loop: { enabled: true }",
+          "    loop: { enabled: true, stop_when: done }",
           "    advisor: { model: opus }",
         ].join("\n"),
       );
@@ -271,7 +305,7 @@ describe("gk run CLI", () => {
           "  exec:",
           "    agent: haiku",
           "    objective: do the thing",
-          "    loop: { enabled: true }",
+          "    loop: { enabled: true, stop_when: done }",
           "    advisor: { model: opus }",
         ].join("\n"),
       );
@@ -311,7 +345,7 @@ describe("gk run CLI", () => {
           "  exec:",
           "    agent: haiku",
           "    objective: do the thing",
-          "    loop: { enabled: true }",
+          "    loop: { enabled: true, stop_when: done }",
           "    advisor: { model: opus }",
         ].join("\n"),
       );
@@ -346,7 +380,7 @@ describe("gk run CLI", () => {
           "  exec:",
           "    agent: haiku",
           "    objective: do the thing",
-          "    loop: { enabled: true }",
+          "    loop: { enabled: true, stop_when: done }",
           "    advisor: { model: sonnet }",
         ].join("\n"),
       );
@@ -370,7 +404,10 @@ describe("gk run CLI", () => {
     const cwd = join(tmpdir(), `gk-run-resume-status-${process.pid}-${Date.now()}`);
     mkdirSync(cwd, { recursive: true });
     try {
-      writeFileSync(join(cwd, "graph.yaml"), "metadata:\n  name: demo\ntopology: diamond\n");
+      writeFileSync(
+        join(cwd, "graph.yaml"),
+        "apiVersion: graphkit.dev/v2\nkind: Graph\nmetadata:\n  name: demo\ntopology: custom\nnodes:\n  a:\n    agent: scout\n    objective: A\n",
+      );
       const r1 = JSON.parse(runCli(["run", "start"], cwd).stdout).data;
       runCli(["run", "end", "--status", "failed"], cwd);
       const { startRun } = require("../../src/memory/ledger.js");

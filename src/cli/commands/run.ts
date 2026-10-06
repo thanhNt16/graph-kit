@@ -1,6 +1,7 @@
 import { execFileSync } from "node:child_process";
 import { basename, join } from "node:path";
 import type { CAC } from "cac";
+import { isBlocking, validateGraph } from "../../compiler/validate.js";
 import { GraphKitError } from "../../errors.js";
 import { analyzeRun } from "../../memory/analyze.js";
 import {
@@ -21,6 +22,7 @@ import {
 } from "../../memory/ledger.js";
 import { recordRound } from "../../memory/loops.js";
 import { reconcileRun, resumeRun } from "../../memory/resume.js";
+import type { Graph } from "../../schemas/graph.schema.js";
 import { leafUsageFor, subcommandsFor } from "../command-registry.js";
 import { toGraphKitError } from "../diagnostics.js";
 import { parseInputs, recordRunInputs, requiredMissing } from "../graph-inputs.js";
@@ -123,12 +125,24 @@ export function registerRunCommands(cli: CAC) {
       }
       try {
         if (subcommand === "start") {
+          // Audit CS#1: resolve + validate BEFORE any ledger state exists —
+          // an invalid graph must never produce runs/<id>/ or .active. Schema
+          // failures die as SCHEMA_INVALID (loadGraph), semantic + environment
+          // probes as VALIDATION_FAILED (validateGraph) — both before startRun.
           let graphPath: string;
+          let graph: Graph;
           try {
-            graphPath = resolveGraphPath(cwd, opts.graph).path;
+            const resolved = resolveGraphPath(cwd, opts.graph);
+            graphPath = resolved.path;
+            graph = loadGraph(resolved.path);
           } catch (e) {
             if (!(e instanceof GraphKitError)) throw e;
             emit(fail(e.code, e.message, e.details));
+            return;
+          }
+          const findings = validateGraph(graph, cwd);
+          if (findings.some(isBlocking)) {
+            emit(fail("VALIDATION_FAILED", "graph has findings", { issues: findings }));
             return;
           }
           // ==== FixGraph slice (audit F4): --input enforcement — the only
