@@ -126,7 +126,10 @@ export function analyzeRun(cwd: string, requested?: string): AnalyzeResult {
   let exhausted = false;
   if (graph) {
     for (const j of journals) {
-      const cfg = graph.loops?.[j.group];
+      // per-node loop journals (node != null) have no graph loop config —
+      // their rounds still count in the totals above, but no_progress policy
+      // lives only on graph loop groups.
+      const cfg = j.node !== null || j.group === null ? undefined : graph.loops?.[j.group];
       if (!cfg || j.lines.length === 0) continue;
       const limit = cfg.no_progress_limit ?? null;
       if (limit != null) {
