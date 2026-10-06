@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { cac } from "cac";
 import { liveDispatchPids, registerRunCommands } from "../../src/cli/commands/run.js";
+import { GraphKitError } from "../../src/errors.js";
 import {
   appendDispatch,
   appendNode,
@@ -14,7 +15,6 @@ import {
   startRun,
 } from "../../src/memory/ledger.js";
 import { reconcileRun, resumeRun } from "../../src/memory/resume.js";
-import { GraphKitError } from "../../src/errors.js";
 
 // Task 2 contract: ledger failures are GraphKitError — codes are the API,
 // messages are prose. Assert the code, not the wording.
@@ -331,9 +331,7 @@ describe("run start graph resolution", () => {
   test("session pointer beats ./graph.yaml (SB F2); explicit --graph wins over both", () => {
     seedSessionGraph("2026-09-28-sessgraph");
     writeFileSync(join(cwd, "graph.yaml"), GRAPH_YAML);
-    expect(startedMetaGraphPath(["run", "start"])).toBe(
-      join(cwd, ".graphkit", "graphs", "2026-09-28-sessgraph.yaml"),
-    );
+    expect(startedMetaGraphPath(["run", "start"])).toBe(join(cwd, ".graphkit", "graphs", "2026-09-28-sessgraph.yaml"));
     endRun(cwd, "failed", "2026-09-04T10:05:00.000Z");
     const alt = join(cwd, "alt.yaml");
     writeFileSync(alt, GRAPH_YAML);

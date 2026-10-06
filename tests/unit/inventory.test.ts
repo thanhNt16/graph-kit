@@ -45,7 +45,10 @@ describe("gk inventory", () => {
     try {
       mkdirSync(join(dir, ".claude", "agents"), { recursive: true });
       mkdirSync(join(dir, "user", ".claude", "agents"), { recursive: true });
-      writeFileSync(join(dir, ".claude", "agents", "haiku-agent.md"), "---\nname: Haiku Agent\nmodel: haiku\n---\nbody\n");
+      writeFileSync(
+        join(dir, ".claude", "agents", "haiku-agent.md"),
+        "---\nname: Haiku Agent\nmodel: haiku\n---\nbody\n",
+      );
       writeFileSync(join(dir, ".claude", "agents", "no-model-agent.md"), "---\nname: No Model\n---\nbody\n");
       const inv = runInventory({ cwd: dir, target: "claude", userDir: join(dir, "user") });
       const byName = new Map(inv.agents.map((a) => [a.name, a.model]));
@@ -76,7 +79,9 @@ describe("gk inventory", () => {
   });
 
   test("invalid target throws with the valid target list", () => {
-    expect(() => runInventory({ cwd: tmp, target: "nope" })).toThrow(/Invalid target: nope\. Must be one of: pi, claude/);
+    expect(() => runInventory({ cwd: tmp, target: "nope" })).toThrow(
+      /Invalid target: nope\. Must be one of: pi, claude/,
+    );
   });
 
   test("mcp server/tool names discovered from supported config; secrets excluded", () => {

@@ -1,7 +1,7 @@
-import { mkdtempSync, mkdirSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
-import { tmpdir } from "node:os";
 import { describe, expect, test } from "bun:test";
+import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { resolveGraphPath } from "../../src/cli/graph-resolve.js";
 
 const GRAPH = `kind: Graph\nmetadata: {name: t}\ntopology: diamond\nnodes: {a: {agent: x, objective: o}}\n`;

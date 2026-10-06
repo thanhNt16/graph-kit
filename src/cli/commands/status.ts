@@ -25,7 +25,11 @@ export function registerStatusCommand(cli: CAC) {
         // Run identity straight from the ledger: .active names the run dir,
         // meta.json enriches it, trace.jsonl tallies it. No current.json.
         const id = basename(dir);
-        const run: { id: string; graph: string | null; started_at: string | null } = { id, graph: null, started_at: null };
+        const run: { id: string; graph: string | null; started_at: string | null } = {
+          id,
+          graph: null,
+          started_at: null,
+        };
         try {
           const meta = readRunMeta(cwd, id);
           run.graph = meta.graph;

@@ -1,8 +1,8 @@
 import { existsSync } from "node:fs";
 import { basename, join } from "node:path";
 import { GraphKitError } from "../errors.js";
-import type { Graph } from "../schemas/graph.schema.js";
 import { activeRunGraph } from "../memory/ledger.js";
+import type { Graph } from "../schemas/graph.schema.js";
 import { getActiveGraphId, listSessionGraphs, loadActiveGraph } from "../store/index.js";
 import { loadGraph } from "./commands/graph.js";
 

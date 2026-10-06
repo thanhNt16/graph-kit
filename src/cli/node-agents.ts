@@ -1,8 +1,8 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { GraphKitError } from "../errors.js";
-import { agentFileName, getTarget } from "../targets/registry.js";
 import type { Graph } from "../schemas/graph.schema.js";
+import { agentFileName, getTarget } from "../targets/registry.js";
 
 // Native-dispatch bridge (pi/omp): omp's task tool discovers agents from
 // .omp/agents/*.md — but only files with valid frontmatter (name +

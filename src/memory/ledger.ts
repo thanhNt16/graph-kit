@@ -2,9 +2,8 @@ import { createHash } from "node:crypto";
 import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { basename, isAbsolute, join, resolve } from "node:path";
 import YAML from "yaml";
-
-import { fingerprint } from "../evidence/fingerprint.js";
 import { GraphKitError } from "../errors.js";
+import { fingerprint } from "../evidence/fingerprint.js";
 
 export interface TraceLine {
   at: string;
@@ -281,7 +280,10 @@ export function landNode(cwd: string, node: string, commit: string, now = new Da
     }
   if (idx < 0) throw new GraphKitError("LAND_NOT_OK", `no trace line for node "${node}" in run ${id}`);
   if (trace[idx].status !== "ok")
-    throw new GraphKitError("LAND_NOT_OK", `latest trace for node "${node}" in run ${id} is "${trace[idx].status}", not ok`);
+    throw new GraphKitError(
+      "LAND_NOT_OK",
+      `latest trace for node "${node}" in run ${id} is "${trace[idx].status}", not ok`,
+    );
   trace[idx] = { ...trace[idx], landed: { at: now, commit } };
   writeFileSync(join(dir, "trace.jsonl"), `${trace.map((t) => JSON.stringify(t)).join("\n")}\n`);
   return { run: id, node };

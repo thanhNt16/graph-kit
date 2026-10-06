@@ -2,11 +2,11 @@ import { createHash } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import YAML from "yaml";
+import { GraphKitError } from "../errors.js";
 import { parseMarker } from "../evidence/marker.js";
 import type { Graph } from "../schemas/graph.schema.js";
 import { GraphSchema, type LoopGroup } from "../schemas/graph.schema.js";
 import { saveSessionGraph, setActiveGraphId } from "../store/index.js";
-import { GraphKitError } from "../errors.js";
 import {
   type AdvisorEvent,
   activeRun,
@@ -157,7 +157,10 @@ export function reconcileRun(
   const graph = parseGraph(meta.graph_path);
   const names = Object.keys(graph.nodes);
   if (opts.fromNode != null && !names.includes(opts.fromNode))
-    throw new GraphKitError("RESUME_BAD_FROM_NODE", `--from-node "${opts.fromNode}" is not a node of ${meta.graph_path}`);
+    throw new GraphKitError(
+      "RESUME_BAD_FROM_NODE",
+      `--from-node "${opts.fromNode}" is not a node of ${meta.graph_path}`,
+    );
   const last = new Map<string, TraceLine>();
   for (const line of readTrace(cwd, runId)) last.set(line.node, line);
   const evidenceDir = graph.outputs?.evidence_dir ?? ".graphkit/evidence/";

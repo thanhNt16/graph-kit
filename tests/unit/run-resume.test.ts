@@ -2,9 +2,9 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { GraphKitError } from "../../src/errors.js";
 import { appendAdvisor, appendDispatch, appendNode, endRun, startRun } from "../../src/memory/ledger.js";
 import { deriveResumeGraph, reconcileRun, resumeRun, validateDerivedGraph } from "../../src/memory/resume.js";
-import { GraphKitError } from "../../src/errors.js";
 import { GraphSchema } from "../../src/schemas/graph.schema.js";
 
 // Task 2 contract: ledger failures are GraphKitError — codes are the API,

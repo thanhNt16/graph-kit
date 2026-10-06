@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { basename, join } from "node:path";
-import { GraphKitError } from "../errors.js";
 import YAML from "yaml";
+import { GraphKitError } from "../errors.js";
 import { GraphSchema } from "../schemas/graph.schema.js";
 import {
   type AdvisorEvent,
@@ -55,7 +55,8 @@ function resolveRun(cwd: string, requested?: string): string {
   const active = activeRun(cwd);
   if (active) return basename(active);
   const all = listRunIds(cwd);
-  if (all.length === 0) throw new GraphKitError("NO_RUNS", `no runs under ${runsDir(cwd)} — start one with \`gk run start\``);
+  if (all.length === 0)
+    throw new GraphKitError("NO_RUNS", `no runs under ${runsDir(cwd)} — start one with \`gk run start\``);
   return all[all.length - 1];
 }
 

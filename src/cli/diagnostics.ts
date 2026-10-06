@@ -55,7 +55,8 @@ function schemaAt(schema: z.core.$ZodType, path: PropertyKey[]): z.core.$ZodType
       element?: z.core.$ZodType;
     };
     if (s.shape) cur = s.shape[String(seg)];
-    else if (s.valueType) cur = s.valueType; // record key segment: step into the value schema
+    else if (s.valueType)
+      cur = s.valueType; // record key segment: step into the value schema
     else if (s.element) cur = s.element;
     else return undefined;
   }

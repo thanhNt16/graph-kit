@@ -235,7 +235,6 @@ export function runTemplateList(opts: { cwd: string; home: string }): {
   return ok({ templates });
 }
 
-
 type MaterializeSuccess = {
   id: string;
   path: string;

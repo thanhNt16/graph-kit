@@ -8,9 +8,9 @@ import { registerGraphCommands } from "../../src/cli/commands/graph.js";
 import { formatZodIssues } from "../../src/cli/diagnostics.js";
 import { materializeNodeAgents } from "../../src/cli/node-agents.js";
 import { isBlocking, validateGraph } from "../../src/compiler/validate.js";
-import { agentFileName, agentDirsFor } from "../../src/targets/registry.js";
-import { GraphKitError } from "../../src/errors.js";
+import type { GraphKitError } from "../../src/errors.js";
 import { GraphSchema } from "../../src/schemas/graph.schema.js";
+import { agentDirsFor, agentFileName } from "../../src/targets/registry.js";
 
 const FIXTURES = join(import.meta.dir, "..", "fixtures");
 
@@ -402,7 +402,9 @@ describe("one diagnostic envelope", () => {
     const issues = parsed.error.details.issues;
     expect(issues.some((i: { check: string }) => i.check === "refs-exist")).toBe(true);
     expect(
-      issues.some((i: { check: string; severity?: string }) => i.check === "duplicate-required-key" && i.severity === "warn"),
+      issues.some(
+        (i: { check: string; severity?: string }) => i.check === "duplicate-required-key" && i.severity === "warn",
+      ),
     ).toBe(true);
     expect(parsed.error.details.findings).toBeUndefined();
   });

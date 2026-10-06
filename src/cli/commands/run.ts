@@ -52,7 +52,6 @@ function orphanedGkArtifacts(cwd: string): { orphaned_worktrees: string[]; orpha
   }
 }
 
-
 /** Node ids of the graph the run actually executes — resolved through the ONE
  *  graph resolver: explicit --graph (file or session id) wins, then the active
  *  run's recorded graph. null when nothing resolves (no active run / legacy

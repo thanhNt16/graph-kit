@@ -148,7 +148,6 @@ function collectCommands(installDir: string, commandsKind: string): string[] {
   return readdirSync(dir).sort();
 }
 
-
 function collectMcpFromJson(file: string, warnings: string[]): McpServerInventory[] {
   const out: McpServerInventory[] = [];
   if (!existsSync(file)) return out;

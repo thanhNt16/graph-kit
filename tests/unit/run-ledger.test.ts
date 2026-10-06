@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
+import { GraphKitError } from "../../src/errors.js";
 import {
   activeRun,
   activeRunPointer,
@@ -16,7 +17,6 @@ import {
   readTrace,
   startRun,
 } from "../../src/memory/ledger.js";
-import { GraphKitError } from "../../src/errors.js";
 
 // Task 2 contract: ledger failures are GraphKitError — codes are the API,
 // messages are prose. Assert the code, not the wording.

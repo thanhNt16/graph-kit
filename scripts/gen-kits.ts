@@ -130,7 +130,6 @@ Return your output with these evidence keys: {node.evidence}
 
 Set the Agent's \`model\` to the node's \`model\` tier. Use \`general-purpose\` as the agent type.`;
 
-
 const GK_EXECUTE_OVERRIDES: Record<Exclude<HostId, "pi">, SkillOverride> = {
   claude: {
     description:

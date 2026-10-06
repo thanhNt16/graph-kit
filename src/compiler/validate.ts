@@ -3,8 +3,8 @@ import { basename, join } from "node:path";
 import YAML from "yaml";
 import type { Issue } from "../cli/diagnostics.js";
 import { topoWaves } from "../cli/graph-waves.js";
-import { agentDirsFor, agentFileName } from "../targets/registry.js";
 import type { Graph } from "../schemas/graph.schema.js";
+import { agentDirsFor, agentFileName } from "../targets/registry.js";
 
 /** A semantic check result. Shape-compatible with the schema `Issue` envelope:
  *  check and severity ride along as extra fields on the same object. */
