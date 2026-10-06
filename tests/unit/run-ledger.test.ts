@@ -16,6 +16,20 @@ import {
   readTrace,
   startRun,
 } from "../../src/memory/ledger.js";
+import { GraphKitError } from "../../src/errors.js";
+
+// Task 2 contract: ledger failures are GraphKitError — codes are the API,
+// messages are prose. Assert the code, not the wording.
+function expectGkCode(fn: () => unknown, code: string) {
+  try {
+    fn();
+  } catch (e) {
+    expect(e).toBeInstanceOf(GraphKitError);
+    expect((e as GraphKitError).code).toBe(code);
+    return;
+  }
+  throw new Error(`expected GraphKitError "${code}", but the call resolved`);
+}
 
 describe("run ledger", () => {
   let cwd: string;
@@ -37,22 +51,24 @@ describe("run ledger", () => {
 
   test("second start while active fails", () => {
     startRun(cwd, join(cwd, "graph.yaml"), "2026-09-03T10:00:00.000Z");
-    expect(() => startRun(cwd, join(cwd, "graph.yaml"), "2026-09-03T11:00:00.000Z")).toThrow(/RUN_ACTIVE/);
+    expectGkCode(() => startRun(cwd, join(cwd, "graph.yaml"), "2026-09-03T11:00:00.000Z"), "RUN_ACTIVE");
   });
 
   test("node append without active run fails", () => {
-    expect(() =>
-      appendNode(cwd, {
-        node: "audit",
-        wave: 0,
-        agent: "code-reviewer",
-        model: "sonnet",
-        status: "ok",
-        evidence: ["audit"],
-        duration_ms: 1200,
-        notes: null,
-      }),
-    ).toThrow(/NO_ACTIVE_RUN/);
+    expectGkCode(
+      () =>
+        appendNode(cwd, {
+          node: "audit",
+          wave: 0,
+          agent: "code-reviewer",
+          model: "sonnet",
+          status: "ok",
+          evidence: ["audit"],
+          duration_ms: 1200,
+          notes: null,
+        }),
+      "NO_ACTIVE_RUN",
+    );
   });
 
   test("same timestamp gets a unique id and preserves both traces", () => {
@@ -69,18 +85,20 @@ describe("run ledger", () => {
     const { dir } = startRun(cwd, join(cwd, "graph.yaml"), "2026-09-03T10:00:00.000Z");
     rmSync(dir, { recursive: true, force: true });
     expect(activeRun(cwd)).toBeNull();
-    expect(() =>
-      appendNode(cwd, {
-        node: "x",
-        wave: 0,
-        agent: null,
-        model: null,
-        status: "ok",
-        evidence: [],
-        duration_ms: null,
-        notes: null,
-      }),
-    ).toThrow(/NO_ACTIVE_RUN/);
+    expectGkCode(
+      () =>
+        appendNode(cwd, {
+          node: "x",
+          wave: 0,
+          agent: null,
+          model: null,
+          status: "ok",
+          evidence: [],
+          duration_ms: null,
+          notes: null,
+        }),
+      "NO_ACTIVE_RUN",
+    );
   });
 
   test("sanitizes graph names before creating run directories", () => {
@@ -123,7 +141,7 @@ describe("run ledger", () => {
   });
 
   test("appendAdvisor without active run fails", () => {
-    expect(() => appendAdvisor(cwd, { node: "x", round: 1, tier: "fable", streak: 1 })).toThrow(/NO_ACTIVE_RUN/);
+    expectGkCode(() => appendAdvisor(cwd, { node: "x", round: 1, tier: "fable", streak: 1 }), "NO_ACTIVE_RUN");
   });
 
   test("readAdvisorEvents returns [] when missing", () => {
@@ -161,7 +179,7 @@ describe("run ledger", () => {
   });
 
   test("appendDispatch without active run fails", () => {
-    expect(() => appendDispatch(cwd, { node: "x", attempt: null, via: "task", pid: null })).toThrow(/NO_ACTIVE_RUN/);
+    expectGkCode(() => appendDispatch(cwd, { node: "x", attempt: null, via: "task", pid: null }), "NO_ACTIVE_RUN");
   });
 
   test("readDispatches on a run with no dispatches returns []", () => {
@@ -198,14 +216,14 @@ describe("run ledger", () => {
       duration_ms: 1,
       notes: null,
     });
-    expect(() => landNode(cwd, "audit", "abc123")).toThrow(/LAND_NOT_OK/);
-    expect(() => landNode(cwd, "ghost", "abc123")).toThrow(/LAND_NOT_OK/);
+    expectGkCode(() => landNode(cwd, "audit", "abc123"), "LAND_NOT_OK");
+    expectGkCode(() => landNode(cwd, "ghost", "abc123"), "LAND_NOT_OK");
   });
 
   test("second startRun while .active exists fails atomically (EEXIST path)", () => {
     startRun(cwd, join(cwd, "graph.yaml"), "2026-09-28T10:00:00.000Z");
     // Simulate a crash: .active left behind, dir exists
-    expect(() => startRun(cwd, join(cwd, "graph.yaml"), "2026-09-28T11:00:00.000Z")).toThrow(/RUN_ACTIVE/);
+    expectGkCode(() => startRun(cwd, join(cwd, "graph.yaml"), "2026-09-28T11:00:00.000Z"), "RUN_ACTIVE");
   });
   test("startRun clears a dangling .active pointer instead of deadlocking", () => {
     const { dir } = startRun(cwd, join(cwd, "graph.yaml"), "2026-09-03T10:00:00.000Z");
