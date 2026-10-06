@@ -84,7 +84,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - npm `gk --version` always reported the dev version (`0.3.0`): the release `publish` job re-checks out the repo, stamped only `package.json`, and `prepack` rebuilt `dist/index.js` with the committed `APP_VERSION`. `src/version.ts` is now stamped in `publish` too, so the npm bundle reports the release tag. Standalone tarballs were unaffected.
 - `gk_dispatch_agent` timeout/abort now kills the child's whole process group (detached spawn + `kill(-pgid)`, SIGTERM then SIGKILL after 5s). Previously `execFile` SIGTERMed only the direct child — a timed-out node kept mutating shared state for 11+ minutes after the orchestrator recorded it failed. Timeout results now carry `timed_out: true` and a `TIMEOUT` marker in `output` (matchable by `retry.non_retryable`), and the tool honors the host abort signal.
 
+### Changed
+- **P0 contract extraction** — four Layer-1 contracts unified across every command: (1) **one graph resolver** (`src/cli/graph-resolve.ts`) — `flag → file | session-id`; omitted → active run's recorded graph → session pointer → `./graph.yaml` (pointer beats root); `GRAPH_NOT_FOUND`/`NO_ACTIVE_GRAPH` replace per-command dead-ends, and session-graph *ids* are now accepted wherever a path was. (2) **one diagnostic envelope** — `GraphKitError` everywhere; `details.issues: {path, message, hint?}` is the single issues shape (semantic findings keep `check`/`severity` as extras); text-prefix `Error("CODE:…")` and the `errCode` regex deleted; `formatZodIssues` + did-you-mean live in `src/cli/diagnostics.ts`. (3) **`gk run start` validates before state** — schema + semantic findings (incl. agent-binding, refs) run *before* `runs/<id>` or `.active` are created; an invalid graph fails `VALIDATION_FAILED` with zero ledger writes. (4) **pi+claude target table** — one `agentFileName` (kebab) + `agentDirsFor` shared by `validate` and `graph agents`; "Software Architect" now validates AND materializes. Kits reduced to pi + claude.
+- **`gk status` derives from the ledger** (`.active` + `run.md` + `trace.jsonl`) — reports the same run `gk run status` sees. The `runs/current.json` read is gone; nothing ever wrote it.
+
+### Fixed
+- `gk evidence add --node` is now forwarded into the marker — producing-node provenance lands in frontmatter (flag was declared but silently dropped).
+- `gk init --force` wipe restored for pi/claude targets (deleted wholesale in the kit purge — regression caught by test).
+- `gk inventory` no longer `INVENTORY_FAILED`s when a user-global agents dir is missing (restored `existsSync` guard in `collectAgents`).
+
 ### Removed
+- **`kits/{cursor,opencode,codex}`** and their target-table entries — targets are pi + claude only. codex was hard-blocked by the agent-binding bug, opencode's dir contract was unverified, cursor's tier map was rotting.
+- `runs/current.json` ghost read, `errCode` text-prefix error protocol, six-dir hardcoded agent probe ladder.
 - **Bundled live viewer deleted for real**: `kits/{_core,claude,cursor}/viewer/` carried a stale pre-strictness GraphSchema and no build path after src/viewer was removed in 0.3.2; gen-kits viewer clauses and kit metadata deletions entries removed, claude/cursor gk-visualize fragments scrubbed (archify/SVG/ASCII/Excalidraw unaffected).
 - Dead dependencies `ajv` + `ajv-formats` (zod is the only validator).
 - `gk execute` / `gk visualize` NOT_IMPLEMENTED stub commands.
