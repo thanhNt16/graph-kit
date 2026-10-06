@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import YAML from "yaml";
 import { materializeTemplate, runTemplatePack } from "../../src/cli/commands/template.js";
+import { requiredMissing } from "../../src/cli/graph-inputs.js";
 import { getActiveGraphId, setActiveGraphId } from "../../src/store/index.js";
 
 const MIN_GRAPH = `apiVersion: graphkit.dev/v2
@@ -263,5 +264,63 @@ graph:
       const onDisk = YAML.parse(readFileSync(res.path, "utf-8")) as { kind?: string };
       expect(onDisk.kind).toBe("Graph");
     }
+  });
+  test("provided params write through to the emitted graph's input defaults (audit F5)", () => {
+    const { root, cwd, home } = newEnv("write-through");
+    cleanup.push(() => rmSync(root, { recursive: true, force: true }));
+    const res = materializeTemplate("bench-eval", { workload: "W" }, { cwd, home });
+    // The saved yaml carries the materialized value as the declared input's
+    // default...
+    const onDisk = YAML.parse(readFileSync(res.path, "utf-8")) as {
+      inputs?: Record<string, { default?: unknown }>;
+    };
+    expect(onDisk.inputs?.workload?.default).toBe("W");
+    // ...so `gk run start` accepts it without --input.
+    expect(requiredMissing(res.path, {})).toEqual([]);
+  });
+
+  test("materialized value wins when template parameters collide with embedded inputs", () => {
+    const { root, cwd, home } = newEnv("collision");
+    cleanup.push(() => rmSync(root, { recursive: true, force: true }));
+    mkdirSync(join(cwd, ".graphkit", "templates"), { recursive: true });
+    writeFileSync(
+      join(cwd, ".graphkit", "templates", "collision-probe.gk.yaml"),
+      `apiVersion: graphkit.dev/v1
+kind: GraphTemplate
+metadata:
+  name: collision-probe
+  description: Parameter and input name collision probe
+  version: 1
+parameters:
+  workload:
+    description: Workload to run
+    default: baseline
+recommendations:
+  agents: []
+graph:
+  apiVersion: graphkit.dev/v2
+  kind: Graph
+  metadata:
+    name: collision-probe
+  topology: custom
+  inputs:
+    workload:
+      type: string
+      default: stale-embedded-default
+  nodes:
+    runner:
+      agent: code-reviewer
+      objective: Work on {{workload}}.
+      depend_on: []
+      evidence: [notes]
+  evidence:
+    required_keys: [notes]
+`,
+    );
+    const res = materializeTemplate("collision-probe", { workload: "W" }, { cwd, home });
+    const onDisk = YAML.parse(readFileSync(res.path, "utf-8")) as {
+      inputs?: Record<string, { default?: unknown }>;
+    };
+    expect(onDisk.inputs?.workload?.default).toBe("W");
   });
 });

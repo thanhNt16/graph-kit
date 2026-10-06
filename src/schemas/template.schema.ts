@@ -210,5 +210,15 @@ function substitute(node: unknown, template: GraphTemplate, values: TemplateValu
  */
 export function materializeTemplate(template: GraphTemplate, values: TemplateValues): z.infer<typeof GraphSchema> {
   const graph = substitute(template.graph, template, values) as unknown as z.infer<typeof GraphSchema>;
+  // Audit F5: a value the user already supplied at materialize must not be
+  // re-demanded by `gk run start` — write each provided param through to the
+  // matching declared input's default. Same-name collision (template
+  // parameter vs embedded input): the materialized value wins; `--input`
+  // still overrides at run. Params without a declared input are skipped —
+  // nothing demands them, and synthesizing an input entry would mean
+  // inventing its `type`.
+  for (const [name, value] of Object.entries(values)) {
+    if (graph.inputs && name in graph.inputs) graph.inputs[name].default = value;
+  }
   return GraphSchema.parse(graph);
 }
