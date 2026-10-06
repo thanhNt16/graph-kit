@@ -13,7 +13,7 @@ disable-model-invocation: false
 3. For each view: report the criterion id, its description, status badge, artifact path, and provenance line. Surface `stale`/`unknown` freshness explicitly — stale means the repo changed after the artifact was recorded.
 4. Check coverage: are all `evidence.required_keys` present? Flag gaps explicitly.
 5. Compose a single markdown report:
-   - Header: graph name, topology, run timestamp (from .graphkit/runs/current.json)
+   - Header: graph name, topology, run timestamp (from `.graphkit/runs/.active` or the run's `meta.json`)
    - Per-criterion section with evidence (description, badge, artifact, provenance)
    - Coverage table: required key × producing node × status × freshness
    - Verdict line (passed if all required keys present, else partial/failed)
