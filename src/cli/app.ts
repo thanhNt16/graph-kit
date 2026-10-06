@@ -4,10 +4,10 @@
 import { type CAC, cac } from "cac";
 import { APP_VERSION } from "../version.js";
 import { registerEvidenceCommand } from "./commands/evidence.js";
+import { registerExecCommand } from "./commands/exec.js";
 import { registerGateCommand } from "./commands/gate.js";
 import { registerGraphCommands } from "./commands/graph.js";
 import { registerInventoryCommands } from "./commands/inventory.js";
-import { registerExecCommand } from "./commands/exec.js";
 import { registerKitCommands } from "./commands/kit.js";
 import { registerMemoryCommands } from "./commands/memory.js";
 import { registerModelsCommands } from "./commands/models.js";

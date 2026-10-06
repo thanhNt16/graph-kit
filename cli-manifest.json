@@ -135,6 +135,18 @@
       ]
     },
     {
+      "name": "exec",
+      "description": "Headless graph runner — resolve, plan, and execute every node via child-process dispatch",
+      "options": [
+        "--graph <id|path>",
+        "--session <id>",
+        "--json",
+        "--yes",
+        "--no-judge",
+        "--worktree"
+      ]
+    },
+    {
       "name": "suggest",
       "description": "Show ranked workflow suggestions from memory",
       "options": [

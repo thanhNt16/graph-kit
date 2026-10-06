@@ -47,7 +47,6 @@ export interface JournalLine {
   up_to: number;
 }
 
-
 const roundsDir = (cwd: string, id: string) => join(cwd, ".graphkit", "runs", id, "rounds");
 function readJournal(cwd: string, id: string, stem: string): JournalLine[] {
   const f = join(roundsDir(cwd, id), `${stem}.jsonl`);

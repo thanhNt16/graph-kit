@@ -4,18 +4,18 @@
 // red until the module exists.
 import "../../src/exec/types.js";
 import { describe, expect, test } from "bun:test";
-import { planGraph } from "../../src/compiler/plan.js";
 import type { PlannedNode } from "../../src/compiler/plan.js";
-import { GraphSchema } from "../../src/schemas/graph.schema.js";
+import { planGraph } from "../../src/compiler/plan.js";
 import type {
   DispatchContext,
   DispatchOutcome,
   InteractiveHooks,
   NodeRun,
-  RunVerdict,
   Runner,
+  RunVerdict,
   WaveRun,
 } from "../../src/exec/types.js";
+import { GraphSchema } from "../../src/schemas/graph.schema.js";
 
 // Task 1 contract: src/exec/types.ts is the engine's public IR. These tests
 // drive the types the way Task 3's engine will — a stub Runner behind the
