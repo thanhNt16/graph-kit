@@ -242,8 +242,14 @@ describe("gk run CLI", () => {
       const fired = JSON.parse(runCli(["run", "node", "exec", "--advisor-fired", "1"], cwd).stdout);
       expect(fired.status).toBe("fail");
       expect(fired.error.code).toBe("SCHEMA_INVALID");
-      // Task 2 envelope: the offending key lives in details.issues, not the message.
-      expect(JSON.stringify(fired.error.details.issues)).toContain("polic_ref");
+      // Task 2 envelope: the offending root key surfaces as a structured
+      // details.issues[] entry (path "" = graph root, key named in the
+      // zod unrecognized-key message) instead of raw message text.
+      expect(
+        (fired.error.details.issues as { path: string; message: string }[]).some(
+          (i) => i.path === "" && i.message.includes("polic_ref"),
+        ),
+      ).toBe(true);
     } finally {
       rmSync(cwd, { recursive: true, force: true });
     }

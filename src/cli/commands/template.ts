@@ -292,8 +292,10 @@ export function materializeTemplate(
 
   const findings = validateGraph(graph, cwd);
   if (findings.some(isBlocking)) {
+    // Pre-existing public code kept: this task owns the envelope shape, not
+    // error-code renames. `issues` carries the semantic findings.
     throw new GraphKitError(
-      "MATERIALIZED_INVALID",
+      "VALIDATION_FAILED",
       `Materialized graph failed validation:\n${findings.map((f) => `- [${f.check}] ${f.path}: ${f.message}`).join("\n")}`,
       { issues: findings },
     );
