@@ -1,31 +1,30 @@
-// gen-kits.ts — materialize the five host kits from kits/_core (the canonical source).
+// gen-kits.ts — materialize the host kits from kits/_core (the canonical source).
 //
 // Usage:
 //   bun run scripts/gen-kits.ts                 # regenerate kits/ in place (staged to temp, then swapped)
 //   bun run scripts/gen-kits.ts --out <dir>     # write generated kits to <dir>/<host>; kits/ untouched
 //   bun run scripts/gen-kits.ts --check         # diff generated output against kits/; exit 1 on drift
-//   bun run scripts/gen-kits.ts --only <host>   # limit to one host (claude|cursor|opencode|codex|pi)
+//   bun run scripts/gen-kits.ts --only <host>   # limit to one host (claude|pi)
 //
 // Transform table — extracted from the actual host-vs-_core diffs (2026-09-18 audit):
 //
-// | aspect            | claude                     | cursor                        | opencode          | codex                     | pi          |
-// |-------------------|----------------------------|-------------------------------|-------------------|---------------------------|-------------|
-// | skills dir        | skills/                    | skills/                       | skill/            | skills/                   | skills/     |
-// | skill SKILL.md    | fm `name: gk-x` → `gk:x`;  | verbatim from _core           | verbatim          | verbatim                  | verbatim    |
-// |                   | rest verbatim              |                               |                   |                           |             |
+// | aspect            | claude                     | pi          |
+// |-------------------|----------------------------|-------------|
+// | skills dir        | skills/                    | skills/     |
+// | skill SKILL.md    | fm `name: gk-x` → `gk:x`;  | verbatim    |
+// |                   | rest verbatim              |             |
 // | install-dir refs  | `.omp/agents/` → `<installDir>/<agentsDir>/`, `.omp/skills/` → `<installDir>/<skillsDir>/` in every copied .md (pi: identity) |
-// | agents format     | md frontmatter             | md frontmatter +readonly      | md frontmatter    | TOML                      | bare prompt |
-// |                   | name/description/model:    | name/description/model:tier/  | description/      | name(underscored)/        | verbatim    |
-// |                   | tier/graph_roles/          | graph_roles/evidence_keys/    | mode: subagent/   | description/model/effort/ |             |
-// |                   | evidence_keys/source       | source/readonly/is_background | model:mapped      | sandbox_mode/developer_   |             |
-// |                   |                            |                               |                   | instructions              |             |
+// | agents format     | md frontmatter             | bare prompt |
+// |                   | name/description/model:    | verbatim    |
+// |                   | tier/graph_roles/          |             |
+// |                   | evidence_keys/source       |             |
 // | agent body        | _core minus the leading "You are <slug>, acting as an isolated subagent…" line (all hosts but pi) |
-// | agent models      | tier keyword (opus/sonnet/haiku) | tier keyword            | TARGET_MODEL_DEFAULTS.opencode | TARGET_MODEL_DEFAULTS.codex | n/a |
-// | rules             | rules/*.md (3 files: `# Title` + `## Validation`/`## Inviolable Rules`/`## Rules` wrappers) | rules/*.mdc (same + Cursor description/alwaysApply frontmatter) | rules-section.md + "Runtime guards (plugin-enforced)" section | rules-section.md + "Runtime guards (no hooks on this host)" section | rules-section.md verbatim |
+// | agent models      | tier keyword (opus/sonnet/haiku) | n/a   |
+// | rules             | rules/*.md (3 files: `# Title` + `## Validation`/`## Inviolable Rules`/`## Rules` wrappers) | rules-section.md verbatim |
 // | rules body        | _core sections; `.omp/agents/` → `<installDir>/<agentsDir>/` |
-// | prompts/, extensions/ | —                          | —                          | —                 | —                         | copied verbatim |
+// | prompts/, extensions/ | —                          | copied verbatim |
 // | extras (checked-in host files, copied verbatim, never synthesized) |
-// |                   | metadata.json settings.json .gk.json templates/ hooks/ schemas/ skills/gk-run skills/gk-compile | metadata.json hooks.json hooks/ | metadata.json command/ plugins/ | — | — |
+// |                   | metadata.json settings.json .gk.json templates/ hooks/ schemas/ skills/gk-run skills/gk-compile | — |
 import { cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
 import { TARGET_MODEL_DEFAULTS } from "../src/targets/model-tiers.js";
@@ -34,7 +33,7 @@ const ROOT = resolve(import.meta.dir, "..");
 const CORE = join(ROOT, "kits", "_core");
 const KITS = join(ROOT, "kits");
 
-export const HOST_IDS = ["claude", "cursor", "opencode", "codex", "pi"] as const;
+export const HOST_IDS = ["claude", "pi"] as const;
 export type HostId = (typeof HOST_IDS)[number];
 
 interface RuntimeGuards {
@@ -47,7 +46,6 @@ interface RuleFile {
   file: string;
   title: string;
   wrapper: string; // section heading inserted between intro and list ("## Validation" etc.) or the intro sentence for routing
-  cursorFm?: string; // extra Cursor frontmatter body (description/alwaysApply)
 }
 
 interface HostConfig {
@@ -73,12 +71,6 @@ const CORE_PURPOSE_LINE =
 const PURPOSE_LINE_BY_HOST: Record<Exclude<HostId, "pi">, string> = {
   claude:
     "Execute a graph.yaml by **directly spawning parallel subagents via the Agent tool** — YOU are the orchestrator. No compiled .workflow.js. Each node becomes one Agent call you can see and monitor.",
-  cursor:
-    "Execute a graph.yaml by **directly dispatching subagents via the Task tool** — YOU are the orchestrator. No compiled .workflow.js. Each node becomes a real Task tool call you can see and monitor.",
-  opencode:
-    "Execute a graph.yaml by **directly dispatching subagents via the Task tool** — YOU are the orchestrator. No compiled .workflow.js. Each node becomes a real Task tool call you can see and monitor.",
-  codex:
-    "Execute a graph.yaml by **directly spawning custom agents by name** — YOU are the orchestrator. No compiled .workflow.js. Each node becomes an agent spawn you can see and monitor.",
 };
 const CORE_RESOLVER_ITEM =
   "1. **Materialize node agents** — run `gk graph agents <graph.yaml>` once after `gk run start`. It writes `.omp/agents/gk-<node-id>.md` (frontmatter: name, description, node `model`, constraint-derived `tools`, `autoloadSkills` from node `skills`) so omp's native task discovery can dispatch each node directly. Re-run it if the graph changes mid-run.";
@@ -86,12 +78,6 @@ const CORE_RESOLVER_ITEM =
 const CURATOR_ITEM_BY_HOST: Record<Exclude<HostId, "pi">, string> = {
   claude:
     "1. **Read each node's agent definition** from `.claude/agents/<agent-name>.md` — this gives you the agent's identity, rules, and deliverables.",
-  cursor:
-    "1. **Read each node's agent definition** from `.cursor/agents/<agent-name>.md` — this gives you the agent's identity, rules, and deliverables.",
-  opencode:
-    "1. **Read each node's agent definition** from `.opencode/agent/<agent-name>.md` — this gives you the agent's identity, rules, and deliverables.",
-  codex:
-    "1. **Read each node's agent definition** from `.codex/agents/<agent-name>.toml` (`developer_instructions`) — this gives you the agent's identity, rules, and deliverables.",
 };
 
 const COLLECT_AND_LOOPS = `2. **Collect results** — when all agents in the wave return, collect their outputs.
@@ -144,132 +130,6 @@ Return your output with these evidence keys: {node.evidence}
 
 Set the Agent's \`model\` to the node's \`model\` tier. Use \`general-purpose\` as the agent type.`;
 
-const CURSOR_DISPATCH = `## Dispatching a wave (Cursor)
-
-Dispatch one **Task tool** call per node in the current wave, with \`subagent_type\` set to the node's agent name — issue all calls for the wave in a single message (they run in parallel), collect every result, then proceed. Agent definitions live at \`.cursor/agents/<agent-name>.md\`; read the node's definition first for identity, rules, and deliverables.
-Wave barrier: do NOT start wave N+1 until every task of wave N returned. The same barrier holds across loop rounds — do not start round N+1 until every node of a loop group's last wave returned.
-A failed task stops the graph: report node name, objective, and error output — unless the node declares \`retry\` for a transient failure (see [Orchestration fields](#orchestration-fields)). Before dispatching a node, check its \`when\` (skip if false) and \`gate\` (suspend for approval).
-
-Each Task call gets:
-   - \`subagent_type\` = the node's \`agent\` (must match \`.cursor/agents/<agent-name>.md\`)
-   - The node's \`objective\` as its task
-   - The agent definition (identity, rules) as context
-   - The node's \`model\` tier
-   - The node's \`refs\` (read these files and include relevant content)
-   - The node's \`tools\` and \`skills\` constraints
-
-${RUN_LEDGER_CONTRACT}
-
-${COLLECT_AND_LOOPS.replaceAll("all agents", "all tasks")}`;
-
-const CURSOR_TEMPLATE = `## Task dispatch template
-
-For each node, construct the Task tool prompt (with \`subagent_type\` set to the node's agent name):
-
-\`\`\`
-You are {agent_name} from .cursor/agents/{agent-file}.md.
-
-Your task: {node.objective}
-
-{if upstream results:}
-Upstream results from dependencies:
-{for each dep: dep_id: dep_result}
-
-Constraints: {node.constraints}
-Required evidence: {node.evidence}
-
-Return your output with these evidence keys: {node.evidence}
-\`\`\`
-
-Set the Task tool's \`model\` to the node's \`model\` tier mapped through the Cursor model defaults (\`${TARGET_MODEL_DEFAULTS.cursor.opus}\`, \`${TARGET_MODEL_DEFAULTS.cursor.sonnet}\`, or \`${TARGET_MODEL_DEFAULTS.cursor.haiku}\`). The \`subagent_type\` must match an agent filename in \`.cursor/agents/\`.`;
-
-const OPENCODE_DISPATCH = `## Dispatching a wave (OpenCode)
-
-Dispatch each node in the current wave via the **Task tool** with \`subagent_type\` set to the node's agent name; the wave barrier = wait for all background tasks in the wave before proceeding — issue all calls for the wave in a single message (they run in parallel), collect every result, then continue. Agent definitions live at \`.opencode/agent/<agent-name>.md\`; read the node's definition first for identity, rules, and deliverables.
-Wave barrier: do NOT start wave N+1 until every task of wave N returned. The same barrier holds across loop rounds — do not start round N+1 until every node of a loop group's last wave returned.
-A failed task stops the graph: report node name, objective, and error output — unless the node declares \`retry\` for a transient failure (see [Orchestration fields](#orchestration-fields)). Before dispatching a node, check its \`when\` (skip if false) and \`gate\` (suspend for approval).
-
-Each Task call gets:
-   - \`subagent_type\` = the node's \`agent\` (must match \`.opencode/agent/<agent-name>.md\`)
-   - The node's \`objective\` as its task
-   - The agent definition (identity, rules) as context
-   - The node's \`model\` tier
-   - Any upstream results from \`depend_on\` nodes (append to the objective)
-   - The node's \`refs\` (read these files and include relevant content)
-   - The node's \`tools\` and \`skills\` constraints
-
-   In **worktree mode**: write-capable nodes additionally get \`isolation: "worktree"\` and their prompts must be fully self-contained (background workers cannot ask the user) — include repo conventions, the node's acceptance-check recipe, and landing instructions (commit to the worktree branch, conventional message). Read-only nodes skip worktrees — plain dispatch.
-
-${RUN_LEDGER_CONTRACT}
-
-${COLLECT_AND_LOOPS.replaceAll("all agents", "all tasks")}`;
-
-const OPENCODE_TEMPLATE = `## Agent dispatch template
-
-For each node, construct the Task tool prompt (with \`subagent_type\` set to the node's agent name):
-
-\`\`\`
-You are {agent_name} from .opencode/agent/{agent-file}.md.
-
-Your task: {node.objective}
-
-{if upstream results:}
-Upstream results from dependencies:
-{for each dep: dep_id: dep_result}
-
-Constraints: {node.constraints}
-Required evidence: {node.evidence}
-
-Return your output with these evidence keys: {node.evidence}
-\`\`\`
-
-Set the Task tool's \`model\` to the node's \`model\` tier mapped through the agent's frontmatter default (\`${TARGET_MODEL_DEFAULTS.opencode.opus}\`, \`${TARGET_MODEL_DEFAULTS.opencode.sonnet}\`, or \`${TARGET_MODEL_DEFAULTS.opencode.haiku}\`). The \`subagent_type\` must match an agent filename in \`.opencode/agent/\`.`;
-
-const CODEX_DISPATCH = `## Dispatching a wave (Codex)
-
-For each node in the current wave, instruct Codex to spawn its custom agent by name,
-in parallel, then WAIT for all results before continuing to the next wave. Example prompt:
-
-"Spawn one <agent_name> agent per item below. Give each the objective and inputs listed.
-Wait for ALL agents to finish before summarizing results back to me."
-
-Wave barrier rule: never start wave N+1 until every agent of wave N has returned its summary.
-If an agent fails, stop the graph and report which node failed — do not skip ahead.
-
-Each spawned agent gets:
-   - The node's \`objective\` as its task
-   - The agent definition (identity, rules) as context
-   - The node's \`model\` tier
-   - Any upstream results from \`depend_on\` nodes (append to the objective)
-   - The node's \`refs\` (read these files and include relevant content)
-   - The node's \`tools\` and \`skills\` constraints
-
-   In **worktree mode**: for each write-capable node, create an isolated worktree first (\`git worktree add .graphkit/worktrees/<node-id> -b gk/<node-id>\`), spawn the agent with the worktree path in its prompt, and make prompts fully self-contained (workers cannot ask the user) — include repo conventions, the node's acceptance-check recipe, and landing instructions (commit to the worktree branch, conventional message). Read-only nodes skip worktrees — plain dispatch.
-
-${RUN_LEDGER_CONTRACT}
-
-${COLLECT_AND_LOOPS}`;
-
-const CODEX_TEMPLATE = `## Agent dispatch template
-
-For each node, construct the spawn prompt (agent name = the TOML \`name\` field, underscored):
-
-\`\`\`
-You are {agent_name} from .codex/agents/{agent-file}.toml.
-
-Your task: {node.objective}
-
-{if upstream results:}
-Upstream results from dependencies:
-{for each dep: dep_id: dep_result}
-
-Constraints: {node.constraints}
-Required evidence: {node.evidence}
-
-Return your output with these evidence keys: {node.evidence}
-\`\`\`
-
-The agent's \`model\` and \`model_reasoning_effort\` come from its TOML definition — do not override per node.`;
 
 const GK_EXECUTE_OVERRIDES: Record<Exclude<HostId, "pi">, SkillOverride> = {
   claude: {
@@ -281,61 +141,15 @@ const GK_EXECUTE_OVERRIDES: Record<Exclude<HostId, "pi">, SkillOverride> = {
     ],
     sections: { "Dispatching a wave (pi)": CLAUDE_DISPATCH, "Dispatch call shape": CLAUDE_TEMPLATE },
   },
-  cursor: {
-    description:
-      'Execute a graph.yaml by directly dispatching parallel subagents via the Task tool — no compilation. Transparent, real-time, interactive. Optional worktree mode (--worktree / "batch") isolates write nodes in git worktrees. Trigger: "execute graph", "run graph directly", "spawn agents for graph", "batch the graph".',
-    replaces: [
-      [CORE_PURPOSE_LINE, PURPOSE_LINE_BY_HOST.cursor],
-      [CORE_RESOLVER_ITEM, CURATOR_ITEM_BY_HOST.cursor],
-    ],
-    sections: { "Dispatching a wave (pi)": CURSOR_DISPATCH, "Dispatch call shape": CURSOR_TEMPLATE },
-  },
-  opencode: {
-    description:
-      'Execute a graph.yaml by directly dispatching parallel subagents via the Task tool — no compilation. Transparent, real-time, interactive. Optional worktree mode (--worktree / "batch") isolates write nodes in git worktrees. Trigger: "execute graph", "run graph directly", "spawn agents for graph", "batch the graph".',
-    replaces: [
-      [CORE_PURPOSE_LINE, PURPOSE_LINE_BY_HOST.opencode],
-      [CORE_RESOLVER_ITEM, CURATOR_ITEM_BY_HOST.opencode],
-    ],
-    sections: { "Dispatching a wave (pi)": OPENCODE_DISPATCH, "Dispatch call shape": OPENCODE_TEMPLATE },
-  },
-  codex: {
-    description:
-      'Execute a graph.yaml by directly spawning custom agents in parallel waves — no compilation. Transparent, real-time, interactive. Optional worktree mode (--worktree / "batch") isolates write nodes in git worktrees. Trigger: "execute graph", "run graph directly", "spawn agents for graph", "batch the graph".',
-    replaces: [
-      [CORE_PURPOSE_LINE, PURPOSE_LINE_BY_HOST.codex],
-      [CORE_RESOLVER_ITEM, CURATOR_ITEM_BY_HOST.codex],
-    ],
-    sections: { "Dispatching a wave (pi)": CODEX_DISPATCH, "Dispatch call shape": CODEX_TEMPLATE },
-  },
 };
-
-// Skill-invocation spelling per host: _core writes `visualize --mode`; claude/cursor
-// invoke skills as `/gk:visualize`, opencode/codex as `gk-visualize`.
+// Skill-invocation spelling per host: _core writes `visualize --mode`; claude
+// invokes skills as `/gk:visualize`.
 const VISUALIZE_INVOCATION: Record<Exclude<HostId, "pi">, [string, string][]> = {
   claude: [
     ["`visualize --ascii`", "`/gk:visualize --ascii`"],
     ["`visualize --svg`", "`/gk:visualize --svg`"],
     ["`visualize --excalidraw`", "`/gk:visualize --excalidraw`"],
     ["`visualize`", "`/gk:visualize`"],
-  ],
-  cursor: [
-    ["`visualize --ascii`", "`/gk:visualize --ascii`"],
-    ["`visualize --svg`", "`/gk:visualize --svg`"],
-    ["`visualize --excalidraw`", "`/gk:visualize --excalidraw`"],
-    ["`visualize`", "`/gk:visualize`"],
-  ],
-  opencode: [
-    ["`visualize --ascii`", "`gk-visualize --ascii`"],
-    ["`visualize --svg`", "`gk-visualize --svg`"],
-    ["`visualize --excalidraw`", "`gk-visualize --excalidraw`"],
-    ["`visualize`", "`gk-visualize`"],
-  ],
-  codex: [
-    ["`visualize --ascii`", "`gk-visualize --ascii`"],
-    ["`visualize --svg`", "`gk-visualize --svg`"],
-    ["`visualize --excalidraw`", "`gk-visualize --excalidraw`"],
-    ["`visualize`", "`gk-visualize`"],
   ],
 };
 
@@ -364,81 +178,6 @@ const HOSTS: Record<HostId, HostConfig> = {
     extras: ["metadata.json", "settings.json", ".gk.json", "templates", "hooks", "schemas"],
     extraSkills: ["gk-run", "gk-compile"],
   },
-  cursor: {
-    label: "Cursor",
-    agentsDir: "agents",
-    skillsDir: "skills",
-    installDir: ".cursor",
-    skillNameStyle: "dash",
-    skillOverrides: {
-      "gk-execute": GK_EXECUTE_OVERRIDES.cursor,
-      "gk-visualize": { replaces: VISUALIZE_INVOCATION.cursor },
-      "gk-init-graph": { replaces: [["`visualize`", "`/gk:visualize`"]] },
-    },
-    rules: "rules-dir",
-    ruleFiles: [
-      {
-        file: "agent-binding.mdc",
-        title: "Agent Binding",
-        wrapper: "## Validation",
-        cursorFm:
-          "description: GraphKit agent binding — agent names in graph.yaml must resolve to files in .cursor/agents/\nalwaysApply: true",
-      },
-      {
-        file: "graph-authority.mdc",
-        title: "Graph Authority",
-        wrapper: "## Inviolable Rules",
-        cursorFm:
-          "description: GraphKit graph-state authority — gk owns graph state; never improvise edges or skip nodes; recompile to change topology\nalwaysApply: true",
-      },
-      {
-        file: "topology-routing.mdc",
-        title: "Topology Routing",
-        wrapper: "Decision tree for suggesting topology in `/gk:init-graph`.\n\n## Rules",
-        cursorFm:
-          "description: Choose the right GraphKit topology (diamond, classify-and-act, adversarial-verification, loop-until-done, generate-and-filter, tournament, memory-augmented, custom, sdd, superpowers, research-and-build) based on user intent. Use when scaffolding a new graph or selecting a flow preset.\nalwaysApply: false",
-      },
-    ],
-    extras: ["metadata.json", "hooks.json", "hooks"],
-  },
-  opencode: {
-    label: "OpenCode",
-    agentsDir: "agent",
-    skillsDir: "skill",
-    installDir: ".opencode",
-    skillNameStyle: "dash",
-    skillOverrides: {
-      "gk-execute": GK_EXECUTE_OVERRIDES.opencode,
-      "gk-visualize": { replaces: VISUALIZE_INVOCATION.opencode },
-      "gk-init-graph": { replaces: [["`visualize`", "`gk-visualize`"]] },
-    },
-    rules: "rules-section",
-    runtimeGuards: {
-      heading: "### Runtime guards (plugin-enforced)",
-      intro:
-        "The gk plugin (`.opencode/plugins/gk.ts`) enforces evidence-persist, graph-state-guard, lease-enforce, and memory-persist automatically. Where the plugin cannot see an operation (direct shell edits, subagent internals), these behaviors are explicit instructions you MUST follow:",
-      extraBullet: "- Skills live under `.opencode/skill/`; bind nodes only to skills that exist there.",
-    },
-    extras: ["metadata.json", "command", "plugins"],
-  },
-  codex: {
-    label: "Codex",
-    agentsDir: "agents",
-    skillsDir: "skills",
-    installDir: ".codex",
-    skillNameStyle: "dash",
-    skillOverrides: {
-      "gk-execute": GK_EXECUTE_OVERRIDES.codex,
-      "gk-visualize": { replaces: VISUALIZE_INVOCATION.codex },
-      "gk-init-graph": { replaces: [["`visualize`", "`gk-visualize`"]] },
-    },
-    rules: "rules-section",
-    runtimeGuards: {
-      heading: "### Runtime guards (no hooks on this host)",
-      intro:
-        "Codex has no hook/plugin enforcement layer, so these behaviors are explicit instructions you MUST follow:",
-    },
-  },
   pi: {
     label: "pi",
     agentsDir: "agents",
@@ -460,9 +199,6 @@ interface AgentMeta {
   graphRoles: string[];
   evidenceKeys: string[];
   source: string;
-  cursorReadonly: boolean;
-  codexEffort: "high" | "medium";
-  codexSandbox: "read-only" | "workspace-write";
 }
 
 const AGENT_META: Record<string, AgentMeta> = {
@@ -474,9 +210,6 @@ const AGENT_META: Record<string, AgentMeta> = {
     graphRoles: ["scouter", "synthesizer"],
     evidenceKeys: ["task_breakdown", "agent_assignments", "orchestration_log"],
     source: "agency-agents/specialized-agents-orchestrator",
-    cursorReadonly: true,
-    codexEffort: "high",
-    codexSandbox: "read-only",
   },
   "code-reviewer": {
     title: "Code Reviewer",
@@ -486,9 +219,6 @@ const AGENT_META: Record<string, AgentMeta> = {
     graphRoles: ["worker", "verifier"],
     evidenceKeys: ["findings", "severity", "remediation", "lines_affected"],
     source: "agency-agents/engineering-code-reviewer",
-    cursorReadonly: true,
-    codexEffort: "medium",
-    codexSandbox: "read-only",
   },
   "data-engineer": {
     title: "Data Engineer",
@@ -498,9 +228,6 @@ const AGENT_META: Record<string, AgentMeta> = {
     graphRoles: ["worker", "scouter"],
     evidenceKeys: ["schema_changes", "data_quality", "migration_plan"],
     source: "agency-agents/engineering-data-engineer",
-    cursorReadonly: false,
-    codexEffort: "medium",
-    codexSandbox: "workspace-write",
   },
   "document-generator": {
     title: "Document Generator",
@@ -510,9 +237,6 @@ const AGENT_META: Record<string, AgentMeta> = {
     graphRoles: ["synthesizer", "worker"],
     evidenceKeys: ["report", "executive_summary", "recommendations"],
     source: "agency-agents/specialized-specialized-document-generator",
-    cursorReadonly: false,
-    codexEffort: "medium",
-    codexSandbox: "workspace-write",
   },
   "memory-curator": {
     title: "Memory Curator",
@@ -522,9 +246,6 @@ const AGENT_META: Record<string, AgentMeta> = {
     graphRoles: ["curator", "injector"],
     evidenceKeys: ["memory_delta", "injection_decision", "expired_memories"],
     source: "synthesized (Memanto + MAGMA + EvoMemKG + Genesys)",
-    cursorReadonly: false,
-    codexEffort: "high",
-    codexSandbox: "workspace-write",
   },
   "qa-engineer": {
     title: "QA Engineer",
@@ -534,9 +255,6 @@ const AGENT_META: Record<string, AgentMeta> = {
     graphRoles: ["verifier", "worker"],
     evidenceKeys: ["test_results", "bug_reports", "coverage_gaps"],
     source: "agency-agents/testing-evidence-collector+specialized-model-qa",
-    cursorReadonly: true,
-    codexEffort: "medium",
-    codexSandbox: "workspace-write",
   },
   "software-architect": {
     title: "Software Architect",
@@ -546,9 +264,6 @@ const AGENT_META: Record<string, AgentMeta> = {
     graphRoles: ["scouter", "planner", "synthesizer"],
     evidenceKeys: ["architecture_decisions", "trade_offs", "context_map"],
     source: "agency-agents/engineering-software-architect",
-    cursorReadonly: true,
-    codexEffort: "high",
-    codexSandbox: "workspace-write",
   },
   "ui-ux-researcher": {
     title: "UI/UX Researcher",
@@ -558,9 +273,6 @@ const AGENT_META: Record<string, AgentMeta> = {
     graphRoles: ["worker", "synthesizer"],
     evidenceKeys: ["design_specs", "accessibility_audit", "user_flows"],
     source: "agency-agents/design-ux-researcher+design-ui-designer",
-    cursorReadonly: false,
-    codexEffort: "medium",
-    codexSandbox: "read-only",
   },
   "security-auditor": {
     title: "Security Auditor",
@@ -570,9 +282,6 @@ const AGENT_META: Record<string, AgentMeta> = {
     graphRoles: ["verifier", "worker"],
     evidenceKeys: ["vulnerabilities", "severity", "exploit_path", "remediation"],
     source: "wshobson-agents/comprehensive-review-security-auditor",
-    cursorReadonly: true,
-    codexEffort: "high",
-    codexSandbox: "read-only",
   },
   implementer: {
     title: "Implementer",
@@ -582,9 +291,6 @@ const AGENT_META: Record<string, AgentMeta> = {
     graphRoles: ["worker"],
     evidenceKeys: ["files_changed", "implementation_summary", "tests_run", "acceptance_status"],
     source: "synthesized (ticket-worker pattern: zachwills dispatch-outcomes + Claude Code general-purpose)",
-    cursorReadonly: false,
-    codexEffort: "medium",
-    codexSandbox: "workspace-write",
   },
   "codebase-scout": {
     title: "Codebase Scout",
@@ -594,9 +300,6 @@ const AGENT_META: Record<string, AgentMeta> = {
     graphRoles: ["scouter"],
     evidenceKeys: ["findings", "structure_map", "files_read"],
     source: "synthesized (Claude Code Explore built-in + Anthropic subagent-as-compression)",
-    cursorReadonly: true,
-    codexEffort: "medium",
-    codexSandbox: "read-only",
   },
   "adversarial-reviewer": {
     title: "Adversarial Reviewer",
@@ -606,9 +309,6 @@ const AGENT_META: Record<string, AgentMeta> = {
     graphRoles: ["verifier"],
     evidenceKeys: ["verdict", "findings", "could_not_verify"],
     source: "synthesized (HN adversarial review loops + Claude Code second-opinion pattern)",
-    cursorReadonly: true,
-    codexEffort: "medium",
-    codexSandbox: "read-only",
   },
   "claim-verifier": {
     title: "Claim Verifier",
@@ -618,9 +318,6 @@ const AGENT_META: Record<string, AgentMeta> = {
     graphRoles: ["verifier"],
     evidenceKeys: ["claim_results"],
     source: "synthesized (zachwills cheap claim-checkers + Anthropic rubric LLM-as-judge)",
-    cursorReadonly: true,
-    codexEffort: "medium",
-    codexSandbox: "read-only",
   },
   debugger: {
     title: "Debugger",
@@ -630,9 +327,6 @@ const AGENT_META: Record<string, AgentMeta> = {
     graphRoles: ["worker", "verifier"],
     evidenceKeys: ["root_cause", "reproduction", "hypotheses_tried", "fix_plan"],
     source: "wshobson-agents/error-debugging-debugger + systematic-debugging bisection",
-    cursorReadonly: false,
-    codexEffort: "medium",
-    codexSandbox: "workspace-write",
   },
   planner: {
     title: "Planner",
@@ -642,9 +336,6 @@ const AGENT_META: Record<string, AgentMeta> = {
     graphRoles: ["planner"],
     evidenceKeys: ["ticket", "acceptance_criteria", "open_questions"],
     source: "synthesized (zachwills ticket-as-interface + aider architect/editor split + Claude Code plan mode)",
-    cursorReadonly: true,
-    codexEffort: "high",
-    codexSandbox: "read-only",
   },
   "research-analyst": {
     title: "Research Analyst",
@@ -654,9 +345,6 @@ const AGENT_META: Record<string, AgentMeta> = {
     graphRoles: ["scouter", "synthesizer"],
     evidenceKeys: ["findings", "citations", "options_compared", "open_questions"],
     source: "synthesized (Anthropic multi-agent research system shape; VoltAgent body rejected as padding)",
-    cursorReadonly: true,
-    codexEffort: "medium",
-    codexSandbox: "read-only",
   },
   arbiter: {
     title: "Arbiter",
@@ -666,9 +354,6 @@ const AGENT_META: Record<string, AgentMeta> = {
     graphRoles: ["verifier"],
     evidenceKeys: ["verdict", "score_matrix", "dissent", "what_would_flip"],
     source: "synthesized (Anthropic arbiter pattern: 12x vuln yield vs independent agents; tournament judge slot)",
-    cursorReadonly: true,
-    codexEffort: "high",
-    codexSandbox: "read-only",
   },
   "test-automator": {
     title: "Test Automator",
@@ -678,9 +363,6 @@ const AGENT_META: Record<string, AgentMeta> = {
     graphRoles: ["worker"],
     evidenceKeys: ["tests_added", "coverage_map", "tests_run", "gaps"],
     source: "synthesized (test-quality contract: observable behavior only, every test must be able to fail)",
-    cursorReadonly: false,
-    codexEffort: "medium",
-    codexSandbox: "workspace-write",
   },
   "performance-engineer": {
     title: "Performance Engineer",
@@ -690,9 +372,6 @@ const AGENT_META: Record<string, AgentMeta> = {
     graphRoles: ["worker", "verifier"],
     evidenceKeys: ["baseline", "bottlenecks", "optimizations", "after_metrics", "validation"],
     source: "synthesized (measure-before-optimize contract; no numbers = no claim)",
-    cursorReadonly: false,
-    codexEffort: "medium",
-    codexSandbox: "workspace-write",
   },
   "api-designer": {
     title: "API Designer",
@@ -702,9 +381,6 @@ const AGENT_META: Record<string, AgentMeta> = {
     graphRoles: ["planner", "synthesizer"],
     evidenceKeys: ["contract", "breaking_change_matrix", "decisions", "versioning_policy"],
     source: "synthesized (contract-first design + breaking-change classification)",
-    cursorReadonly: true,
-    codexEffort: "high",
-    codexSandbox: "read-only",
   },
   "release-manager": {
     title: "Release Manager",
@@ -714,9 +390,6 @@ const AGENT_META: Record<string, AgentMeta> = {
     graphRoles: ["verifier"],
     evidenceKeys: ["go_no_go", "checklist", "blockers", "residual_risks"],
     source: "synthesized (release-checklist gate; verdict-first contract like adversarial-reviewer)",
-    cursorReadonly: true,
-    codexEffort: "medium",
-    codexSandbox: "read-only",
   },
   "devops-engineer": {
     title: "DevOps Engineer",
@@ -726,9 +399,6 @@ const AGENT_META: Record<string, AgentMeta> = {
     graphRoles: ["worker"],
     evidenceKeys: ["changes", "pipeline_diagram", "validation", "risks"],
     source: "synthesized (reproducible-pipeline contract; pin everything, fail fast)",
-    cursorReadonly: false,
-    codexEffort: "medium",
-    codexSandbox: "workspace-write",
   },
   "migration-planner": {
     title: "Migration Planner",
@@ -738,9 +408,6 @@ const AGENT_META: Record<string, AgentMeta> = {
     graphRoles: ["planner", "worker"],
     evidenceKeys: ["delta", "steps", "consumers", "risks"],
     source: "synthesized (expand-contract pattern; no flag-day, every step reversible)",
-    cursorReadonly: true,
-    codexEffort: "high",
-    codexSandbox: "read-only",
   },
   "doc-sync": {
     title: "Doc Sync",
@@ -750,9 +417,6 @@ const AGENT_META: Record<string, AgentMeta> = {
     graphRoles: ["worker", "verifier"],
     evidenceKeys: ["drift", "summary", "unverifiable"],
     source: "synthesized (grep-deterministic drift sweep; code is truth, docs must match)",
-    cursorReadonly: false,
-    codexEffort: "medium",
-    codexSandbox: "workspace-write",
   },
 };
 
@@ -835,36 +499,6 @@ function emitAgent(slug: string, raw: string, host: HostId): string {
     return `---\nname: ${slug}\ndescription: ${meta.description}\n---\n\n${raw}`;
   }
   const body = agentBody(raw, host);
-  if (host === "codex") {
-    // ponytail: TOML escaping covers backslashes and triple-quote runs only; a
-    // body ending in a bare `"` before the terminator would need `\"` — add when
-    // an agent prompt actually ends that way.
-    const instructions = body.replace(/\\/g, "\\\\").replace(/"""/g, '\\"\\"\\"').trimEnd();
-    return [
-      `name = "${slug.replaceAll("-", "_")}"`,
-      `description = "${meta.description.replaceAll('"', '\\"')}"`,
-      `model = "${TARGET_MODEL_DEFAULTS.codex[meta.tier]}"`,
-      `model_reasoning_effort = "${meta.codexEffort}"`,
-      `sandbox_mode = "${meta.codexSandbox}"`,
-      "",
-      `developer_instructions = """`,
-      "",
-      instructions,
-      `"""`,
-      "",
-    ].join("\n");
-  }
-  if (host === "opencode") {
-    return [
-      "---",
-      `description: ${meta.description}`,
-      "mode: subagent",
-      `model: ${TARGET_MODEL_DEFAULTS.opencode[meta.tier]}`,
-      "---",
-      "",
-      body,
-    ].join("\n");
-  }
   const fm = [
     "---",
     `name: ${meta.title}`,
@@ -874,7 +508,6 @@ function emitAgent(slug: string, raw: string, host: HostId): string {
     `evidence_keys: [${meta.evidenceKeys.join(", ")}]`,
     `source: ${meta.source}`,
   ];
-  if (host === "cursor") fm.push(`readonly: ${meta.cursorReadonly}`, "is_background: false");
   fm.push("---");
   return `${fm.join("\n")}\n\n${body}`;
 }
@@ -923,8 +556,7 @@ function emitRulesSection(host: HostId): string {
 function emitRulesDirFile(section: { name: string; body: string }, rule: RuleFile, host: HostId): string {
   const body = substituteInstallDirs(section.body, host);
   const [intro, ...rest] = body.split("\n\n");
-  const frontmatter = rule.cursorFm ? `---\n${rule.cursorFm}\n---\n\n` : "";
-  return `${frontmatter}# ${rule.title}\n\n${intro}\n\n${rule.wrapper}\n\n${rest.join("\n\n")}\n`;
+  return `# ${rule.title}\n\n${intro}\n\n${rule.wrapper}\n\n${rest.join("\n\n")}\n`;
 }
 
 export function generateKit(host: HostId, outRoot: string): string {
@@ -980,7 +612,7 @@ export function generateKit(host: HostId, outRoot: string): string {
   for (const file of readdirSync(join(CORE, "agents"))) {
     const slug = file.replace(/\.md$/, "");
     writeFileSync(
-      join(out, cfg.agentsDir, host === "codex" ? `${slug}.toml` : file),
+      join(out, cfg.agentsDir, file),
       emitAgent(slug, readFileSync(join(CORE, "agents", file), "utf8"), host),
     );
   }

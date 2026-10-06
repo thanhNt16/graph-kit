@@ -3,6 +3,7 @@ import { basename, join } from "node:path";
 import YAML from "yaml";
 import type { Issue } from "../cli/diagnostics.js";
 import { topoWaves } from "../cli/graph-waves.js";
+import { agentDirsFor, agentFileName } from "../targets/registry.js";
 import type { Graph } from "../schemas/graph.schema.js";
 
 /** A semantic check result. Shape-compatible with the schema `Issue` envelope:
@@ -15,25 +16,11 @@ export interface Finding extends Issue {
 
 export const isBlocking = (f: Finding) => f.severity !== "warn";
 
-// Agent names resolve to kebab-case filenames: "Software Architect" → software-architect.md
-export function agentFileName(agent: string): string {
-  return `${agent.toLowerCase().replace(/[^a-z0-9]+/g, "-")}.md`;
-}
-
 export function validateGraph(graph: Graph, projectRoot: string): Finding[] {
   const findings: Finding[] = [];
 
-  // 1. Agent binding: use the first installed host's agent directory.
-  const agentDir = [
-    ".omp/agents",
-    ".claude/agents",
-    ".cursor/agents",
-    ".opencode/agent",
-    ".codex/agents",
-    "claude/agents",
-  ]
-    .map((path) => join(projectRoot, path))
-    .find(existsSync);
+  // 1. Agent binding: first installed host's agent directory wins (pi first).
+  const agentDir = agentDirsFor(projectRoot).find(existsSync);
   const available = agentDir ? readdirSync(agentDir).map((f) => basename(f, ".md")) : [];
 
   // 0. Non-custom topologies require at least one node
@@ -50,7 +37,7 @@ export function validateGraph(graph: Graph, projectRoot: string): Finding[] {
       findings.push({
         check: "agent-binding",
         path: `nodes.${id}.agent`,
-        message: `Agent "${node.agent}" not found. Available: ${available.join(", ")}`,
+        message: `Agent "${node.agent}" not found — looked for ${agentFileName(node.agent)} in ${agentDir}. Available: ${available.join(", ")}`,
       });
     }
 

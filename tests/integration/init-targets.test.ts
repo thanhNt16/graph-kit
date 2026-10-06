@@ -17,19 +17,12 @@ function initTmp(target: string): string {
 }
 
 describe("init per target", () => {
-  test("opencode tree", () => {
-    initTmp("opencode");
-    expect(existsSync(join(TMP, ".opencode", "agent"))).toBe(true);
-    expect(existsSync(join(TMP, ".opencode", "skill"))).toBe(true);
-    expect(existsSync(join(TMP, ".opencode", "plugins", "gk.ts"))).toBe(true);
-    expect(existsSync(join(TMP, ".opencode", "command"))).toBe(true);
-    expect(existsSync(join(TMP, ".opencode", "metadata.json"))).toBe(true);
-  });
-
-  test.skipIf(!existsSync(join(KITS, "codex")))("codex tree — agents toml + skills land in .agents/skills", () => {
-    initTmp("codex");
-    expect(existsSync(join(TMP, ".codex", "agents"))).toBe(true);
-    expect(existsSync(join(TMP, ".agents", "skills"))).toBe(true);
+  test("claude tree", () => {
+    initTmp("claude");
+    expect(existsSync(join(TMP, ".claude", "agents"))).toBe(true);
+    expect(existsSync(join(TMP, ".claude", "skills", "gk-status", "SKILL.md"))).toBe(true);
+    expect(existsSync(join(TMP, ".claude", "settings.json"))).toBe(true);
+    expect(existsSync(join(TMP, ".claude", "metadata.json"))).toBe(true);
   });
 
   test("pi/omp tree", () => {
@@ -60,7 +53,7 @@ describe("init per target", () => {
       const err = e as { status: number; stdout: string };
       code = err.status;
       expect(String(err.stdout)).toContain("BAD_TARGET");
-      expect(String(err.stdout)).toContain("opencode");
+      expect(String(err.stdout)).toContain("claude");
     }
     expect(code).toBe(1);
   });

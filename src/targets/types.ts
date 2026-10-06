@@ -2,13 +2,13 @@ export const TIERS = ["opus", "sonnet", "haiku", "fable"] as const;
 
 export type Tier = (typeof TIERS)[number];
 
-export type TargetId = "claude" | "cursor" | "opencode" | "codex" | "pi";
+export type TargetId = "claude" | "pi";
 
-export type AgentFormat = "md-frontmatter" | "mdc" | "toml" | "prompt-fragment";
-export type RulesStrategy = "rules-dir" | "agents-md-sections" | "instructions-md";
-export type HooksKind = "settings-json" | "hooks-json" | "plugin-ts" | "extension-ts" | "instructions";
-export type CommandsKind = "slash-skill" | "command-md" | "prompts-dir" | "prompt-template";
-export type SubagentDispatch = "task-tool" | "spawn-prompt" | "extension" | "none";
+export type AgentFormat = "md-frontmatter" | "prompt-fragment";
+export type RulesStrategy = "rules-dir" | "agents-md-sections";
+export type HooksKind = "settings-json" | "extension-ts";
+export type CommandsKind = "slash-skill" | "prompt-template";
+export type SubagentDispatch = "task-tool" | "extension";
 
 export interface TargetDescriptor {
   id: string;

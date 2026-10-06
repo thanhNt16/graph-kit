@@ -1,20 +1,102 @@
-import { afterEach, describe, expect, test } from "bun:test";
-import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { afterAll, afterEach, beforeAll, describe, expect, test } from "bun:test";
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { cac } from "cac";
 import YAML from "yaml";
 import { registerGraphCommands } from "../../src/cli/commands/graph.js";
 import { formatZodIssues } from "../../src/cli/diagnostics.js";
-import { agentFileName, isBlocking, validateGraph } from "../../src/compiler/validate.js";
+import { materializeNodeAgents } from "../../src/cli/node-agents.js";
+import { isBlocking, validateGraph } from "../../src/compiler/validate.js";
+import { agentFileName, agentDirsFor } from "../../src/targets/registry.js";
+import { GraphKitError } from "../../src/errors.js";
 import { GraphSchema } from "../../src/schemas/graph.schema.js";
 
 const FIXTURES = join(import.meta.dir, "..", "fixtures");
-const PROJECT_ROOT = join(import.meta.dir, "..", "..", "kits");
+
+// A real project root for binding probes: validate + materialize agree on
+// .omp/agents (pi target, first in agentDirsFor). Lives next to this file so
+// runs are hermetic; removed after the suite.
+const PROJECT_ROOT = join(import.meta.dir, ".tmp-validate-project");
+
+beforeAll(() => {
+  const agentsDir = join(PROJECT_ROOT, ".omp", "agents");
+  mkdirSync(agentsDir, { recursive: true });
+  for (const name of ["software-architect", "code-reviewer", "qa-engineer", "memory-curator"]) {
+    writeFileSync(join(agentsDir, `${name}.md`), `# ${name}`, "utf-8");
+  }
+});
+
+afterAll(() => {
+  rmSync(PROJECT_ROOT, { recursive: true, force: true });
+});
 
 function loadYaml(name: string) {
   return YAML.parse(readFileSync(join(FIXTURES, name), "utf-8"));
 }
+
+// Task 4: validate and node-agents materialization share ONE binding rule.
+// "Software Architect" is the canonical CS#6 case: it used to validate (kebab
+// in validate) but fail materialization (raw name lookup in node-agents).
+describe("agent binding agreement (validate <-> materialize)", () => {
+  const TMP = join(import.meta.dir, ".tmp-validate-binding");
+
+  afterEach(() => {
+    rmSync(TMP, { recursive: true, force: true });
+  });
+
+  function projectWithAgents(files: Record<string, string>) {
+    mkdirSync(TMP, { recursive: true });
+    for (const [rel, content] of Object.entries(files)) {
+      const p = join(TMP, rel);
+      mkdirSync(join(p, ".."), { recursive: true });
+      writeFileSync(p, content, "utf-8");
+    }
+  }
+
+  const bindingGraph = {
+    apiVersion: "graphkit.dev/v2",
+    kind: "Graph",
+    metadata: { name: "binding" },
+    topology: "diamond",
+    nodes: { worker: { agent: "Software Architect", objective: "work", depend_on: [] } },
+  };
+
+  test("kebab round-trip: .omp/agents/software-architect.md satisfies both sides", () => {
+    projectWithAgents({ ".omp/agents/software-architect.md": "architect fragment" });
+    const g = GraphSchema.parse(bindingGraph);
+    // validate: no agent-binding finding
+    const findings = validateGraph(g, TMP).filter((f) => f.check === "agent-binding");
+    expect(findings).toEqual([]);
+    // materialize: resolves the same fragment through the same rule
+    const mapping = materializeNodeAgents(TMP, g);
+    expect(mapping.worker).toBe("gk-worker");
+    expect(existsSync(join(TMP, ".omp/agents/gk-worker.md"))).toBe(true);
+  });
+
+  test("unknown agent fails naming the file it looked for", () => {
+    projectWithAgents({ ".omp/agents/.keep": "" });
+    const g = GraphSchema.parse({
+      ...bindingGraph,
+      nodes: { worker: { agent: "Nonexistent Agent", objective: "work", depend_on: [] } },
+    });
+    const finding = validateGraph(g, TMP).find((f) => f.check === "agent-binding");
+    expect(finding?.message).toContain("nonexistent-agent.md");
+    let matErr: GraphKitError | undefined;
+    try {
+      materializeNodeAgents(TMP, g);
+    } catch (e) {
+      matErr = e as GraphKitError;
+    }
+    expect(matErr?.code).toBe("AGENT_NOT_FOUND");
+    expect(String(matErr?.details?.hint)).toContain("nonexistent-agent.md");
+  });
+
+  test("agentDirsFor derives from the target table (pi first, claude second)", () => {
+    const dirs = agentDirsFor("/proj").map((d) => d.slice("/proj/".length));
+    expect(dirs).toEqual([".omp/agents", ".claude/agents"]);
+  });
+});
 
 describe("agentFileName", () => {
   test("lowercases and hyphenates", () => {

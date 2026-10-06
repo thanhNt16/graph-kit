@@ -32,8 +32,8 @@ function writeOverrides(cwd: string, target: string, overrides: Record<string, s
 }
 
 export function registerModelsCommands(cli: CAC): void {
-  // cac (6.x) matches a single leading token only; "models cursor" never
-  // dispatches. Use one `models` command with subcommand dispatch (like memory).
+  // cac (6.x) matches a single leading token only; a second word is never
+  // dispatched as its own command. Use one `models` command with subcommand dispatch (like memory).
   cli
     .command("models [subcommand] [args...]", "Per-target model mapping commands")
     .option("--map <k=v,...>", "comma-separated model=override pairs")

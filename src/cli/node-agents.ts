@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { GraphKitError } from "../errors.js";
+import { agentFileName, getTarget } from "../targets/registry.js";
 import type { Graph } from "../schemas/graph.schema.js";
 
 // Native-dispatch bridge (pi/omp): omp's task tool discovers agents from
@@ -61,8 +62,14 @@ function yamlArray(items: string[]): string {
   return `[${items.map((i) => JSON.stringify(i)).join(", ")}]`;
 }
 
+// Materialization target: the pi target's agent dir from the target table.
+export function piAgentsDir(cwd: string): string {
+  const t = getTarget("pi");
+  return join(cwd, t.installDir, t.agents.dir);
+}
+
 export function materializeNodeAgents(cwd: string, graph: Graph): Record<string, string> {
-  const agentsDir = join(cwd, ".omp", "agents");
+  const agentsDir = piAgentsDir(cwd);
   if (!existsSync(agentsDir)) {
     throw new GraphKitError("AGENTS_DIR_MISSING", `No .omp/agents directory at ${agentsDir}`, {
       hint: "Run `gk init --target pi` first.",
@@ -73,7 +80,7 @@ export function materializeNodeAgents(cwd: string, graph: Graph): Record<string,
   const wanted = new Set<string>();
 
   for (const [nodeId, node] of Object.entries(nodes)) {
-    const fragmentPath = join(agentsDir, `${node.agent}.md`);
+    const fragmentPath = join(agentsDir, agentFileName(node.agent));
     if (!existsSync(fragmentPath)) {
       throw new GraphKitError("AGENT_NOT_FOUND", `Agent '${node.agent}' not found for node '${nodeId}'`, {
         hint: `Expected ${fragmentPath}. Available: ${readdirSync(agentsDir)
@@ -82,6 +89,7 @@ export function materializeNodeAgents(cwd: string, graph: Graph): Record<string,
           .join(", ")}`,
       });
     }
+
     const agentName = `${GK_AGENT_PREFIX}${nodeId}`;
     wanted.add(`${agentName}.md`);
 

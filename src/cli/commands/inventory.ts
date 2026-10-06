@@ -49,37 +49,6 @@ const BUILTIN_TOOLS_CLAUDE = [
   "ExitWorktree",
   "SendMessage",
 ];
-const BUILTIN_TOOLS_CURSOR = [
-  "Bash",
-  "Read",
-  "Edit",
-  "Write",
-  "Glob",
-  "Grep",
-  "WebFetch",
-  "WebSearch",
-  "Agent",
-  "Task",
-  "TodoWrite",
-  "AskUserQuestion",
-  "ExitPlanMode",
-  "Skill",
-];
-const BUILTIN_TOOLS_OPENCODE = [
-  "Read",
-  "Write",
-  "Edit",
-  "Bash",
-  "Glob",
-  "Grep",
-  "WebFetch",
-  "WebSearch",
-  "Task", // subagent dispatch
-  "TodoWrite",
-  "Skill",
-];
-// Codex has no subagent tool — waves are driven by spawn-prompt instructions.
-const BUILTIN_TOOLS_CODEX = ["Read", "Write", "Edit", "Bash", "Glob", "Grep", "WebFetch", "WebSearch"];
 // pi registers gk_dispatch_agent via .omp/extensions/gk-subagent.ts.
 const BUILTIN_TOOLS_PI = [
   "Read",
@@ -95,9 +64,6 @@ const BUILTIN_TOOLS_PI = [
 
 const TOOLS_BY_TARGET: Record<TargetId, string[]> = {
   claude: BUILTIN_TOOLS_CLAUDE,
-  cursor: BUILTIN_TOOLS_CURSOR,
-  opencode: BUILTIN_TOOLS_OPENCODE,
-  codex: BUILTIN_TOOLS_CODEX,
   pi: BUILTIN_TOOLS_PI,
 };
 
@@ -122,23 +88,11 @@ function parseFrontmatterModel(content: string): { model?: string; name?: string
   };
 }
 
-// Minimal TOML scalar extraction — names only, never parses developer_instructions bodies.
-function parseTomlAgent(content: string): { model?: string; name?: string } {
-  const nameMatch = content.match(/^name\s*=\s*"([^"]+)"/m);
-  const modelMatch = content.match(/^model\s*=\s*"([^"]+)"/m);
-  return {
-    name: nameMatch?.[1]?.trim() || undefined,
-    model: modelMatch?.[1]?.trim() || undefined,
-  };
-}
-
 function collectAgents(dir: string, format: string, warnings: string[]): Map<string, InventoryAgent> {
   const out = new Map<string, InventoryAgent>();
-  if (!existsSync(dir)) return out;
-  const ext = format === "toml" ? ".toml" : ".md";
   for (const entry of readdirSync(dir)) {
-    if (!entry.endsWith(ext)) continue;
-    const base = entry.replace(/\.(md|toml)$/, "");
+    if (!entry.endsWith(".md")) continue;
+    const base = entry.replace(/\.md$/, "");
     if (format === "prompt-fragment") {
       // pi fragments have no frontmatter — basename is the agent name.
       out.set(base, { name: base });
@@ -152,7 +106,7 @@ function collectAgents(dir: string, format: string, warnings: string[]): Map<str
       warnings.push(`Failed to read agent "${entry}": ${String(e)}`);
       continue;
     }
-    const parsed = format === "toml" ? parseTomlAgent(content) : parseFrontmatterModel(content);
+    const parsed = parseFrontmatterModel(content);
     if (!parsed.name) {
       warnings.push(`Skipped agent "${entry}": missing or malformed frontmatter`);
       continue;
@@ -176,10 +130,12 @@ function collectSkills(dir: string): string[] {
 
 // Names of hook artifacts on disk for the target's hook kind; instruction-based hosts report none.
 function collectHooks(installDir: string, hooksKind: string): string[] {
-  let dir: string | null = null;
-  if (hooksKind === "plugin-ts") dir = join(installDir, "plugins");
-  else if (hooksKind === "extension-ts") dir = join(installDir, "extensions");
-  else if (hooksKind === "settings-json" || hooksKind === "hooks-json") dir = join(installDir, "hooks");
+  const dir =
+    hooksKind === "extension-ts"
+      ? join(installDir, "extensions")
+      : hooksKind === "settings-json"
+        ? join(installDir, "hooks")
+        : null;
   if (!dir || !existsSync(dir)) return [];
   return readdirSync(dir).sort();
 }
@@ -187,10 +143,11 @@ function collectHooks(installDir: string, hooksKind: string): string[] {
 // Names of command artifacts per kind; slash-skill hosts surface commands via their skills dir instead.
 function collectCommands(installDir: string, commandsKind: string): string[] {
   if (commandsKind === "slash-skill") return [];
-  const dir = commandsKind === "command-md" ? join(installDir, "command") : join(installDir, "prompts");
+  const dir = join(installDir, "prompts");
   if (!existsSync(dir)) return [];
   return readdirSync(dir).sort();
 }
+
 
 function collectMcpFromJson(file: string, warnings: string[]): McpServerInventory[] {
   const out: McpServerInventory[] = [];
@@ -249,7 +206,7 @@ export function runInventory(opts: { cwd?: string; target?: string; userDir?: st
   for (const [k, v] of userAgents) agents.set(k, v);
   for (const [k, v] of projectAgents) agents.set(k, v); // project wins
 
-  // skills.dir may point outside installDir (codex installs into sibling .agents/skills).
+  // skills.dir may point outside installDir (a host may install into a sibling dir).
   const projectSkills = collectSkills(join(cwd, desc.installDir, desc.skills.dir));
   const userSkills = collectSkills(join(home, desc.installDir, desc.skills.dir));
   const skills = [...new Set([...userSkills, ...projectSkills])].sort();
@@ -264,14 +221,12 @@ export function runInventory(opts: { cwd?: string; target?: string; userDir?: st
     ]),
   ].sort();
 
-  // MCP discovery is defined per-host: project .mcp.json / .cursor/mcp.json, then user-global.
-  // Other hosts' MCP config formats are not inventoried yet.
+  // MCP discovery is defined per-host: project .mcp.json, then user-global.
+  // pi has no JSON MCP config to inventory yet.
   const mcpServers: McpServerInventory[] = [];
-  if (target === "claude" || target === "cursor") {
-    const projectMcp = target === "cursor" ? join(cwd, ".cursor", "mcp.json") : join(cwd, ".mcp.json");
-    const userMcp = target === "cursor" ? join(home, ".cursor", "mcp.json") : join(home, ".claude.json");
-    mcpServers.push(...collectMcpFromJson(projectMcp, warnings));
-    mcpServers.push(...collectMcpFromJson(userMcp, warnings));
+  if (target === "claude") {
+    mcpServers.push(...collectMcpFromJson(join(cwd, ".mcp.json"), warnings));
+    mcpServers.push(...collectMcpFromJson(join(home, ".claude.json"), warnings));
   }
 
   return {

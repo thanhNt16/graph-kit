@@ -43,7 +43,7 @@ function compareVersions(a: string, b: string): number {
   return 0;
 }
 
-export type KitTarget = "claude" | "cursor";
+export type KitTarget = "claude" | "pi";
 
 // Candidate ladder shared with template.ts's gallery lookup: resolve a bundled
 // asset directory (e.g. "kits/claude", "templates/gallery") relative to however
@@ -186,15 +186,6 @@ export function installKit(
       /* corrupt user config: rewrite defaults below */
     }
   }
-  // --force / fresh: wipe old dir and reinstall clean
-  if (fresh && existsSync(destDir)) {
-    rmSync(destDir, { recursive: true, force: true });
-    // codex special case: skills also install into sibling .agents/skills/
-    // — --force must remove stale skills there too, not just .codex/skills/
-    if (t.id === "codex") {
-      rmSync(join(targetDir, ".agents", "skills"), { recursive: true, force: true });
-    }
-  }
 
   mkdirSync(destDir, { recursive: true });
   // Runtime artifacts shared across hosts.
@@ -215,19 +206,7 @@ export function installKit(
   });
   for (const rel of kitDeletions(source)) {
     rmSync(join(destDir, rel), { recursive: true, force: true });
-    if (t.id === "codex" && rel.startsWith("skills/")) {
-      rmSync(join(targetDir, ".agents", rel), { recursive: true, force: true });
-    }
   }
-
-  // codex special case: skills also install into sibling .agents/skills/
-  if (t.id === "codex") {
-    const skillsSrc = join(source, "skills");
-    if (existsSync(skillsSrc)) {
-      cpSync(skillsSrc, join(targetDir, ".agents", "skills"), { recursive: true, force: true });
-    }
-  }
-
   // rules: agents-md-sections targets merge a marked section into AGENTS.md
   // (refresh on every init so upgrades propagate rule changes)
   if (t.rulesStrategy === "agents-md-sections") {
@@ -243,8 +222,7 @@ export function installKit(
     writeFileSync(agentsMd, mergeAgentsMd(agentsExisting, section));
   }
 
-  // settings.json is kit-owned infrastructure (hook config), always overwrite for claude
-  // Cursor uses hooks.json shipped inside the cursor kit — no settings.json overwrite needed.
+  // settings.json is kit-owned infrastructure (hook config), always overwritten.
   if (t.hooksKind === "settings-json") {
     const settingsSrc = join(source, "settings.json");
     if (existsSync(settingsSrc)) {
@@ -274,7 +252,7 @@ export function registerKitCommands(cli: CAC) {
     .command("init", "Install the GraphKit kit into the current project")
     .option("--json", "JSON output")
     .option("--force", "Remove previous install and install fresh")
-    .option("--target <target>", "Kit target: claude, cursor, opencode, codex, or pi", { default: "claude" })
+    .option("--target <target>", "Kit target: claude or pi", { default: "claude" })
     .action((opts) => {
       try {
         assertValidTarget(opts);
@@ -289,7 +267,7 @@ export function registerKitCommands(cli: CAC) {
     .command("new", "Scaffold a new project with the GraphKit kit")
     .option("--dir <dir>", "Target directory (required)")
     .option("--json", "JSON output")
-    .option("--target <target>", "Kit target: claude, cursor, opencode, codex, or pi", { default: "claude" })
+    .option("--target <target>", "Kit target: claude or pi", { default: "claude" })
     .action((opts) => {
       try {
         if (!opts.dir) {
