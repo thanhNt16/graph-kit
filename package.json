@@ -27,9 +27,6 @@
   "files": [
     "dist/",
     "kits/claude",
-    "kits/cursor",
-    "kits/opencode",
-    "kits/codex",
     "kits/pi",
     "templates/gallery"
   ],

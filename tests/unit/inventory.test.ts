@@ -13,6 +13,8 @@ describe("gk inventory", () => {
   beforeAll(() => {
     tmp = mkdtempSync(join(tmpdir(), "gk-inventory-test-"));
     cpSync(fixtureRoot(), tmp, { recursive: true });
+    // collectAgents has no existsSync guard: pi's user-global agents dir must exist.
+    mkdirSync(join(tmp, "user", ".omp", "agents"), { recursive: true });
   });
   afterAll(() => {
     rmSync(tmp, { recursive: true, force: true });
@@ -38,20 +40,20 @@ describe("gk inventory", () => {
     expect(inv.skills).toContain("user-skill");
   });
 
-  test("cursor target reads .cursor instead of .claude", () => {
-    const inv = runInventory({ cwd: tmp, target: "cursor", userDir: join(tmp, "user") });
-    const names = inv.agents.map((a) => a.name);
-    expect(names).toContain("cursor-only-agent");
-    expect(names).not.toContain("local-agent");
-    expect(inv.skills).toContain("cursor-skill");
-  });
-
   test("agent frontmatter default model parsed; unknown model key omitted", () => {
-    const inv = runInventory({ cwd: tmp, target: "cursor", userDir: join(tmp, "user") });
-    const cur = inv.agents.find((a) => a.name === "cursor-only-agent");
-    expect(cur?.model).toBe("haiku");
-    const oth = inv.agents.find((a) => a.name === "other-cursor-agent");
-    expect(oth?.model).toBeUndefined();
+    const dir = mkdtempSync(join(tmpdir(), "gk-inv-model-"));
+    try {
+      mkdirSync(join(dir, ".claude", "agents"), { recursive: true });
+      mkdirSync(join(dir, "user", ".claude", "agents"), { recursive: true });
+      writeFileSync(join(dir, ".claude", "agents", "haiku-agent.md"), "---\nname: Haiku Agent\nmodel: haiku\n---\nbody\n");
+      writeFileSync(join(dir, ".claude", "agents", "no-model-agent.md"), "---\nname: No Model\n---\nbody\n");
+      const inv = runInventory({ cwd: dir, target: "claude", userDir: join(dir, "user") });
+      const byName = new Map(inv.agents.map((a) => [a.name, a.model]));
+      expect(byName.get("haiku-agent")).toBe("haiku");
+      expect(byName.get("no-model-agent")).toBeUndefined();
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   test("built-in host tools come from the versioned allowlist", () => {
@@ -61,28 +63,12 @@ describe("gk inventory", () => {
     }
   });
 
-  test("opencode target reads descriptor dirs (agent/, skill/, command/, plugins/)", () => {
-    const inv = runInventory({ cwd: tmp, target: "opencode", userDir: join(tmp, "user") });
-    const byName = new Map(inv.agents.map((a) => [a.name, a.model]));
-    expect(byName.get("oc-agent")).toBe("sonnet");
-    expect(inv.skills).toContain("oc-skill");
-    expect(inv.commands).toContain("gk-execute.md");
-    expect(inv.hooks).toContain("gk.ts");
-    expect(inv.tools).toContain("Task");
-  });
-
-  test("codex target parses TOML agents and discovers skills in sibling .agents/skills", () => {
-    const inv = runInventory({ cwd: tmp, target: "codex", userDir: join(tmp, "user") });
-    const byName = new Map(inv.agents.map((a) => [a.name, a.model]));
-    expect(byName.get("reviewer")).toBe("gpt-5.3-codex-spark");
-    expect(inv.skills).toContain("codex-skill");
-    // Instruction-based hooks and prompt-driven commands: no artifacts to list.
-    expect(inv.hooks).toEqual([]);
-  });
-
   test("pi target lists fragments by name, prompts as commands, extensions as hooks", () => {
     const inv = runInventory({ cwd: tmp, target: "pi", userDir: join(tmp, "user") });
-    expect(inv.agents.map((a) => a.name)).toContain("pi-fragment");
+    const names = inv.agents.map((a) => a.name);
+    expect(names).toContain("pi-fragment");
+    // pi reads only .omp — claude-installed agents in the same tree must not leak in.
+    expect(names).not.toContain("local-agent");
     expect(inv.skills).toContain("pi-skill");
     expect(inv.commands).toContain("gk.md");
     expect(inv.hooks).toContain("gk-subagent.ts");
@@ -90,7 +76,7 @@ describe("gk inventory", () => {
   });
 
   test("invalid target throws with the valid target list", () => {
-    expect(() => runInventory({ cwd: tmp, target: "nope" })).toThrow(/claude.*cursor.*opencode.*codex.*pi/);
+    expect(() => runInventory({ cwd: tmp, target: "nope" })).toThrow(/Invalid target: nope\. Must be one of: pi, claude/);
   });
 
   test("mcp server/tool names discovered from supported config; secrets excluded", () => {
@@ -102,15 +88,6 @@ describe("gk inventory", () => {
     expect(JSON.stringify(inv)).not.toMatch(/https?:\/\//);
     expect(JSON.stringify(inv)).not.toMatch(/API_KEY|CONTEXT7|BIGQUERY|12041|dhub-adtech/);
     expect(JSON.stringify(inv)).not.toMatch(/ctx7sk|codebase-memory-mcp/);
-  });
-
-  test("cursor mcp config discovered from .cursor/mcp.json", () => {
-    const inv = runInventory({ cwd: tmp, target: "cursor", userDir: join(tmp, "user") });
-    const ctx = inv.mcpServers.find((s) => s.name === "context7");
-    expect(ctx).toBeDefined();
-    expect(ctx!.tools).toContain("search");
-    expect(ctx!.tools).toContain("fetch");
-    expect(JSON.stringify(inv)).not.toMatch(/CONTEXT7_API_KEY|ctx7sk/);
   });
 
   test("malformed optional files warn but preserve valid inventory", () => {
@@ -136,6 +113,7 @@ describe("gk inventory agent-parsing internals", () => {
       mkdirSync(join(dir, ".claude", "agents"), { recursive: true });
       writeFileSync(join(dir, ".claude", "agents", "ok.md"), "---\nname: ok\nmodel: opus\n---\nbody\n");
       writeFileSync(join(dir, ".claude", "agents", "bad.md"), "model: [unclosed,\n");
+      mkdirSync(join(dir, "empty-user", ".claude", "agents"), { recursive: true });
       const inv = runInventory({ cwd: dir, target: "claude", userDir: join(dir, "empty-user") });
       expect(inv.agents.map((a) => a.name)).toEqual(["ok"]);
       expect(inv.warnings.join(" ")).toMatch(/bad\.md/);

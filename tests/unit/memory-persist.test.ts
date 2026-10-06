@@ -154,9 +154,13 @@ describe("memory-persist (exec-tests step 2)", () => {
     expect(existsSync(join(tmp, ".graphkit", ".memory-dirty"))).toBe(false);
   });
 
-  test("hook parity: claude and cursor memory-persist are byte-identical", () => {
-    const claude = readFileSync(join(ROOT, "kits", "claude", "hooks", "memory-persist.cjs"), "utf-8");
-    const cursor = readFileSync(join(ROOT, "kits", "cursor", "hooks", "memory-persist.cjs"), "utf-8");
-    expect(cursor).toBe(claude);
+  test("claude ships the memory-persist hook, registered in settings.json PostToolUse", () => {
+    const hookPath = join(ROOT, "kits", "claude", "hooks", "memory-persist.cjs");
+    expect(existsSync(hookPath)).toBe(true);
+    const settings = JSON.parse(readFileSync(join(ROOT, "kits", "claude", "settings.json"), "utf-8")) as {
+      hooks: { PostToolUse: Array<{ hooks: Array<{ command: string }> }> };
+    };
+    const commands = settings.hooks.PostToolUse.flatMap((entry) => entry.hooks.map((h) => h.command));
+    expect(commands).toContain("node .claude/hooks/memory-persist.cjs");
   });
 });

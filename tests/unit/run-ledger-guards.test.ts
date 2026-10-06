@@ -14,6 +14,21 @@ import {
   startRun,
 } from "../../src/memory/ledger.js";
 import { reconcileRun, resumeRun } from "../../src/memory/resume.js";
+import { GraphKitError } from "../../src/errors.js";
+
+// Task 2 contract: ledger failures are GraphKitError — codes are the API,
+// messages are prose. Assert the code, not the wording.
+function expectGkCode(fn: () => unknown, code: string, messagePart?: string) {
+  try {
+    fn();
+  } catch (e) {
+    expect(e).toBeInstanceOf(GraphKitError);
+    expect((e as GraphKitError).code).toBe(code);
+    if (messagePart) expect((e as GraphKitError).message).toContain(messagePart);
+    return;
+  }
+  throw new Error(`expected GraphKitError "${code}", but the call resolved`);
+}
 
 const GRAPH_YAML =
   "apiVersion: graphkit.dev/v2\nkind: Graph\nmetadata:\n  name: demo\ntopology: custom\nnodes:\n  a:\n    agent: scout\n    objective: A\n  b:\n    agent: task\n    objective: B\n    depend_on: [a]\n";
@@ -135,7 +150,7 @@ describe("dispatch pid hygiene", () => {
 
   test("appendDispatch rejects pid <= 0 and non-integers with BAD_PID", () => {
     for (const pid of [0, -3, 1.5, Number("nope")]) {
-      expect(() => appendDispatch(cwd, { node: "a", attempt: null, via: "task", pid })).toThrow(/BAD_PID/);
+      expectGkCode(() => appendDispatch(cwd, { node: "a", attempt: null, via: "task", pid }), "BAD_PID");
     }
     expect(() => appendDispatch(cwd, { node: "a", attempt: null, via: "task", pid: 4242 })).not.toThrow();
     expect(() => appendDispatch(cwd, { node: "a", attempt: null, via: "task", pid: null })).not.toThrow();
@@ -224,7 +239,7 @@ describe("land guards", () => {
       duration_ms: 1,
       notes: null,
     });
-    expect(() => landNode(cwd, "a", "abc123")).toThrow(/LAND_NOT_OK/);
+    expectGkCode(() => landNode(cwd, "a", "abc123"), "LAND_NOT_OK");
     expect(() => landNode(cwd, "a", "abc123")).toThrow(/"fail", not ok/);
     // A later ok round makes the node landable again.
     traceOk(cwd, "a", []);
@@ -236,7 +251,7 @@ describe("land guards", () => {
     startRun(cwd, join(cwd, "graph.yaml"), "2026-09-04T10:00:00.000Z");
     traceOk(cwd, "a", []);
     for (const bad of ["zzzz", "abc", "nodeA-wt", "g".repeat(41)]) {
-      expect(() => landNode(cwd, "a", bad)).toThrow(/BAD_COMMIT/);
+      expectGkCode(() => landNode(cwd, "a", bad), "BAD_COMMIT");
     }
     // 4-char short sha and full 40-char sha are both accepted.
     expect(() => landNode(cwd, "a", "1234")).not.toThrow();
@@ -358,8 +373,8 @@ describe("resume graph + reason guards", () => {
     const { id } = startRun(cwd, join(cwd, "graph.yaml"), "2026-09-04T10:00:00.000Z");
     endRun(cwd, "failed", "2026-09-04T10:05:00.000Z");
     rmSync(join(cwd, "graph.yaml"));
-    expect(() => reconcileRun(cwd, id)).toThrow(/RESUME_GRAPH_DRIFT/);
-    expect(() => reconcileRun(cwd, id, { force: true })).toThrow(/GRAPH_FILE_NOT_FOUND/);
+    expectGkCode(() => reconcileRun(cwd, id), "RESUME_GRAPH_DRIFT");
+    expectGkCode(() => reconcileRun(cwd, id, { force: true }), "GRAPH_FILE_NOT_FOUND");
     expect(() => reconcileRun(cwd, id, { force: true })).toThrow(/take --from/);
   });
 

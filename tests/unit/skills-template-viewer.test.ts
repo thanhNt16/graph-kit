@@ -4,13 +4,13 @@ import { join } from "node:path";
 
 const ROOT = join(import.meta.dir, "..", "..");
 
-function readSkill(kit: "claude" | "cursor", name: string): string {
+function readSkill(kit: "claude" | "pi", name: string): string {
   return readFileSync(join(ROOT, "kits", kit, "skills", name, "SKILL.md"), "utf-8");
 }
 
 describe("gk-template skill", () => {
   const claude = readSkill("claude", "gk-template");
-  const cursor = readSkill("cursor", "gk-template");
+  const pi = readSkill("pi", "gk-template");
 
   test("claude has valid frontmatter and name", () => {
     expect(claude).toContain("name: gk:template");
@@ -29,12 +29,12 @@ describe("gk-template skill", () => {
     expect(claude).toContain("read-only");
   });
 
-  test("cursor frontmatter and inventory target", () => {
-    expect(cursor).toContain("name: gk-template");
-    expect(cursor).toContain("gk inventory --target cursor --json");
+  test("pi frontmatter and inventory target", () => {
+    expect(pi).toContain("name: gk-template");
+    expect(pi).toContain("gk inventory --target pi --json");
   });
 
-  test("claude/cursor parity: shared flow lines identical", () => {
+  test("claude/pi parity: shared flow lines identical", () => {
     for (const line of [
       "gk validate graph.yaml --json",
       "gk template pack",
@@ -43,20 +43,20 @@ describe("gk-template skill", () => {
       "Do not parameterize structural values",
     ]) {
       expect(claude).toContain(line);
-      expect(cursor).toContain(line);
+      expect(pi).toContain(line);
     }
   });
 });
 
 describe("gk-init-graph skill", () => {
   const claude = readSkill("claude", "gk-init-graph");
-  const cursor = readSkill("cursor", "gk-init-graph");
+  const pi = readSkill("pi", "gk-init-graph");
 
   test("packaged-template resolution + inventory", () => {
     expect(claude).toContain("gk template list");
     expect(claude).toContain("gk template show");
     expect(claude).toContain("gk inventory --target claude --json");
-    expect(cursor).toContain("gk inventory --target cursor --json");
+    expect(pi).toContain("gk inventory --target pi --json");
   });
 
   test("installed-only suggestions + model approval", () => {
@@ -77,19 +77,19 @@ describe("gk-init-graph skill", () => {
     expect(claude).toContain("custom");
   });
 
-  test("claude/cursor parity", () => {
+  test("claude/pi parity", () => {
     expect(claude).toContain("gk template list");
-    expect(cursor).toContain("gk template list");
+    expect(pi).toContain("gk template list");
     expect(claude).toContain("install required");
-    expect(cursor).toContain("install required");
+    expect(pi).toContain("install required");
     expect(claude).toContain("Model changes always require approval");
-    expect(cursor).toContain("Model changes always require approval");
+    expect(pi).toContain("Model changes always require approval");
   });
 });
 
 describe("gk-visualize skill", () => {
   const claude = readSkill("claude", "gk-visualize");
-  const cursor = readSkill("cursor", "gk-visualize");
+  const pi = readSkill("pi", "gk-visualize");
 
   test("archify HTML default + explicit modes preserved", () => {
     expect(claude).toContain("Archify HTML");
@@ -115,14 +115,14 @@ describe("gk-visualize skill", () => {
   test("bundled viewer section removed; archify stays the only primary path", () => {
     expect(claude).not.toContain("Bundled live viewer");
     expect(claude).not.toContain("viewer/server.mjs");
-    expect(cursor).not.toContain("Bundled live viewer");
+    expect(pi).not.toContain("Bundled live viewer");
   });
 
-  test("claude/cursor parity", () => {
+  test("claude/pi parity", () => {
     expect(claude).toContain("Archify HTML");
-    expect(cursor).toContain("Archify HTML");
+    expect(pi).toContain("Archify HTML");
     expect(claude).toContain("archify-ir.md");
-    expect(cursor).toContain("archify-ir.md");
-    expect(cursor).toContain("/gk:visualize --svg");
+    expect(pi).toContain("archify-ir.md");
+    expect(pi).toContain("visualize --svg");
   });
 });

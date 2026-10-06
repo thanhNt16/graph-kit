@@ -17,15 +17,9 @@ afterAll(() => {
   rmSync(TMP, { recursive: true, force: true });
 });
 
-// OpenCode installs skills into .opencode/skill (singular); every other host uses skills/.
-const SKILL_DIR: Record<string, string> = { opencode: "skill" };
-const skillDir = (host: string) => SKILL_DIR[host] ?? "skills";
-const AGENT_DIR: Record<string, string> = { opencode: "agent" };
-const agentDir = (host: string) => AGENT_DIR[host] ?? "agents";
-
 function skillNames(host: string): string[] {
-  return readdirSync(join(TMP, host, skillDir(host)))
-    .filter((d) => existsSync(join(TMP, host, skillDir(host), d, "SKILL.md")))
+  return readdirSync(join(TMP, host, "skills"))
+    .filter((d) => existsSync(join(TMP, host, "skills", d, "SKILL.md")))
     .sort();
 }
 
@@ -36,10 +30,10 @@ function coreSkillNames(): string[] {
 }
 
 function skillMd(host: string, skill: string): string {
-  return readFileSync(join(TMP, host, skillDir(host), skill, "SKILL.md"), "utf8");
+  return readFileSync(join(TMP, host, "skills", skill, "SKILL.md"), "utf8");
 }
 
-describe("generated kit parity (all 5 targets from kits/_core)", () => {
+describe("generated kit parity (claude + pi from kits/_core)", () => {
   test("every host exposes the full _core skill set", () => {
     const core = coreSkillNames();
     expect(core.length).toBeGreaterThan(0);
@@ -98,40 +92,18 @@ describe("generated kit parity (all 5 targets from kits/_core)", () => {
       .sort();
     expect(slugs.length).toBeGreaterThan(0);
     for (const host of HOST_IDS) {
-      const ext = host === "codex" ? ".toml" : ".md";
-      const dir = join(TMP, host, agentDir(host));
-      for (const slug of slugs) expect(existsSync(join(dir, slug + ext)), `${host}/${slug}${ext}`).toBe(true);
+      const dir = join(TMP, host, "agents");
+      for (const slug of slugs) expect(existsSync(join(dir, `${slug}.md`)), `${host}/${slug}.md`).toBe(true);
     }
   });
 
-  test("codex agents parse as TOML with the required fields", () => {
-    for (const f of readdirSync(join(TMP, "codex", "agents"))) {
-      const raw = readFileSync(join(TMP, "codex", "agents", f), "utf8");
-      for (const field of [
-        "name",
-        "description",
-        "model",
-        "model_reasoning_effort",
-        "sandbox_mode",
-        "developer_instructions",
-      ]) {
-        expect(raw.startsWith(`${field} =`) || raw.includes(`\n${field} =`), `${f}:${field}`).toBe(true);
-      }
+  test("claude ships rules-dir files; pi carries the AGENTS.md rules sections", () => {
+    for (const rule of ["agent-binding", "graph-authority", "topology-routing"]) {
+      expect(existsSync(join(TMP, "claude", "rules", `${rule}.md`)), `claude/${rule}.md`).toBe(true);
     }
-  });
-
-  test("rules-dir hosts ship their 3 rule files; rules-section hosts carry all 3 sections", () => {
-    for (const host of ["claude", "cursor"] as const) {
-      const ext = host === "cursor" ? ".mdc" : ".md";
-      for (const rule of ["agent-binding", "graph-authority", "topology-routing"]) {
-        expect(existsSync(join(TMP, host, "rules", rule + ext)), `${host}/${rule}${ext}`).toBe(true);
-      }
-    }
-    for (const host of ["opencode", "codex", "pi"] as const) {
-      const raw = readFileSync(join(TMP, host, "rules-section.md"), "utf8");
-      for (const rule of ["agent-binding", "graph-authority", "topology-routing"]) {
-        expect(raw, `${host} rules-section`).toContain(rule);
-      }
+    const raw = readFileSync(join(TMP, "pi", "rules-section.md"), "utf8");
+    for (const rule of ["agent-binding", "graph-authority", "topology-routing"]) {
+      expect(raw, `pi rules-section contains ${rule}`).toContain(rule);
     }
   });
 
@@ -153,9 +125,7 @@ describe("generated kit parity (all 5 targets from kits/_core)", () => {
 
   test("host-only skill files are preserved (gk-visualize/references)", () => {
     for (const host of HOST_IDS) {
-      expect(existsSync(join(TMP, host, skillDir(host), "gk-visualize", "references", "graph-palette.md")), host).toBe(
-        true,
-      );
+      expect(existsSync(join(TMP, host, "skills", "gk-visualize", "references", "graph-palette.md")), host).toBe(true);
     }
   });
 });

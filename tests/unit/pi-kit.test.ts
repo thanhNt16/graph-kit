@@ -26,10 +26,10 @@ describe("pi kit structure", () => {
     expect(raw("memory-curator.md")).toContain("# Memory Curator Agent");
   });
 
-  test("11 skills matching cursor set", () => {
+  test("11 skills matching the core set", () => {
     const pi = readdirSync(join(KIT, "skills")).sort();
-    const cursor = readdirSync(join(ROOT, "kits", "cursor", "skills")).sort();
-    expect(pi).toEqual(cursor);
+    const core = readdirSync(join(ROOT, "kits", "_core", "skills")).sort();
+    expect(pi).toEqual(core);
   });
 
   test("skill frontmatter names are dash form and match directories", () => {

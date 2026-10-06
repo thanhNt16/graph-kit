@@ -187,6 +187,11 @@ export function installKit(
     }
   }
 
+  // --force wipes the previous install first; user config was read above and
+  // is rewritten (with preserved keys) after the copy.
+  if (fresh && existsSync(destDir)) {
+    rmSync(destDir, { recursive: true, force: true });
+  }
   mkdirSync(destDir, { recursive: true });
   // Runtime artifacts shared across hosts.
   for (const dir of ["evidence", "reports", "memory", "runs", "inbox"]) {

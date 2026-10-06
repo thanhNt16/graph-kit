@@ -1,4 +1,0 @@
----
-name: cursor-skill
----
-body

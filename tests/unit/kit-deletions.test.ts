@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { installKit } from "../../src/cli/commands/kit.js";
 
@@ -13,7 +13,7 @@ function makeSource(deletions: unknown): string {
   rmSync(SRC, { recursive: true, force: true });
   mkdirSync(join(SRC, "skills", "gk-run"), { recursive: true });
   writeFileSync(join(SRC, "skills", "gk-run", "SKILL.md"), "# run\n");
-  // codex installs rules as AGENTS.md sections and requires this file.
+  // pi merges rules into AGENTS.md (agents-md-sections) and requires this file.
   writeFileSync(join(SRC, "rules-section.md"), "# rules\n");
   writeFileSync(join(SRC, "metadata.json"), JSON.stringify({ name: "graphkit", version: "0.0.0", deletions }));
   return SRC;
@@ -60,12 +60,22 @@ describe("installKit deletions", () => {
     expect(existsSync(join(project, ".claude", "skills", "gk-run"))).toBe(true);
   });
 
-  test("codex skill deletions also prune .agents/skills", () => {
-    process.env.GK_KIT_DIR = makeSource(["skills/gk-old"]);
-    const project = makeProject([".codex/skills/gk-old", ".agents/skills/gk-old"]);
-    installKit(project, false, "codex");
-    expect(existsSync(join(project, ".codex", "skills", "gk-old"))).toBe(false);
-    expect(existsSync(join(project, ".agents", "skills", "gk-old"))).toBe(false);
+  test("pi merges the rules section into AGENTS.md (agents-md-sections)", () => {
+    process.env.GK_KIT_DIR = makeSource([]);
+    const project = makeProject([]);
+    installKit(project, false, "pi");
+    // Fresh install: the section becomes the whole file.
+    expect(readFileSync(join(project, "AGENTS.md"), "utf8")).toBe("# rules\n");
+    // Re-init refreshes the marked section in place, preserving user content.
+    writeFileSync(
+      join(project, "AGENTS.md"),
+      "user notes\n<!-- graphkit:start -->\nstale rules\n<!-- graphkit:end -->\n",
+    );
+    installKit(project, false, "pi");
+    const refreshed = readFileSync(join(project, "AGENTS.md"), "utf8");
+    expect(refreshed).toContain("user notes");
+    expect(refreshed).toContain("# rules");
+    expect(refreshed).not.toContain("stale rules");
   });
 
   test("missing or empty deletions is a no-op", () => {

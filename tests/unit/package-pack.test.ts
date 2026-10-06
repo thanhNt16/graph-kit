@@ -18,7 +18,7 @@ describe("npm package tarball contents", () => {
   });
 
   test("both kits ship the gk-visualize skill with archify IR reference", () => {
-    for (const kit of ["claude", "cursor"]) {
+    for (const kit of ["claude", "pi"]) {
       expect(listing).toContain(`kits/${kit}/skills/gk-visualize/SKILL.md`);
       expect(listing).toContain(`kits/${kit}/skills/gk-visualize/references/archify-ir.md`);
       expect(listing).toContain(`kits/${kit}/skills/gk-visualize/references/graph-palette.md`);
@@ -27,12 +27,12 @@ describe("npm package tarball contents", () => {
 
   test("both kits ship the gk-template skill", () => {
     expect(listing).toContain("kits/claude/skills/gk-template/SKILL.md");
-    expect(listing).toContain("kits/cursor/skills/gk-template/SKILL.md");
+    expect(listing).toContain("kits/pi/skills/gk-template/SKILL.md");
   });
 
   test("both kits ship agents and the built bin entry", () => {
     expect(listing).toContain("kits/claude/agents/qa-engineer.md");
-    expect(listing).toContain("kits/cursor/agents/qa-engineer.md");
+    expect(listing).toContain("kits/pi/agents/qa-engineer.md");
     // dist/index.js is the "gk" bin target
     expect(listing).toContain("dist/index.js");
   });

@@ -4,7 +4,22 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { appendAdvisor, appendDispatch, appendNode, endRun, startRun } from "../../src/memory/ledger.js";
 import { deriveResumeGraph, reconcileRun, resumeRun, validateDerivedGraph } from "../../src/memory/resume.js";
+import { GraphKitError } from "../../src/errors.js";
 import { GraphSchema } from "../../src/schemas/graph.schema.js";
+
+// Task 2 contract: ledger failures are GraphKitError — codes are the API,
+// messages are prose. Assert the code, not the wording.
+function expectGkCode(fn: () => unknown, code: string, messagePart?: string) {
+  try {
+    fn();
+  } catch (e) {
+    expect(e).toBeInstanceOf(GraphKitError);
+    expect((e as GraphKitError).code).toBe(code);
+    if (messagePart) expect((e as GraphKitError).message).toContain(messagePart);
+    return;
+  }
+  throw new Error(`expected GraphKitError "${code}", but the call resolved`);
+}
 
 const GRAPH = `apiVersion: graphkit.dev/v2
 kind: Graph
@@ -70,7 +85,7 @@ function traceChallenge(dir: string, node: string, notes: string | null) {
 }
 describe("reconcileRun", () => {
   test("unknown run id throws RESUME_RUN_NOT_FOUND", () => {
-    expect(() => reconcileRun(cwd, "20990101-000000-demo")).toThrow(/RESUME_RUN_NOT_FOUND/);
+    expectGkCode(() => reconcileRun(cwd, "20990101-000000-demo"), "RESUME_RUN_NOT_FOUND");
   });
   test("ok + evidence on disk = satisfied; fail = pending; untraced = pending", () => {
     const { id } = startRun(cwd, join(cwd, "graph.yaml"), "2026-09-04T10:00:00.000Z");
@@ -166,14 +181,14 @@ describe("reconcileRun", () => {
     const { id } = startRun(cwd, join(cwd, "graph.yaml"), "2026-09-04T10:00:00.000Z");
     endRun(cwd, "failed", "2026-09-04T10:05:00.000Z");
     writeFileSync(join(cwd, "graph.yaml"), `${GRAPH}# drifted\n`);
-    expect(() => reconcileRun(cwd, id)).toThrow(/RESUME_GRAPH_DRIFT/);
+    expectGkCode(() => reconcileRun(cwd, id), "RESUME_GRAPH_DRIFT");
     expect(() => reconcileRun(cwd, id, { force: true })).not.toThrow();
   });
   test("recorded graph file gone → RESUME_GRAPH_DRIFT", () => {
     const { id } = startRun(cwd, join(cwd, "graph.yaml"), "2026-09-04T10:00:00.000Z");
     endRun(cwd, "failed", "2026-09-04T10:05:00.000Z");
     rmSync(join(cwd, "graph.yaml"));
-    expect(() => reconcileRun(cwd, id)).toThrow(/RESUME_GRAPH_DRIFT/);
+    expectGkCode(() => reconcileRun(cwd, id), "RESUME_GRAPH_DRIFT");
   });
   test("--from-node selects node + transitive dependents regardless of satisfaction", () => {
     const { id } = startRun(cwd, join(cwd, "graph.yaml"), "2026-09-04T10:00:00.000Z");
@@ -189,12 +204,12 @@ describe("reconcileRun", () => {
   test("legacy meta without graph tracking throws", () => {
     const { id, dir } = startRun(cwd, join(cwd, "graph.yaml"), "2026-09-04T10:00:00.000Z");
     writeFileSync(join(dir, "meta.json"), JSON.stringify({ id }));
-    expect(() => reconcileRun(cwd, id)).toThrow(/RESUME_RUN_NOT_FOUND/);
+    expectGkCode(() => reconcileRun(cwd, id), "RESUME_RUN_NOT_FOUND");
   });
   test("fromNode not in graph → RESUME_BAD_FROM_NODE", () => {
     const { id } = startRun(cwd, join(cwd, "graph.yaml"), "2026-09-04T10:00:00.000Z");
     endRun(cwd, "failed", "2026-09-04T10:05:00.000Z");
-    expect(() => reconcileRun(cwd, id, { fromNode: "zzz" })).toThrow(/RESUME_BAD_FROM_NODE/);
+    expectGkCode(() => reconcileRun(cwd, id, { fromNode: "zzz" }), "RESUME_BAD_FROM_NODE");
   });
   test("marker run_id from ancestor run (resumes chain) satisfies the node", () => {
     const { id: parent } = startRun(cwd, join(cwd, "graph.yaml"), "2026-09-04T09:00:00.000Z");
@@ -398,7 +413,7 @@ describe("deriveResumeGraph", () => {
     traceOk(cwd, "impl", ["impl-out"]);
     traceFail(cwd, "gate");
     endRun(cwd, "failed", "2026-09-04T10:05:00.000Z");
-    expect(() => resumeRun(cwd, id)).toThrow(/RESUME_DERIVED_INVALID/);
+    expectGkCode(() => resumeRun(cwd, id), "RESUME_DERIVED_INVALID");
     expect(existsSync(join(cwd, ".graphkit", "graphs"))).toBe(false);
     expect(existsSync(join(cwd, ".graphkit", "active"))).toBe(false);
   });
@@ -414,8 +429,10 @@ describe("validateDerivedGraph compile-rule mirror", () => {
   });
   test("required key produced by no node → evidence-keys", () => {
     const bad = GraphSchema.parse({ ...base, evidence: { required_keys: ["b-out", "ghost"] } });
-    expect(() => validateDerivedGraph(bad)).toThrow(
-      /RESUME_DERIVED_INVALID.*evidence-keys — Required evidence key "ghost" is not produced by any node/,
+    expectGkCode(
+      () => validateDerivedGraph(bad),
+      "RESUME_DERIVED_INVALID",
+      'Required evidence key "ghost" is not produced by any node',
     );
     expect(() =>
       validateDerivedGraph(GraphSchema.parse({ ...base, evidence: { required_keys: ["b-out"] } })),
@@ -426,7 +443,7 @@ describe("validateDerivedGraph compile-rule mirror", () => {
       ...base,
       nodes: { b: { agent: "task", objective: "B", evidence: ["b-out"], role: "eval-gate", eval: {}, depend_on: [] } },
     });
-    expect(() => validateDerivedGraph(empty)).toThrow(/RESUME_DERIVED_INVALID.*eval-gate-depend_on/);
+    expectGkCode(() => validateDerivedGraph(empty), "RESUME_DERIVED_INVALID", "eval-gate-depend_on");
     const kept = GraphSchema.parse({
       ...base,
       nodes: {
@@ -442,7 +459,7 @@ describe("validateDerivedGraph compile-rule mirror", () => {
       topology: "memory-augmented",
       topology_config: { memory: { curator_node: "curator" } },
     });
-    expect(() => validateDerivedGraph(bad)).toThrow(/RESUME_DERIVED_INVALID.*memory-curator-node/);
+    expectGkCode(() => validateDerivedGraph(bad), "RESUME_DERIVED_INVALID", "memory-curator-node");
     const good = GraphSchema.parse({
       ...base,
       topology: "memory-augmented",
@@ -463,7 +480,7 @@ describe("resumeRun derived-graph gate", () => {
       nodes: { b: { agent: "task", objective: "B" } },
     });
     const bad = { ...base, loops: [{ nodes: ["a", "b"], max_rounds: 2, stop_when: "done" }] };
-    expect(() => validateDerivedGraph(bad)).toThrow(/RESUME_DERIVED_INVALID.*loop node "a" does not exist/);
+    expectGkCode(() => validateDerivedGraph(bad), "RESUME_DERIVED_INVALID", 'loop node "a" does not exist');
     expect(() => validateDerivedGraph(base)).not.toThrow();
   });
   test("gate_evidence key undeclared by loop members → RESUME_DERIVED_INVALID", () => {
@@ -475,17 +492,17 @@ describe("resumeRun derived-graph gate", () => {
       nodes: { b: { agent: "task", objective: "B", evidence: ["b-out"] } },
     });
     const bad = { ...base, loops: [{ nodes: ["b"], max_rounds: 2, gate_evidence: ["b-out", "ghost"] }] };
-    expect(() => validateDerivedGraph(bad)).toThrow(/RESUME_DERIVED_INVALID.*"ghost" is not declared/);
+    expectGkCode(() => validateDerivedGraph(bad), "RESUME_DERIVED_INVALID", '"ghost" is not declared');
   });
   test("active run → RUN_ACTIVE before any write", () => {
     const { id } = startRun(cwd, join(cwd, "graph.yaml"), "2026-09-04T10:00:00.000Z");
     traceFail(cwd, "a"); // run stays active (no endRun)
-    expect(() => resumeRun(cwd, id)).toThrow(/RUN_ACTIVE/);
+    expectGkCode(() => resumeRun(cwd, id), "RUN_ACTIVE");
     expect(existsSync(join(cwd, ".graphkit", "graphs"))).toBe(false);
     expect(existsSync(join(cwd, ".graphkit", "active"))).toBe(false);
   });
   test("run-not-found resolves before RUN_ACTIVE", () => {
     startRun(cwd, join(cwd, "graph.yaml"), "2026-09-04T10:00:00.000Z");
-    expect(() => resumeRun(cwd, "20990101-000000-demo")).toThrow(/RESUME_RUN_NOT_FOUND/);
+    expectGkCode(() => resumeRun(cwd, "20990101-000000-demo"), "RESUME_RUN_NOT_FOUND");
   });
 });
