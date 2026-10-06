@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { createHash } from "node:crypto";
-import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import YAML from "yaml";
@@ -45,7 +45,7 @@ function graph() {
 }
 
 describe("addEvidence", () => {
-  test("stores content-addressed artifact + marker + index row", () => {
+  test("stores content-addressed artifact + marker, no .index", () => {
     writeFileSync(join(cwd, "resp.json"), '{"ok":true}');
     const out = addEvidence(cwd, graph(), {
       file: join(cwd, "resp.json"),
@@ -64,15 +64,7 @@ describe("addEvidence", () => {
     expect(marker).toContain(`artifact_sha256: ${sha}`);
     expect(marker.trimEnd().split("---").pop()!.trim().length).toBeGreaterThan(0); // ADR-002: non-whitespace body
 
-    const index = readFileSync(join(cwd, ".graphkit", "evidence", ".index"), "utf-8");
-    const line = index.trim().split("\n").at(-1)!;
-    const entry = JSON.parse(line);
-    expect(entry.key).toBe("api-response");
-    expect(entry.node).toBe("probe");
-    expect(entry.artifact).toBe(`api-response/${sha}.json`);
-    expect(entry.sha256).toBe(sha);
-    expect(entry.file).toContain("api-response.md");
-    expect(entry.at).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+    expect(existsSync(join(cwd, ".graphkit", "evidence", ".index"))).toBe(false);
   });
 
   test("same content twice reuses blob and rewrites marker", () => {

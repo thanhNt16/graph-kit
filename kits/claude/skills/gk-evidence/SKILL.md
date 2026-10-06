@@ -9,7 +9,7 @@ disable-model-invocation: false
 ## Process
 
 1. Read `graph.yaml` → `metadata.name`, `evidence.required_keys`, `nodes` (each node's declared `evidence` keys).
-2. Run `gk evidence report --json` — the enumeration and provenance source (the `.index` written by evidence-persist.cjs feeds it; do not scan evidence files by hand). Each view carries: `id`, `description` (from `criteria/<id>.md`), `kind`, `status` (`present`/`missing`), `freshness` (`fresh`/`stale`/`unknown`), `artifact`, `provenance` (run, node, fingerprint head, ts).
+2. Run `gk evidence report --json` — the enumeration and provenance source (it reads the marker `.md` files, the single evidence record; do not scan evidence files by hand). Each view carries: `id`, `description` (from `criteria/<id>.md`), `kind`, `status` (`present`/`missing`), `freshness` (`fresh`/`stale`/`unknown`), `artifact`, `provenance` (run, node, fingerprint head, ts).
 3. For each view: report the criterion id, its description, status badge, artifact path, and provenance line. Surface `stale`/`unknown` freshness explicitly — stale means the repo changed after the artifact was recorded.
 4. Check coverage: are all `evidence.required_keys` present? Flag gaps explicitly.
 5. Compose a single markdown report:

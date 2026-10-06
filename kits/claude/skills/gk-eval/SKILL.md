@@ -13,7 +13,7 @@ The gate reads evidence and decides. "An agent finishes a change, opens it, and 
 ## Process
 
 1. Read `graph.yaml` → the `eval-gate` node's `eval` config (`mode`, `rubric`, `abstention_weighted`, `llm_as_judge`).
-2. Read `.graphkit/evidence/.index` and the evidence files.
+2. Read the evidence marker `.md` files in `.graphkit/evidence/` and the artifacts they point to.
 
 ### `work_product` mode
 3. Collect each `evidence.required_keys` value from the evidence dir.

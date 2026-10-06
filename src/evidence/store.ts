@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { appendFileSync, copyFileSync, existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { basename, extname, join } from "node:path";
 import { GraphKitError } from "../errors.js";
 import { activeRun } from "../runs/ledger.js";
@@ -76,19 +76,6 @@ export function addEvidence(
   writeFileSync(
     join(evidenceDir, `${opts.key}.md`),
     renderMarker(meta, `Evidence artifact "${opts.key}" recorded ${ts}.`),
-  );
-
-  // Same JSONL shape as kits/*/hooks/evidence-persist.cjs, extended with provenance.
-  appendFileSync(
-    join(evidenceDir, ".index"),
-    `${JSON.stringify({
-      file: join(evidenceDir, `${opts.key}.md`),
-      at: ts,
-      key: opts.key,
-      node: opts.node ?? null,
-      artifact: artifactRel,
-      sha256,
-    })}\n`,
   );
 
   return { key: opts.key, artifact: artifactRel, sha256, bytes };

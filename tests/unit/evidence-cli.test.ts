@@ -1,4 +1,4 @@
-import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { cac } from "cac";
@@ -65,6 +65,19 @@ describe("gk evidence add", () => {
     expect(env.data.sha256).toMatch(/^[0-9a-f]{64}$/);
     const marker = parseMarker(readFileSync(join(cwd, ".graphkit/evidence/api-response.md"), "utf-8"));
     expect(marker?.node).toBe("probe");
+  });
+
+  test("add writes no .index — marker .md is the single record; report still works", () => {
+    writeFileSync(join(cwd, "r.json"), "{}");
+    const r = runCli(["evidence", "add", "r.json", "--key", "api-response", "--node", "probe", "--json"]);
+    expect(JSON.parse(r.stdout).status).toBe("ok");
+    expect(existsSync(join(cwd, ".graphkit", "evidence", ".index"))).toBe(false);
+
+    const report = runCli(["evidence", "report", "--json"]);
+    const env = JSON.parse(report.stdout);
+    expect(env.status).toBe("ok");
+    expect(env.data.views.map((v: { id: string }) => v.id)).toEqual(["api-response"]);
+    expect(env.data.views[0].status).toBe("present");
   });
 
   test("undeclared key exits 1 with code", () => {
