@@ -1,10 +1,10 @@
 import { describe, expect, test } from "bun:test";
 import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { GraphKitError } from "../../src/errors.js";
 import { join } from "node:path";
 import YAML from "yaml";
 import { planGraph } from "../../src/compiler/plan.js";
+import { GraphKitError } from "../../src/errors.js";
 import { GraphSchema } from "../../src/schemas/graph.schema.js";
 
 const BASE = {

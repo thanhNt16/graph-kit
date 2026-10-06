@@ -98,10 +98,17 @@ describe("gateGraph freshness", () => {
     writeFileSync(
       join(runs, "run-2", "trace.jsonl"),
       [
-        JSON.stringify({ at: "t0", node: "build", model: null, status: "ok", evidence: ["design"], duration_ms: 1, notes: null }),
+        JSON.stringify({
+          at: "t0",
+          node: "build",
+          model: null,
+          status: "ok",
+          evidence: ["design"],
+          duration_ms: 1,
+          notes: null,
+        }),
         JSON.stringify({ at: "t1", node: "build", status: "landed", commit: "abc" }),
-      ].join("\n") +
-        "\n",
+      ].join("\n") + "\n",
     );
     writeFileSync(
       join(runs, "index.jsonl"),

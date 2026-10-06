@@ -97,9 +97,7 @@ export function planGraph(graph: Graph, opts?: { source?: string }): PlanGraph {
   // yields unknown, and the document is the same file the caller's
   // GraphSchema.parse just accepted.
   type RawDoc = { nodes?: Record<string, { eval?: unknown }> };
-  const rawDoc: RawDoc | null = opts?.source
-    ? (YAML.parse(readFileSync(opts.source, "utf-8")) as RawDoc | null)
-    : null;
+  const rawDoc: RawDoc | null = opts?.source ? (YAML.parse(readFileSync(opts.source, "utf-8")) as RawDoc | null) : null;
 
   const isMem = graph.topology === "memory-augmented";
   const memCfg = isMem ? graph.topology_config?.memory || {} : {};

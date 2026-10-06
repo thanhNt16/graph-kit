@@ -96,7 +96,9 @@ export function recordRound(cwd: string, groupIdx: number, now = new Date().toIS
   const upTo = journal.length > 0 ? journal[journal.length - 1].up_to : 0;
 
   // Window: this round's slice of the group's trace lines.
-  const groupLines = readTrace(cwd, id).filter(isNodeLine).filter((l: TraceLine) => group.nodes.includes(l.node));
+  const groupLines = readTrace(cwd, id)
+    .filter(isNodeLine)
+    .filter((l: TraceLine) => group.nodes.includes(l.node));
   const window = groupLines.slice(upTo);
 
   const statuses = new Map<string, string>();

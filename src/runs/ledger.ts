@@ -298,10 +298,7 @@ export function landNode(cwd: string, node: string, commit: string, now = new Da
   }
   if (!last) throw new GraphKitError("LAND_NOT_OK", `no trace line for node "${node}" in run ${id}`);
   if (last.status !== "ok")
-    throw new GraphKitError(
-      "LAND_NOT_OK",
-      `latest trace for node "${node}" in run ${id} is "${last.status}", not ok`,
-    );
+    throw new GraphKitError("LAND_NOT_OK", `latest trace for node "${node}" in run ${id} is "${last.status}", not ok`);
   const event: LandEvent = { at: now, node, status: "landed", commit };
   appendFileSync(join(dir, "trace.jsonl"), `${JSON.stringify(event)}\n`);
   return { run: id, node };

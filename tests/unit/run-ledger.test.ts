@@ -2,8 +2,8 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
-import { GraphKitError } from "../../src/errors.js";
 import { gateGraph } from "../../src/cli/commands/gate.js";
+import { GraphKitError } from "../../src/errors.js";
 import {
   activeRun,
   activeRunPointer,
