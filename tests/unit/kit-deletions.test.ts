@@ -102,7 +102,9 @@ describe("installKit deletions", () => {
   });
 
   test("the shipped claude metadata ledger covers the compile-kill removals", () => {
-    const meta = JSON.parse(readFileSync(join(import.meta.dir, "..", "..", "kits", "claude", "metadata.json"), "utf-8")) as {
+    const meta = JSON.parse(
+      readFileSync(join(import.meta.dir, "..", "..", "kits", "claude", "metadata.json"), "utf-8"),
+    ) as {
       deletions?: string[];
     };
     // cpSync overlays never delete: without these rows an existing install
@@ -110,4 +112,4 @@ describe("installKit deletions", () => {
     for (const rel of ["skills/gk-compile", "skills/gk-run", "templates/memory-augmented.workflow.js"])
       expect(meta.deletions).toContain(rel);
   });
- });
+});

@@ -21,12 +21,7 @@ export const MemoryFileSchema = z
   })
   .passthrough();
 
-export const PATTERN_KINDS = [
-  "node-sequence",
-  "failure-recurrence",
-  "graph-reuse",
-  "advisor-repeat",
-] as const;
+export const PATTERN_KINDS = ["node-sequence", "failure-recurrence", "graph-reuse", "advisor-repeat"] as const;
 export const SUGGESTION_ACTIONS = ["materialize-template", "capture-skill", "review-failure"] as const;
 
 /** Derived pattern entries under .graphkit/memory/patterns/. */

@@ -29,9 +29,36 @@ describe("consolidate merge-retain (MEM F3)", () => {
     const at = `2026-09-0${day}T09:00:00.000Z`;
     startRun(cwd, join(cwd, "graph.yaml"), at);
     const nodes = [
-      { node: "plan", wave: 0, agent: "software-architect", model: "opus", status: "ok", evidence: ["plan"], duration_ms: 3, notes: null },
-      { node: "build", wave: 1, agent: "data-engineer", model: "sonnet", status: "ok", evidence: ["build"], duration_ms: 3, notes: null },
-      { node: "verify", wave: 2, agent: "qa-engineer", model: "sonnet", status: "ok", evidence: ["verify"], duration_ms: 3, notes: null },
+      {
+        node: "plan",
+        wave: 0,
+        agent: "software-architect",
+        model: "opus",
+        status: "ok",
+        evidence: ["plan"],
+        duration_ms: 3,
+        notes: null,
+      },
+      {
+        node: "build",
+        wave: 1,
+        agent: "data-engineer",
+        model: "sonnet",
+        status: "ok",
+        evidence: ["build"],
+        duration_ms: 3,
+        notes: null,
+      },
+      {
+        node: "verify",
+        wave: 2,
+        agent: "qa-engineer",
+        model: "sonnet",
+        status: "ok",
+        evidence: ["verify"],
+        duration_ms: 3,
+        notes: null,
+      },
     ] as const;
     for (const n of nodes) appendNode(cwd, n, at);
     endRun(cwd, "merged", at);

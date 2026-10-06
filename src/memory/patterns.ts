@@ -5,11 +5,7 @@ import { createHash } from "node:crypto";
 import { HALF_LIFE_DAYS } from "../eval/forgetting.js";
 import type { AdvisorEvent, RunIndexLine, TraceLine } from "../runs/ledger.js";
 
-export type PatternKind =
-  | "node-sequence"
-  | "failure-recurrence"
-  | "graph-reuse"
-  | "advisor-repeat";
+export type PatternKind = "node-sequence" | "failure-recurrence" | "graph-reuse" | "advisor-repeat";
 
 export interface Pattern {
   signature: string;
