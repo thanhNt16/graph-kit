@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { type CAC, cac } from "cac";
 import { registerStatusCommand } from "../../src/cli/commands/status.js";
+import { appendNode, startRun } from "../../src/memory/ledger.js";
 
 function runCli(args: string[], cwd: string, register: (cli: CAC) => void) {
   const cli = cac("gk");
@@ -45,20 +46,31 @@ describe("gk status", () => {
     expect(result.output).toEqual({ status: "ok", data: { running: false, run: null, coverage: null } });
   });
 
-  test("active run reports current run and evidence gate", () => {
-    mkdirSync(join(root, ".graphkit", "runs"), { recursive: true });
-    mkdirSync(join(root, ".graphkit", "evidence"), { recursive: true });
-    writeFileSync(join(root, ".graphkit", "runs", ".active"), "");
-    writeFileSync(join(root, ".graphkit", "runs", "current.json"), JSON.stringify({ name: "demo", started_at: "now" }));
+  test("active run reports ledger run id, node tallies and evidence gate", () => {
     writeFileSync(
       join(root, "graph.yaml"),
       `apiVersion: graphkit.dev/v2\nkind: Graph\nmetadata:\n  name: demo\ntopology: diamond\nnodes:\n  a:\n    agent: reviewer\n    objective: test\n    depend_on: []\n    evidence: [design]\nevidence:\n  required_keys: [design]\n`,
     );
+    mkdirSync(join(root, ".graphkit", "evidence"), { recursive: true });
+    const start = startRun(root, join(root, "graph.yaml"));
+    appendNode(root, {
+      node: "a",
+      wave: 0,
+      agent: "reviewer",
+      model: null,
+      status: "ok",
+      evidence: ["design"],
+      duration_ms: 5,
+      notes: null,
+    });
     writeFileSync(join(root, ".graphkit", "evidence", "design.md"), "done\n");
+
     const result = runCli(["status"], root, registerStatusCommand);
     expect(result.code).toBe(0);
     expect(result.output.data.running).toBe(true);
-    expect(result.output.data.run.name).toBe("demo");
+    expect(result.output.data.run.id).toBe(start.id);
+    expect(result.output.data.run.graph).toBe("demo");
+    expect(result.output.data.nodes).toEqual({ ok: 1, fail: 0, skipped: 0, challenge: 0 });
     expect(result.output.data.coverage.verdict).toBe("MERGE");
   });
 });

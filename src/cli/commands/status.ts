@@ -1,7 +1,7 @@
-import { existsSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import type { CAC } from "cac";
 import { GraphKitError } from "../../errors.js";
+import { activeRun, readRunMeta, readTrace } from "../../memory/ledger.js";
 import { resolveGraph } from "../graph-resolve.js";
 import { emit, fail, ok } from "../output.js";
 import { type GateResult, gateGraph } from "./gate.js";
@@ -13,23 +13,28 @@ export function registerStatusCommand(cli: CAC) {
     .action(() => {
       try {
         const cwd = process.cwd();
-        const runsDir = join(cwd, ".graphkit", "runs");
-        const activeMarker = join(runsDir, ".active");
 
-        // No active run → stable success exit 0.
-        if (!existsSync(activeMarker)) {
+        // No active run → stable success exit 0. (A dangling .active pointer
+        // counts as no run: the ledger already treats a vanished dir that way.)
+        const dir = activeRun(cwd);
+        if (!dir) {
           emit(ok({ running: false, run: null, coverage: null }));
           return;
         }
 
-        // Read current.json (best-effort).
-        const currentPath = join(runsDir, "current.json");
-        let run: { name?: string; started_at?: string; constraints?: Record<string, unknown> } | null = null;
+        // Run identity straight from the ledger: .active names the run dir,
+        // meta.json enriches it, trace.jsonl tallies it. No current.json.
+        const id = basename(dir);
+        const run: { id: string; graph: string | null; started_at: string | null } = { id, graph: null, started_at: null };
         try {
-          run = JSON.parse(readFileSync(currentPath, "utf-8"));
+          const meta = readRunMeta(cwd, id);
+          run.graph = meta.graph;
+          run.started_at = meta.started_at;
         } catch {
-          // .active exists but current.json missing — still running.
+          // meta unreadable — the id alone is still the honest answer.
         }
+        const nodes = { ok: 0, fail: 0, skipped: 0, challenge: 0 };
+        for (const line of readTrace(cwd, id)) nodes[line.status]++;
 
         // Gate evidence coverage via the one graph resolver + gateGraph.
         let coverage: GateResult | null = null;
@@ -46,6 +51,7 @@ export function registerStatusCommand(cli: CAC) {
           ok({
             running: true,
             run,
+            nodes,
             coverage,
             gate_error: gateError,
           }),
