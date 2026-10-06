@@ -7,7 +7,7 @@ import { explainRecall } from "./explain-recall.js";
 export interface ExpandedHit {
   id: string;
   file: string;
-  /** Final score — linked neighbors rank below direct hits. */
+  /** Final score - link expansion adds salience to linked hits; it does not cap them below direct hits. */
   salience: number;
   linked: boolean;
 }

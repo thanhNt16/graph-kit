@@ -9,7 +9,7 @@ inputs:
     type: string
     required: true
 nodes:
-  # ── Wave 1: sonnet research fleet — six parallel improvement sweeps ─────────
+  # ── Wave 1: sonnet research fleet — five parallel improvement sweeps ────────
   fleet-cli:
     agent: data-engineer
     model: sonnet
@@ -26,23 +26,11 @@ nodes:
     agent: data-engineer
     model: sonnet
     objective: |
-      Sweep src/compiler/ + src/schemas/ (validate, emitter, resolver, topology).
+      Sweep src/compiler/ + src/schemas/ (validate, plan, topology).
       Hunt: validation gaps, schema strictness, compile-time errors that could
       be caught earlier, dead exports. Write top 3-5 ranked findings to
       .graphkit/evidence/fleet-compiler.md (same format: what/why, file:line,
       diff sketch, impact, verification).
-    depend_on: []
-    evidence: [fleet_findings]
-  fleet-cbm:
-    agent: data-engineer
-    model: sonnet
-    objective: |
-      Sweep src/cbm/ (client, contract, index, route). Hunt: the 5 remaining
-      benchmark misses (q01 q06 q09 q16 q20 — capacity-limited), token payload
-      bloat (13062 tokens vs grep 2922), contract types unused at runtime,
-      connect-time version guard. Write top 3-5 ranked findings to
-      .graphkit/evidence/fleet-cbm.md. Efficiency claims must carry a measured
-      before/after on the frozen benchmark or a concrete sizing argument.
     depend_on: []
     evidence: [fleet_findings]
   fleet-eval:
@@ -61,9 +49,9 @@ nodes:
     model: sonnet
     objective: |
       Sweep tests/ (unit, integration, acceptance). Hunt: untested paths in
-      new code (route.ts classify/route, memory trace expiry marking), flaky
-      patterns (tmpdir, Date.now), test seams leaking. Write top 3-5 ranked
-      findings to .graphkit/evidence/fleet-tests.md.
+      new code (memory trace expiry marking), flaky patterns (tmpdir,
+      Date.now), test seams leaking. Write top 3-5 ranked findings to
+      .graphkit/evidence/fleet-tests.md.
     depend_on: []
     evidence: [fleet_findings]
   fleet-docs:
@@ -82,46 +70,46 @@ nodes:
     agent: software-architect
     model: sonnet
     objective: |
-      Lens: USEFUL. Read all six .graphkit/evidence/fleet-*.md reports.
+      Lens: USEFUL. Read all five .graphkit/evidence/fleet-*.md reports.
       Pick or synthesize the single highest-value feature gap a developer hits
       daily. Propose ONE concrete feature with a minimal diff sketch (file,
       ~lines), the user story it serves, and how you would verify it. Cite
       which fleet findings support it. No dependency installs, no
       benchmark/eval edits.
-    depend_on: [fleet-cli, fleet-compiler, fleet-cbm, fleet-eval, fleet-tests, fleet-docs]
+    depend_on: [fleet-cli, fleet-compiler, fleet-eval, fleet-tests, fleet-docs]
     evidence: [solution]
   candidate-2:
     agent: code-reviewer
     model: sonnet
     objective: |
-      Lens: CLEANER. Read all six .graphkit/evidence/fleet-*.md reports.
+      Lens: CLEANER. Read all five .graphkit/evidence/fleet-*.md reports.
       Pick the single highest-leverage cleanup (deletion beats refactor).
       Provide a diff sketch and the test that proves behavior is unchanged.
       329 tests must stay green. Cite supporting fleet findings.
-    depend_on: [fleet-cli, fleet-compiler, fleet-cbm, fleet-eval, fleet-tests, fleet-docs]
+    depend_on: [fleet-cli, fleet-compiler, fleet-eval, fleet-tests, fleet-docs]
     evidence: [solution]
   candidate-3:
     agent: data-engineer
     model: sonnet
     objective: |
-      Lens: EFFICIENT. Read .graphkit/evidence/fleet-cbm.md plus the other
-      fleet reports. The gk arm scores 63115 vs grep 2936; tokens=13062
-      dominate (wrong=5, capacity-limited misses). Propose ONE payload-shaping
-      or retrieval change that cuts tokens without losing answers — measure on
-      the frozen benchmark.jsonl and report metric before/after. Never edit
-      benchmark.jsonl or the score() function.
-    depend_on: [fleet-cli, fleet-compiler, fleet-cbm, fleet-eval, fleet-tests, fleet-docs]
+      Lens: EFFICIENT. Read all five .graphkit/evidence/fleet-*.md reports.
+      Hunt the biggest measurable inefficiency (token payload bloat,
+      redundant scans, hot-path allocation). Propose ONE payload-shaping
+      or retrieval change with a concrete sizing argument or a measured
+      before/after on an existing benchmark. Never edit benchmarks or
+      score functions to make numbers look better.
+    depend_on: [fleet-cli, fleet-compiler, fleet-eval, fleet-tests, fleet-docs]
     evidence: [solution]
   candidate-4:
     agent: qa-engineer
     model: sonnet
     objective: |
-      Lens: PRODUCTIVE. Read all six .graphkit/evidence/fleet-*.md reports.
+      Lens: PRODUCTIVE. Read all five .graphkit/evidence/fleet-*.md reports.
       Pick the biggest workflow friction (CLI ergonomics, error messages,
       evidence/reports flow, agent-binding validation). Propose ONE friction
       fix with highest developer-minutes saved, diff sketch, and verification
       plan. Cite supporting fleet findings.
-    depend_on: [fleet-cli, fleet-compiler, fleet-cbm, fleet-eval, fleet-tests, fleet-docs]
+    depend_on: [fleet-cli, fleet-compiler, fleet-eval, fleet-tests, fleet-docs]
     evidence: [solution]
 
   # ── Wave 3: fable judge — pairwise elimination to one champion ──────────────

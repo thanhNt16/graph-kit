@@ -77,5 +77,6 @@ describe("consolidate merge-retain (MEM F3)", () => {
     expect(decayedAfter.expired).toBe(true); // no resurrection
     expect(decayedAfter.valid_to).toBe("2026-09-04T09:00:00.000Z");
     expect(decayedAfter.created_at).toBe(decayedBefore.created_at);
+    expect(decayedAfter.status).toBe("deprecated"); // decay's status survives re-consolidation
   });
 });

@@ -146,7 +146,7 @@
 <div class="hero" id="top">
   <div class="hero-badge">Graph Engineering Kit · Claude Code · Cursor · OpenCode · Codex · Pi</div>
   <h1>Define, Execute, and Verify Agent Workflows</h1>
-  <p class="hero-tag">GraphKit compiles declarative, graph-structured agent workflows into native execution across five hosts. With deterministic DAG validation, dual execution runtimes, a run ledger with checkpoint resume, a criteria-based content-addressed evidence store, and project memory. No custom runtime, no daemon.</p>
+  <p class="hero-tag">GraphKit turns declarative, graph-structured agent workflows into native execution across five hosts. With deterministic DAG validation, a wave-dispatch engine, a run ledger with checkpoint resume, a criteria-based content-addressed evidence store, and project memory. No custom runtime, no daemon.</p>
   <div class="hero-cta">
     <a class="btn btn-primary" href="#quickstart">Get started</a>
     <a class="btn btn-ghost" href="https://github.com/thanhNt16/graph-kit">View on GitHub</a>
@@ -184,8 +184,8 @@
 
     <div class="lifecycle-card">
       <div class="card-num">03. EXECUTE</div>
-      <h3>⚡ Dual Execution Runtimes</h3>
-      <p>Run via transparent subagent wave dispatch on all five hosts (<code>/gk:execute</code> with git worktree isolation) or compile to Claude Code's native Workflow tool (<code>/gk:run</code>).</p>
+      <h3>⚡ Wave Dispatch Engine</h3>
+      <p>Run via transparent subagent wave dispatch on all five hosts — interactive (<code>/gk:execute</code>, with git worktree isolation) or headless (<code>gk exec</code>).</p>
       <a href="#runtimes">Execution Paths →</a>
     </div>
 
@@ -206,7 +206,7 @@
     <div class="lifecycle-card">
       <div class="card-num">06. REMEMBER</div>
       <h3>🧠 Project Memory &amp; Code Graph</h3>
-      <p>Execution history is mined into reusable patterns and suggestions. The CBM MCP bridge provides instant LSP-backed search, caller tracing, and Cypher queries.</p>
+      <p>Execution history is mined into reusable patterns and suggestions; code-graph search, caller tracing, and Cypher come from the Codebase Memory MCP server in your host session.</p>
       <a href="#memory">Project Memory →</a>
     </div>
   </div>
@@ -475,7 +475,7 @@ gk validate                              <span class="cmt"># check active graph 
 
     <div class="code-block">
       <div class="code-header"><div class="code-dot" style="background:#f85149"></div><div class="code-dot" style="background:#d29922"></div><div class="code-dot" style="background:#3fb950"></div> 9 Static DAG Validation Gates</div>
-      <div class="code-body"><span class="cmt"># Run before compilation or dispatch:</span>
+      <div class="code-body"><span class="cmt"># Run before dispatch:</span>
 gk validate
 
 <span class="cmt"># 1. Syntax: Clean YAML parsing</span>
@@ -495,17 +495,17 @@ gk validate
 
 <div class="section" id="runtimes">
   <div class="section-label">Execution Architecture</div>
-  <h2>Dual Execution Runtimes</h2>
-  <p>One graph specification, two execution paths. <code>/gk:execute</code> provides transparent, interactive wave-by-wave dispatch across all 5 host targets. <code>/gk:run</code> compiles graphs into native Claude Code Workflow scripts.</p>
+  <h2>One Engine, Two Modes</h2>
+  <p>One graph specification, one execution engine, two modes. <code>/gk:execute</code> drives interactive, wave-by-wave dispatch across all 5 host targets; <code>gk exec</code> runs the same engine headless for CI and one-shot dispatch.</p>
 
   <table class="cmp-table">
-    <tr><th>Capability</th><th>/gk:execute (All 5 Hosts)</th><th>/gk:run (Claude Code)</th></tr>
-    <tr><td>Supported Hosts</td><td>Claude Code, Cursor, OpenCode, Codex, Pi</td><td>Claude Code Workflow tool</td></tr>
-    <tr><td>Compilation</td><td>Zero compile step — executes wave-by-wave</td><td>Compiles to <code>.workflow.js</code></td></tr>
-    <tr><td>Visibility</td><td>Full visibility — every subagent interactive</td><td>Opaque background execution</td></tr>
-    <tr><td>Isolation Mode</td><td><code>--worktree</code> (isolated git branches per write node)</td><td>Single workspace process</td></tr>
-    <tr><td>Advisor Escalation</td><td>Automatic advisor injection on failed streaks</td><td>Static round loops</td></tr>
-    <tr><td>Dynamic Fan-Out</td><td>Fleet sizing determined by upstream briefs</td><td>Fixed array maps</td></tr>
+    <tr><th>Capability</th><th>/gk:execute (Interactive)</th><th>gk exec (Headless)</th></tr>
+    <tr><td>Supported Hosts</td><td>Claude Code, Cursor, OpenCode, Codex, Pi</td><td>Any host with the gk binary</td></tr>
+    <tr><td>Execution</td><td>Wave-by-wave, every subagent in your session</td><td>Same wave engine, driven end-to-end</td></tr>
+    <tr><td>Visibility</td><td>Full visibility — every subagent interactive</td><td>Ledger + evidence on disk, no session noise</td></tr>
+    <tr><td>Isolation Mode</td><td><code>--worktree</code> (isolated git branches per write node)</td><td><code>--worktree</code> (same flag, same semantics)</td></tr>
+    <tr><td>Advisor Escalation</td><td>Automatic advisor injection on failed streaks</td><td>Same escalation, recorded in the ledger</td></tr>
+    <tr><td>Dynamic Fan-Out</td><td>Fleet sizing determined by upstream briefs</td><td>Same — sizing is a planner property</td></tr>
   </table>
 
   <div class="bridge-grid">
@@ -607,8 +607,8 @@ gk run resume &lt;run-id&gt; --from-node fixer  <span class="cmt"># re-execute a
 
 <div class="section" id="memory">
   <div class="section-label">Durable Intelligence</div>
-  <h2>Project Memory &amp; Code-Graph Bridge</h2>
-  <p>GraphKit turns execution history into project assets. The memory compiler consolidates run ledgers into durable patterns, while the CBM MCP bridge enables fast code-graph queries without requiring a separate graph database.</p>
+  <h2>Project Memory &amp; Code Graph</h2>
+  <p>GraphKit turns execution history into project assets. The memory consolidator mines run ledgers into durable patterns, while the Codebase Memory MCP server provides code-graph queries without requiring a separate graph database.</p>
 
   <div class="bridge-grid">
     <div class="subsys" style="border-color:var(--memory)">
@@ -621,13 +621,9 @@ gk recall "auth tokens"    <span class="cmt"># retrieve contextual memory</span>
     </div>
 
     <div class="subsys" style="border-color:var(--bridge)">
-      <div class="subsys-tag" style="background:rgba(57,208,216,0.15);color:var(--bridge)">CBM CODE GRAPH</div>
+      <div class="subsys-tag" style="background:rgba(57,208,216,0.15);color:var(--bridge)">CODE GRAPH VIA MCP</div>
       <h3>LSP-Backed Graph Queries</h3>
-      <p>Bridge to Codebase Memory MCP for multi-language semantic code search, caller/callee tracing, and direct Cypher queries directly within workflow nodes.</p>
-      <div class="code-block" style="margin:0.6rem 0 0"><div class="code-body">gk graph index /path/to/repo
-gk graph search "validation gate"
-gk graph trace validateGraph
-gk graph query "MATCH (f:Function) RETURN f.name"</div></div>
+      <p>Code-graph search, caller/callee tracing, and Cypher queries come from the Codebase Memory MCP server, wired directly into your host session — workflow nodes query it like any other MCP tool.</p>
     </div>
   </div>
 </div>
@@ -635,7 +631,7 @@ gk graph query "MATCH (f:Function) RETURN f.name"</div></div>
 <div class="section" id="hosts">
   <div class="section-label">Multi-Host Compatibility</div>
   <h2>Five Targets, One Universal CLI</h2>
-  <p>Pass <code>--target &lt;host&gt;</code> to install the native kit for your coding environment. The <code>gk</code> CLI provides identical validation, compilation, memory, and ledger capabilities across all five hosts.</p>
+  <p>Pass <code>--target &lt;host&gt;</code> to install the native kit for your coding environment. The <code>gk</code> CLI provides identical validation, execution, memory, and ledger capabilities across all five hosts.</p>
 
   <table class="cmp-table">
     <tr><th>Host Target</th><th>Rules Format</th><th>Agents Format</th><th>Skills Directory</th><th>Hook Mechanism</th></tr>
@@ -799,16 +795,15 @@ gk graph query "MATCH (f:Function) RETURN f.name"</div></div>
 
     <div class="cf-stage">
       <div class="cf-top"><span class="cf-num g-opus">04</span><span class="cf-title">Execute</span></div>
-      <div class="cf-role">Fork: run on all hosts wave-by-wave, or compile to a Claude Code Workflow. Ledger tracks each wave.</div>
+      <div class="cf-role">Run on all hosts wave-by-wave — interactive (<code>/gk:execute</code>) or headless (<code>gk exec</code>). Ledger tracks each wave.</div>
       <div class="cf-pills">
         <span class="cf-pill g-opus">/gk:execute</span>
-        <span class="cf-pill g-opus">gk compile → /gk:run</span>
+        <span class="cf-pill g-opus">gk exec</span>
         <span class="cf-pill g-opus">gk run start</span>
         <span class="cf-pill g-opus">gk run node</span>
       </div>
       <div class="cf-verdicts cf-skills-row">
         <span class="cf-skill sf-opus">/gk:execute · all hosts</span>
-        <span class="cf-skill sf-opus">/gk:compile → /gk:run · Claude only</span>
       </div>
     </div>
 
@@ -886,12 +881,6 @@ gk graph query "MATCH (f:Function) RETURN f.name"</div></div>
       <div class="cli-cmd">gk validate [file]</div>
       <div class="cli-desc">Run 9 static DAG checks against graph.yaml or the active session graph.</div>
     </div>
-
-    <div class="cli-card">
-      <div class="cli-cmd">gk compile [file]</div>
-      <div class="cli-desc">Compile graph.yaml into a standalone <code>.workflow.js</code> for Claude Code.</div>
-    </div>
-
     <div class="cli-card">
       <div class="cli-cmd">gk gate [file]</div>
       <div class="cli-desc">Evaluate required evidence criteria and tree freshness: MERGE or BLOCK verdict.</div>
@@ -931,10 +920,8 @@ gk graph query "MATCH (f:Function) RETURN f.name"</div></div>
     <div class="cf-scard"><div class="cf-shead"><span class="cf-skill sf-custom">/gk:template</span><span class="cf-sstage">02 Compose</span></div><div class="cf-sdesc">Package a graph.yaml as a reusable, parameterized GraphTemplate v1.</div></div>
     <div class="cf-scard"><div class="cf-shead"><span class="cf-skill sf-custom">/gk:visualize</span><span class="cf-sstage">02 Compose</span></div><div class="cf-sdesc">Render graph.yaml as archify HTML, ASCII, SVG, or Excalidraw.</div></div>
     <div class="cf-scard"><div class="cf-shead"><span class="cf-skill sf-custom">excalidraw-diagram</span><span class="cf-sstage">02 Compose</span></div><div class="cf-sdesc">Create Excalidraw JSON files that make visual arguments.</div></div>
-    <div class="cf-scard"><div class="cf-shead"><span class="cf-skill sf-sonnet">/gk:validate</span><span class="cf-sstage">03 Validate</span></div><div class="cf-sdesc">Gate-check graph.yaml before compilation — 9 static validation checks.</div></div>
+    <div class="cf-scard"><div class="cf-shead"><span class="cf-skill sf-sonnet">/gk:validate</span><span class="cf-sstage">03 Validate</span></div><div class="cf-sdesc">Gate-check graph.yaml before dispatch — 9 static validation checks.</div></div>
     <div class="cf-scard"><div class="cf-shead"><span class="cf-skill sf-opus">/gk:execute</span><span class="cf-sstage">04 Execute</span></div><div class="cf-sdesc">Run graph.yaml via parallel subagents — no compilation, every host.</div></div>
-    <div class="cf-scard"><div class="cf-shead"><span class="cf-skill sf-opus">/gk:compile</span><span class="cf-sstage">04 Execute</span></div><div class="cf-sdesc">Compile graph.yaml into a self-contained .workflow.js (Claude Code).</div></div>
-    <div class="cf-scard"><div class="cf-shead"><span class="cf-skill sf-opus">/gk:run</span><span class="cf-sstage">04 Execute</span></div><div class="cf-sdesc">Execute the compiled .workflow.js via Claude Code Workflows.</div></div>
     <div class="cf-scard"><div class="cf-shead"><span class="cf-skill sf-haiku">/gk:evidence</span><span class="cf-sstage">05 Evidence &amp; Gate</span></div><div class="cf-sdesc">Produce a markdown evidence report from a completed graph run.</div></div>
     <div class="cf-scard"><div class="cf-shead"><span class="cf-skill sf-haiku">/gk:eval</span><span class="cf-sstage">05 Evidence &amp; Gate</span></div><div class="cf-sdesc">Score a run's evidence and emit a MERGE/BLOCK gate verdict.</div></div>
     <div class="cf-scard"><div class="cf-shead"><span class="cf-skill sf-fable">/gk:recall</span><span class="cf-sstage">06 Close Out</span></div><div class="cf-sdesc">Query the run's memory store for node-relevant context and past decisions.</div></div>
@@ -951,7 +938,7 @@ gk graph query "MATCH (f:Function) RETURN f.name"</div></div>
   <h2>Diagrams</h2>
   <p class="cf-sub">Explorable archify diagrams — architecture, execution workflow, run-resume lifecycle, and all eleven topologies. Inline SVG, trace motion, no scripts required beyond the viewer.</p>
   <div class="cf-skills">
-    <div class="cf-scard"><div class="cf-shead"><a href="diagrams/gk-architecture.html" style="color:inherit">Architecture</a><span class="cf-sstage">Explore</span></div><div class="cf-sdesc">Kit anatomy: compiler, kits, hooks, runtimes, evidence layer.</div></div>
+    <div class="cf-scard"><div class="cf-shead"><a href="diagrams/gk-architecture.html" style="color:inherit">Architecture</a><span class="cf-sstage">Explore</span></div><div class="cf-sdesc">Kit anatomy: CLI, kits, hooks, runtimes, evidence layer.</div></div>
     <div class="cf-scard"><div class="cf-shead"><a href="diagrams/gk-execution-workflow.html" style="color:inherit">Execution Workflow</a><span class="cf-sstage">Explore</span></div><div class="cf-sdesc">End-to-end: define → validate → dispatch waves → evidence → gate.</div></div>
     <div class="cf-scard"><div class="cf-shead"><a href="diagrams/gk-resume-lifecycle.html" style="color:inherit">Run Resume Lifecycle</a><span class="cf-sstage">Explore</span></div><div class="cf-sdesc">Idle → run → gating → merged, plus blocked/cancelled recovery.</div></div>
   </div>

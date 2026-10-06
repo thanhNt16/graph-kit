@@ -237,4 +237,4 @@ The path is printed rather than auto-opened.
 
 - The `gk` CLI is identical across targets — `template pack|list|show`, `inventory`, and `validate/graph` behave the same.
 - `gk-template`, `gk-init-graph`, and `gk-visualize` skills exist in all five kits, and the `gk-visualize` bodies differ only in skill name and invocation prefix.
-- **Execution parity differs only as before**: Claude Code runs the compile→run path (`/gk:run`) plus `/gk:execute`; other hosts have no Workflow tool, so `/gk:execute` is their sole execution path. Templates and diagrams behave the same everywhere.
+- **Execution parity is total**: every host runs the same wave engine — interactive via `/gk:execute`, headless via `gk exec`. There is no compile step. Templates and diagrams behave the same everywhere.

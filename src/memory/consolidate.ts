@@ -151,7 +151,7 @@ function priorFrontmatter(path: string): Record<string, unknown> | null {
   }
 }
 
-function retainedState(prior: Record<string, unknown>): Record<string, unknown> {
+function retainedState(prior: Record<string, unknown>, statusEnum: readonly string[]): Record<string, unknown> {
   const kept: Record<string, unknown> = {};
   // ISO-date fields survive verbatim; anything unparseable is dropped so the
   // schema guard below still sees a valid entry.
@@ -161,6 +161,10 @@ function retainedState(prior: Record<string, unknown>): Record<string, unknown> 
   }
   if (typeof prior.use_count === "number" && prior.use_count >= 1) kept.use_count = prior.use_count;
   if (typeof prior.expired === "boolean") kept.expired = prior.expired;
+  // Lifecycle status survives too: a decay-marked pattern stays deprecated, a
+  // human's dismissed suggestion stays dismissed. Anything outside the file
+  // kind's published enum drops like any other corrupt field.
+  if (typeof prior.status === "string" && statusEnum.includes(prior.status)) kept.status = prior.status;
   return kept;
 }
 
@@ -226,7 +230,7 @@ export function consolidate(cwd: string, now = new Date().toISOString()): Consol
       recorded_at: now,
       status: "stable",
     };
-    if (prior) Object.assign(frontmatter, retainedState(prior));
+    if (prior) Object.assign(frontmatter, retainedState(prior, ["draft", "stable", "deprecated"]));
     // Invariant guard: generated entries must satisfy the published schemas (fail loud on drift).
     const parsed = PatternFileSchema.safeParse(frontmatter);
     if (!parsed.success)
@@ -248,10 +252,9 @@ export function consolidate(cwd: string, now = new Date().toISOString()): Consol
   for (const s of drafts) {
     const file = `${s.id}.md`;
     keptSuggestions.add(file);
-    // Preserve a human's dismissal across re-consolidation.
+    // The prior file's state (incl. a human's dismissed/accepted status)
+    // merges in below.
     const prior = priorFrontmatter(join(suggestionsDir, file));
-    let status = "proposed";
-    if (prior && (prior.status === "dismissed" || prior.status === "accepted")) status = prior.status;
     const frontmatter = {
       id: s.id,
       type: "suggestion",
@@ -261,7 +264,7 @@ export function consolidate(cwd: string, now = new Date().toISOString()): Consol
       sources: [...new Set(s.based_on.flatMap((id) => runsOf.get(id) ?? []))].map((run) => ({
         resource: `run:${run}`,
       })),
-      status,
+      status: "proposed",
       created_at: now,
       valid_from: now,
       salience: Number(s.salience.toFixed(4)),
@@ -270,7 +273,7 @@ export function consolidate(cwd: string, now = new Date().toISOString()): Consol
       generated: { by: GENERATOR, at: now },
       recorded_at: now,
     };
-    if (prior) Object.assign(frontmatter, retainedState(prior));
+    if (prior) Object.assign(frontmatter, retainedState(prior, ["proposed", "accepted", "dismissed"]));
     // Invariant guard: generated entries must satisfy the published schemas (fail loud on drift).
     const parsed = SuggestionFileSchema.safeParse(frontmatter);
     if (!parsed.success)

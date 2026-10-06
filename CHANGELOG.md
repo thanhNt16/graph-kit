@@ -109,6 +109,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Stray artifacts: `src/compiler/validate.ts:84-93`, `validate.ts:90`, `dist/gk` (64MB binary no longer inside the npm `files` glob — `build:bin` now emits to `build/`).
 - Repo-root autoresearch experiment files and unlinked internal docs moved to `archive/`; `.tmp-*/` gitignored; `.graphkit/evidence/improve-review.md` untracked.
 
+### Removed
+- **CBM bridge killed — the external Codebase Memory MCP server is the integration** (`src/cbm/` client/contract/route/index, `scripts/cbm-parity.ts`, `src/cli/cbm-seam.ts`; −1421 lines). Six always-fail commands deleted: `graph index|search|trace|query|ask` and `memory index`. `graph ask` had no non-CBM path and went with the bridge. Workflow nodes query the MCP server in the host session like any other tool.
+- **Compile/`.workflow.js` runtime killed — `planGraph` + exec is the only execution path** (`src/compiler/emitter.ts` + `resolver.ts`, `gk compile`, the `/gk:compile` + `/gk:run` claude workflow skills, and the `memory-augmented.workflow.js` gallery template; −1062 lines). Dual-runtime docs copy collapsed to the wave engine everywhere (landing page, architecture diagrams, parity notes).
+- Memory spec shrink: Personalized PageRank link scoring and evidence-cooccurrence auto-linking dropped — co-occurrence links were noise-dominated. BM25 scoring + relative-score cutoff remain; explain/recall output shapes unchanged.
+
+### Fixed
+- **`gk memory consolidate` merge-retain keeps lifecycle `status` across re-consolidation**: a decay-marked pattern stays `deprecated`, a dismissed suggestion stays `dismissed` (previously every re-run flipped them back to `draft`/`proposed`); values outside the file kind's published enum still drop like corrupt fields.
+- **Existing claude-kit installs now prune retired assets**: `kits/claude/metadata.json` carries a `deletions` ledger (`skills/gk-compile`, `skills/gk-run`, `templates/memory-augmented.workflow.js`) — the installer's cpSync overlay never deletes, so pre-P3 installs kept the dead compile-runtime files forever. Pinned by a `kit-deletions` test row.
+
 ## [0.3.8] - 2026-09-05
 ### Fixed
 - CI lint: auto-formatted run-resume sources (biome `useTemplate`/`useConst`/import order/format). No behavior change — 575 tests pass.
