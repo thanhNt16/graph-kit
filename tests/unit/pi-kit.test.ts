@@ -52,6 +52,10 @@ describe("pi kit structure", () => {
     expect(raw).toContain("gk graph agents");
     expect(raw).toContain("gk-<node-id>");
     expect(raw).toContain("gk run node <node-id> --status");
+    // Recipe closes the evidence gap: deterministic gate runs after the last
+    // wave, and materialized nodes know to write evidence files.
+    expect(raw).toContain("gk gate");
+    expect(raw).toContain("<evidence_dir>/<key>.md");
     expect(raw).not.toContain("/gk:");
   });
 

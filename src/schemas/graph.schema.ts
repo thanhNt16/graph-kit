@@ -104,10 +104,12 @@ const NodeDefSchema = z
     // the agent and to the owns-overlap validation heuristic.
     owns: z.array(z.string()).default([]),
     evidence: z.array(z.string()).default([]),
-    // Free-form string; recognized semantic roles: "eval-gate" (evidence gate
-    // that requires an `eval` config block and emits a MERGE/BLOCK verdict) and
-    // "supervisor" (orchestrator-owned control node). Any other value surfaces
-    // an unknown-role advisory warning in the compiler.
+    // Free-form label. Compiler-recognized roles: "eval-gate" (authoring-time
+    // contract — requires an `eval` config block and a depend_on, checked by
+    // the compiler and resume; run analysis lists these nodes) and
+    // "supervisor" (materialized with read-only tools, node-agents.ts).
+    // Neither role drives engine execution. Any other value surfaces an
+    // unknown-role advisory warning in the compiler.
     role: z.string().optional(),
     eval: EvalConfig.optional(),
     advisor: AdvisorConfig.optional(),
