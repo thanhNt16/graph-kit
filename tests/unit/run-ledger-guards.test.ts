@@ -244,7 +244,7 @@ describe("land guards", () => {
     // A later ok round makes the node landable again.
     traceOk(cwd, "a", []);
     landNode(cwd, "a", "abc123");
-    expect(readTrace(cwd, id).at(-1)?.landed).toMatchObject({ commit: "abc123" });
+    expect(readTrace(cwd, id).at(-1)).toMatchObject({ node: "a", status: "landed", commit: "abc123" });
   });
 
   test("landNode validates the commit is a hex sha (BAD_COMMIT)", () => {

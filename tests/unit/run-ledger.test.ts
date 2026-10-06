@@ -3,6 +3,7 @@ import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import { GraphKitError } from "../../src/errors.js";
+import { gateGraph } from "../../src/cli/commands/gate.js";
 import {
   activeRun,
   activeRunPointer,
@@ -187,21 +188,70 @@ describe("run ledger", () => {
     expect(readDispatches(cwd, id)).toEqual([]);
   });
 
-  test("landNode stamps landed on the node's ok line", () => {
-    const { id } = startRun(cwd, join(cwd, "graph.yaml"), "2026-09-28T10:00:00.000Z");
+  test("landNode appends a landed event — existing lines stay byte-identical", () => {
+    const { id, dir } = startRun(cwd, join(cwd, "graph.yaml"), "2026-09-28T10:00:00.000Z");
     appendNode(cwd, {
       node: "build",
       wave: 0,
       agent: null,
       model: null,
       status: "ok",
-      evidence: ["k"],
+      evidence: [],
       duration_ms: 1,
       notes: null,
     });
+    const before = readFileSync(join(dir, "trace.jsonl"), "utf-8");
     landNode(cwd, "build", "abc123");
-    const last = readTrace(cwd, id).at(-1)!;
-    expect(last.landed?.commit).toBe("abc123");
+    const after = readFileSync(join(dir, "trace.jsonl"), "utf-8");
+    // Append, never rewrite: the pre-land bytes are a strict prefix of the file.
+    expect(after.startsWith(before)).toBe(true);
+    const lines = after.trim().split("\n");
+    expect(lines).toHaveLength(2);
+    expect(JSON.parse(lines[1])).toMatchObject({ node: "build", status: "landed", commit: "abc123" });
+    expect(readTrace(cwd, id)).toHaveLength(2);
+  });
+
+  test("interleaved append survives a land: appendNode(a) → landNode(a) → appendNode(b)", () => {
+    const { id, dir } = startRun(cwd, join(cwd, "graph.yaml"), "2026-09-28T10:00:00.000Z");
+    const evDir = join(cwd, ".graphkit", "evidence");
+    mkdirSync(evDir, { recursive: true });
+    writeFileSync(join(evDir, "design.md"), "body\n");
+    appendNode(cwd, {
+      node: "build",
+      wave: 0,
+      agent: null,
+      model: null,
+      status: "ok",
+      evidence: ["design"],
+      duration_ms: 1,
+      notes: null,
+    });
+    // Unlanded ok evidence BLOCKs require_landed…
+    expect(gateGraph(["design"], evDir, { cwd, requireLanded: true }).unlanded).toEqual(["build"]);
+    const before = readFileSync(join(dir, "trace.jsonl"), "utf-8");
+    landNode(cwd, "build", "abc123");
+    // …then a concurrent-style append arrives AFTER the land's read window.
+    appendNode(cwd, {
+      node: "audit",
+      wave: 0,
+      agent: null,
+      model: null,
+      status: "ok",
+      evidence: [],
+      duration_ms: 1,
+      notes: null,
+    });
+    // Every line the ledger ever wrote survives — the RMW this replaced dropped
+    // anything appended between its read and its rewrite.
+    expect(readFileSync(join(dir, "trace.jsonl"), "utf-8").startsWith(before)).toBe(true);
+    const trace = readTrace(cwd, id);
+    expect(trace.map((t) => `${t.status}:${t.node}`)).toEqual(["ok:build", "landed:build", "ok:audit"]);
+    const landed = trace[1];
+    expect(landed.status === "landed" && landed.commit).toBe("abc123");
+    // The ok line itself is untouched — landing is an event after it, not a mutation.
+    expect(JSON.parse(before)).toEqual(trace[0]);
+    // require_landed reads the landed event even with a newer ok line in the file.
+    expect(gateGraph(["design"], evDir, { cwd, requireLanded: true }).verdict).toBe("MERGE");
   });
 
   test("landNode rejects a node with no ok trace line", () => {

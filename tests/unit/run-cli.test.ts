@@ -618,7 +618,7 @@ describe("run dispatch/land/take CLI", () => {
     runCli(["run", "node", "a", "--status", "ok"], cwd);
     const landed = JSON.parse(runCli(["run", "land", "a", "--commit", "abc123"], cwd).stdout);
     expect(landed.status).toBe("ok");
-    expect(readTrace(cwd, landed.data.run).at(-1)?.landed).toMatchObject({ commit: "abc123" });
+    expect(readTrace(cwd, landed.data.run).at(-1)).toMatchObject({ node: "a", status: "landed", commit: "abc123" });
   });
 
   test("run take clears stale .active and stamps takes_over on the next start", () => {

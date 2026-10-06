@@ -16,8 +16,22 @@ export interface TraceLine {
   duration_ms: number | null;
   notes: string | null;
   attempt?: number;
-  landed?: { at: string; commit: string };
 }
+
+/** Integration stamp on its own line, appended AFTER the node's ok line.
+ *  An event, not an in-place rewrite: rewriting dropped any line another
+ *  writer appended between the land's read and its write-back. */
+export interface LandEvent {
+  at: string;
+  node: string;
+  status: "landed";
+  commit: string;
+}
+
+/** Everything trace.jsonl can hold: node rounds plus landed events. */
+export type TraceEntry = TraceLine | LandEvent;
+
+export const isNodeLine = (t: TraceEntry): t is TraceLine => t.status !== "landed";
 
 /** Adjudication stamp in a challenge line's notes: `disposition=<value>`.
  *  Any value counts — a typo'd value is still a recorded decision — so the
@@ -257,9 +271,10 @@ export function readDispatches(cwd: string, id: string): DispatchLine[] {
     });
 }
 
-/** Mark the node's LATEST trace line as integrated ("landed") — refused unless
- *  that line is `ok`. Rewrites trace.jsonl in place — the only multi-line
- *  ledger write; single-writer run makes this safe. */
+/** Record integration as an append-only event — `{node, status:"landed",
+ *  commit}` on its own line — refused unless the node's latest trace line is
+ *  `ok`. Appending is the point: the read-modify-write this replaced clobbered
+ *  any line another writer appended between its read and its rewrite. */
 export function landNode(cwd: string, node: string, commit: string, now = new Date().toISOString()) {
   const dir = activeRun(cwd);
   if (!dir) throw new GraphKitError("NO_ACTIVE_RUN", "start a run before landing nodes");
@@ -271,21 +286,24 @@ export function landNode(cwd: string, node: string, commit: string, now = new Da
   const trace = readTrace(cwd, id);
   // Latest status wins: a node whose most recent round failed is not landable,
   // even if an earlier `ok` line exists — a stale-ok stamp asserts an
-  // integration that never happened.
-  let idx = -1;
-  for (let i = trace.length - 1; i >= 0; i--)
-    if (trace[i].node === node) {
-      idx = i;
+  // integration that never happened. Landed events carry no round result, so
+  // the scan looks through them (a re-land after a re-ok re-appends).
+  let last: TraceLine | undefined;
+  for (let i = trace.length - 1; i >= 0; i--) {
+    const t = trace[i];
+    if (t.node === node && isNodeLine(t)) {
+      last = t;
       break;
     }
-  if (idx < 0) throw new GraphKitError("LAND_NOT_OK", `no trace line for node "${node}" in run ${id}`);
-  if (trace[idx].status !== "ok")
+  }
+  if (!last) throw new GraphKitError("LAND_NOT_OK", `no trace line for node "${node}" in run ${id}`);
+  if (last.status !== "ok")
     throw new GraphKitError(
       "LAND_NOT_OK",
-      `latest trace for node "${node}" in run ${id} is "${trace[idx].status}", not ok`,
+      `latest trace for node "${node}" in run ${id} is "${last.status}", not ok`,
     );
-  trace[idx] = { ...trace[idx], landed: { at: now, commit } };
-  writeFileSync(join(dir, "trace.jsonl"), `${trace.map((t) => JSON.stringify(t)).join("\n")}\n`);
+  const event: LandEvent = { at: now, node, status: "landed", commit };
+  appendFileSync(join(dir, "trace.jsonl"), `${JSON.stringify(event)}\n`);
   return { run: id, node };
 }
 
@@ -304,7 +322,7 @@ export function readAdvisorEvents(cwd: string, id: string): AdvisorEvent[] {
     });
 }
 
-export function readTrace(cwd: string, id: string): TraceLine[] {
+export function readTrace(cwd: string, id: string): TraceEntry[] {
   const f = join(runsDir(cwd), id, "trace.jsonl");
   if (!existsSync(f)) return [];
   return readFileSync(f, "utf-8")
@@ -312,7 +330,7 @@ export function readTrace(cwd: string, id: string): TraceLine[] {
     .filter((l) => l.trim())
     .flatMap((l) => {
       try {
-        return [JSON.parse(l) as TraceLine];
+        return [JSON.parse(l) as TraceEntry];
       } catch {
         return []; // skip a torn line rather than abort the whole scan
       }
@@ -340,6 +358,9 @@ export function endRun(cwd: string, status: RunIndexLine["status"], now = new Da
   const id = basename(dir);
   const meta = JSON.parse(readFileSync(join(dir, "meta.json"), "utf-8"));
   const trace = readTrace(cwd, id);
+  // Landed events are bookkeeping, not node rounds: they must not inflate
+  // node_count or leak into evidence_keys.
+  const nodes = trace.filter(isNodeLine);
 
   const summary: RunIndexLine = {
     id,
@@ -348,9 +369,9 @@ export function endRun(cwd: string, status: RunIndexLine["status"], now = new Da
     started_at: meta.started_at,
     ended_at: now,
     status,
-    node_count: trace.length,
-    failures: trace.filter((t) => t.status === "fail").length,
-    evidence_keys: Array.from(new Set(trace.flatMap((t) => t.evidence))).sort(),
+    node_count: nodes.length,
+    failures: nodes.filter((t) => t.status === "fail").length,
+    evidence_keys: Array.from(new Set(nodes.flatMap((t) => t.evidence))).sort(),
   };
 
   appendFileSync(indexFile(cwd), `${JSON.stringify(summary)}\n`);

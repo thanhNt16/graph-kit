@@ -38,7 +38,7 @@ export function registerStatusCommand(cli: CAC) {
           // meta unreadable — the id alone is still the honest answer.
         }
         const nodes = { ok: 0, fail: 0, skipped: 0, challenge: 0 };
-        for (const line of readTrace(cwd, id)) nodes[line.status]++;
+        for (const line of readTrace(cwd, id)) if (line.status !== "landed") nodes[line.status]++;
 
         // Gate evidence coverage via the one graph resolver + gateGraph.
         let coverage: GateResult | null = null;

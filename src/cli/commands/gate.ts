@@ -82,15 +82,21 @@ export function gateGraph(
   const unlanded: string[] = [];
   if (opts?.requireLanded && opts.cwd) {
     const id = activeRun(opts.cwd) ? basename(activeRun(opts.cwd)!) : readRunIndex(opts.cwd).at(-1)?.id;
-    if (id)
-      for (const t of readTrace(opts.cwd, id))
-        if (
-          t.status === "ok" &&
-          !t.landed &&
-          t.evidence.some((e) => requiredKeys.includes(e)) &&
-          !unlanded.includes(t.node)
-        )
-          unlanded.push(t.node);
+    if (id) {
+      // Landed is an append-only event: one landed line covers every ok line
+      // before it for that node. Scan newest-first — an ok line carrying
+      // required evidence with no landed event after it leaves its node open.
+      const covered = new Set<string>();
+      const open = new Set<string>();
+      const trace = readTrace(opts.cwd, id);
+      for (let i = trace.length - 1; i >= 0; i--) {
+        const t = trace[i];
+        if (t.status === "landed") covered.add(t.node);
+        else if (t.status === "ok" && t.evidence.some((e) => requiredKeys.includes(e)) && !covered.has(t.node))
+          open.add(t.node);
+      }
+      unlanded.push(...[...open].reverse());
+    }
   }
   const verdict =
     (opts?.strict && (stale.length > 0 || unknown.length > 0 || foreign.length > 0)) || unlanded.length > 0

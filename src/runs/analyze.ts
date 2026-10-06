@@ -10,6 +10,7 @@ import {
   hasDisposition,
   listRunIds,
   RUN_ID_PATTERN,
+  isNodeLine,
   readAdvisorEvents,
   readRunMeta,
   readTrace,
@@ -83,6 +84,7 @@ export function analyzeRun(cwd: string, requested?: string): AnalyzeResult {
   let adjudicated = 0;
   const byNode = new Map<string, TraceLine[]>();
   for (const line of trace) {
+    if (line.status === "landed") continue; // integration event, not a node round
     counts[line.status]++;
     if (line.status === "challenge") {
       const m = line.notes?.match(DISPOSITION_PATTERN);
@@ -135,7 +137,7 @@ export function analyzeRun(cwd: string, requested?: string): AnalyzeResult {
       if (j.lines.length >= cfg.max_rounds) exhausted = true;
     }
   }
-  const judgedLines = gateNodes ? trace.filter((l) => gateNodes.has(l.node)) : [];
+  const judgedLines = gateNodes ? trace.filter(isNodeLine).filter((l) => gateNodes.has(l.node)) : [];
 
   const suggestions: string[] = [];
 

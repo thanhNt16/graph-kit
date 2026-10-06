@@ -13,6 +13,7 @@ import {
   hasDisposition,
   readAdvisorEvents,
   readDispatches,
+  isNodeLine,
   readRunMeta,
   readTrace,
   startRun,
@@ -162,7 +163,9 @@ export function reconcileRun(
       `--from-node "${opts.fromNode}" is not a node of ${meta.graph_path}`,
     );
   const last = new Map<string, TraceLine>();
-  for (const line of readTrace(cwd, runId)) last.set(line.node, line);
+  // Landed events are integration bookkeeping, not round results: the node's
+  // effective latest status is the ok line the event follows.
+  for (const line of readTrace(cwd, runId)) if (isNodeLine(line)) last.set(line.node, line);
   const evidenceDir = graph.outputs?.evidence_dir ?? ".graphkit/evidence/";
   const chain = resumeChain(cwd, runId);
   const satisfied = new Set<string>();

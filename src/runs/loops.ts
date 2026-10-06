@@ -6,7 +6,7 @@ import { formatZodIssues } from "../cli/diagnostics.js";
 import { resolveGraphPath } from "../cli/graph-resolve.js";
 import { GraphKitError } from "../errors.js";
 import { GraphSchema } from "../schemas/graph.schema.js";
-import { activeRun, readTrace, type TraceLine } from "./ledger.js";
+import { activeRun, isNodeLine, readTrace, type TraceLine } from "./ledger.js";
 
 /**
  * Durable loop-group round tracking (graph `loops:` spans).
@@ -96,7 +96,7 @@ export function recordRound(cwd: string, groupIdx: number, now = new Date().toIS
   const upTo = journal.length > 0 ? journal[journal.length - 1].up_to : 0;
 
   // Window: this round's slice of the group's trace lines.
-  const groupLines = readTrace(cwd, id).filter((l: TraceLine) => group.nodes.includes(l.node));
+  const groupLines = readTrace(cwd, id).filter(isNodeLine).filter((l: TraceLine) => group.nodes.includes(l.node));
   const window = groupLines.slice(upTo);
 
   const statuses = new Map<string, string>();
