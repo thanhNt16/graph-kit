@@ -367,14 +367,22 @@ export async function runGraph(plan: PlanGraph, opts: RunGraphOptions): Promise<
         attempts: 0,
       };
     }
-    if (!Array.isArray(briefs) || briefs.length === 0)
+    if (!Array.isArray(briefs))
       return {
         outcome: {
           ok: false,
-          output: `briefs-malformed: ${fan.briefs_from}.json is not a non-empty brief array`,
+          output: `briefs-malformed: ${fan.briefs_from}.json is not a brief array`,
           exitCode: -1,
           durationMs: 0,
         },
+        attempts: 0,
+      };
+    // Empty array is not an error: the fan source legitimately produced no
+    // briefs — the node succeeds with nothing to dispatch (design spec §2:
+    // "not an error — worker reports 'no briefs'").
+    if (briefs.length === 0)
+      return {
+        outcome: { ok: true, output: "no briefs", exitCode: 0, durationMs: 0 },
         attempts: 0,
       };
 
