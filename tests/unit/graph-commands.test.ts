@@ -94,6 +94,7 @@ describe("gk graph commands", () => {
       data: {
         graph: "test-graph",
         topology: "diamond",
+        topology_config: {},
         total_waves: 3,
         total_nodes: 3,
         waves: [

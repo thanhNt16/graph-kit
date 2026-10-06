@@ -18,7 +18,7 @@ import { seamClientFactory, seamIndexProject } from "../cbm-seam.js";
 import { leafUsageFor, subcommandsFor } from "../command-registry.js";
 import { formatZodIssues } from "../diagnostics.js";
 import { resolveGraph, resolveGraphPath } from "../graph-resolve.js";
-import { topoWaves } from "../graph-waves.js";
+import { planGraph } from "../../compiler/plan.js";
 import { materializeNodeAgents } from "../node-agents.js";
 import { emit, fail, ok, type Result } from "../output.js";
 import { renderSvg } from "../svg.js";
@@ -815,135 +815,29 @@ export function registerGraphCommands(cli: CAC) {
             emit(fail("VALIDATION_FAILED", "graph has findings", { issues: findings }));
             return;
           }
-          const nodes = graph.nodes || {};
-          // role/eval ride the payload verbatim: GraphSchema.parse materializes
-          // EvalConfig defaults (mode/rubric/abstention_weighted), so the
-          // author's exact eval block is read back from the source YAML, not
-          // from parsed data.
-          const rawNodes = ((readGraphDoc(resolved) as { nodes?: Record<string, unknown> } | null)?.nodes ??
-            {}) as Record<string, { role?: unknown; eval?: unknown }>;
-          const ids = Object.keys(nodes);
-
-          // Memory-augmented: the Curator node interleaves at cadence (execute-path
-          // equivalent of memory-augmented.workflow.js's wrappedAgent, which only
-          // runs under the Workflow tool). Pull the curator out of the Kahn sort and
-          // re-insert it as its own interleave waves so /gk:execute can dispatch it.
-          const isMem = graph.topology === "memory-augmented";
-          const memCfg = isMem ? graph.topology_config?.memory || {} : {};
-          const curatorName = isMem ? memCfg.curator_node || "curator" : null;
-          const cadence = memCfg.cadence || "on_node_complete";
-          const every = memCfg.every || 1;
-          const hasCurator = curatorName !== null && Object.hasOwn(nodes, curatorName);
-          const actionIds = hasCurator ? ids.filter((id) => id !== curatorName) : ids;
-
-          // Kahn's algorithm over action nodes → action waves (shared helper so
-          // renderers compute the identical levelization).
-          const actionNodes = Object.fromEntries(actionIds.map((id) => [id, nodes[id]]));
-          const { waves: actionWaves, unresolved } = topoWaves(actionNodes);
-          if (unresolved.length > 0) {
-            emit(
-              fail("WAVES_INCOMPLETE", `unresolved nodes after topological sort: ${unresolved.join(", ")}`, {
-                unresolved,
-                hint: "cycle or dependency on an excluded node",
-              }),
-            );
-            return;
-          }
-
-          // Interleave curator waves at cadence; always finish with one end-of-run curation.
-          type PlanWave = { kind: "action"; ids: string[] } | { kind: "curator" };
-          const plan: PlanWave[] = [];
-          let completedActions = 0;
-          let lastCuratedAt = 0;
-          actionWaves.forEach((w) => {
-            plan.push({ kind: "action", ids: w });
-            completedActions += w.length;
-            if (hasCurator) {
-              const fire =
-                cadence === "on_node_complete" ||
-                (cadence === "every" && Math.floor(completedActions / every) > Math.floor(lastCuratedAt / every));
-              if (fire) {
-                plan.push({ kind: "curator" });
-                lastCuratedAt = completedActions;
-              }
-            }
-          });
-          // End-of-run curation: fire if the last crossing happened at a multiple of
-          // `every` but the current cumulative total no longer is — a threshold was
-          // passed since the last fire.
-          if (
-            hasCurator &&
-            actionWaves.length > 0 &&
-            lastCuratedAt > 0 &&
-            lastCuratedAt < completedActions &&
-            completedActions % every !== 0 &&
-            lastCuratedAt % every === 0
-          ) {
-            plan.push({ kind: "curator" });
-          }
-
-          // HookRef commands ride the payload so /gk:execute can run them without
-          // re-reading graph.yaml. on_fanout_dispatch stays declared-but-unused:
-          // no consumer exists, and inventing one would be speculative.
-          const nodeHooks = graph.hooks?.on_node_complete ?? [];
-          const nodeObj = (id: string) => ({
-            id,
-            agent: nodes[id]?.agent,
-            model: nodes[id]?.model || "sonnet",
-            objective: nodes[id]?.objective?.trim() || "",
-            tools: nodes[id]?.tools || [],
-            skills: nodes[id]?.skills || [],
-            refs: nodes[id]?.refs || [],
-            advisor: nodes[id]?.advisor ?? null,
-            fan_out: nodes[id]?.fan_out ?? null,
-            retry: nodes[id]?.retry ?? null,
-            when: nodes[id]?.when ?? null,
-            budget_tokens: nodes[id]?.budget_tokens ?? null,
-            gate: nodes[id]?.gate ?? null,
-            role: rawNodes[id]?.role ?? null,
-            eval: rawNodes[id]?.eval ?? null,
-            effort: nodes[id]?.effort ?? "standard",
-            timeout_ms: nodes[id]?.timeout_ms ?? null,
-            constraints: nodes[id]?.constraints || [],
-            assumptions: nodes[id]?.assumptions || [],
-            owns: nodes[id]?.owns || [],
-            depend_on: nodes[id]?.depend_on || [],
-            loop: nodes[id]?.loop || null,
-            evidence: nodes[id]?.evidence || [],
-            hooks: nodeHooks,
-          });
-
-          // Materialize waves; curator waves carry `curator: true` + the recall skill.
-          const waveData = plan.map((pw, i) => {
-            if (pw.kind === "curator") {
-              const skills = Array.from(new Set([...(nodes[curatorName]?.skills || []), "gk-recall"]));
-              return { wave: i, parallel: false, curator: true, nodes: [{ ...nodeObj(curatorName), skills }] };
-            }
-            return { wave: i, parallel: pw.ids.length > 1, nodes: pw.ids.map(nodeObj) };
-          });
+          // Planner IR: waves, curator interleave, node payloads, and
+          // topology_config all derive from one compiler function.
+          const plan = planGraph(graph, { source: resolved });
 
           const payload: Record<string, unknown> = {
             graph: graph.metadata?.name,
             topology: graph.topology,
-            total_waves: waveData.length,
-            total_nodes: ids.length,
-            waves: waveData,
+            topology_config: plan.topology_config,
+            total_waves: plan.waves.length,
+            total_nodes: Object.keys(graph.nodes).length,
+            waves: plan.waves.map((w) => ({
+              wave: w.index,
+              parallel: w.parallel,
+              curator: w.curator,
+              nodes: w.nodes,
+            })),
             evidence_required: graph.evidence?.required_keys || [],
             on_graph_complete: graph.hooks?.on_graph_complete ?? [],
             // Advisory findings ride the ok payload (audit F5) — a typo'd
             // constraint shouldn't require a separate `gk validate` to be seen.
             warnings: findings.filter((f) => !isBlocking(f)),
           };
-          if (hasCurator) {
-            payload.memory = {
-              curator_node: curatorName,
-              cadence,
-              every,
-              recall_topk: memCfg.recall_topk ?? 5,
-              expire_policy: memCfg.expire_policy ?? "act_r",
-              null_intervention_allowed: memCfg.null_intervention_allowed ?? true,
-            };
-          }
+          if (plan.memory) payload.memory = plan.memory;
 
           emit(ok(payload));
         } catch (e) {

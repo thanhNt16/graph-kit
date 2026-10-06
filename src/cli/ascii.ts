@@ -1,5 +1,5 @@
+import { topoWaves } from "../compiler/plan.js";
 import type { Graph } from "../schemas/graph.schema.js";
-import { topoWaves } from "./graph-waves.js";
 
 type GraphNode = Graph["nodes"][string];
 
@@ -110,7 +110,7 @@ export function renderAscii(graph: Graph): string {
   const nodes = graph.nodes;
 
   // Topological levels — same Kahn computation as the `graph waves` executor
-  // (src/cli/graph-waves.ts), so a rendered diagram cannot disagree with the
+  // (src/compiler/plan.ts), so a rendered diagram cannot disagree with the
   // run plan. Cycles cannot reach a validated graph; fail loudly if one does.
   const { waves, unresolved } = topoWaves(nodes);
   if (unresolved.length > 0) {

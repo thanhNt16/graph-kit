@@ -165,6 +165,22 @@ describe("gk graph waves — memory-augmented curator interleave", () => {
     expect(d.topology).toBe("memory-augmented");
   });
 
+  test("topology_config rides the waves payload (audit CS#4)", () => {
+    const d = parsed(ON_NODE);
+    // authored config verbatim — schema passes it through without
+    // materializing memory defaults (those are filled in `memory` above)
+    expect(d.topology_config).toEqual({
+      inner: { template: "custom" },
+      memory: {
+        curator_node: "curator",
+        cadence: "on_node_complete",
+        recall_topk: 7,
+        expire_policy: "manual",
+        null_intervention_allowed: false,
+      },
+    });
+  });
+
   test("cadence counts completed action nodes: every:3 fires after the wave crossing node 3, never mid-wave", () => {
     // 5 action nodes in waves [scouter], [worker], [w1,w2], [synthesizer].
     // Cumulative action-node count crosses 3 only at the end of wave 3 ([w1,w2]).
