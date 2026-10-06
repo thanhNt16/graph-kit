@@ -26,6 +26,10 @@ export interface DispatchArgs {
   node?: string;
   attempt?: number | null;
   cwd?: string;
+  /** Working directory for the spawned child itself (worktree isolation).
+   *  Agent-fragment loading and ledger writes stay on `cwd` — the repo root —
+   *  while the agent process runs here. Unset → child inherits the caller's cwd. */
+  child_cwd?: string;
 }
 
 export interface DispatchResult {
@@ -114,7 +118,14 @@ export async function dispatch(args: DispatchArgs, signal?: AbortSignal): Promis
   const child = spawn(
     "/bin/sh",
     ["-c", 'printf %s "$GK_PROMPT" | exec omp "$@"', "gk-dispatch", ...buildPiArgs(args)],
-    { env: { ...process.env, GK_PROMPT: prompt }, detached: true },
+    // Child cwd: the worktree when isolated, else the ledger/agent root —
+    // never the orchestrator's process.cwd(), which under `gk exec` may be
+    // any directory the user invoked from.
+    {
+      env: { ...process.env, GK_PROMPT: prompt },
+      detached: true,
+      cwd: args.child_cwd ?? args.cwd,
+    },
   );
   // The 'spawn' event fires once the OS accepts the fork — record the real
   // pid as a second ledger line so `gk run take` can kill live dispatches.

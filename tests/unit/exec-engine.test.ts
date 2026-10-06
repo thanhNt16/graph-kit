@@ -445,6 +445,48 @@ describe("exec engine — runGraph", () => {
     expect(fan.outcome?.output).toContain("briefs");
   });
 
+  test("fan_out: empty briefs array is a successful no-op round", async () => {
+    const g = GraphSchema.parse({
+      metadata: { name: "demo" },
+      topology: "diamond",
+      nodes: {
+        planner: { agent: "plan", objective: "plan" },
+        fan: { agent: "worker", objective: "fan out", depend_on: ["planner"], fan_out: { briefs_from: "planner" } },
+      },
+    });
+    mkdirSync(join(cwd, ".graphkit", "evidence"), { recursive: true });
+    writeFileSync(join(cwd, ".graphkit", "evidence", "briefs.json"), "[]");
+    const runner = new StubRunner();
+    const v = await run(g, runner);
+    expect(v.status).toBe("merged");
+    const fan = v.nodes.find((n) => n.id === "fan")!;
+    expect(fan.status).toBe("ok");
+    expect(fan.outcome?.output).toBe("no briefs");
+    expect(runner.calls.filter((c) => c.id.startsWith("fan-"))).toHaveLength(0); // nothing dispatched
+  });
+
+  test("fan_out: valid JSON that is not an array is briefs-malformed", async () => {
+    const g = GraphSchema.parse({
+      metadata: { name: "demo" },
+      topology: "diamond",
+      nodes: {
+        planner: { agent: "plan", objective: "plan" },
+        fan: { agent: "worker", objective: "fan out", depend_on: ["planner"], fan_out: { briefs_from: "planner" } },
+      },
+    });
+    mkdirSync(join(cwd, ".graphkit", "evidence"), { recursive: true });
+    writeFileSync(
+      join(cwd, ".graphkit", "evidence", "briefs.json"),
+      JSON.stringify({ id: "b1", title: "T", body: "B" }),
+    );
+    const runner = new StubRunner();
+    const v = await run(g, runner);
+    expect(v.status).toBe("failed");
+    const fan = v.nodes.find((n) => n.id === "fan")!;
+    expect(fan.status).toBe("fail");
+    expect(fan.outcome?.output).toContain("briefs-malformed");
+  });
+
   test("budget_tokens: oversized upstream context compacts per node and spills the full text", async () => {
     const g = diamond();
     g.nodes["worker-a"].budget_tokens = 100;

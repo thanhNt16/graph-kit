@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { execFileSync, spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { cac } from "cac";
@@ -231,6 +231,32 @@ describe("gk exec — headless runner", () => {
     expect(r.stdout).toContain("merged");
     expect(r.stdout).toContain("build");
   });
+
+  test("top-level loops: → UNSUPPORTED_LOOPS fail fast before any dispatch", async () => {
+    const cwd = fresh("loops");
+    writeFileSync(
+      join(cwd, "graph.yaml"),
+      `apiVersion: graphkit.dev/v2
+kind: Graph
+metadata:
+  name: loop-group
+topology: custom
+nodes:
+  build:
+    agent: worker
+    objective: build the thing
+loops:
+  - nodes: [build]
+    max_rounds: 3
+    stop_when: tests pass
+`,
+    );
+    const runner = new ScriptRunner(() => okOut());
+    const r = await runCli(["exec", "graph.yaml", "--json"], cwd, { runner });
+    expect(r.code).toBe(1);
+    expect(JSON.parse(r.stdout).error.code).toBe("UNSUPPORTED_LOOPS");
+    expect(runner.calls).toHaveLength(0);
+  });
 });
 
 describe("gk exec --worktree — merge-on-land", () => {
@@ -349,6 +375,53 @@ nodes:
     expect(r.code).toBe(1);
     expect(JSON.parse(r.stdout).error.code).toBe("WORKTREE_UNAVAILABLE");
     expect(runner.calls).toHaveLength(0);
+  });
+
+  test("wiring: real SpawnRunner (no deps) runs the child inside its worktree", async () => {
+    const cwd = fresh("wt-wiring");
+    gitInit(cwd);
+    writeFileSync(
+      join(cwd, "graph.yaml"),
+      `apiVersion: graphkit.dev/v2
+kind: Graph
+metadata:
+  name: wt-wiring
+topology: custom
+nodes:
+  a:
+    agent: worker
+    objective: report your working directory
+`,
+    );
+    execFileSync("git", ["add", "."], { cwd });
+    execFileSync("git", ["commit", "-q", "-m", "graph"], { cwd });
+
+    // PATH stub: `omp` prints the child's cwd. No runner/worktrees deps are
+    // injected — this exercises the production wiring (registerExecCommand →
+    // SpawnRunner → spawnDispatch) that deps-injected tests bypass.
+    const stub = join(cwd, "bin");
+    mkdirSync(stub);
+    writeFileSync(join(stub, "omp"), "#!/bin/sh\nexec pwd\n");
+    chmodSync(join(stub, "omp"), 0o755);
+
+    const rootPhysical = realpathSync(cwd);
+    const origPath = process.env.PATH;
+    process.env.PATH = `${stub}:${origPath}`;
+    let r: { code: number; stdout: string; stderr: string };
+    try {
+      r = await runCli(["exec", "graph.yaml", "--json", "--worktree"], cwd);
+    } finally {
+      process.env.PATH = origPath;
+    }
+
+    expect(r.code).toBe(0);
+    const envelope = JSON.parse(r.stdout);
+    expect(envelope.data.status).toBe("merged");
+    const pwd = envelope.data.nodes[0].outcome.output.trim();
+    // C1 regression: child_cwd must reach spawnDispatch on the default path —
+    // the child's pwd is INSIDE the worktree, never the repo root.
+    expect(pwd).toBe(join(rootPhysical, ".graphkit", "worktrees", "a"));
+    expect(pwd).not.toBe(rootPhysical);
   });
 });
 

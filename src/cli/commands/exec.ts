@@ -40,8 +40,10 @@ const CHALLENGE_RE = /^CHALLENGE:\s*(\S+)\s+—\s*(.+)$/u;
 // Graph classification
 
 /** Nodes the false-judge would mis-execute: `when:` predicates and enabled
- *  loops with `stop_when` (schema-real fields; graph-level `loops[]` ride
- *  node.loop, and no `stop_while` field exists in this schema). */
+ *  node-local loops with `stop_when`. Graph-level `loops[]` groups are NOT
+ *  covered here — the planner drops them entirely, so the verb refuses them
+ *  outright (UNSUPPORTED_LOOPS) instead of classifying; no `stop_while`
+ *  field exists in this schema. */
 export function judgeDependence(plan: PlanGraph): Array<{ node: string; field: string }> {
   const out: Array<{ node: string; field: string }> = [];
   for (const w of plan.waves) {
@@ -278,14 +280,24 @@ export class WorktreeRunner implements Runner {
       }
       try {
         git(["merge", "--no-commit", "--no-ff", branch], this.root);
-        // "Already up to date" writes no MERGE_HEAD; only seal real merges.
-        execFileSync("git", ["rev-parse", "-q", "--verify", "MERGE_HEAD"], {
-          cwd: this.root,
-          stdio: ["ignore", "ignore", "ignore"],
-        });
-        git(["commit", "-q", "--no-edit"], this.root);
+        // "Already up to date" exits 0 with no MERGE_HEAD (the branch is an
+        // ancestor — zero commits landed): a no-op merge, not a conflict.
+        let sealed = false;
+        try {
+          execFileSync("git", ["rev-parse", "-q", "--verify", "MERGE_HEAD"], {
+            cwd: this.root,
+            stdio: ["ignore", "ignore", "ignore"],
+          });
+          sealed = true;
+        } catch {
+          /* no MERGE_HEAD — nothing to seal */
+        }
+        if (sealed) git(["commit", "-q", "--no-edit"], this.root);
         cur.merged.add(n.id);
-        this.note(`[exec] merged ${branch} into ${git(["rev-parse", "--abbrev-ref", "HEAD"], this.root).trim()}`);
+        this.note(
+          `[exec] merged ${branch} into ${git(["rev-parse", "--abbrev-ref", "HEAD"], this.root).trim()}` +
+            (sealed ? "" : " (no commits — already up to date)"),
+        );
       } catch (e) {
         const detail = (e as { stderr?: Buffer }).stderr?.toString() ?? "";
         const files = [...detail.matchAll(/CONFLICT \(content\): Merge conflict in (\S+)/gu)].map((m) => m[1]!);
@@ -441,6 +453,22 @@ export function registerExecCommand(cli: CAC, deps: ExecDeps = {}): { settle: ()
             emit(fail("VALIDATION_FAILED", "graph has findings", { issues: findings }));
             return;
           }
+          // Graph-level `loops[]` groups are schema-valid but unplanned:
+          // planGraph maps node-local `loop` only, so a loop-group graph
+          // would execute one silent pass and report merged. Refuse before
+          // any dispatch until the engine executes groups.
+          if (graph.loops !== undefined && graph.loops.length > 0) {
+            emit(
+              fail(
+                "UNSUPPORTED_LOOPS",
+                `graph declares ${graph.loops.length} top-level \`loops:\` group(s) — gk exec executes ` +
+                  "node-local `loop:` only; loop groups would silently run a single pass. " +
+                  "Move `stop_when` onto the individual nodes' `loop:` (or drive the run via the gk-execute skill).",
+                { groups: graph.loops.length },
+              ),
+            );
+            return;
+          }
           const agents = materializeNodeAgents(cwd, graph);
           const plan = planGraph(graph);
 
@@ -467,13 +495,16 @@ export function registerExecCommand(cli: CAC, deps: ExecDeps = {}): { settle: ()
                 .join(", ")}) — when: nodes will skip, stop_when: loops run to max_rounds`,
             );
 
-          let runner: Runner = deps.runner ?? new SpawnRunner(agents, deps.worktrees);
+          // The shared worktree map must exist BEFORE SpawnRunner captures
+          // it: the Runner holds the map identity from construction (a later
+          // deps reassignment would never be re-read), so the --worktree
+          // block below populates this same instance per dispatch.
+          const shared = deps.worktrees ?? new Map<string, string>();
+          let runner: Runner = deps.runner ?? new SpawnRunner(agents, shared);
           let worktrees: WorktreeRunner | null = null;
           if (opts.worktree) {
             assertGitRepo(cwd);
-            const shared = deps.worktrees ?? new Map<string, string>();
             worktrees = new WorktreeRunner(runner, cwd, plan, err, shared);
-            if (!deps.runner) deps.worktrees = shared; // SpawnRunner reads the same map
             runner = worktrees;
           }
 
