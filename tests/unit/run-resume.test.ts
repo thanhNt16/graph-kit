@@ -3,8 +3,8 @@ import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { GraphKitError } from "../../src/errors.js";
-import { appendAdvisor, appendDispatch, appendNode, endRun, startRun } from "../../src/memory/ledger.js";
-import { deriveResumeGraph, reconcileRun, resumeRun, validateDerivedGraph } from "../../src/memory/resume.js";
+import { appendAdvisor, appendDispatch, appendNode, endRun, startRun } from "../../src/runs/ledger.js";
+import { deriveResumeGraph, reconcileRun, resumeRun, validateDerivedGraph } from "../../src/runs/resume.js";
 import { GraphSchema } from "../../src/schemas/graph.schema.js";
 
 // Task 2 contract: ledger failures are GraphKitError — codes are the API,

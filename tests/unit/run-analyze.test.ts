@@ -4,9 +4,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { cac } from "cac";
 import { registerRunCommands } from "../../src/cli/commands/run.js";
-import { analyzeRun } from "../../src/memory/analyze.js";
-import type { AdvisorEvent, TraceLine } from "../../src/memory/ledger.js";
-import type { JournalLine } from "../../src/memory/loops.js";
+import { analyzeRun } from "../../src/runs/analyze.js";
+import type { AdvisorEvent, TraceLine } from "../../src/runs/ledger.js";
+import type { JournalLine } from "../../src/runs/loops.js";
 
 const T0 = Date.parse("2026-01-01T00:00:00.000Z");
 const at = (offsetSec: number) => new Date(T0 + offsetSec * 1000).toISOString();

@@ -1,6 +1,6 @@
 // tests/unit/patterns.test.ts
 import { describe, expect, test } from "bun:test";
-import type { RunIndexLine, TraceLine } from "../../src/memory/ledger.js";
+import type { RunIndexLine, TraceLine } from "../../src/runs/ledger.js";
 import { extractPatterns, patternSalience } from "../../src/memory/patterns.js";
 
 const NOW = "2026-09-03T00:00:00.000Z";

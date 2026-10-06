@@ -13,8 +13,8 @@ import {
   landNode,
   readTrace,
   startRun,
-} from "../../src/memory/ledger.js";
-import { reconcileRun, resumeRun } from "../../src/memory/resume.js";
+} from "../../src/runs/ledger.js";
+import { reconcileRun, resumeRun } from "../../src/runs/resume.js";
 
 // Task 2 contract: ledger failures are GraphKitError — codes are the API,
 // messages are prose. Assert the code, not the wording.

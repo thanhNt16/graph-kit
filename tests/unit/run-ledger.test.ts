@@ -16,7 +16,7 @@ import {
   readRunIndex,
   readTrace,
   startRun,
-} from "../../src/memory/ledger.js";
+} from "../../src/runs/ledger.js";
 
 // Task 2 contract: ledger failures are GraphKitError — codes are the API,
 // messages are prose. Assert the code, not the wording.

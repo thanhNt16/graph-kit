@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { type CAC, cac } from "cac";
 import { registerStatusCommand } from "../../src/cli/commands/status.js";
-import { appendNode, startRun } from "../../src/memory/ledger.js";
+import { appendNode, startRun } from "../../src/runs/ledger.js";
 
 function runCli(args: string[], cwd: string, register: (cli: CAC) => void) {
   const cli = cac("gk");

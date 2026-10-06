@@ -7,8 +7,8 @@ import { GraphKitError } from "../../errors.js";
 import { scoreWorkProduct } from "../../eval/rubrics.js";
 import { fingerprint } from "../../evidence/fingerprint.js";
 import { type Freshness, freshnessOf, parseMarker } from "../../evidence/marker.js";
-import { activeRun, readRunIndex, readTrace } from "../../memory/ledger.js";
-import { resumeChain } from "../../memory/resume.js";
+import { activeRun, readRunIndex, readTrace } from "../../runs/ledger.js";
+import { resumeChain } from "../../runs/resume.js";
 import { resolveGraph } from "../graph-resolve.js";
 import { emit, fail, ok } from "../output.js";
 

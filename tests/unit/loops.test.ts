@@ -4,8 +4,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import YAML from "yaml";
 import { GraphKitError } from "../../src/errors.js";
-import { appendNode, startRun } from "../../src/memory/ledger.js";
-import { recordRound } from "../../src/memory/loops.js";
+import { appendNode, startRun } from "../../src/runs/ledger.js";
+import { recordRound } from "../../src/runs/loops.js";
 import { GraphSchema } from "../../src/schemas/graph.schema.js";
 
 const GRAPH = [

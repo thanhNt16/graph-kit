@@ -3,7 +3,7 @@ import { basename, join } from "node:path";
 import type { CAC } from "cac";
 import { isBlocking, validateGraph } from "../../compiler/validate.js";
 import { GraphKitError } from "../../errors.js";
-import { analyzeRun } from "../../memory/analyze.js";
+import { analyzeRun } from "../../runs/analyze.js";
 import {
   activeRun,
   activeRunPointer,
@@ -19,9 +19,9 @@ import {
   readRunMeta,
   stampTakeover,
   startRun,
-} from "../../memory/ledger.js";
-import { recordRound } from "../../memory/loops.js";
-import { reconcileRun, resumeRun } from "../../memory/resume.js";
+} from "../../runs/ledger.js";
+import { recordRound } from "../../runs/loops.js";
+import { reconcileRun, resumeRun } from "../../runs/resume.js";
 import type { Graph } from "../../schemas/graph.schema.js";
 import { leafUsageFor, subcommandsFor } from "../command-registry.js";
 import { toGraphKitError } from "../diagnostics.js";

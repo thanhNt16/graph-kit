@@ -3,7 +3,7 @@
 // everything here is counting, and counting is free.
 import { createHash } from "node:crypto";
 import { HALF_LIFE_DAYS } from "../eval/forgetting.js";
-import type { AdvisorEvent, RunIndexLine, TraceLine } from "./ledger.js";
+import type { AdvisorEvent, RunIndexLine, TraceLine } from "../runs/ledger.js";
 
 export type PatternKind =
   | "node-sequence"

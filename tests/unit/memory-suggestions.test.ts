@@ -11,7 +11,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { touchMemory, traceMemory } from "../../src/cli/commands/memory.js";
 import { consolidate } from "../../src/memory/consolidate.js";
-import { appendNode, endRun, startRun } from "../../src/memory/ledger.js";
+import { appendNode, endRun, startRun } from "../../src/runs/ledger.js";
 import { expandedRecall } from "../../src/memory/recall-expanded.js";
 import { readSuggestions } from "../../src/memory/suggest.js";
 

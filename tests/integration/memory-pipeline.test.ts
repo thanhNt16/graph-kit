@@ -4,7 +4,7 @@ import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { consolidate } from "../../src/memory/consolidate.js";
-import { appendNode, endRun, startRun } from "../../src/memory/ledger.js";
+import { appendNode, endRun, startRun } from "../../src/runs/ledger.js";
 import { expandedRecall } from "../../src/memory/recall-expanded.js";
 import { dismissSuggestion, rankSuggestions, readSuggestions } from "../../src/memory/suggest.js";
 

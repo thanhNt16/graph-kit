@@ -7,7 +7,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync
 import { join } from "node:path";
 import YAML from "yaml";
 import { PatternFileSchema, SuggestionFileSchema } from "../schemas/memory.schema.js";
-import { type AdvisorEvent, listRunIds, readAdvisorEvents, readRunIndex, readTrace, type TraceLine } from "./ledger.js";
+import { type AdvisorEvent, listRunIds, readAdvisorEvents, readRunIndex, readTrace, type TraceLine } from "../runs/ledger.js";
 import { buildLinks, writeLinks } from "./links.js";
 import { extractPatterns, type Pattern, patternSalience } from "./patterns.js";
 import { tokenize } from "./store.js";

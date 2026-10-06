@@ -1,7 +1,7 @@
 import { basename, join } from "node:path";
 import type { CAC } from "cac";
 import { GraphKitError } from "../../errors.js";
-import { activeRun, readRunMeta, readTrace } from "../../memory/ledger.js";
+import { activeRun, readRunMeta, readTrace } from "../../runs/ledger.js";
 import { resolveGraph } from "../graph-resolve.js";
 import { emit, fail, ok } from "../output.js";
 import { type GateResult, gateGraph } from "./gate.js";

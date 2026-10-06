@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import YAML from "yaml";
 import { consolidate } from "../../src/memory/consolidate.js";
-import { appendAdvisor, appendNode, endRun, startRun } from "../../src/memory/ledger.js";
+import { appendAdvisor, appendNode, endRun, startRun } from "../../src/runs/ledger.js";
 import { PatternFileSchema, SuggestionFileSchema } from "../../src/schemas/memory.schema.js";
 
 const GRAPH = "metadata:\n  name: demo\ntopology: diamond\n";
