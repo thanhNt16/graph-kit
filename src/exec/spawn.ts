@@ -1,12 +1,13 @@
-// The spawn contract here (dispatch/buildPiArgs/buildPrompt/recordIntent) is
-// duplicated in graph-kit's src/exec/spawn.ts — the CANONICAL copy, consumed
-// by the headless `gk exec` engine. This extension ships verbatim into target
-// repos (.omp/extensions/) that have no graph-kit src/ to import, so the copy
-// must stay self-contained; keep behavioral fixes in both files until the P3
-// dedupe (kit-bridge bundling or generated shared file).
+// Headless child-process dispatch — the childProcess Runner's core. Ported
+// from kits/_core/extensions/gk-subagent.ts, which keeps a standalone verbatim
+// copy: extensions materialize verbatim into target repos (gen-kits.ts /
+// sync-omp.ts) where no graph-kit src/ exists to import. This module is
+// canonical for `gk exec`; keep behavioral fixes in both until the P3 dedupe.
 import { spawn } from "node:child_process";
-import { appendFileSync, existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import { activeRun, appendDispatch } from "../runs/ledger.js";
+import type { DispatchOutcome } from "./types.js";
 
 export interface DispatchConstraints {
   no_exec?: boolean;
@@ -62,30 +63,27 @@ export function buildPrompt(args: DispatchArgs): string {
     .join("\n\n");
 }
 
-/** Append one dispatch-intent line to the active run's dispatch.jsonl under
- *  <cwd>/.graphkit/runs/.active. Silent no-op when no run is active or the
- *  write fails — bookkeeping must never fail a dispatch. */
+/** Append one dispatch-intent line to the active run's dispatch.jsonl via the
+ *  run ledger (same DispatchLine format `gk run dispatch` writes). Silent
+ *  no-op when no run is active or the write fails — bookkeeping must never
+ *  fail a dispatch. The ledger's DispatchLine.node is a string; an unbound
+ *  dispatch records "" (never matches a node id on resume, same as null). */
 function recordIntent(args: DispatchArgs, pid: number | null): void {
   try {
-    const active = join(args.cwd ?? process.cwd(), ".graphkit", "runs", ".active");
-    if (!existsSync(active)) return;
-    const dir = readFileSync(active, "utf-8").trim();
-    appendFileSync(
-      join(dir, "dispatch.jsonl"),
-      `${JSON.stringify({
-        at: new Date().toISOString(),
-        node: args.node ?? null,
-        attempt: args.attempt ?? null,
-        via: "extension",
-        pid,
-      })}\n`,
-    );
+    const cwd = args.cwd ?? process.cwd();
+    if (!activeRun(cwd)) return;
+    appendDispatch(cwd, {
+      node: args.node ?? "",
+      attempt: args.attempt ?? null,
+      via: "extension",
+      pid,
+    });
   } catch {
     /* intent write is best-effort; never fail a dispatch over bookkeeping */
   }
 }
 
-export async function dispatch(args: DispatchArgs, signal?: AbortSignal): Promise<DispatchResult> {
+async function dispatch(args: DispatchArgs, signal?: AbortSignal): Promise<DispatchResult> {
   const fragment = loadAgentPrompt(args.agent, args.cwd);
   if (!fragment) return { ok: false, output: `Unknown agent: ${args.agent}`, exit_code: 1 };
   const prompt = `${fragment}\n\n${buildPrompt(args)}`;
@@ -204,81 +202,16 @@ export async function dispatch(args: DispatchArgs, signal?: AbortSignal): Promis
   return promise;
 }
 
-// Registration targets the pi extension API (registerTool + typebox schema),
-// verified against badlogic/pi-mono packages/coding-agent/docs/extensions.md.
-// The factory dynamically imports typebox so unit tests can import the pure
-// dispatch functions above without any pi/typebox runtime present.
-interface MinimalPiAPI {
-  registerTool(tool: {
-    name: string;
-    label?: string;
-    description?: string;
-    parameters: unknown;
-    execute: (
-      toolCallId: string,
-      params: DispatchArgs,
-      signal: AbortSignal,
-      onUpdate: unknown,
-      ctx: unknown,
-    ) => Promise<{ content: { type: string; text: string }[]; details?: unknown }>;
-  }): void;
-}
-
-export default async function gkSubagentExtension(pi: MinimalPiAPI): Promise<void> {
-  const { Type } = (await import("typebox")) as {
-    Type: {
-      Object: (props: Record<string, unknown>, opts?: unknown) => unknown;
-      String: (opts?: unknown) => unknown;
-      Boolean: (opts?: unknown) => unknown;
-      Array: (schema: unknown, opts?: unknown) => unknown;
-      Number: (opts?: unknown) => unknown;
-      Optional: (schema: unknown, opts?: unknown) => unknown;
-    };
+/** The Runner-facing dispatch: the engine's DispatchOutcome contract
+ *  (camelCase + durationMs) over the raw child-process result. */
+export async function spawnDispatch(args: DispatchArgs, signal?: AbortSignal): Promise<DispatchOutcome> {
+  const started = Date.now();
+  const r = await dispatch(args, signal);
+  return {
+    ok: r.ok,
+    output: r.output,
+    exitCode: r.exit_code,
+    durationMs: Date.now() - started,
+    ...(r.timed_out === undefined ? {} : { timedOut: r.timed_out }),
   };
-
-  pi.registerTool({
-    name: "gk_dispatch_agent",
-    label: "Dispatch Agent",
-    description:
-      "Dispatch an isolated subagent run: loads .omp/agents/<agent>.md as the role prompt, appends objective/context, and runs a headless `omp -p` child process. Returns { ok, output, exit_code }. Honor wave barriers from gk-execute: treat ok:false as graph-stopping.",
-    parameters: Type.Object({
-      agent: Type.String({ description: "Agent fragment name (file stem under .omp/agents/, e.g. data-engineer)" }),
-      model: Type.Optional(Type.String({ description: "Model tier or ID passed to omp --model" })),
-      objective: Type.String({ description: "What the subagent must accomplish" }),
-      context: Type.Optional(Type.String({ description: "Upstream results, refs, or extra background" })),
-      constraints: Type.Optional(
-        Type.Object(
-          {
-            no_exec: Type.Optional(Type.Boolean({ description: "Restrict the child to read-only tools, no shell" })),
-            no_write: Type.Optional(Type.Boolean({ description: "Restrict the child to read/bash tools" })),
-            tools_allowlist: Type.Optional(
-              Type.Array(Type.String(), { description: "Comma-joined into --tools for the child run" }),
-            ),
-          },
-          { additionalProperties: false },
-        ),
-      ),
-      // Ledger identity + run root for the dispatch-intent record; without
-      // these the tool path logs node:null and resume reconciliation can't
-      // distinguish "dispatched but quiet" from "never dispatched".
-      node: Type.Optional(Type.String({ description: "Graph node id this dispatch belongs to" })),
-      attempt: Type.Optional(Type.Number({ description: "Attempt number for this node (recorded in dispatch.jsonl)" })),
-      cwd: Type.Optional(
-        Type.String({ description: "Run root (defaults to process cwd); reads <cwd>/.graphkit/runs/.active" }),
-      ),
-      timeout_ms: Type.Optional(
-        Type.Number({
-          description:
-            "Kill budget in ms (default 600000). On timeout the whole child process group is terminated and the result is { ok:false, exit_code:124, timed_out:true } with a TIMEOUT marker in output.",
-        }),
-      ),
-    }),
-    async execute(_toolCallId, params, signal) {
-      const result = await dispatch(params, signal);
-      return {
-        content: [{ type: "text", text: JSON.stringify(result) }],
-        details: result,
-      };
-    },
-  });
 }

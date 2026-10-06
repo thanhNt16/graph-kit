@@ -1,3 +1,9 @@
+// The spawn contract here (dispatch/buildPiArgs/buildPrompt/recordIntent) is
+// duplicated in graph-kit's src/exec/spawn.ts — the CANONICAL copy, consumed
+// by the headless `gk exec` engine. This extension ships verbatim into target
+// repos (.omp/extensions/) that have no graph-kit src/ to import, so the copy
+// must stay self-contained; keep behavioral fixes in both files until the P3
+// dedupe (kit-bridge bundling or generated shared file).
 import { spawn } from "node:child_process";
 import { appendFileSync, existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
