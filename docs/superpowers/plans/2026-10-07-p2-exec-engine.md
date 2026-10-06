@@ -156,3 +156,15 @@
 - **Ordering:** T1 types → T2 spawn port → T3 engine (needs both) → T4 `gk exec` (needs engine+spawn) → T5 skill (needs engine to reference). T2/T4 could overlap; keep serial for clarity.
 - **Type consistency:** Runner/DispatchOutcome/NodeRun/RunVerdict consistent; engine consumes PlanGraph; Runner returns DispatchOutcome.
 - **Scope honesty:** the full engine is large — this plan is the honest slice (engine + spawn + exec CLI + skill shrink); memory-curator cadence interleave inside engine comes from planGraph's `curator` flag, fan_out briefs from graph node field, both real.
+
+## Deferred out of P2 (tracked — do not lose)
+
+- **I3 worktree protocol-verification half**: per-merge test gate, `owns` check, `gk run land --commit`, post-merge evidence re-stamp — the second half of the skill's merge protocol not yet in `WorktreeRunner`/`mergeWave`. Own ticket.
+- **Dual spawn-copy dedupe**: `kits/_core/extensions/gk-subagent.ts` keeps a verbatim `dispatch()` copy; `src/exec/spawn.ts` is canonical — pointer comments on both files name the dedupe as P3 (kit-bridge bundling or generated shared file).
+- **`--resume` for `gk exec`**: engine `attachRun` validates activeness only — no skip-traced-nodes logic, so attaching would silently re-dispatch every node. Real resume lives in `src/runs/resume.ts`. Needs the resume-graph derivation wired through `runGraph`, not just a flag.
+- **`fan_out.reduce` merge/vote + `effort` scaling**: declared in schema, engine appends/advisory-only — validate now warns (`unimplemented-field`). Implementation ticket pending multi-run aggregation semantics.
+- **hooks `.cjs` family** (same parked ticket as P1): `kits/claude/hooks/evidence-persist.cjs` writes dead `.index`, `lease-enforce.cjs` reads ghost `current.json`, `gk-run` claude prose documents group rounds no flow drives — kill + rewrite pinned `hooks.test.ts` cases.
+- **`docs/gk-slp-usage.html` staleness**: describes the pre-P2 flow; zero inbound refs — retire or rewrite.
+- **Judge for `gk exec`**: `JUDGE_REQUIRED` fails fast rather than mis-executing `when:`/`stop_when:` graphs; a real JudgeFn (LLM predicate eval) for headless is the eventual answer.
+- **`gk run round` orphaned in interactive recipe**: claude-kit prose documents group rounds — `gk exec` refuses groups (UNSUPPORTED_LOOPS); either wire `run round` into the skill recipe or mark it engine-only.
+

@@ -273,6 +273,29 @@ export function validateGraph(graph: Graph, projectRoot: string): Finding[] {
     }
   }
 
+  // 7b'. Unimplemented orchestration fields (ADVISORY): `fan_out.reduce` other
+  // than "append" and `effort` scale semantics ride the plan payload but the
+  // engine doesn't evaluate them yet — surface so an author doesn't rely on
+  // merge/vote aggregation or effort widening that never happens.
+  for (const [id, node] of Object.entries(graph.nodes)) {
+    if (node.fan_out && node.fan_out.reduce !== "append") {
+      findings.push({
+        check: "unimplemented-field",
+        path: `nodes.${id}.fan_out.reduce`,
+        message: `fan_out.reduce "${node.fan_out.reduce}" is declared but the engine appends all brief outputs unconditionally — merge/vote reducers are not implemented`,
+        severity: "warn",
+      });
+    }
+    if (node.effort && node.effort !== "standard") {
+      findings.push({
+        check: "unimplemented-field",
+        path: `nodes.${id}.effort`,
+        message: `effort "${node.effort}" is declared but the engine does not scale fan-out width/budgets/loop bounds — the field is advisory-only today`,
+        severity: "warn",
+      });
+    }
+  }
+
   // 7c. Constraint provenance (ADVISORY): a constraint may carry `source` to
   // mark who declared it — "human" (operator, agents must never modify it) or
   // "author" (default, graph author). Any other value is a typo surfacing as a

@@ -68,6 +68,8 @@ const FanOutConfig = z
   .object({
     briefs_from: z.string().min(1),
     template: z.string().min(1).default("{brief.body}"),
+    // Only "append" is implemented — the engine joins brief outputs in order.
+    // merge/vote are declared-but-unimplemented; validate warns when used.
     reduce: z.enum(["append", "merge", "vote"]).default("append"),
   })
   .strict();
@@ -122,7 +124,8 @@ const NodeDefSchema = z
     budget_tokens: z.number().int().positive().optional(),
     retry: RetryConfig.optional(),
     gate: GateConfig.optional(),
-    // Scales fan-out width, budgets, and loop bounds (enforced by src/exec/engine.ts).
+    // Advisory-only: rides the plan payload but the engine does not scale
+    // fan-out/budgets/loop bounds yet. Validate warns when non-standard.
     effort: z.enum(["light", "standard", "deep"]).default("standard"),
     // Per-node dispatch kill budget in ms; forwarded to gk_dispatch_agent's
     // timeout_ms. Unset → the dispatch default (600000). Set explicitly for
