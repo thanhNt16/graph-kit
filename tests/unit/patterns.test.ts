@@ -43,11 +43,10 @@ describe("pattern extraction", () => {
     expect(extractPatterns(runs, traces, new Map(), NOW).filter((p) => p.kind === "node-sequence")).toHaveLength(0);
   });
 
-  test("evidence keys co-produced in 3 runs become a cooccurrence pattern", () => {
+  test("co-occurring evidence keys emit no evidence-cooccurrence pattern", () => {
     const runs = ["r1", "r2", "r3"].map((id) => run(id, "g", `sha-${id}`, ["audit", "risk"]));
     const traces = new Map(runs.map((r) => [r.id, [node("a", "ok", ["audit"]), node("b", "ok", ["risk"])]]));
-    const pats = extractPatterns(runs, traces, new Map(), NOW).filter((p) => p.kind === "evidence-cooccurrence");
-    expect(pats.map((p) => p.label)).toEqual(["audit + risk"]);
+    expect(extractPatterns(runs, traces, new Map(), NOW).map((p) => p.kind)).not.toContain("evidence-cooccurrence");
   });
 
   test("same node failing twice is a failure-recurrence pattern", () => {

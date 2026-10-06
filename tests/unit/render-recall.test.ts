@@ -26,7 +26,6 @@ describe("renderRecall", () => {
         final_score: 0.035,
         status: "hit" as const,
         linked_via: "mem-a1b2",
-        ppr_mass: 0.42,
       },
     ],
     rejected_top_n: [
@@ -67,7 +66,7 @@ describe("renderRecall", () => {
     expect(ascii).toContain("HITS");
     expect(ascii).toContain("mem-a1b2");
     expect(ascii).toContain("0.035*");
-    expect(ascii).toContain("linked via mem-a1b2 (ppr 0.42)");
+    expect(ascii).toContain("linked via mem-a1b2");
     expect(ascii).toContain("REJECTED");
     expect(ascii).toContain("superseded by mem-a1b2");
     expect(ascii).toContain("ZERO_OVERLAP");

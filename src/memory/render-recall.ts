@@ -30,7 +30,7 @@ export function renderRecallAscii(exp: RecallExplanation): string {
       const idStr = h.id.padEnd(11, " ");
       let fileStr = h.file;
       if (h.linked_via) {
-        fileStr += `   ← linked via ${h.linked_via} (ppr ${(h.ppr_mass ?? 0).toFixed(2)})`;
+        fileStr += `   ← linked via ${h.linked_via}`;
       }
       lines.push(`${num}  ${scoreStr} ${salStr} ${termsStr} ${idStr} ${fileStr}`);
     });
@@ -81,7 +81,7 @@ export function renderRecallHtml(exp: RecallExplanation): string {
     .map((h, i) => {
       const widthPct = Math.min(100, Math.round((h.final_score / maxScore) * 100));
       const badge = h.linked_via
-        ? `<span class="badge linked">linked via ${escapeHtml(h.linked_via)} (ppr ${(h.ppr_mass ?? 0).toFixed(2)})</span>`
+        ? `<span class="badge linked">linked via ${escapeHtml(h.linked_via)}</span>`
         : `<span class="badge hit">direct match</span>`;
 
       return `

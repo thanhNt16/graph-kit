@@ -29,8 +29,6 @@ export interface DocExplain {
   reason?: ExplainRejectReason;
   superseded_by?: string;
   linked_via?: string;
-  /** Personalized-PageRank mass that admitted this neighbor. */
-  ppr_mass?: number;
 }
 
 export interface RecallExplanation {
@@ -44,39 +42,8 @@ export interface RecallExplanation {
   rejected_top_n: DocExplain[];
 }
 
-const PPR_DAMPING = 0.85;
-const PPR_ITERATIONS = 3;
 const REJECTED_POOL_MAX = 10; // zero-overlap candidates worth reporting
 const REJECTED_TOP_N = 5; // what rejected_top_n keeps
-
-/** Personalized PageRank over the undirected link graph, seeded with
- *  normalized direct-hit scores. Replaces the flat 0.5 link penalty: mass
- *  flows along the graph, so a neighbor enmeshed with strong hits inherits
- *  more of their evidence than a fringe neighbor. Deterministic. */
-function pageRank(links: Record<string, string[]>, seeds: Map<string, number>): Map<string, number> {
-  const adj = new Map<string, Set<string>>();
-  const link = (a: string, b: string) => {
-    if (a === b) return;
-    (adj.get(a) ?? adj.set(a, new Set()).get(a)!).add(b);
-    (adj.get(b) ?? adj.set(b, new Set()).get(b)!).add(a);
-  };
-  for (const [id, ns] of Object.entries(links)) for (const n of ns) link(id, n);
-
-  const total = [...seeds.values()].reduce((a, b) => a + b, 0);
-  if (!(total > 0)) return new Map();
-  let p = new Map([...seeds].map(([id, s]) => [id, s / total]));
-  for (let i = 0; i < PPR_ITERATIONS; i += 1) {
-    const next = new Map([...p].map(([id]) => [id, ((1 - PPR_DAMPING) * (seeds.get(id) ?? 0)) / total]));
-    for (const [id, mass] of p) {
-      const outs = adj.get(id);
-      if (!outs || outs.size === 0) continue; // dangling mass vanishes — deterministic
-      const share = (PPR_DAMPING * mass) / outs.size;
-      for (const n of outs) next.set(n, (next.get(n) ?? 0) + share);
-    }
-    p = next;
-  }
-  return p;
-}
 
 export function explainRecall(memDir: string, query: string, k = 5, now = new Date().toISOString()): RecallExplanation {
   // One load pass over root + subfolders; docs carry store-relative paths.
@@ -133,39 +100,30 @@ export function explainRecall(memDir: string, query: string, k = 5, now = new Da
     });
   }
 
-  // Link expansion: PPR mass (seeded by direct-hit scores) admits neighbors
-  // into leftover slots, ranked below every direct hit.
+  // Link expansion: neighbors of direct hits fill leftover slots, ranked
+  // below every direct hit.
   const hits = [...directHits];
   const seen = new Set(hits.map((h) => h.id));
   if (hits.length > 0 && hits.length < k) {
     const graph = readLinks(memDir);
-    const seeds = new Map(directHits.map((h) => [h.id, h.final_score]));
-    const ppr = pageRank(graph.links, seeds);
-    // Admit neighbors in PPR-mass order (not raw adjacency order): a high-mass
-    // neighbor of the k-th hit outranks a zero-mass fringe neighbor of the top hit.
-    const candidates: { id: string; via: string; mass: number }[] = [];
     for (const hit of directHits) {
+      if (hits.length >= k) break;
       for (const neighborId of graph.links[hit.id] ?? []) {
         if (seen.has(neighborId)) continue;
         seen.add(neighborId);
-        candidates.push({ id: neighborId, via: hit.id, mass: ppr.get(neighborId) ?? 0 });
+        const neighborDoc = byId.get(neighborId);
+        if (!neighborDoc) continue; // neighbor must exist as a loaded doc to be returnable
+        hits.push({
+          id: neighborDoc.id,
+          file: neighborDoc.file,
+          matched_terms: qTerms.filter((t) => neighborDoc.terms.has(t)),
+          raw_salience: neighborDoc.salience,
+          final_score: neighborDoc.salience,
+          status: "hit",
+          linked_via: hit.id,
+        });
+        if (hits.length >= k) break;
       }
-    }
-    candidates.sort((a, b) => b.mass - a.mass || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
-    for (const c of candidates) {
-      if (hits.length >= k) break;
-      const neighborDoc = byId.get(c.id);
-      if (!neighborDoc) continue; // neighbor must exist as a loaded doc to be returnable
-      hits.push({
-        id: neighborDoc.id,
-        file: neighborDoc.file,
-        matched_terms: qTerms.filter((t) => neighborDoc.terms.has(t)),
-        raw_salience: neighborDoc.salience,
-        final_score: neighborDoc.salience * c.mass,
-        status: "hit",
-        linked_via: c.via,
-        ppr_mass: c.mass,
-      });
     }
   }
 

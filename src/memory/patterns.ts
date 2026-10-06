@@ -7,7 +7,6 @@ import type { AdvisorEvent, RunIndexLine, TraceLine } from "../runs/ledger.js";
 
 export type PatternKind =
   | "node-sequence"
-  | "evidence-cooccurrence"
   | "failure-recurrence"
   | "graph-reuse"
   | "advisor-repeat";
@@ -26,7 +25,6 @@ export interface Pattern {
 const SEQ_MIN_RUNS = 3;
 const SEQ_MIN_LEN = 2;
 const SEQ_MAX_LEN = 4;
-const COOCCUR_MIN_RUNS = 3;
 const FAILURE_MIN = 2;
 const REUSE_MIN_RUNS = 3;
 const ADVISOR_MIN = 2;
@@ -84,7 +82,6 @@ export function extractPatterns(
   now = new Date().toISOString(),
 ): Pattern[] {
   const sequences = new Map<string, Acc>();
-  const cooccur = new Map<string, Acc>();
   const failures = new Map<string, Acc>();
   const advisorAcc = new Map<string, Acc>();
   const reuse = new Map<string, Acc>();
@@ -98,14 +95,6 @@ export function extractPatterns(
     for (let len = SEQ_MIN_LEN; len <= SEQ_MAX_LEN; len += 1) {
       for (let i = 0; i + len <= ids.length; i += 1) {
         bump(sequences, ids.slice(i, i + len).join("\u0000"), run.id, at);
-      }
-    }
-
-    // evidence-cooccurrence: unordered pairs of keys produced in the same run
-    const keys = Array.from(new Set(trace.flatMap((t) => t.evidence).concat(run.evidence_keys))).sort();
-    for (let i = 0; i < keys.length; i += 1) {
-      for (let j = i + 1; j < keys.length; j += 1) {
-        bump(cooccur, `${keys[i]}\u0000${keys[j]}`, run.id, at);
       }
     }
 
@@ -124,11 +113,6 @@ export function extractPatterns(
     if (acc.runs.size < SEQ_MIN_RUNS) continue;
     const members = key.split("\u0000");
     out.push(toPattern("node-sequence", members, members.join(" → "), acc, now));
-  }
-  for (const [key, acc] of cooccur) {
-    if (acc.runs.size < COOCCUR_MIN_RUNS) continue;
-    const members = key.split("\u0000");
-    out.push(toPattern("evidence-cooccurrence", members, members.join(" + "), acc, now));
   }
   for (const [key, acc] of failures) {
     if (acc.runs.size < FAILURE_MIN) continue;

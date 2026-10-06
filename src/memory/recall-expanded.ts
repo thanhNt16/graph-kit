@@ -1,13 +1,13 @@
 // src/memory/recall-expanded.ts
 // Recall over root + subfolders (patterns/, suggestions/) with link expansion.
 // A thin projection of explainRecall — the explain lens owns the BM25 scoring,
-// the filters, and the PPR link join; this module only reshapes its hits.
+// the filters, and the link join; this module only reshapes its hits.
 import { explainRecall } from "./explain-recall.js";
 
 export interface ExpandedHit {
   id: string;
   file: string;
-  /** Final (PPR-weighted) score — linked neighbors rank below direct hits. */
+  /** Final score — linked neighbors rank below direct hits. */
   salience: number;
   linked: boolean;
 }

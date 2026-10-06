@@ -23,7 +23,6 @@ export const MemoryFileSchema = z
 
 export const PATTERN_KINDS = [
   "node-sequence",
-  "evidence-cooccurrence",
   "failure-recurrence",
   "graph-reuse",
   "advisor-repeat",

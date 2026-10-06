@@ -70,7 +70,7 @@ describe("explainRecall", () => {
     expect(lowDoc?.reason).toBe("below_cutoff"); // 0.1 salience makes it a distractor
   });
 
-  it("admits link neighbors by PPR mass, ranked below direct hits", () => {
+  it("admits link neighbors unweighted (no PPR), ranked below direct hits", () => {
     writeFileSync(
       join(TEST_DIR, "root.md"),
       `---\nid: mem-root\nsalience: 0.8\nstatus: stable\n---\nDatabase connection pool configuration.`,
@@ -90,20 +90,16 @@ describe("explainRecall", () => {
     );
 
     const explanation = explainRecall(TEST_DIR, "database connection", 2, "2026-09-10T00:00:00Z");
-    expect(explanation.hits.length).toBe(2);
-    expect(explanation.hits[0].id).toBe("mem-root");
+    expect(explanation.hits.map((h) => h.id)).toEqual(["mem-root", "mem-neighbor"]);
     expect(explanation.hits[0].linked_via).toBeUndefined();
 
-    // Neighbor has zero term overlap — PPR mass flowing from the direct hit
-    // admits it, scored salience×mass and always below the direct hit.
+    // Neighbor has zero term overlap — the link join still admits it, but
+    // unweighted: final_score is raw salience, and no ppr_mass field exists.
     const neighbor = explanation.hits[1];
-    expect(neighbor.id).toBe("mem-neighbor");
     expect(neighbor.linked_via).toBe("mem-root");
-    expect(neighbor.ppr_mass).toBeGreaterThan(0);
-    expect(neighbor.ppr_mass).toBeLessThanOrEqual(1);
+    expect((neighbor as Record<string, unknown>).ppr_mass).toBeUndefined();
     expect(neighbor.raw_salience).toBe(0.6);
-    expect(neighbor.final_score).toBeCloseTo(0.6 * neighbor.ppr_mass!, 5);
-    expect(neighbor.final_score).toBeLessThan(explanation.hits[0].final_score);
+    expect(neighbor.final_score).toBe(0.6);
   });
 
   it("classifies future-valid docs as not_yet_valid", () => {
@@ -182,7 +178,7 @@ describe("explainRecall", () => {
     expect(explanation.rejected_top_n.find((d) => d.id === "d6")?.reason).toBe("zero_overlap");
   });
 
-  it("never reports a PPR-admitted hit as rejected/zero_overlap", () => {
+  it("never reports a link-admitted hit as rejected/zero_overlap", () => {
     writeFileSync(
       join(TEST_DIR, "root.md"),
       `---\nid: mem-root\nsalience: 0.8\nstatus: stable\n---\nDatabase connection pool configuration.`,
