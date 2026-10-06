@@ -133,6 +133,37 @@ export function suggestionsFor(patterns: Pattern[]): SuggestionDraft[] {
   return out;
 }
 
+/** MEM F3: re-consolidation merges instead of rewriting. Fresh evidence
+ *  (count/runs/last_seen/salience) is recomputed from the ledger, but the
+ *  reinforcement/decay state written between runs is per-memory lived state:
+ *  touch owns use_count/last_used_at, trace owns expired/valid_to, and
+ *  created_at is the anchor ACT-R decay measures from. Narrow guards keep a
+ *  corrupted prior file from poisoning the entry past the schema guard. */
+function priorFrontmatter(path: string): Record<string, unknown> | null {
+  if (!existsSync(path)) return null;
+  const match = readFileSync(path, "utf-8").match(/^---\n([\s\S]*?)\n---/);
+  if (!match) return null;
+  try {
+    const fm: unknown = YAML.parse(match[1]);
+    return fm && typeof fm === "object" && !Array.isArray(fm) ? (fm as Record<string, unknown>) : null;
+  } catch {
+    return null;
+  }
+}
+
+function retainedState(prior: Record<string, unknown>): Record<string, unknown> {
+  const kept: Record<string, unknown> = {};
+  // ISO-date fields survive verbatim; anything unparseable is dropped so the
+  // schema guard below still sees a valid entry.
+  for (const key of ["created_at", "last_used_at", "valid_to"] as const) {
+    const value = prior[key];
+    if (typeof value === "string" && !Number.isNaN(Date.parse(value))) kept[key] = value;
+  }
+  if (typeof prior.use_count === "number" && prior.use_count >= 1) kept.use_count = prior.use_count;
+  if (typeof prior.expired === "boolean") kept.expired = prior.expired;
+  return kept;
+}
+
 function writeEntry(dir: string, file: string, frontmatter: Record<string, unknown>, body: string) {
   mkdirSync(dir, { recursive: true });
   writeFileSync(join(dir, file), `---\n${YAML.stringify(frontmatter)}---\n${body}`);
@@ -173,6 +204,8 @@ export function consolidate(cwd: string, now = new Date().toISOString()): Consol
   for (const p of patterns) {
     const file = `${p.signature}.md`;
     keptPatterns.add(file);
+    // MEM F3: the previous file's reinforcement/decay state merges in below.
+    const prior = priorFrontmatter(join(patternsDir, file));
     const frontmatter = {
       id: `pattern-${p.signature}`,
       type: "pattern",
@@ -193,6 +226,7 @@ export function consolidate(cwd: string, now = new Date().toISOString()): Consol
       recorded_at: now,
       status: "stable",
     };
+    if (prior) Object.assign(frontmatter, retainedState(prior));
     // Invariant guard: generated entries must satisfy the published schemas (fail loud on drift).
     const parsed = PatternFileSchema.safeParse(frontmatter);
     if (!parsed.success)
@@ -215,12 +249,9 @@ export function consolidate(cwd: string, now = new Date().toISOString()): Consol
     const file = `${s.id}.md`;
     keptSuggestions.add(file);
     // Preserve a human's dismissal across re-consolidation.
-    const existingPath = join(suggestionsDir, file);
+    const prior = priorFrontmatter(join(suggestionsDir, file));
     let status = "proposed";
-    if (existsSync(existingPath)) {
-      const prior = readFileSync(existingPath, "utf-8").match(/^status:\s*(\w+)$/m)?.[1];
-      if (prior === "dismissed" || prior === "accepted") status = prior;
-    }
+    if (prior && (prior.status === "dismissed" || prior.status === "accepted")) status = prior.status;
     const frontmatter = {
       id: s.id,
       type: "suggestion",
@@ -239,6 +270,7 @@ export function consolidate(cwd: string, now = new Date().toISOString()): Consol
       generated: { by: GENERATOR, at: now },
       recorded_at: now,
     };
+    if (prior) Object.assign(frontmatter, retainedState(prior));
     // Invariant guard: generated entries must satisfy the published schemas (fail loud on drift).
     const parsed = SuggestionFileSchema.safeParse(frontmatter);
     if (!parsed.success)
