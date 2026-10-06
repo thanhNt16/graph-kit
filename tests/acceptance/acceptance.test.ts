@@ -2,21 +2,12 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, symlinkSync } from "node:fs";
 import { join } from "node:path";
 import YAML from "yaml";
-import { installKit, templatesDir } from "../../src/cli/commands/kit.js";
-import { compileGraph } from "../../src/compiler/emitter.js";
+import { installKit } from "../../src/cli/commands/kit.js";
 import { validateGraph } from "../../src/compiler/validate.js";
 import { GraphSchema } from "../../src/schemas/graph.schema.js";
 
 const TMP = join(import.meta.dir, ".tmp-acceptance");
 const FIXTURES = join(import.meta.dir, "..", "fixtures");
-const TOPOS = [
-  "diamond",
-  "classify-and-act",
-  "adversarial-verification",
-  "loop-until-done",
-  "generate-and-filter",
-  "tournament",
-];
 
 beforeAll(() => {
   if (existsSync(TMP)) rmSync(TMP, { recursive: true });
@@ -31,23 +22,21 @@ afterAll(() => {
 });
 
 describe("AC01: gk init installs claude/ with all agents, skills, hooks, rules", () => {
-  test("all core agents, 12 gk-* skills, 4 hooks, 3 rules installed", () => {
+  test("all core agents, 10 gk-* skills, 4 hooks, 3 rules installed", () => {
     const coreCount = readdirSync(join(import.meta.dir, "..", "..", "kits", "_core", "agents")).filter((f) =>
       f.endsWith(".md"),
     ).length;
     expect(readdirSync(join(TMP, ".claude", "agents")).filter((f) => f.endsWith(".md")).length).toBe(coreCount);
     const skills = readdirSync(join(TMP, ".claude", "skills")).filter((f) => f.startsWith("gk-"));
-    expect(skills.length).toBe(12);
-    // Explicit skill set — do not blindly count. gk-compile + gk-run are Claude-only.
+    expect(skills.length).toBe(10);
+    // Explicit skill set — do not blindly count.
     for (const expected of [
       "gk-brainstorm",
-      "gk-compile",
       "gk-eval",
       "gk-evidence",
       "gk-execute",
       "gk-init-graph",
       "gk-recall",
-      "gk-run",
       "gk-status",
       "gk-template",
       "gk-validate",
@@ -66,28 +55,6 @@ describe("AC02: gk validate rejects invalid graph.yaml", () => {
       YAML.parse(`metadata:\n  name: x\ntopology: diamond\nnodes:\n  a:\n    objective: no agent`),
     );
     expect(r.success).toBe(false);
-  });
-});
-
-describe("AC03: gk compile produces valid .workflow.js for all 6 topologies", () => {
-  test("each topology compiles", () => {
-    for (const topo of TOPOS) {
-      const g = GraphSchema.parse(
-        YAML.parse(
-          `metadata:\n  name: t\ntopology: ${topo}\nnodes:\n  a:\n    agent: Code Reviewer\n    objective: x\n`,
-        ),
-      );
-      const script = compileGraph(g, templatesDir());
-      expect(script).toContain("export const meta");
-    }
-  });
-});
-
-describe("AC04: gk compile resolves subgraph references", () => {
-  test("diamond + adversarial-verification inlines both templates", () => {
-    const g = GraphSchema.parse(YAML.parse(readFileSync(join(FIXTURES, "diamond-with-verification.yaml"), "utf-8")));
-    const script = compileGraph(g, templatesDir());
-    expect(script).toContain("createAdversarialWorkflow");
   });
 });
 
@@ -139,11 +106,3 @@ describe("AC09: brainstorm updates graph.yaml", () => {
   });
 });
 
-describe("AC10: model tiering propagates to compiled .workflow.js", () => {
-  test("opus and sonnet tiers present in emitted config", () => {
-    const g = GraphSchema.parse(YAML.parse(readFileSync(join(FIXTURES, "minimal-diamond.yaml"), "utf-8")));
-    const script = compileGraph(g, templatesDir());
-    expect(script).toContain('"model": "opus"');
-    expect(script).toContain('"model": "sonnet"');
-  });
-});

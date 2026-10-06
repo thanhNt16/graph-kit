@@ -2,7 +2,6 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import type { CAC } from "cac";
 import YAML from "yaml";
-import { compileGraph } from "../../compiler/emitter.js";
 import { planGraph } from "../../compiler/plan.js";
 import { isBlocking, validateGraph } from "../../compiler/validate.js";
 import { GraphKitError } from "../../errors.js";
@@ -18,7 +17,6 @@ import { resolveGraph, resolveGraphPath } from "../graph-resolve.js";
 import { materializeNodeAgents } from "../node-agents.js";
 import { emit, fail, ok, type Result } from "../output.js";
 import { renderSvg } from "../svg.js";
-import { templatesDir } from "./kit.js";
 
 // Read + YAML-parse a graph document, wrapping ENOENT in the canonical
 // GRAPH_FILE_NOT_FOUND envelope. Shared by loadGraph and the template-routing
@@ -613,29 +611,6 @@ export function registerGraphCommands(cli: CAC) {
         emit(ok({ valid: true, topology: graph.topology, warnings: findings.filter((f) => !isBlocking(f)) }));
       } catch (e) {
         emit(e instanceof GraphKitError ? fail(e.code, e.message, e.details) : fail("VALIDATE_ERROR", String(e)));
-      }
-    });
-
-  cli
-    .command("compile [file]", "Compile graph.yaml to a .workflow.js script")
-    .option("--output <path>", "Output path (default .claude/workflows/{name}.workflow.js)")
-    .option("--json", "JSON output")
-    .action((file, opts) => {
-      try {
-        const graph = resolveGraph(process.cwd(), file);
-        const findings = validateGraph(graph, process.cwd());
-        if (findings.some(isBlocking)) {
-          emit(fail("VALIDATION_FAILED", "fix findings before compile", { issues: findings }));
-          return;
-        }
-        const script = compileGraph(graph, templatesDir());
-        const outPath =
-          opts.output ?? join(process.cwd(), ".claude", "workflows", `${graph.metadata.name}.workflow.js`);
-        mkdirSync(dirname(outPath), { recursive: true });
-        writeFileSync(outPath, script);
-        emit(ok({ compiled: outPath, topology: graph.topology }));
-      } catch (e) {
-        emit(fail("COMPILE_ERROR", String(e)));
       }
     });
 

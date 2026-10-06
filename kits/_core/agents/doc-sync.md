@@ -38,7 +38,7 @@ Find and fix where docs diverge from code:
 |---|-----|-------|-----------|------|--------|
 | 1 | README.md:106 | "8 agents" | 16 in kits/_core/agents/ | stale | fixed |
 | 2 | docs/cli.md:44 | "--format flag" | flag removed in 0.3.0 | stale | fixed |
-| 3 | README.md:201 | "gk compile" | command renamed gk graph compile | stale | fixed |
+| 3 | README.md:201 | "gk compile" | compile removed — planGraph+exec is the only execution path | stale | fixed |
 | 4 | docs/api.md | (no mention) | new --dry-run flag exists | missing | reported |
 | 5 | README.md:88 | example: `gk run --watch` | flag doesn't exist | wrong | fixed |
 

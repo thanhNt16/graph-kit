@@ -24,7 +24,7 @@
 // | rules body        | _core sections; `.omp/agents/` → `<installDir>/<agentsDir>/` |
 // | prompts/, extensions/ | —                          | copied verbatim |
 // | extras (checked-in host files, copied verbatim, never synthesized) |
-// |                   | metadata.json settings.json .gk.json templates/ hooks/ schemas/ skills/gk-run skills/gk-compile | — |
+// |                   | metadata.json settings.json .gk.json templates/ hooks/ schemas/ | — |
 import { cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
 import { TARGET_MODEL_DEFAULTS } from "../src/targets/model-tiers.js";
@@ -58,7 +58,6 @@ interface HostConfig {
   runtimeGuards?: RuntimeGuards;
   verbatimCoreDirs?: string[];
   extras?: string[];
-  extraSkills?: string[];
   label: string;
   skillOverrides?: Record<string, SkillOverride>;
 }
@@ -120,7 +119,6 @@ const HOSTS: Record<HostId, HostConfig> = {
       },
     ],
     extras: ["metadata.json", "settings.json", ".gk.json", "templates", "hooks", "schemas"],
-    extraSkills: ["gk-run", "gk-compile"],
   },
   pi: {
     label: "pi",
@@ -521,14 +519,6 @@ export function generateKit(host: HostId, outRoot: string): string {
       writeFileSync(f, text);
     }
   }
-  for (const extra of cfg.extraSkills ?? []) {
-    const src = join(KITS, host, cfg.skillsDir, extra);
-    if (!existsSync(src))
-      throw new Error(
-        `gen-kits: ${host} declares extra skill '${extra}' but kits/${host}/${cfg.skillsDir}/${extra} is missing`,
-      );
-    copyExtra(src, join(out, cfg.skillsDir, extra));
-  }
 
   // Pass through host-only skill files the canonical source does not carry yet
   // (e.g. gk-visualize/references/ — identical across hosts, pending promotion
@@ -537,7 +527,7 @@ export function generateKit(host: HostId, outRoot: string): string {
   if (existsSync(checkedInSkills)) {
     for (const e of readdirSync(checkedInSkills, { withFileTypes: true })) {
       const skill = e.name;
-      if (!e.isDirectory() || cfg.extraSkills?.includes(skill)) continue;
+      if (!e.isDirectory()) continue;
       const hostDir = join(checkedInSkills, skill);
       if (!existsSync(hostDir)) continue;
       for (const f of walkTree(hostDir)) {

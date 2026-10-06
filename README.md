@@ -279,7 +279,7 @@ One `gk init` command configures all five host targets:
 
 | Host | Init target | Rule format | Agents | Skills | Execution path |
 |---|---|---|---|---|---|
-| **Claude Code** | `gk init` | `.claude/rules/` | `.claude/agents/` | `.claude/skills/` | `/gk:run` (Workflow tool) & `/gk:execute` |
+| **Claude Code** | `gk init` | `.claude/rules/` | `.claude/agents/` | `.claude/skills/` | `/gk:execute` |
 | **Cursor** | `gk init --target cursor` | `.cursor/rules/*.mdc` | `.cursor/agents/` | `.cursor/skills/` | `/gk:execute` (Task tool dispatch) |
 | **OpenCode** | `gk init --target opencode` | `AGENTS.md` | `.opencode/agent/` | `.opencode/skill/` | `/gk:execute` (Task tool dispatch) |
 | **Codex CLI** | `gk init --target codex` | `AGENTS.md` | `.codex/agents/` | `.agents/skills/` | `/gk:execute` (Spawn-prompt driven) |
@@ -324,7 +324,6 @@ $ gk --help
     new                              Scaffold a new project with the GraphKit kit
     gate [file]                      Deterministic evidence gate: MERGE/BLOCK over required evidence keys
     validate [file]                  Validate a graph.yaml
-    compile [file]                   Compile graph.yaml to a .workflow.js script
     graph [subcommand] [args...]     Graph lifecycle commands
     memory [subcommand] [args...]  Memory commands
     models [subcommand] [args...]    Per-target model mapping commands

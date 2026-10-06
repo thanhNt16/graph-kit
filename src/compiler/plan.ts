@@ -82,9 +82,7 @@ export interface PlanGraph {
 // The planner: turns a validated Graph into the wave IR every consumer
 // (`graph waves` payload, /gk:execute dispatch, renderers) derives from.
 // Memory-augmented graphs pull the Curator out of the Kahn sort and
-// re-insert it as interleave waves at the configured cadence (execute-path
-// equivalent of memory-augmented.workflow.js's wrappedAgent, which only
-// runs under the Workflow tool).
+// re-insert it as interleave waves at the configured cadence.
 export function planGraph(graph: Graph, opts?: { source?: string }): PlanGraph {
   const nodes = graph.nodes;
   const ids = Object.keys(nodes);

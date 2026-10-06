@@ -133,39 +133,6 @@ describe("CLI trust: bare gk (no command) prints help + exits 1 — F1", () => {
   });
 });
 
-describe("CLI trust: gk compile emits the envelope and writes the artifact", () => {
-  let root: string;
-  let cwd: string;
-  beforeEach(() => {
-    root = join(tmpdir(), `gk-trust-cmp-${process.pid}-${Date.now()}`);
-    cwd = root;
-    mkdirSync(join(cwd, "claude", "agents"), { recursive: true });
-    writeFileSync(join(cwd, "claude", "agents", "code-reviewer.md"), "# CR\n");
-    writeFileSync(join(cwd, "graph.yaml"), DIAMOND);
-  });
-  afterEach(() => {
-    process.exitCode = 0;
-    rmSync(root, { recursive: true, force: true });
-  });
-
-  test("compile prints the JSON envelope and writes the artifact", () => {
-    const { logs, code } = runCli(["compile"], cwd);
-    expect(code).toBe(0);
-    const parsed = JSON.parse(logs.join("\n"));
-    expect(parsed.status).toBe("ok");
-    expect(parsed.data.compiled).toMatch(/\.workflow\.js$/);
-    expect(existsSync(join(cwd, ".claude", "workflows", "trust-audit.workflow.js"))).toBe(true);
-  });
-
-  test("compile --json keeps the structured envelope (unchanged contract)", () => {
-    const { logs, code } = runCli(["compile", "--json"], cwd);
-    expect(code).toBe(0);
-    const parsed = JSON.parse(logs.join("\n"));
-    expect(parsed.status).toBe("ok");
-    expect(parsed.data.compiled).toMatch(/\.workflow\.js$/);
-  });
-});
-
 describe("CLI trust: group help lists per-leaf usage (AuditCli F3)", () => {
   let root: string;
   let cwd: string;

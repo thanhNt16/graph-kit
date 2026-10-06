@@ -128,11 +128,6 @@ function kitDeletions(source: string): string[] {
   return raw as string[];
 }
 
-// Re-exported so graph.ts can resolve the templates dir the same way.
-export function templatesDir(target: TargetId = "claude"): string {
-  return join(kitSourceDir(target), "templates");
-}
-
 // Merge the GraphKit rules section into an existing AGENTS.md.
 // - null existing → the section becomes the whole file
 // - no markers → append a marked section

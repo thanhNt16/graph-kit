@@ -35,14 +35,6 @@
       ]
     },
     {
-      "name": "compile",
-      "description": "Compile graph.yaml to a .workflow.js script",
-      "options": [
-        "--output <path>",
-        "--json"
-      ]
-    },
-    {
       "name": "graph",
       "description": "Graph lifecycle commands\nSubcommands: topologies list switch show inspect new ascii svg waves agents",
       "options": [

@@ -11,7 +11,7 @@ const TARGETS: Record<TargetId, TargetDescriptor> = {
     rulesStrategy: "agents-md-sections",
     hooksKind: "extension-ts",
     commandsKind: "prompt-template",
-    execution: { workflowTool: false, subagentDispatch: "extension" },
+    execution: { subagentDispatch: "extension" },
   },
   claude: {
     id: "claude",
@@ -22,7 +22,7 @@ const TARGETS: Record<TargetId, TargetDescriptor> = {
     rulesStrategy: "rules-dir",
     hooksKind: "settings-json",
     commandsKind: "slash-skill",
-    execution: { workflowTool: true, subagentDispatch: "task-tool" },
+    execution: { subagentDispatch: "task-tool" },
   },
 };
 

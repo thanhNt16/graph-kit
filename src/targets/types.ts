@@ -19,5 +19,5 @@ export interface TargetDescriptor {
   rulesStrategy: RulesStrategy;
   hooksKind: HooksKind;
   commandsKind: CommandsKind;
-  execution: { workflowTool: boolean; subagentDispatch: SubagentDispatch };
+  execution: { subagentDispatch: SubagentDispatch };
 }

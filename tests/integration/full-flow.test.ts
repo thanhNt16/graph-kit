@@ -1,16 +1,15 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, symlinkSync } from "node:fs";
 import { join } from "node:path";
 import YAML from "yaml";
-import { installKit, templatesDir } from "../../src/cli/commands/kit.js";
-import { compileGraph } from "../../src/compiler/emitter.js";
+import { installKit } from "../../src/cli/commands/kit.js";
 import { validateGraph } from "../../src/compiler/validate.js";
 import { GraphSchema } from "../../src/schemas/graph.schema.js";
 
 const TMP = join(import.meta.dir, ".tmp-full-flow");
 const FIXTURES = join(import.meta.dir, "..", "fixtures");
 
-describe("Full flow: init -> validate -> compile", () => {
+describe("Full flow: init -> validate", () => {
   beforeAll(() => {
     if (existsSync(TMP)) rmSync(TMP, { recursive: true });
     mkdirSync(TMP, { recursive: true });
@@ -34,18 +33,16 @@ describe("Full flow: init -> validate -> compile", () => {
       f.endsWith(".md"),
     ).length;
     expect(agents.length).toBe(coreCount);
-    // 12 gk-* skills — assert the explicit set (includes gk-compile + gk-run, Claude-only)
+    // 10 gk-* skills — assert the explicit set
     const skills = readdirSync(join(TMP, ".claude", "skills")).filter((f) => f.startsWith("gk-"));
-    expect(skills.length).toBe(12);
+    expect(skills.length).toBe(10);
     for (const expected of [
       "gk-brainstorm",
-      "gk-compile",
       "gk-eval",
       "gk-evidence",
       "gk-execute",
       "gk-init-graph",
       "gk-recall",
-      "gk-run",
       "gk-status",
       "gk-template",
       "gk-validate",
@@ -67,17 +64,6 @@ describe("Full flow: init -> validate -> compile", () => {
     const findings = validateGraph(graph, TMP);
     expect(findings).toEqual([]);
   });
-
-  test("compile produces a runnable .workflow.js", () => {
-    const raw = readFileSync(join(FIXTURES, "minimal-diamond.yaml"), "utf-8");
-    const graph = GraphSchema.parse(YAML.parse(raw));
-    const script = compileGraph(graph, templatesDir());
-    expect(script).toContain("createDiamondWorkflow");
-    // Write + re-read to confirm it's valid JS (no syntax errors)
-    const outPath = join(TMP, "diamond.workflow.js");
-    writeFileSync(outPath, script);
-    expect(existsSync(outPath)).toBe(true);
-  });
 });
 
 describe("Subgraph composition: diamond + adversarial-verification", () => {
@@ -89,16 +75,6 @@ describe("Subgraph composition: diamond + adversarial-verification", () => {
   });
   afterAll(() => {
     if (existsSync(TMP)) rmSync(TMP, { recursive: true });
-  });
-
-  test("compiles with inlined subgraph template", () => {
-    const raw = readFileSync(join(FIXTURES, "diamond-with-verification.yaml"), "utf-8");
-    const graph = GraphSchema.parse(YAML.parse(raw));
-    const script = compileGraph(graph, templatesDir());
-    // Both template functions present (root + subgraph)
-    expect(script).toContain("createDiamondWorkflow");
-    expect(script).toContain("createAdversarialWorkflow");
-    expect(script).toContain('"__subgraph": "adversarial-verification"');
   });
 
   test("validateGraph still passes (subgraph is config, not a node)", () => {

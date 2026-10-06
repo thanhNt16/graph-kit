@@ -34,9 +34,7 @@ describe("target registry", () => {
 
   test("pi and claude declare expected capabilities", () => {
     expect(getTarget("pi").execution.subagentDispatch).toBe("extension");
-    expect(getTarget("pi").execution.workflowTool).toBe(false);
     expect(getTarget("claude").execution.subagentDispatch).toBe("task-tool");
-    expect(getTarget("claude").execution.workflowTool).toBe(true);
   });
 
   test("isValidTarget guards bad input", () => {
