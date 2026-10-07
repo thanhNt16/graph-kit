@@ -6,7 +6,7 @@ import { planGraph } from "../../compiler/plan.js";
 import { isBlocking, validateGraph } from "../../compiler/validate.js";
 import { GraphKitError } from "../../errors.js";
 import type { Graph } from "../../schemas/graph.schema.js";
-import { materializeTemplate, type GraphTemplate } from "../../schemas/template.schema.js";
+import { type GraphTemplate, materializeTemplate } from "../../schemas/template.schema.js";
 import { getTopologyConfigKeys, TOPOLOGY_NAMES, type TopologyName } from "../../schemas/topology/index.js";
 import { getActiveGraphId, listSessionGraphs, loadActiveGraph, setActiveGraphId } from "../../store/index.js";
 import { renderAscii } from "../ascii.js";

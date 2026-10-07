@@ -5,10 +5,10 @@ import { GraphKitError } from "../errors.js";
 import { activeRunGraph } from "../runs/ledger.js";
 import type { Graph } from "../schemas/graph.schema.js";
 import { GraphSchema } from "../schemas/graph.schema.js";
-import { GraphTemplateSchema, materializeTemplate, type GraphTemplate } from "../schemas/template.schema.js";
+import { type GraphTemplate, GraphTemplateSchema, materializeTemplate } from "../schemas/template.schema.js";
 import { getActiveGraphId, listSessionGraphs, loadActiveGraph } from "../store/index.js";
-import { formatZodIssues } from "./diagnostics.js";
 import { loadGraph } from "./commands/graph.js";
+import { formatZodIssues } from "./diagnostics.js";
 
 export interface ResolvedGraph {
   path: string;
@@ -74,7 +74,9 @@ function readGraphDoc(file: string): unknown {
  *  THE template-awareness branch — a `kind: GraphTemplate` file never hits
  *  GraphSchema (the 4-issue noise wall, audit F3); it validates against its
  *  own schema instead. */
-export type GraphDoc = { kind: "graph"; path: string; graph: Graph } | { kind: "template"; path: string; template: GraphTemplate };
+export type GraphDoc =
+  | { kind: "graph"; path: string; graph: Graph }
+  | { kind: "template"; path: string; template: GraphTemplate };
 
 export function loadGraphDoc(file: string): GraphDoc {
   const doc = readGraphDoc(file);

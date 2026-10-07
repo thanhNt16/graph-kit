@@ -2,8 +2,8 @@ import { describe, expect, test } from "bun:test";
 import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { GraphKitError } from "../../src/errors.js";
 import { loadGraphDoc, previewGraph, resolveGraphPath } from "../../src/cli/graph-resolve.js";
+import { GraphKitError } from "../../src/errors.js";
 
 const GRAPH = `kind: Graph\nmetadata: {name: t}\ntopology: diamond\nnodes: {a: {agent: x, objective: o}}\n`;
 
@@ -31,7 +31,7 @@ graph:
 `;
 
 const TEMPLATE_REQUIRED_PARAM = TEMPLATE.replace(
-  /  target:\n    type: string\n    required: false\n    default: world\n/,
+  / {2}target:\n {4}type: string\n {4}required: false\n {4}default: world\n/,
   "  target:\n    type: string\n    required: true\n",
 );
 
