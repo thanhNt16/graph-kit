@@ -6,65 +6,57 @@ import { planGraph } from "../../compiler/plan.js";
 import { isBlocking, validateGraph } from "../../compiler/validate.js";
 import { GraphKitError } from "../../errors.js";
 import type { Graph } from "../../schemas/graph.schema.js";
-import { GraphSchema } from "../../schemas/graph.schema.js";
-import { GraphTemplateSchema } from "../../schemas/template.schema.js";
+import { materializeTemplate, type GraphTemplate } from "../../schemas/template.schema.js";
 import { getTopologyConfigKeys, TOPOLOGY_NAMES, type TopologyName } from "../../schemas/topology/index.js";
 import { getActiveGraphId, listSessionGraphs, loadActiveGraph, setActiveGraphId } from "../../store/index.js";
 import { renderAscii } from "../ascii.js";
 import { leafUsageFor, subcommandsFor } from "../command-registry.js";
-import { formatZodIssues } from "../diagnostics.js";
-import { resolveGraph, resolveGraphPath } from "../graph-resolve.js";
+import { loadGraphDoc, previewGraph, resolveGraph } from "../graph-resolve.js";
 import { materializeNodeAgents } from "../node-agents.js";
 import { emit, fail, ok, type Result } from "../output.js";
 import { renderSvg } from "../svg.js";
 
-// Read + YAML-parse a graph document, wrapping ENOENT in the canonical
-// GRAPH_FILE_NOT_FOUND envelope. Shared by loadGraph and the template-routing
-// pre-check in `gk validate` so both report missing files identically.
-function readGraphDoc(file: string): unknown {
-  let raw: string;
-  try {
-    raw = readFileSync(file, "utf-8");
-  } catch (e) {
-    if ((e as NodeJS.ErrnoException).code === "ENOENT") {
-      throw new GraphKitError("GRAPH_FILE_NOT_FOUND", `file not found: ${file}`, {
-        file,
-        hint: "run `gk graph new <topology>` to scaffold one, or check the path",
-      });
-    }
-    throw e;
-  }
-  return YAML.parse(raw);
-}
-
+// The strict graph loader: templates are not graphs here. run/exec materialize
+// session graphs before this ever sees them, so a template reaching loadGraph
+// gets the honest TEMPLATE_NOT_GRAPH remedy instead of schema noise.
 export function loadGraph(file: string) {
-  const doc = readGraphDoc(file);
-  const parsed = GraphSchema.safeParse(doc);
-  if (!parsed.success) {
-    throw new GraphKitError("SCHEMA_INVALID", "graph.yaml failed schema validation", {
-      issues: formatZodIssues(parsed.error, GraphSchema),
-    });
+  const doc = loadGraphDoc(file);
+  if (doc.kind === "template") {
+    throw new GraphKitError(
+      "TEMPLATE_NOT_GRAPH",
+      `TEMPLATE_NOT_GRAPH: ${file} is a GraphTemplate — preview with gk graph waves|ascii|svg, or materialize first: gk template materialize ${doc.template.metadata.name}`,
+      { file, name: doc.template.metadata.name, hint: "materialize first: gk template materialize <name>" },
+    );
   }
-  return parsed.data;
+  return doc.graph;
 }
 
-// A `kind: GraphTemplate` wrapper is not a graph — running it through
-// GraphSchema surfaced a 4-issue noise wall (audit F3). Detect the kind field
-// before the Graph parse and validate against GraphTemplateSchema instead;
-// the template's inner graph is placeholder-substituted and re-validated
-// against GraphSchema at materialize time.
-function validateTemplateDoc(doc: unknown): Result {
-  const parsed = GraphTemplateSchema.safeParse(doc);
-  if (!parsed.success) {
-    return fail("SCHEMA_INVALID", "graph template failed schema validation", {
-      issues: formatZodIssues(parsed.error, GraphTemplateSchema),
-    });
+// Template validate (audit F3 + F10): the envelope already passed
+// GraphTemplateSchema (loadGraphDoc routed it); the embedded `graph:` body now
+// gets the SAME semantic checks as a materialized graph — agent bindings,
+// refs, evidence keys — so a typo'd agent fails here, not at materialize
+// time. The body is checked defaults-materialized when possible (placeholders
+// in value positions resolve; a parameterized agent would false-positive on
+// the raw body), falling back to the raw body for defaults-incomplete
+// templates. Embedded findings carry a `graph.` path prefix so they are
+// distinguishable from envelope issues.
+function validateTemplateDoc(template: GraphTemplate, projectRoot: string): Result {
+  let embedded: Graph;
+  try {
+    embedded = materializeTemplate(template, {});
+  } catch {
+    embedded = template.graph;
+  }
+  const findings = validateGraph(embedded, projectRoot).map((f) => ({ ...f, path: `graph.${f.path}` }));
+  if (findings.some(isBlocking)) {
+    return fail("VALIDATION_FAILED", "template's embedded graph has findings", { issues: findings });
   }
   return ok({
     valid: true,
     kind: "template",
-    name: parsed.data.metadata.name,
-    parameters: parsed.data.parameters,
+    name: template.metadata.name,
+    parameters: template.parameters,
+    warnings: findings,
   });
 }
 
@@ -592,23 +584,23 @@ export function registerGraphCommands(cli: CAC) {
     .option("--json", "JSON output")
     .action((file) => {
       try {
-        // Template wrapper pre-check (audit F3): only explicit file args can be
-        // templates — the bare path resolves the active session graph, which is
-        // always a materialized Graph.
-        if (file) {
-          const doc = readGraphDoc(String(file));
-          if (typeof doc === "object" && doc !== null && "kind" in doc && doc.kind === "GraphTemplate") {
-            emit(validateTemplateDoc(doc));
-            return;
-          }
+        // One load, one branch (audit F3 + F10): explicit file args route
+        // through loadGraphDoc — templates get envelope + embedded-graph
+        // checks; plain graphs the usual path. The no-file bare form resolves
+        // the active session graph, which is always a materialized Graph.
+        const doc = file
+          ? loadGraphDoc(String(file))
+          : { kind: "graph" as const, graph: resolveGraph(process.cwd()) };
+        if (doc.kind === "template") {
+          emit(validateTemplateDoc(doc.template, process.cwd()));
+          return;
         }
-        const graph = resolveGraph(process.cwd(), file);
-        const findings = validateGraph(graph, process.cwd());
+        const findings = validateGraph(doc.graph, process.cwd());
         if (findings.some(isBlocking)) {
           emit(fail("VALIDATION_FAILED", "graph has findings", { issues: findings }));
           return;
         }
-        emit(ok({ valid: true, topology: graph.topology, warnings: findings.filter((f) => !isBlocking(f)) }));
+        emit(ok({ valid: true, topology: doc.graph.topology, warnings: findings.filter((f) => !isBlocking(f)) }));
       } catch (e) {
         emit(e instanceof GraphKitError ? fail(e.code, e.message, e.details) : fail("VALIDATE_ERROR", String(e)));
       }
@@ -725,7 +717,7 @@ export function registerGraphCommands(cli: CAC) {
         // `graph waves` so the renderer sees exactly what the executor would run.
         const file = Array.isArray(args) ? args[0] : args;
         try {
-          const graph = resolveGraph(process.cwd(), file);
+          const graph = previewGraph(process.cwd(), file).graph;
           const findings = validateGraph(graph, process.cwd());
           if (findings.some(isBlocking)) {
             emit(fail("VALIDATION_FAILED", "graph has findings", { issues: findings }));
@@ -738,7 +730,7 @@ export function registerGraphCommands(cli: CAC) {
       } else if (subcommand === "svg") {
         const file = Array.isArray(args) ? args[0] : args;
         try {
-          const graph = resolveGraph(process.cwd(), file);
+          const graph = previewGraph(process.cwd(), file).graph;
           const findings = validateGraph(graph, process.cwd());
           if (findings.some(isBlocking)) {
             emit(fail("VALIDATION_FAILED", "graph has findings", { issues: findings }));
@@ -758,8 +750,7 @@ export function registerGraphCommands(cli: CAC) {
         // Each wave = nodes that can run in parallel (all deps satisfied)
         const file = Array.isArray(args) ? args[0] : args;
         try {
-          const resolved = resolveGraphPath(process.cwd(), file).path;
-          const graph = loadGraph(resolved);
+          const { path: resolved, graph } = previewGraph(process.cwd(), file);
           const findings = validateGraph(graph, process.cwd());
           if (findings.some(isBlocking)) {
             emit(fail("VALIDATION_FAILED", "graph has findings", { issues: findings }));
@@ -799,7 +790,7 @@ export function registerGraphCommands(cli: CAC) {
         // child-process path. Run after `gk run start`, before wave dispatch.
         const file = Array.isArray(args) ? args[0] : args;
         try {
-          const graph = resolveGraph(process.cwd(), file);
+          const graph = previewGraph(process.cwd(), file).graph;
           const findings = validateGraph(graph, process.cwd());
           if (findings.some(isBlocking)) {
             emit(fail("VALIDATION_FAILED", "graph has findings", { issues: findings }));

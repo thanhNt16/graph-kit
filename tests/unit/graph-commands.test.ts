@@ -1,17 +1,39 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { cac } from "cac";
 import { registerGraphCommands } from "../../src/cli/commands/graph.js";
 
 const FIXTURES = join(import.meta.dir, "..", "fixtures");
+
+const PREVIEW_TEMPLATE = `apiVersion: graphkit.dev/v1
+kind: GraphTemplate
+metadata: { name: preview-tpl, description: d, version: 1 }
+parameters:
+  target:
+    type: string
+    required: false
+    default: world
+graph:
+  apiVersion: graphkit.dev/v2
+  kind: Graph
+  metadata: { name: "inner-{{target}}" }
+  topology: custom
+  nodes:
+    step1: { agent: code-reviewer, objective: "review {{target}}" }
+`;
+const TYPO_TEMPLATE = PREVIEW_TEMPLATE.replace("code-reviewer", "qa-enginer");
+const REQUIRED_PARAM_TEMPLATE = PREVIEW_TEMPLATE.replace(
+  "    required: false\n    default: world\n",
+  "    required: true\n",
+);
 const graphFile = join(FIXTURES, "minimal-diamond.yaml");
 
 function scaffoldProject(dir: string) {
-  mkdirSync(join(dir, "claude", "agents"), { recursive: true });
-  writeFileSync(join(dir, "claude", "agents", "software-architect.md"), "# SA\n");
-  writeFileSync(join(dir, "claude", "agents", "code-reviewer.md"), "# CR\n");
+  mkdirSync(join(dir, ".claude", "agents"), { recursive: true });
+  writeFileSync(join(dir, ".claude", "agents", "software-architect.md"), "# SA\n");
+  writeFileSync(join(dir, ".claude", "agents", "code-reviewer.md"), "# CR\n");
 }
 
 function runCli(args: string[], _cwd?: string) {
@@ -270,6 +292,7 @@ describe("gk graph commands", () => {
       kind: "template",
       name: "kit",
       parameters: { target: { type: "string", required: true } },
+      warnings: [],
     });
   });
   test("validate reports template-schema errors, not Graph-schema noise", () => {
@@ -301,5 +324,47 @@ describe("gk graph commands", () => {
     expect(out.code).toBe(0);
     const warnings = JSON.parse(out.stdout).data.warnings;
     expect(warnings.some((w: { check: string }) => w.check === "constraint-source")).toBe(true);
+  });
+  test("graph waves previews a GraphTemplate in-memory — no SCHEMA_INVALID, no session write", () => {
+    const tpl = join(tmp, "preview.gk.yaml");
+    writeFileSync(tpl, PREVIEW_TEMPLATE);
+    const { stdout, code } = runCli(["graph", "waves", tpl, "--json"], tmp);
+    expect(code).toBe(0);
+    const data = JSON.parse(stdout).data;
+    expect(data.graph).toBe("inner-world");
+    expect(data.topology).toBe("custom");
+    expect(data.total_nodes).toBe(1);
+    expect(data.waves[0].nodes.map((n: { id: string }) => n.id)).toEqual(["step1"]);
+    // Preview materializes in-memory: no session graph, no active pointer.
+    expect(existsSync(join(tmp, ".graphkit"))).toBe(false);
+  });
+  test("graph ascii previews a template too", () => {
+    const tpl = join(tmp, "preview.gk.yaml");
+    writeFileSync(tpl, PREVIEW_TEMPLATE);
+    const { stdout, code } = runCli(["graph", "ascii", tpl, "--json"], tmp);
+    expect(code).toBe(0);
+    expect(stdout).not.toContain("SCHEMA_INVALID");
+    expect(stdout).toContain("step1");
+  });
+  test("validate surfaces embedded-graph agent-binding findings for templates (F10)", () => {
+    const tpl = join(tmp, "typo.gk.yaml");
+    writeFileSync(tpl, TYPO_TEMPLATE);
+    const out = runCli(["validate", tpl, "--json"], tmp);
+    expect(out.code).toBe(1);
+    const err = JSON.parse(out.stdout).error;
+    expect(err.code).toBe("VALIDATION_FAILED");
+    const binding = err.details.issues.find((i: { check: string }) => i.check === "agent-binding");
+    expect(binding.path).toBe("graph.nodes.step1.agent");
+    expect(binding.message).toContain("qa-enginer");
+  });
+  test("graph waves on a defaults-incomplete template → TEMPLATE_NOT_GRAPH with hint", () => {
+    const tpl = join(tmp, "req.gk.yaml");
+    writeFileSync(tpl, REQUIRED_PARAM_TEMPLATE);
+    const out = runCli(["graph", "waves", tpl, "--json"], tmp);
+    expect(out.code).toBe(1);
+    const err = JSON.parse(out.stdout).error;
+    expect(err.code).toBe("TEMPLATE_NOT_GRAPH");
+    expect(err.details.hint).toContain("gk template materialize");
+    expect(existsSync(join(tmp, ".graphkit"))).toBe(false);
   });
 });

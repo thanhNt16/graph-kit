@@ -9,7 +9,7 @@ import { fingerprint } from "../../evidence/fingerprint.js";
 import { type Freshness, freshnessOf, parseMarker } from "../../evidence/marker.js";
 import { activeRun, readRunIndex, readTrace } from "../../runs/ledger.js";
 import { resumeChain } from "../../runs/resume.js";
-import { resolveGraph } from "../graph-resolve.js";
+import { previewGraph } from "../graph-resolve.js";
 import { emit, fail, ok } from "../output.js";
 
 /**
@@ -121,7 +121,7 @@ export function registerGateCommand(cli: CAC) {
     .option("--json", "JSON output")
     .action((file) => {
       try {
-        const graph = resolveGraph(process.cwd(), file);
+        const graph = previewGraph(process.cwd(), file).graph;
         const findings = validateGraph(graph, process.cwd());
         if (findings.some(isBlocking)) {
           emit(fail("VALIDATION_FAILED", "graph has findings", { issues: findings }));
