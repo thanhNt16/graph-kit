@@ -11,7 +11,7 @@ import { getTopologyConfigKeys, TOPOLOGY_NAMES, type TopologyName } from "../../
 import { getActiveGraphId, listSessionGraphs, loadActiveGraph, setActiveGraphId } from "../../store/index.js";
 import { renderAscii } from "../ascii.js";
 import { leafUsageFor, subcommandsFor } from "../command-registry.js";
-import { loadGraphDoc, previewGraph, resolveGraph } from "../graph-resolve.js";
+import { loadGraphDoc, previewGraph, resolveGraph, resolveGraphPath } from "../graph-resolve.js";
 import { materializeNodeAgents } from "../node-agents.js";
 import { emit, fail, ok, type Result } from "../output.js";
 import { renderSvg } from "../svg.js";
@@ -589,7 +589,7 @@ export function registerGraphCommands(cli: CAC) {
         // checks; plain graphs the usual path. The no-file bare form resolves
         // the active session graph, which is always a materialized Graph.
         const doc = file
-          ? loadGraphDoc(String(file))
+          ? loadGraphDoc(resolveGraphPath(process.cwd(), String(file)).path)
           : { kind: "graph" as const, graph: resolveGraph(process.cwd()) };
         if (doc.kind === "template") {
           emit(validateTemplateDoc(doc.template, process.cwd()));
