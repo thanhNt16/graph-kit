@@ -294,6 +294,34 @@ describe("gk template list / show", () => {
     expect(res.error.details.available).toContain("deploy-flow");
   });
 
+  test("show renders structure: nodes, waves, agent bindings, full parameter list", () => {
+    const prev = process.env.GK_GALLERY_DIR;
+    try {
+      process.env.GK_GALLERY_DIR = join(import.meta.dir, "..", "..", "templates", "gallery");
+      const res = runTemplateShow({ cwd, home, name: "dream" });
+      expect(res.status).toBe("ok");
+      expect(res.data.origin).toBe("gallery");
+      expect(res.data.topology).toBe("diamond");
+      expect(res.data.waveCount).toBe(3);
+      expect(res.data.nodes.map((n: { id: string }) => n.id)).toEqual(["harvest", "dream", "challenge"]);
+      const node = (id: string) => res.data.nodes.find((n: { id: string }) => n.id === id);
+      expect(node("harvest").agent).toBe("agents-orchestrator");
+      expect(node("dream").agent).toBe("memory-curator");
+      expect(node("dream").wave).toBe(1);
+      expect(node("challenge").wave).toBe(2);
+      const params = res.data.parameters;
+      expect(params.map((p: { name: string }) => p.name).sort()).toEqual(["focus", "since"]);
+      const focus = params.find((p: { name: string }) => p.name === "focus");
+      expect(focus.required).toBe(false);
+      expect(focus.default).toBe("");
+      expect(typeof focus.description).toBe("string");
+      expect(res.data.recommendations.agents).toContain("memory-curator");
+    } finally {
+      if (prev === undefined) delete process.env.GK_GALLERY_DIR;
+      else process.env.GK_GALLERY_DIR = prev;
+    }
+  });
+
   test("galleryTemplatesDir respects GK_GALLERY_DIR override", () => {
     const custom = join(root, "custom-gallery");
     mkdirSync(custom, { recursive: true });

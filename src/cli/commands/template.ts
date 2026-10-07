@@ -4,6 +4,7 @@ import { dirname, join } from "node:path";
 import type { CAC } from "cac";
 import YAML from "yaml";
 import { isBlocking, validateGraph } from "../../compiler/validate.js";
+import { topoWaves } from "../../compiler/plan.js";
 import { GraphKitError } from "../../errors.js";
 import type { Graph } from "../../schemas/graph.schema.js";
 import { GraphSchema } from "../../schemas/graph.schema.js";
@@ -325,18 +326,37 @@ export function runTemplateShow(opts: { cwd: string; home: string; name: string 
       });
     }
     const t = readTemplate(resolved.path);
+    const { waves, unresolved } = topoWaves(t.graph.nodes);
+    if (unresolved.length > 0) {
+      return fail("WAVES_INCOMPLETE", `unresolved nodes after topological sort: ${unresolved.join(", ")}`, {
+        unresolved,
+      });
+    }
+    const waveIndex = new Map<string, number>();
+    waves.forEach((ids, i) => {
+      for (const id of ids) waveIndex.set(id, i);
+    });
     return ok({
       name: opts.name,
       origin: resolved.origin,
       path: resolved.path,
       description: t.metadata.description,
       version: t.metadata.version,
-      parameterCount: Object.keys(t.parameters).length,
-      recommendationCount:
-        t.recommendations.agents.length +
-        t.recommendations.skills.length +
-        t.recommendations.tools.length +
-        t.recommendations.capabilities.length,
+      topology: t.graph.topology,
+      waveCount: waves.length,
+      nodes: Object.keys(t.graph.nodes).map((id) => ({
+        id,
+        agent: t.graph.nodes[id].agent,
+        wave: waveIndex.get(id),
+      })),
+      parameters: Object.entries(t.parameters).map(([pname, def]) => ({
+        name: pname,
+        required: def.required ?? false,
+        default: def.default,
+        ...(def.type !== undefined ? { type: def.type } : {}),
+        ...(def.description !== undefined ? { description: def.description } : {}),
+      })),
+      recommendations: t.recommendations,
     });
   } catch (e) {
     return e instanceof GraphKitError ? fail(e.code, e.message, e.details) : fail("SHOW_ERROR", String(e));
