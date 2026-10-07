@@ -44,7 +44,7 @@
       "sublabel": "agents · skills · hooks",
       "pos": [220, 320],
       "size": [150, 60],
-      "tag": "5 hosts"
+      "tag": "2 hosts"
     },
     {
       "id": "compiler",
@@ -53,7 +53,7 @@
       "sublabel": "validate · plan · run",
       "pos": [420, 320],
       "size": [150, 60],
-      "tag": "47 commands"
+      "tag": "14 command groups"
     },
     {
       "id": "exec_rt",
@@ -76,7 +76,7 @@
       "id": "memory",
       "type": "database",
       "label": "Project Memory",
-      "sublabel": "gk recall",
+      "sublabel": "gk memory recall",
       "pos": [1000, 180],
       "size": [150, 60]
     },
@@ -102,7 +102,7 @@
   "boundaries": [
     {
       "kind": "region",
-      "label": "Host Session (Claude Code · Cursor · OpenCode · Codex · pi)",
+      "label": "Host Session (Claude Code · Pi)",
       "wraps": ["claude_rt", "exec_rt", "agents", "kits"]
     },
     { "kind": "region", "label": ".graphkit/", "wraps": ["memory", "evidence", "ledger"] }
@@ -190,7 +190,7 @@
       "dot": "rose",
       "title": "Host Kits",
       "items": [
-        "Same planner feeds all five host kits",
+        "Same planner feeds both host kits",
         "Session skills expose /gk:validate, /gk:execute, /gk:recall, …",
         "Hooks persist evidence at task end without extra config"
       ]

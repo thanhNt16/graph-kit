@@ -144,9 +144,9 @@
 </nav>
 
 <div class="hero" id="top">
-  <div class="hero-badge">Graph Engineering Kit · Claude Code · Cursor · OpenCode · Codex · Pi</div>
+  <div class="hero-badge">Graph Engineering Kit · Claude Code · Pi</div>
   <h1>Define, Execute, and Verify Agent Workflows</h1>
-  <p class="hero-tag">GraphKit turns declarative, graph-structured agent workflows into native execution across five hosts. With deterministic DAG validation, a wave-dispatch engine, a run ledger with checkpoint resume, a criteria-based content-addressed evidence store, and project memory. No custom runtime, no daemon.</p>
+  <p class="hero-tag">GraphKit turns declarative, graph-structured agent workflows into native execution across Claude Code and Pi. With deterministic DAG validation, a wave-dispatch engine, a run ledger with checkpoint resume, a criteria-based content-addressed evidence store, and project memory. No custom runtime, no daemon.</p>
   <div class="hero-cta">
     <a class="btn btn-primary" href="#quickstart">Get started</a>
     <a class="btn btn-ghost" href="https://github.com/thanhNt16/graph-kit">View on GitHub</a>
@@ -154,8 +154,8 @@
   <div class="hero-install"><code>curl -fsSL https://raw.githubusercontent.com/thanhNt16/graph-kit/main/install.sh | sh</code></div>
   <div class="hero-stats">
     <div class="stat"><div class="stat-num">11</div><div class="stat-label">Canonical Topologies</div></div>
-    <div class="stat"><div class="stat-num">5</div><div class="stat-label">Supported Host Targets</div></div>
-    <div class="stat"><div class="stat-num">9</div><div class="stat-label">Static DAG Gates</div></div>
+    <div class="stat"><div class="stat-num">2</div><div class="stat-label">Host Targets (Claude Code, Pi)</div></div>
+    <div class="stat"><div class="stat-num">18</div><div class="stat-label">Static DAG Checks</div></div>
     <div class="stat"><div class="stat-num">8</div><div class="stat-label">Native Agents</div></div>
     <div class="stat"><div class="stat-num">sha256</div><div class="stat-label">Content-Addressed Store</div></div>
     <div class="stat"><div class="stat-num">0</div><div class="stat-label">Daemons / Lock-In</div></div>
@@ -185,7 +185,7 @@
     <div class="lifecycle-card">
       <div class="card-num">03. EXECUTE</div>
       <h3>⚡ Wave Dispatch Engine</h3>
-      <p>Run via transparent subagent wave dispatch on all five hosts — interactive (<code>/gk:execute</code>, with git worktree isolation) or headless (<code>gk exec</code>).</p>
+      <p>Run via transparent subagent wave dispatch in your host session — interactive (<code>/gk:execute</code>, with git worktree isolation) or headless (<code>gk exec</code>).</p>
       <a href="#runtimes">Execution Paths →</a>
     </div>
 
@@ -242,9 +242,6 @@ gk --version</div>
     <div class="code-body"><span class="cmt"># Install kit into an existing repository:</span>
 cd /path/to/your-project
 gk init                                  <span class="cmt"># → .claude/   (Claude Code)</span>
-gk init --target cursor                  <span class="cmt"># → .cursor/   (Cursor)</span>
-gk init --target opencode                <span class="cmt"># → .opencode/ (OpenCode)</span>
-gk init --target codex                   <span class="cmt"># → .codex/    (Codex CLI)</span>
 gk init --target pi                      <span class="cmt"># → .omp/      (Pi / OMP)</span>
 
 <span class="cmt"># Or materialize a workflow from the template gallery:</span>
@@ -496,11 +493,11 @@ gk validate
 <div class="section" id="runtimes">
   <div class="section-label">Execution Architecture</div>
   <h2>One Engine, Two Modes</h2>
-  <p>One graph specification, one execution engine, two modes. <code>/gk:execute</code> drives interactive, wave-by-wave dispatch across all 5 host targets; <code>gk exec</code> runs the same engine headless for CI and one-shot dispatch.</p>
+  <p>One graph specification, one execution engine, two modes. <code>/gk:execute</code> drives interactive, wave-by-wave dispatch in your host session (Claude Code and Pi); <code>gk exec</code> runs the same engine headless for CI and one-shot dispatch.</p>
 
   <table class="cmp-table">
     <tr><th>Capability</th><th>/gk:execute (Interactive)</th><th>gk exec (Headless)</th></tr>
-    <tr><td>Supported Hosts</td><td>Claude Code, Cursor, OpenCode, Codex, Pi</td><td>Any host with the gk binary</td></tr>
+    <tr><td>Supported Hosts</td><td>Claude Code and Pi (installed kit)</td><td>Any host with the gk binary</td></tr>
     <tr><td>Execution</td><td>Wave-by-wave, every subagent in your session</td><td>Same wave engine, driven end-to-end</td></tr>
     <tr><td>Visibility</td><td>Full visibility — every subagent interactive</td><td>Ledger + evidence on disk, no session noise</td></tr>
     <tr><td>Isolation Mode</td><td><code>--worktree</code> (isolated git branches per write node)</td><td><code>--worktree</code> (same flag, same semantics)</td></tr>
@@ -614,10 +611,10 @@ gk run resume &lt;run-id&gt; --from-node fixer  <span class="cmt"># re-execute a
     <div class="subsys" style="border-color:var(--memory)">
       <div class="subsys-tag" style="background:rgba(46,160,67,0.15);color:var(--memory)">PROJECT MEMORY</div>
       <h3>Pattern Mining &amp; Suggestions</h3>
-      <p>Consolidation analyzes run ledgers across five pattern families: node sequencing, evidence co-occurrence, failure recurrence, graph reuse, and advisor escalation repeat.</p>
-      <div class="code-block" style="margin:0.6rem 0 0"><div class="code-body">gk memory consolidate --runs 20
+      <p>Consolidation analyzes run ledgers across four pattern families: node sequencing, failure recurrence, graph reuse, and advisor-escalation repeats. Retained patterns are salience-ranked and decay with disuse.</p>
+      <div class="code-block" style="margin:0.6rem 0 0"><div class="code-body">gk memory consolidate
 gk suggest                 <span class="cmt"># ranked workflow recommendations</span>
-gk recall "auth tokens"    <span class="cmt"># retrieve contextual memory</span></div></div>
+gk memory recall "auth tokens"    <span class="cmt"># retrieve contextual memory</span></div></div>
     </div>
 
     <div class="subsys" style="border-color:var(--bridge)">
@@ -630,15 +627,12 @@ gk recall "auth tokens"    <span class="cmt"># retrieve contextual memory</span>
 
 <div class="section" id="hosts">
   <div class="section-label">Multi-Host Compatibility</div>
-  <h2>Five Targets, One Universal CLI</h2>
-  <p>Pass <code>--target &lt;host&gt;</code> to install the native kit for your coding environment. The <code>gk</code> CLI provides identical validation, execution, memory, and ledger capabilities across all five hosts.</p>
+  <h2>Two Targets, One Universal CLI</h2>
+  <p>Pass <code>--target &lt;host&gt;</code> to install the native kit for your coding environment. The <code>gk</code> CLI provides identical validation, execution, memory, and ledger capabilities across both hosts.</p>
 
   <table class="cmp-table">
     <tr><th>Host Target</th><th>Rules Format</th><th>Agents Format</th><th>Skills Directory</th><th>Hook Mechanism</th></tr>
     <tr><td>Claude Code</td><td><code>.claude/rules/*.md</code></td><td><code>.claude/agents/*.md</code></td><td><code>.claude/skills/</code></td><td><code>settings.json</code> + <code>*.cjs</code></td></tr>
-    <tr><td>Cursor</td><td><code>.cursor/rules/*.mdc</code></td><td><code>.cursor/agents/*.md</code></td><td><code>.cursor/skills/</code></td><td><code>hooks.json</code> + <code>*.cjs</code></td></tr>
-    <tr><td>OpenCode</td><td><code>AGENTS.md</code></td><td><code>.opencode/agent/*.md</code></td><td><code>.opencode/skills/</code></td><td>TS Plugin <code>gk.ts</code></td></tr>
-    <tr><td>Codex CLI</td><td><code>AGENTS.md</code> rules</td><td><code>.codex/agents/*.toml</code></td><td><code>.codex/skills/</code></td><td>Instruction-enforced</td></tr>
     <tr><td>Pi (OMP)</td><td><code>AGENTS.md</code></td><td><code>.omp/agents/*.md</code></td><td><code>.omp/skills/</code></td><td>OMP extension handlers</td></tr>
   </table>
 </div>
@@ -646,7 +640,7 @@ gk recall "auth tokens"    <span class="cmt"># retrieve contextual memory</span>
 <div class="section" id="cli">
   <div class="section-label">CLI Surface</div>
   <h2>Comprehensive Command Reference</h2>
-  <p>GraphKit provides 15 top-level command groups covering the full graph engineering lifecycle.</p>
+  <p>GraphKit provides 14 top-level command groups covering the full graph engineering lifecycle.</p>
 
   <h3 class="cf-h3">The gk Lifecycle</h3>
   <p class="cf-sub">Six stages, one end-to-end flow: bind a host, compose a graph, validate, execute in waves, gate on evidence, then close out — solid chips are CLI commands, italic dashed chips are the session skills that drive each stage.</p>
@@ -879,7 +873,7 @@ gk recall "auth tokens"    <span class="cmt"># retrieve contextual memory</span>
 
     <div class="cli-card">
       <div class="cli-cmd">gk validate [file]</div>
-      <div class="cli-desc">Run 9 static DAG checks against graph.yaml or the active session graph.</div>
+      <div class="cli-desc">Run 18 static DAG checks against a graph.yaml, a .gk.yaml template's embedded graph, or the active session graph.</div>
     </div>
     <div class="cli-card">
       <div class="cli-cmd">gk gate [file]</div>
@@ -887,27 +881,27 @@ gk recall "auth tokens"    <span class="cmt"># retrieve contextual memory</span>
     </div>
 
     <div class="cli-card">
-      <div class="cli-cmd">gk evidence &lt;add|list|get|report&gt;</div>
+      <div class="cli-cmd">gk evidence &lt;add|invalidate|report&gt;</div>
       <div class="cli-desc">Manage content-addressed evidence blobs, provenance markers, and HTML reports.</div>
     </div>
 
     <div class="cli-card">
-      <div class="cli-cmd">gk run &lt;start|node|end|resume|status&gt;</div>
+      <div class="cli-cmd">gk run &lt;start|node|dispatch|land|end|status|resume|take|round|analyze&gt;</div>
       <div class="cli-desc">Manage run ledgers, track node status, and replay interrupted runs via checkpoint resume.</div>
     </div>
 
     <div class="cli-card">
-      <div class="cli-cmd">gk template &lt;list|materialize|pack&gt;</div>
-      <div class="cli-desc">Package and materialize reusable workflow templates from the gallery.</div>
+      <div class="cli-cmd">gk template &lt;pack|list|show|materialize&gt;</div>
+      <div class="cli-desc">Package, preview (structure not counts), and materialize reusable workflow templates from the gallery. Template-aware: graph verbs accept .gk.yaml directly.</div>
     </div>
 
     <div class="cli-card">
-      <div class="cli-cmd">gk graph &lt;list|switch|show|topologies&gt;</div>
+      <div class="cli-cmd">gk graph &lt;topologies|list|switch|show|inspect|new|ascii|svg|waves|agents&gt;</div>
       <div class="cli-desc">Manage session graphs and inspect canonical topology definitions.</div>
     </div>
 
     <div class="cli-card">
-      <div class="cli-cmd">gk memory &lt;consolidate|recall|suggest&gt;</div>
+      <div class="cli-cmd">gk memory &lt;trace|touch|recall|consolidate&gt;</div>
       <div class="cli-desc">Mine run ledgers into reusable patterns and ranked workflow suggestions.</div>
     </div>
   </div>
@@ -920,8 +914,8 @@ gk recall "auth tokens"    <span class="cmt"># retrieve contextual memory</span>
     <div class="cf-scard"><div class="cf-shead"><span class="cf-skill sf-custom">/gk:template</span><span class="cf-sstage">02 Compose</span></div><div class="cf-sdesc">Package a graph.yaml as a reusable, parameterized GraphTemplate v1.</div></div>
     <div class="cf-scard"><div class="cf-shead"><span class="cf-skill sf-custom">/gk:visualize</span><span class="cf-sstage">02 Compose</span></div><div class="cf-sdesc">Render graph.yaml as archify HTML, ASCII, SVG, or Excalidraw.</div></div>
     <div class="cf-scard"><div class="cf-shead"><span class="cf-skill sf-custom">excalidraw-diagram</span><span class="cf-sstage">02 Compose</span></div><div class="cf-sdesc">Create Excalidraw JSON files that make visual arguments.</div></div>
-    <div class="cf-scard"><div class="cf-shead"><span class="cf-skill sf-sonnet">/gk:validate</span><span class="cf-sstage">03 Validate</span></div><div class="cf-sdesc">Gate-check graph.yaml before dispatch — 9 static validation checks.</div></div>
-    <div class="cf-scard"><div class="cf-shead"><span class="cf-skill sf-opus">/gk:execute</span><span class="cf-sstage">04 Execute</span></div><div class="cf-sdesc">Run graph.yaml via parallel subagents — no compilation, every host.</div></div>
+    <div class="cf-scard"><div class="cf-shead"><span class="cf-skill sf-sonnet">/gk:validate</span><span class="cf-sstage">03 Validate</span></div><div class="cf-sdesc">Gate-check graph.yaml before dispatch — static validation checks across shape, bindings, evidence, and loops.</div></div>
+    <div class="cf-scard"><div class="cf-shead"><span class="cf-skill sf-opus">/gk:execute</span><span class="cf-sstage">04 Execute</span></div><div class="cf-sdesc">Run graph.yaml via parallel subagents — no compilation, wave dispatch in your host session.</div></div>
     <div class="cf-scard"><div class="cf-shead"><span class="cf-skill sf-haiku">/gk:evidence</span><span class="cf-sstage">05 Evidence &amp; Gate</span></div><div class="cf-sdesc">Produce a markdown evidence report from a completed graph run.</div></div>
     <div class="cf-scard"><div class="cf-shead"><span class="cf-skill sf-haiku">/gk:eval</span><span class="cf-sstage">05 Evidence &amp; Gate</span></div><div class="cf-sdesc">Score a run's evidence and emit a MERGE/BLOCK gate verdict.</div></div>
     <div class="cf-scard"><div class="cf-shead"><span class="cf-skill sf-fable">/gk:recall</span><span class="cf-sstage">06 Close Out</span></div><div class="cf-sdesc">Query the run's memory store for node-relevant context and past decisions.</div></div>
@@ -938,7 +932,7 @@ gk recall "auth tokens"    <span class="cmt"># retrieve contextual memory</span>
   <h2>Diagrams</h2>
   <p class="cf-sub">Explorable archify diagrams — architecture, execution workflow, run-resume lifecycle, and all eleven topologies. Inline SVG, trace motion, no scripts required beyond the viewer.</p>
   <div class="cf-skills">
-    <div class="cf-scard"><div class="cf-shead"><a href="diagrams/gk-architecture.html" style="color:inherit">Architecture</a><span class="cf-sstage">Explore</span></div><div class="cf-sdesc">Kit anatomy: CLI, kits, hooks, runtimes, evidence layer.</div></div>
+    <div class="cf-scard"><div class="cf-shead"><a href="diagrams/gk-architecture.html" style="color:inherit">Architecture</a><span class="cf-sstage">Explore</span></div><div class="cf-sdesc">Kit anatomy: CLI, kits, hooks, wave engine, evidence layer.</div></div>
     <div class="cf-scard"><div class="cf-shead"><a href="diagrams/gk-execution-workflow.html" style="color:inherit">Execution Workflow</a><span class="cf-sstage">Explore</span></div><div class="cf-sdesc">End-to-end: define → validate → dispatch waves → evidence → gate.</div></div>
     <div class="cf-scard"><div class="cf-shead"><a href="diagrams/gk-resume-lifecycle.html" style="color:inherit">Run Resume Lifecycle</a><span class="cf-sstage">Explore</span></div><div class="cf-sdesc">Idle → run → gating → merged, plus blocked/cancelled recovery.</div></div>
   </div>
@@ -960,7 +954,7 @@ gk recall "auth tokens"    <span class="cmt"># retrieve contextual memory</span>
 
 <div class="footer">
   GraphKit — Graph Engineering Kit for AI Coding Agents<br>
-  Built for Claude Code · Cursor · OpenCode · Codex · Pi<br>
+  Built for Claude Code · Pi<br>
   <a href="https://github.com/thanhNt16/graph-kit" style="color:var(--sonnet)">GitHub Repository</a> · 
   <a href="https://github.com/thanhNt16/graph-kit/blob/main/CHANGELOG.md" style="color:var(--sonnet)">Changelog</a> · 
   <a href="https://github.com/thanhNt16/graph-kit/tree/main/docs" style="color:var(--sonnet)">Documentation</a>

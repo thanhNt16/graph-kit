@@ -118,6 +118,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`gk memory consolidate` merge-retain keeps lifecycle `status` across re-consolidation**: a decay-marked pattern stays `deprecated`, a dismissed suggestion stays `dismissed` (previously every re-run flipped them back to `draft`/`proposed`); values outside the file kind's published enum still drop like corrupt fields.
 - **Existing claude-kit installs now prune retired assets**: `kits/claude/metadata.json` carries a `deletions` ledger (`skills/gk-compile`, `skills/gk-run`, `templates/memory-augmented.workflow.js`) — the installer's cpSync overlay never deletes, so pre-P3 installs kept the dead compile-runtime files forever. Pinned by a `kit-deletions` test row.
 
+### Added - P4 gallery + docs
+- **Template-aware graph commands**: every graph-accepting verb (`gk validate`, `gk gate`, `gk graph ascii|svg|waves|agents`) accepts a `GraphTemplate` `.gk.yaml` directly — the embedded graph is previewed in memory from parameter defaults, no materialize, no `--use`; required params without defaults fail with `TEMPLATE_NOT_GRAPH` and the materialize remedy.
+- **`gk validate <template>.gk.yaml` checks the template envelope plus its embedded graph** (findings carry a `graph.` path prefix).
+
+### Fixed - P4 gallery + docs
+- **`gk template materialize` writes provided params through to the matching declared input's `default`** — a value supplied at materialize is no longer re-demanded by `gk run start` (collision rule: materialized value wins, `--input` still overrides).
+- **`gk validate` resolves session-graph ids again** — regression from the template-aware rework (the bare no-file form is always a materialized Graph).
+- **Gallery honesty**: dream/doc-sweep/cook-plan/refactor-module relabeled `topology: custom` (they are arbitrary DAGs; the old diamond/loop-until-done claims were wrong), audit-pr stays `adversarial-verification`, bench-eval keeps `tournament`; cook-plan gains the `goal` parameter wired through node objectives; sentinel scrub (dream's empty-string defaults → "blank means whole store" prose), dead `recommendations.agents` blocks dropped, duplicate node ids removed.
+- **Docs refresh**: five-host claims reduced to Claude Code + Pi across README, landing page, architecture diagrams, worktree protocol, and templates guide; CLI reference now lists real subcommands (`evidence add|invalidate|report`, `memory trace|touch|recall|consolidate`, template-aware validate); SLP usage re-verified against the engine (fields exist in schema, headless `gk exec` path documented); dated reports (orchestration, SLP, audit) get historical banners; consolidation copy corrected to the four surviving pattern families.
+
 ## [0.3.8] - 2026-09-05
 ### Fixed
 - CI lint: auto-formatted run-resume sources (biome `useTemplate`/`useConst`/import order/format). No behavior change — 575 tests pass.

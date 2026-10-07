@@ -29,7 +29,7 @@
       "col": 0,
       "type": "backend",
       "label": "gk validate",
-      "sublabel": "9 checks",
+      "sublabel": "18 checks",
       "width": 72
     },
     {
@@ -130,8 +130,8 @@
       "title": "Execution Contracts",
       "items": [
         "graph.yaml is the single plan",
-        "gk validate enforces 9 checks before the ledger opens",
-        "Host skills run waves; the CLI only compiles and records"
+        "gk validate enforces 18 checks before the ledger opens",
+        "Host skills run waves; gk exec drives the same engine headless"
       ]
     },
     {

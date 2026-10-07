@@ -84,12 +84,9 @@ GraphKit enforces a strict, fail-fast sequential merge:
 
 ## Host Support
 
-This protocol is implemented in the `gk:execute` skill across all supported target kits:
+This protocol is implemented in the `gk:execute` skill across both host kits:
 
 | Kit | Surface | Support |
 |---|---|---|
 | Claude Code | `kits/claude/skills/gk-execute/SKILL.md` | Full worktree merge |
-| Cursor | `kits/cursor/skills/gk-execute/SKILL.md` | Worktree merge + same-tree fallback |
-| Codex CLI | `kits/codex/skills/gk-execute/SKILL.md` | Full worktree merge |
-| OpenCode | `kits/opencode/skill/gk-execute/SKILL.md` | Full worktree merge |
 | Pi / OMP | `kits/pi/skills/gk-execute/SKILL.md` | Full worktree merge (native `task` dispatch) |

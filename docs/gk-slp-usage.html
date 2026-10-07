@@ -67,7 +67,7 @@
 <p class="sub">Challengeable premises, ownership scopes, supervisor review, evidence-driven replans — all driven by one <code>graph.yaml</code>.</p>
 
 <h2><span class="num">1</span> Declare fields on nodes</h2>
-<p>Three new optional fields go on a node. All compose into <code>topology: custom</code> — no new topology needed.</p>
+<p>Optional fields go on a node. All compose into <code>topology: custom</code> — no new topology needed.</p>
 <pre><span class="k">nodes:</span>
   <span class="k">build-handoff:</span>
     <span class="f">agent</span>: implementer
@@ -109,7 +109,11 @@
   <div class="step">skill gk-execute drives waves</div><div class="arrow">→</div>
   <div class="step">gk run end</div>
 </div>
-<p><code>graph agents</code> materializes <code>.omp/agents/gk-&lt;node&gt;.md</code> — the frontmatter that lets omp's native <code>task</code> tool dispatch each node. Re-run it if the graph changes mid-run. From then on the gk-execute skill dispatches one <code>task({context, tasks[]})</code> batch per wave — you don't write dispatch code.</p>
+<div class="flow">
+  <div class="step">gk exec graph.yaml</div><div class="arrow">→</div>
+  <div class="step">headless: resolve → plan → dispatch → ledger</div>
+</div>
+<p><code>graph agents</code> materializes <code>.omp/agents/gk-&lt;node&gt;.md</code> — the frontmatter that lets omp's native <code>task</code> tool dispatch each node. Re-run it if the graph changes mid-run. From then on the gk-execute skill dispatches one <code>task({context, tasks[]})</code> batch per wave — you don't write dispatch code. The same engine runs headless via <code>gk exec</code> for CI and one-shot dispatch.</p>
 
 <h2><span class="num">3</span> Challenge — evidence reopens a premise</h2>
 <p>A peer that finds a declared assumption wrong ends its output with the terminal line:</p>

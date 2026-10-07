@@ -58,6 +58,9 @@
 
 <h1>GraphKit — SLP Orchestration</h1>
 <p class="sub">Implementation report · 2026-09-27 · <code>gk 0.3.0</code> working tree (unreleased)</p>
+<div class="card" style="border-color:#d29922">
+<p><strong>Historical report (2026-09-27).</strong> Snapshot of the SLP milestone. The node fields it describes (<code>assumptions</code>, <code>constraints</code>, <code>owns</code>, <code>role: supervisor</code>, <code>timeout_ms</code>) are current schema; the surrounding CLI has evolved — <code>gk run</code> + <code>gk exec</code> is the only execution path. Usage guide: <a href="gk-slp-usage.html">gk-slp-usage.html</a>.</p>
+</div>
 
 <div class="card">
 <p><strong>Origin.</strong> vhlam's <em>Supervisor–Lead–Peer</em> article identifies three orchestration failure modes this work addresses: <strong>pre-solve</strong> (main solves the problem before delegating, leaving subagents only confirm/reject), the <strong>parachute</strong> (an early design choice silently becomes a constraint for every later agent), and <strong>plan immunity</strong> (findings from the people doing the work can't change the plan). SLP's answer is operational, not cosmetic: roles are responsibilities + authority + escalation paths, dissent is a right gated on evidence, and the orchestration itself is reviewed by telemetry.</p>

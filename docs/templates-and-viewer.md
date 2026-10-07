@@ -133,7 +133,7 @@ The skill never modifies the source graph.
 
 ```bash
 gk inventory --target claude --json
-gk inventory --target cursor --json
+gk inventory --target pi --json
 ```
 
 Reports the installed agents, skills, tools, and MCP servers for the active target:
@@ -235,6 +235,6 @@ The path is printed rather than auto-opened.
 
 ## Cross-host parity
 
-- The `gk` CLI is identical across targets — `template pack|list|show`, `inventory`, and `validate/graph` behave the same.
-- `gk-template`, `gk-init-graph`, and `gk-visualize` skills exist in all five kits, and the `gk-visualize` bodies differ only in skill name and invocation prefix.
+- The `gk` CLI is identical across targets — `template pack|list|show|materialize`, `inventory`, and `validate/graph` behave the same. Graph-accepting verbs are template-aware: a `.gk.yaml` is previewed (embedded graph, parameter defaults) without materializing.
+- `gk-template`, `gk-init-graph`, and `gk-visualize` skills exist in both kits (claude, pi), and the `gk-visualize` bodies differ only in skill name and invocation prefix.
 - **Execution parity is total**: every host runs the same wave engine — interactive via `/gk:execute`, headless via `gk exec`. There is no compile step. Templates and diagrams behave the same everywhere.

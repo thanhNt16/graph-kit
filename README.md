@@ -8,14 +8,14 @@
 [![Release](https://github.com/thanhNt16/graph-kit/actions/workflows/release.yml/badge.svg)](https://github.com/thanhNt16/graph-kit/releases/latest)
 [![GitHub Pages](https://img.shields.io/badge/docs-pages-2ea043?logo=githubpages)](https://thanhnt16.github.io/graph-kit/)
 
-GraphKit gives Claude Code, Cursor, OpenCode, Codex CLI, and Pi one deterministic execution and verification layer: 11 canonical topologies, wave-ordered subagent dispatch, worktree-isolated parallel edits, machine-checked evidence gates, and durable resume across crashes.
+GraphKit gives Claude Code and Pi one deterministic execution and verification layer: 11 canonical topologies, wave-ordered subagent dispatch, worktree-isolated parallel edits, machine-checked evidence gates, and durable resume across crashes.
 
 - **Deterministic execution graphs** — `graph.yaml` compiles multi-agent coordination into static, wave-ordered DAGs instead of trusting LLM ad-hoc routing
 - **Evidence gates over agent prose** — `gk gate` checks machine-evaluated criteria, provenance, and freshness before admitting completion; prose is never proof
 - **Conflict-safe parallel worktrees** — run concurrent agent edits in isolated git worktrees with barrier merges (`/gk:execute --worktree`)
 - **Bounded loops with no-progress limits** — `loops[].no_progress_limit` fingerprints round outputs and stops repetitive failing cycles before burning budgets
 - **Crash & resume without zero restarts** — durable run ledger reconciles satisfied nodes and resumes child runs with ancestor provenance
-- **One kit across every coding agent** — `gk init` configures host-native agents, skills, hooks, and rules for 5 target IDEs and CLIs
+- **One kit across every coding agent** — `gk init` configures host-native agents, skills, hooks, and rules for Claude Code and Pi
 
 The future is many AI coding agents. GraphKit is the layer that makes their execution deterministic, isolated, and verified.
 
@@ -28,7 +28,7 @@ Run `npm i -g graphkit-gk && gk init` and your project gets:
 | Bounded recovery | Hard loop limits, `stop_when` ladders, and `no_progress_limit` early exhaustion |
 | Crash resilience | Checkpoint reconciliation and partial-graph resume (`gk run resume`) |
 | Isolated parallel edits | Git worktree isolation per write node with wave barrier merges |
-| Multi-host support | One kit configuring Claude Code, Cursor, OpenCode, Codex, and Pi |
+| Multi-host support | One kit configuring Claude Code and Pi |
 | Visual architecture | Standalone Archify HTML diagrams, SVG, and Excalidraw exports |
 
 ---
@@ -41,7 +41,7 @@ Developers whose AI coding workflows have outgrown single chat prompts into mult
 - Parallel subagents edit the same files at the same time and overwrite each other's changes
 - A retry loop runs 10 times making the exact same error, burning tokens with zero progress
 - A multi-step workflow crashes on step 4 of 5 and forces you to restart from step 1
-- You have to maintain different rules, prompt templates, and configs across Claude Code, Cursor, Codex, OpenCode, and Pi
+- You have to maintain different rules, prompt templates, and configs across every coding agent you use
 
 Before GraphKit, multi-agent workflows are improvised, brittle, and unverified. After GraphKit, agents follow compiled execution waves, produce auditable evidence, and respect hard budget bounds.
 
@@ -52,7 +52,7 @@ Before GraphKit, multi-agent workflows are improvised, brittle, and unverified. 
 | Retries loop endlessly on identical errors | `no_progress_limit` stops loops after consecutive identical failures |
 | Crashed runs restart from step 1, re-billing work | `gk run resume` reconciles satisfied nodes and resumes from checkpoint |
 | LLMs improvise edges and invent ad-hoc steps | Static wave-ordered DAG compiled from validated YAML |
-| Hand-written configs per agent tool | `gk init` configures all 5 hosts from one canonical kit |
+| Hand-written configs per agent tool | `gk init` configures both host kits from one canonical source |
 
 ---
 
@@ -77,9 +77,6 @@ cd your-project
 
 # Install kit into your IDE / CLI of choice:
 gk init                             # → .claude/   (Claude Code)
-gk init --target cursor             # → .cursor/   (Cursor)
-gk init --target opencode           # → .opencode/ (OpenCode)
-gk init --target codex              # → .codex/    (Codex CLI)
 gk init --target pi                 # → .omp/      (Pi / OMP)
 
 # Scaffold an execution graph from the template gallery:
@@ -102,9 +99,9 @@ your-project/
 │   ├── evidence/                    # content-addressed evidence artifacts & markers
 │   ├── memory/                      # salience-ranked cross-session project memory
 │   └── diagrams/                    # generated Archify HTML diagrams
-└── .claude/                         # or .cursor/, .omp/, .opencode/, .codex/
+└── .claude/                         # or .omp/ (Pi / OMP)
     ├── agents/                      # 24 specialized role agents (architect, reviewer, arbiter...)
-    ├── skills/                      # 13 session skills (brainstorm, execute, gate...)
+    ├── skills/                      # 11 session skills (execute, gate, template, recall...)
     └── rules/                       # host-native constraints & guardrails
 ```
 
@@ -275,14 +272,11 @@ gk memory consolidate
 
 ## Works across coding agents
 
-One `gk init` command configures all five host targets:
+One `gk init` command configures both host targets:
 
 | Host | Init target | Rule format | Agents | Skills | Execution path |
 |---|---|---|---|---|---|
 | **Claude Code** | `gk init` | `.claude/rules/` | `.claude/agents/` | `.claude/skills/` | `/gk:execute` |
-| **Cursor** | `gk init --target cursor` | `.cursor/rules/*.mdc` | `.cursor/agents/` | `.cursor/skills/` | `/gk:execute` (Task tool dispatch) |
-| **OpenCode** | `gk init --target opencode` | `AGENTS.md` | `.opencode/agent/` | `.opencode/skill/` | `/gk:execute` (Task tool dispatch) |
-| **Codex CLI** | `gk init --target codex` | `AGENTS.md` | `.codex/agents/` | `.agents/skills/` | `/gk:execute` (Spawn-prompt driven) |
 | **Pi (OMP)** | `gk init --target pi` | `AGENTS.md` | `.omp/agents/` | `.omp/skills/` | `/skill:gk-execute` (native `task` dispatch) |
 
 ---
@@ -305,7 +299,7 @@ One `gk init` command configures all five host targets:
 - **Not an LLM model runner.** GraphKit never invokes models directly or bills API tokens; execution runs through your host coding agent.
 - **Not a black-box cloud service.** GraphKit is 100% local, MIT-licensed, and inspectable. Your graphs, runs, and memories live in git-friendly plain files in `.graphkit/`.
 - **Not an unconstrained autonomous swarm.** Nodes cannot schedule arbitrary successors, spawn unsanctioned tools, or edit their own execution topology.
-- **Not a replacement for your editor.** GraphKit enhances Claude Code, Cursor, OpenCode, Codex, and Pi — giving them the coordination layer they lack.
+- **Not a replacement for your editor.** GraphKit enhances Claude Code and Pi — giving them the coordination layer they lack.
 
 ---
 
@@ -323,15 +317,20 @@ $ gk --help
     init                             Install the GraphKit kit into the current project
     new                              Scaffold a new project with the GraphKit kit
     gate [file]                      Deterministic evidence gate: MERGE/BLOCK over required evidence keys
-    validate [file]                  Validate a graph.yaml
+    validate [file]                  Validate a graph.yaml (or preview a .gk.yaml template)
     graph [subcommand] [args...]     Graph lifecycle commands
+                                     Subcommands: topologies list switch show inspect new ascii svg waves agents
     memory [subcommand] [args...]  Memory commands
+                                     Subcommands: trace touch recall consolidate
     models [subcommand] [args...]    Per-target model mapping commands
     template [subcommand] [args...]  Package, list, inspect, and materialize reusable GraphTemplates
     inventory                        Inventory installed agents, skills, tools, and MCP servers
     evidence [subcommand] [args...]  Evidence commands
+                                     Subcommands: add invalidate report
     status                           Summarize active graph run and evidence coverage
     run [subcommand] [args...]       Run ledger commands
+                                     Subcommands: start node dispatch land end status resume take round analyze
+    exec [graph]                     Headless graph runner — resolve, plan, and execute every node via child-process dispatch
     suggest                          Show ranked workflow suggestions from memory
 ```
 
