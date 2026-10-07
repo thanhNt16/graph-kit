@@ -8,19 +8,13 @@ parameters:
   task:
     description: Focus area for the audit (e.g. "the auth module")
     required: true
-recommendations:
-  agents:
-    - code-reviewer
-    - software-architect
-  skills:
-    - receiving-code-review
 graph:
   apiVersion: graphkit.dev/v2
   kind: Graph
   metadata:
     name: audit-pr
     description: Adversarial security and quality audit of {{task}}
-  topology: diamond
+  topology: adversarial-verification
   inputs:
     task:
       type: string

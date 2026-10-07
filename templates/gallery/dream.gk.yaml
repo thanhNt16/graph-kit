@@ -7,25 +7,18 @@ metadata:
   version: 1
 parameters:
   focus:
-    description: Optional theme to dream about (e.g. "release workflow"); empty = whole store
+    description: Optional theme to dream about (e.g. "release workflow"); blank = whole store
     required: false
-    default: ""
   since:
-    description: Optional ISO date; only consider runs/patterns after it; empty = no cutoff
+    description: Optional ISO date; only consider runs/patterns after it; blank = no cutoff
     required: false
-    default: ""
-recommendations:
-  agents:
-    - memory-curator
-    - agents-orchestrator
-    - qa-engineer
 graph:
   apiVersion: graphkit.dev/v2
   kind: Graph
   metadata:
     name: dream
     description: Consolidate project memory into a reviewable proposal
-  topology: diamond
+  topology: custom
   inputs:
     focus:
       type: string
@@ -39,8 +32,8 @@ graph:
       objective: >
         Read .graphkit/runs/index.jsonl, .graphkit/memory/patterns/, and
         .graphkit/memory/suggestions/. Summarize: run count by graph, top
-        patterns by salience. Focus theme: {{focus}}. Cutoff: {{since}}.
-        Output a compact digest only — no writes.
+        patterns by salience. Optional scope: focus theme "{{focus}}", cutoff "{{since}}" —
+        blank means no restriction. Output a compact digest only — no writes.
       constraints:
         - no_write: true
       depend_on: []

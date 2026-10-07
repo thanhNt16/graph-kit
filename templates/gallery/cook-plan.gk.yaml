@@ -4,16 +4,10 @@ metadata:
   name: cook-plan
   description: Cook Plan execution loop — plan, bounded implement/test repair, eval gate, integrate
   version: 1
-recommendations:
-  agents:
-    - planner
-    - implementer
-    - test-automator
-    - qa-engineer
-    - release-manager
-  skills:
-    - writing-plans
-    - test-driven-development
+parameters:
+  goal:
+    description: The objective to plan from (e.g. "Ship CSV export with streaming")
+    required: true
 graph:
   apiVersion: graphkit.dev/v2
   kind: Graph
@@ -23,6 +17,10 @@ graph:
   topology: custom
   outputs:
     evidence_dir: .graphkit/evidence
+  inputs:
+    goal:
+      type: string
+      required: true
   evidence:
     required_keys: [plan-doc, impl-report, test-report, eval-verdict]
     freshness: strict
@@ -31,7 +29,7 @@ graph:
       agent: planner
       model: sonnet
       objective: >-
-        Convert the goal into a phase contract: outcome, acceptance criteria,
+        Convert the goal — {{goal}} — into a phase contract: outcome, acceptance criteria,
         owned files, predecessor phases, interface contracts, and assumptions
         open to revision. Separate constraints-with-sources (immutable, source:
         human) from provisional choices.

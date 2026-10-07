@@ -81,11 +81,15 @@ describe("GraphTemplate v1 schema", () => {
     expect(result.success).toBe(false);
   });
 
-  test("rejects a parameter with no default and required not set", () => {
+  test("accepts an optional parameter without a default (audit F7)", () => {
     const t = baseTemplate();
     t.parameters.loose = { description: "x" };
+    t.graph.nodes.reviewer.objective = "Audit {{target}} for {{focus}} (scope: {{loose}}).";
     const result = GraphTemplateSchema.safeParse(t);
-    expect(result.success).toBe(false);
+    expect(result.success).toBe(true);
+    // Unprovided optionals render as empty strings, not forced sentinels.
+    const graph = materializeTemplate(GraphTemplateSchema.parse(t), { target: "src" });
+    expect(graph.nodes.reviewer.objective).toBe("Audit src for general application security (scope: ).");
   });
 
   test("rejects a parameter name that is not lower-camel or kebab-case", () => {
@@ -161,13 +165,13 @@ describe("cook-plan gallery template", () => {
   );
 
   test("gallery cook-plan.gk.yaml materializes and validates clean", () => {
-    const graph = materializeTemplate(tpl, {});
+    const graph = materializeTemplate(tpl, { goal: "Ship the export feature" });
     const findings = validateGraph(graph, ROOT).filter(isBlocking);
     expect(findings).toEqual([]);
   });
 
   test("role eval-gate is not an unknown-role advisory", () => {
-    const graph = materializeTemplate(tpl, {});
+    const graph = materializeTemplate(tpl, { goal: "Ship the export feature" });
     expect(validateGraph(graph, ROOT).filter((f) => f.check === "unknown-role")).toEqual([]);
   });
 });

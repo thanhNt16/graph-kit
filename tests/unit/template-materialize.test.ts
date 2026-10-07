@@ -255,7 +255,7 @@ graph:
       ["refactor-module", { module: "src/store", notes: "extract cache layer" }],
       ["bench-eval", { workload: "summarization" }],
       ["doc-sweep", { topic: "installation guide" }],
-      ["cook-plan", {}],
+      ["cook-plan", { goal: "Ship the export feature" }],
     ];
     for (const [name, params] of cases) {
       const res = materializeTemplate(name, params, { cwd, home });

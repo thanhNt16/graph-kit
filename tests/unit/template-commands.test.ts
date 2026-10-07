@@ -301,7 +301,7 @@ describe("gk template list / show", () => {
       const res = runTemplateShow({ cwd, home, name: "dream" });
       expect(res.status).toBe("ok");
       expect(res.data.origin).toBe("gallery");
-      expect(res.data.topology).toBe("diamond");
+      expect(res.data.topology).toBe("custom");
       expect(res.data.waveCount).toBe(3);
       expect(res.data.nodes.map((n: { id: string }) => n.id)).toEqual(["harvest", "dream", "challenge"]);
       const node = (id: string) => res.data.nodes.find((n: { id: string }) => n.id === id);
@@ -313,9 +313,9 @@ describe("gk template list / show", () => {
       expect(params.map((p: { name: string }) => p.name).sort()).toEqual(["focus", "since"]);
       const focus = params.find((p: { name: string }) => p.name === "focus");
       expect(focus.required).toBe(false);
-      expect(focus.default).toBe("");
+      expect(focus.default).toBeUndefined();
       expect(typeof focus.description).toBe("string");
-      expect(res.data.recommendations.agents).toContain("memory-curator");
+      expect(res.data.recommendations.agents).toEqual([]);
     } finally {
       if (prev === undefined) delete process.env.GK_GALLERY_DIR;
       else process.env.GK_GALLERY_DIR = prev;

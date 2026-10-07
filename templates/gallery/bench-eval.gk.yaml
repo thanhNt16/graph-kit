@@ -9,9 +9,6 @@ parameters:
     description: Task workload to benchmark (e.g. "summarization")
     required: true
 recommendations:
-  agents:
-    - software-architect
-    - code-reviewer
   tools:
     - web_search
 graph:

@@ -12,12 +12,6 @@ parameters:
     description: Refactor constraints, goals, or architectural notes
     required: false
     default: "Preserve all external contracts and existing tests."
-recommendations:
-  agents:
-    - software-architect
-    - qa-engineer
-  skills:
-    - test-driven-development
 graph:
   apiVersion: graphkit.dev/v2
   kind: Graph

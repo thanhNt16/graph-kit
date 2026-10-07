@@ -110,13 +110,6 @@ export const GraphTemplateSchema = z
           message: `Required parameter "${name}" cannot have a default`,
         });
       }
-      if (!param.required && param.default === undefined) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ["parameters", name],
-          message: `Parameter "${name}" without a default must set required: true`,
-        });
-      }
     }
 
     const uses: PlaceholderUse[] = [];
@@ -172,6 +165,10 @@ function resolveValue(key: string, template: GraphTemplate, values: TemplateValu
   const base = jsonForm ? key.slice(0, -5) : key;
   let value: unknown = base in values ? values[base] : template.parameters[base]?.default;
   if (value === undefined) {
+    // Audit F7: an optional parameter may omit its default — an unprovided
+    // optional resolves to an empty string instead of forcing `default: ""`
+    // sentinels into template sources.
+    if (template.parameters[base] && !template.parameters[base].required) return "";
     throw new Error(`Missing value for required parameter "${base}"`);
   }
   if (jsonForm && typeof value === "string") {

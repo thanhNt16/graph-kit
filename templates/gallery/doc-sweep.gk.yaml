@@ -8,19 +8,13 @@ parameters:
   topic:
     description: Topic or subsystem to audit and document (e.g. "CLI commands")
     required: true
-recommendations:
-  agents:
-    - document-generator
-    - software-architect
-  skills:
-    - doc-coauthoring
 graph:
   apiVersion: graphkit.dev/v2
   kind: Graph
   metadata:
     name: doc-sweep
     description: Document {{topic}}
-  topology: loop-until-done
+  topology: custom
   inputs:
     topic:
       type: string
