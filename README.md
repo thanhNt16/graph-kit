@@ -82,7 +82,7 @@ gk init --target pi                 # → .omp/      (Pi / OMP)
 # Scaffold an execution graph from the template gallery:
 gk template materialize audit-pr --use
 
-# Gate-check the graph against 9 static DAG rules:
+# Gate-check the graph against 18 static DAG rules:
 gk validate
 
 # Instant terminal preview:

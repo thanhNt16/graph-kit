@@ -156,7 +156,7 @@
     <div class="stat"><div class="stat-num">11</div><div class="stat-label">Canonical Topologies</div></div>
     <div class="stat"><div class="stat-num">2</div><div class="stat-label">Host Targets (Claude Code, Pi)</div></div>
     <div class="stat"><div class="stat-num">18</div><div class="stat-label">Static DAG Checks</div></div>
-    <div class="stat"><div class="stat-num">8</div><div class="stat-label">Native Agents</div></div>
+    <div class="stat"><div class="stat-num">24</div><div class="stat-label">Role Agents per Host</div></div>
     <div class="stat"><div class="stat-num">sha256</div><div class="stat-label">Content-Addressed Store</div></div>
     <div class="stat"><div class="stat-num">0</div><div class="stat-label">Daemons / Lock-In</div></div>
   </div>
@@ -177,7 +177,7 @@
 
     <div class="lifecycle-card">
       <div class="card-num">02. VALIDATE</div>
-      <h3>🛡️ 9-Check DAG Gate</h3>
+      <h3>🛡️ 18-Check DAG Gate</h3>
       <p>Fail fast before execution. Static checks verify syntax, schema, DAG acyclicity, agent file existence, reference paths, required evidence keys, and loop boundaries.</p>
       <a href="#validation">Validation Rules →</a>
     </div>
@@ -246,7 +246,7 @@ gk init --target pi                      <span class="cmt"># → .omp/      (Pi 
 
 <span class="cmt"># Or materialize a workflow from the template gallery:</span>
 gk template materialize audit-pr --params '<span class="str">{"task":"the auth module"}</span>' --use
-gk validate                              <span class="cmt"># check active graph against 9 DAG rules</span></div>
+gk validate                              <span class="cmt"># check active graph against 18 DAG rules</span></div>
   </div>
 </div>
 
@@ -433,7 +433,7 @@ gk validate                              <span class="cmt"># check active graph 
 <div class="section" id="validation">
   <div class="section-label">Declarative Schema &amp; Node Binding</div>
   <h2>Per-Node Contracts &amp; Static Gating</h2>
-  <p>Every node binds its own configuration: model tier (opus, sonnet, haiku, fable), tool allowlists, reference files, loop bounds, advisor escalation triggers, and expected evidence outputs. <code>gk validate</code> enforces 9 static checks before anything runs.</p>
+  <p>Every node binds its own configuration: model tier (opus, sonnet, haiku, fable), tool allowlists, reference files, loop bounds, advisor escalation triggers, and expected evidence outputs. <code>gk validate</code> enforces 18 static checks before anything runs.</p>
 
   <div class="install-grid">
     <div class="code-block">
@@ -471,7 +471,7 @@ gk validate                              <span class="cmt"># check active graph 
     </div>
 
     <div class="code-block">
-      <div class="code-header"><div class="code-dot" style="background:#f85149"></div><div class="code-dot" style="background:#d29922"></div><div class="code-dot" style="background:#3fb950"></div> 9 Static DAG Validation Gates</div>
+      <div class="code-header"><div class="code-dot" style="background:#f85149"></div><div class="code-dot" style="background:#d29922"></div><div class="code-dot" style="background:#3fb950"></div> 18 Static DAG Validation Gates</div>
       <div class="code-body"><span class="cmt"># Run before dispatch:</span>
 gk validate
 
@@ -485,7 +485,7 @@ gk validate
 <span class="cmt"># 8. Loop Exits: stop_when, gate_evidence, or max_rounds set</span>
 <span class="cmt"># 9. Advisory warnings: wrong-shaped constraint values (e.g. tools_allowlist: true) and concurrent duplicate evidence producers (route-exclusive handlers and declared fan-out families exempt)</span>
 
-<span class="str">PASS: 9 validation gates satisfied</span></div>
+<span class="str">PASS: 18 validation gates satisfied</span></div>
     </div>
   </div>
 </div>
@@ -770,7 +770,7 @@ gk memory recall "auth tokens"    <span class="cmt"># retrieve contextual memory
 
     <div class="cf-stage">
       <div class="cf-top"><span class="cf-num g-sonnet">03</span><span class="cf-title">Validate</span></div>
-      <div class="cf-role">9 static DAG checks — nothing executes until the DAG is sound.</div>
+      <div class="cf-role">18 static DAG checks — nothing executes until the DAG is sound.</div>
       <div class="cf-pills">
         <span class="cf-pill g-sonnet">gk validate</span>
       </div>
