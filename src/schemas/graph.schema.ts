@@ -68,8 +68,8 @@ const FanOutConfig = z
   .object({
     briefs_from: z.string().min(1),
     template: z.string().min(1).default("{brief.body}"),
-    // Only "append" is implemented — the engine joins brief outputs in order.
-    // merge/vote are declared-but-unimplemented; validate warns when used.
+    // Join mode for member outputs: "append" concatenates in brief order,
+    // "merge" dedupes normalized lines, "vote" picks the majority output.
     reduce: z.enum(["append", "merge", "vote"]).default("append"),
   })
   .strict();

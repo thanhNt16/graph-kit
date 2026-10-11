@@ -273,19 +273,10 @@ export function validateGraph(graph: Graph, projectRoot: string): Finding[] {
     }
   }
 
-  // 7b'. Unimplemented orchestration fields (ADVISORY): `fan_out.reduce` other
-  // than "append" and `effort` scale semantics ride the plan payload but the
-  // engine doesn't evaluate them yet — surface so an author doesn't rely on
-  // merge/vote aggregation or effort widening that never happens.
+  // 7b'. Unimplemented orchestration fields (ADVISORY): `effort` scale
+  // semantics ride the plan payload but the engine doesn't evaluate it yet —
+  // surface so an author doesn't rely on effort widening that never happens.
   for (const [id, node] of Object.entries(graph.nodes)) {
-    if (node.fan_out && node.fan_out.reduce !== "append") {
-      findings.push({
-        check: "unimplemented-field",
-        path: `nodes.${id}.fan_out.reduce`,
-        message: `fan_out.reduce "${node.fan_out.reduce}" is declared but the engine appends all brief outputs unconditionally — merge/vote reducers are not implemented`,
-        severity: "warn",
-      });
-    }
     if (node.effort && node.effort !== "standard") {
       findings.push({
         check: "unimplemented-field",
