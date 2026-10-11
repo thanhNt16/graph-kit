@@ -351,6 +351,10 @@ export const GraphSchema = z
     // node briefs re-read as `## Progress so far` (waves payload, materialized
     // agents, resume-derived objectives). 0 disables the injection.
     progress_tail: z.number().int().min(0).default(20),
+    // Learned-items index: how many entries of `## Learned patterns` (adopted
+    // learn proposals + adopted_by:"gk-learn" memory items) node briefs
+    // re-read — same injection path as progress_tail. 0 disables it.
+    learn_index_tail: z.number().int().min(0).default(20),
     // Run-level context budget — a planning-currency cap over the SUM of
     // nodes' declared budget_tokens allocations, never metered API tokens
     // (only the host can count those). Recorded into the run's meta.json at

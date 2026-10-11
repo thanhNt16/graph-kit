@@ -2,6 +2,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync
 import { join } from "node:path";
 import { budgetRemainingByNode } from "../compiler/plan.js";
 import { GraphKitError } from "../errors.js";
+import { learnIndex } from "../learn/index.js";
 import { progressRecitation } from "../runs/ledger.js";
 import type { Graph } from "../schemas/graph.schema.js";
 import { agentFileName, getTarget } from "../targets/registry.js";
@@ -81,8 +82,10 @@ export function materializeNodeAgents(cwd: string, graph: Graph): Record<string,
   const mapping: Record<string, string> = {};
   const wanted = new Set<string>();
   // Recitation channel: the active run's progress.md tail rides each agent
-  // body so a fresh node context sees what prior nodes logged.
+  // body so a fresh node context sees what prior nodes logged — and the
+  // learned-items index tells it which adopted patterns apply.
   const recite = progressRecitation(cwd, graph.progress_tail);
+  const learnIdx = learnIndex(cwd, graph.learn_index_tail);
   // Model-visible run budget: null unless the graph declares `budget:`.
   const budgetRemaining = budgetRemainingByNode(graph);
 
@@ -117,7 +120,8 @@ export function materializeNodeAgents(cwd: string, graph: Graph): Record<string,
       (budgetRemaining?.has(nodeId)
         ? `\n## Context budget\n- Context budget remaining: ${budgetRemaining.get(nodeId)} tokens (planning currency — the run cap over declared budget_tokens, not metered usage)\n`
         : "") +
-      (recite ? `\n${recite}\n` : "");
+      (recite ? `\n${recite}\n` : "") +
+      (learnIdx ? `\n${learnIdx}\n` : "");
     const fm: string[] = [
       "---",
       `name: ${agentName}`,

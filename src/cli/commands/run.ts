@@ -6,6 +6,7 @@ import type { CAC } from "cac";
 import { isBlocking, validateGraph } from "../../compiler/validate.js";
 import { GraphKitError } from "../../errors.js";
 import { parseMarker } from "../../evidence/marker.js";
+import { learnIndex, learnRunSummary } from "../../learn/index.js";
 import { analyzeRun } from "../../runs/analyze.js";
 import { budgetStatus, declaredNodeBudget } from "../../runs/budget.js";
 import {
@@ -212,7 +213,16 @@ export function registerRunCommands(cli: CAC) {
           // executed with a pre-orchestration-fields gk-execute). Surface it at
           // the one moment the orchestrator is guaranteed to look — run start.
           const warnings = kitVersionWarnings(cwd);
-          emit(ok(warnings.length ? { ...started, warnings } : started));
+          // Learned-items index rides run start the same way the progress
+          // recitation rides briefs: run-start context sees landed patterns.
+          const learnIdx = learnIndex(cwd, graph.learn_index_tail);
+          emit(
+            ok({
+              ...started,
+              ...(learnIdx ? { learn_index: learnIdx } : {}),
+              ...(warnings.length ? { warnings } : {}),
+            }),
+          );
           return;
         }
         if (subcommand === "node") {
@@ -515,6 +525,9 @@ export function registerRunCommands(cli: CAC) {
           }
           const meta = dir ? readRunMeta(cwd, basename(dir)) : null;
           const budget = dir && meta ? budgetStatus(cwd, basename(dir), meta) : null;
+          // Learn proposals this run produced — rejected ones stay visible
+          // here instead of disappearing from the account.
+          const learn = dir ? learnRunSummary(cwd, basename(dir)) : null;
           emit(
             ok({
               active: dir,
@@ -524,6 +537,7 @@ export function registerRunCommands(cli: CAC) {
               // Planning-currency accounting over declared budget_tokens —
               // present only when the run recorded a graph budget.
               ...(budget ? { budget } : {}),
+              ...(learn ? { learn } : {}),
               ...(ptr?.dangling ? { dangling: true, dangling_run: basename(ptr.dir) } : {}),
             }),
           );

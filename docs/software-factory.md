@@ -229,6 +229,22 @@ gk learn list                     # all proposals with status
 * `revert` removes the installed files and marks the proposal `reverted`, so
   adoption is always undoable.
 
+Adoption also passes a deterministic admission lint (no model call, so the
+text cannot argue its way past the gate). `LEARN_NO_EVIDENCE` fires when
+`hypothesis`/`evidence` are empty — every learned mutation must cite the
+episode that motivated it. Safety families (`injection`, `exfiltration`,
+`destructive`, `persistence`) regex-scan the hypothesis, evidence, proposed
+skill body and command fix; a hit is a hard `LEARN_LINT` reject. A missing
+trigger cue (no `when:` phrase in the description) and skill bodies over 200
+lines are advisory findings — they land in `adopted.lint` without blocking.
+Every evaluate/adopt/reject/revert appends `{at, proposal, action, verdict,
+families}` to `.graphkit/learn/.verdicts.jsonl`; `gk learn list` footers the
+`{landed, rejected, reverted}` tally and `gk run status` gains a `learn`
+section for the run's proposals, so rejections stay visible. Finally, node
+briefs inject a `## Learned patterns` index (adopted proposals + memory items
+stamped `adopted_by: "gk-learn"`, grouped by kind/category, ~20 newest
+entries, `learn_index_tail: 0` to disable) alongside `## Progress so far`.
+
 ## The gallery template
 
 `gk template materialize software-factory` emits an 8-phase production line
