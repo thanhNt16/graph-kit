@@ -261,7 +261,7 @@ describe("deriveResumeGraph", () => {
     expect(derived.metadata.name).toBe("demo-resume");
     expect(derived.nodes.b!.depend_on).toEqual([]);
     expect(derived.nodes.b!.refs).toEqual([
-      { path: ".graphkit/evidence/a-out.md", purpose: `resumed evidence from node a (run ${id})` },
+      { path: ".graphkit/evidence/a-out.md", purpose: `resumed evidence from node a (run ${id})`, holdout: false },
     ]);
     expect(derived.nodes.c!.depend_on).toEqual(["b"]);
     expect(derived.topology).toBe("custom");
@@ -329,8 +329,8 @@ describe("deriveResumeGraph", () => {
     // group 1 [a,b]: a dropped → [b], a-out pruned; group 2 [d]: emptied → dropped;
     // group 3 [c]: c-ghost undeclared by kept member → gate_evidence field dropped, stop_when keeps group
     expect(derived.loops).toEqual([
-      { nodes: ["b"], max_rounds: 3, gate_evidence: ["b-out"] },
-      { nodes: ["c"], max_rounds: 2, stop_when: "no blockers" },
+      { nodes: ["b"], max_rounds: 3, kind: "judged", gate_evidence: ["b-out"] },
+      { nodes: ["c"], max_rounds: 2, kind: "judged", stop_when: "no blockers" },
     ]);
     expect(GraphSchema.safeParse(derived).success).toBe(true);
   });

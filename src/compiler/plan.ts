@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import YAML from "yaml";
 import { GraphKitError } from "../errors.js";
+import { visibleRefs } from "../evidence/criteria.js";
 import type { Graph } from "../schemas/graph.schema.js";
 
 // Kahn levelization shared by the executor (`graph waves`), the renderers
@@ -161,7 +162,11 @@ export function planGraph(graph: Graph, opts?: { source?: string }): PlanGraph {
       objective: n?.objective?.trim() || "",
       tools: n?.tools || [],
       skills: n?.skills || [],
-      refs: n?.refs || [],
+      // Holdout seal (belt-and-suspenders under the HOLDOUT_LEAK compiler
+      // check): sealed refs — `criteria/*.holdout.md` paths or `holdout: true`
+      // — are stripped from every non-eval-gate payload, so materialized
+      // builder agents never see the rubric even if validate was skipped.
+      refs: visibleRefs(n?.role, n?.refs || []),
       advisor: n?.advisor ?? null,
       fan_out: n?.fan_out ?? null,
       retry: n?.retry ?? null,

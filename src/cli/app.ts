@@ -5,6 +5,7 @@ import { type CAC, cac } from "cac";
 import { APP_VERSION } from "../version.js";
 import { registerEvidenceCommand } from "./commands/evidence.js";
 import { registerExecCommand } from "./commands/exec.js";
+import { registerFeaturesCommand } from "./commands/features.js";
 import { registerGateCommand } from "./commands/gate.js";
 import { registerGraphCommands } from "./commands/graph.js";
 import { registerInventoryCommands } from "./commands/inventory.js";
@@ -12,6 +13,7 @@ import { registerKitCommands } from "./commands/kit.js";
 import { registerMemoryCommands } from "./commands/memory.js";
 import { registerModelsCommands } from "./commands/models.js";
 import { registerRunCommands } from "./commands/run.js";
+import { registerScheduleCommands } from "./commands/schedule.js";
 import { registerStatusCommand } from "./commands/status.js";
 import { registerSuggestCommands } from "./commands/suggest.js";
 import { registerTemplateCommands } from "./commands/template.js";
@@ -26,9 +28,11 @@ export function buildCli(): CAC {
   registerTemplateCommands(cli);
   registerInventoryCommands(cli);
   registerEvidenceCommand(cli);
+  registerFeaturesCommand(cli);
   registerStatusCommand(cli);
   registerRunCommands(cli);
   registerExecCommand(cli);
   registerSuggestCommands(cli);
+  registerScheduleCommands(cli);
   return cli;
 }

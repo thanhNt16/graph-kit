@@ -65,7 +65,11 @@ describe("run resume e2e", () => {
     const derived = YAML.parse(readFileSync(resume.data.session.path, "utf-8"));
     expect(Object.keys(derived.nodes)).toEqual(["build"]);
     expect(derived.nodes.build.refs).toEqual([
-      { path: ".graphkit/evidence/scan-done.md", purpose: `resumed evidence from node scan (run ${start.data.id})` },
+      {
+        path: ".graphkit/evidence/scan-done.md",
+        purpose: `resumed evidence from node scan (run ${start.data.id})`,
+        holdout: false,
+      },
     ]);
 
     // 4. child run is active with provenance; status shows the chain

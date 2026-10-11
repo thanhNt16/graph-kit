@@ -26,6 +26,12 @@ const RefSchema = z
   .object({
     path: z.string(),
     purpose: z.string(),
+    // Seals the ref as a holdout scenario: only `role: eval-gate` nodes may
+    // reference it — a builder (any other role, unset included) is a
+    // HOLDOUT_LEAK compiler error, and the planner strips it from non-eval-gate
+    // payloads. The `criteria/<id>.holdout.md` filename convention seals
+    // without the flag (src/evidence/criteria.ts).
+    holdout: z.boolean().default(false),
   })
   .strict();
 
@@ -64,26 +70,106 @@ const GateConfig = z
   })
   .strict();
 
+// The automation heartbeat: a declared cadence the graph is meant to run on.
+// gk is a local CLI with no daemon — `gk schedule` reads this block and emits
+// platform-native artifacts (crontab line, GitHub Actions workflow, launchd
+// plist, Claude Code /loop snippet) the host scheduler actually executes.
+// Cron *syntax* is not enforced here (a string can't carry a named finding):
+// malformed expressions surface as the `schedule-cron` check in validate.ts.
+const ScheduleConfig = z
+  .object({
+    cron: z.string().min(1),
+    // Which gk verb the cadence drives: "exec" (headless run, default) or
+    // "run" (emitters render `gk run start`).
+    command: z.enum(["exec", "run"]).default("exec"),
+    description: z.string().optional(),
+  })
+  .strict();
+
+export type Schedule = z.infer<typeof ScheduleConfig>;
+
 const FanOutConfig = z
   .object({
     briefs_from: z.string().min(1),
     template: z.string().min(1).default("{brief.body}"),
-    // Only "append" is implemented — the engine joins brief outputs in order.
-    // merge/vote are declared-but-unimplemented; validate warns when used.
+    // Join mode for member outputs: "append" concatenates in brief order,
+    // "merge" dedupes normalized lines, "vote" picks the majority output.
     reduce: z.enum(["append", "merge", "vote"]).default("append"),
   })
   .strict();
+
+// Loop kinds: "judged" (default, today's behavior) exits on a model-evaluated
+// predicate (stop_when) or an evidence gate — the right tool for fuzzy
+// conditions. Mechanical kinds never invoke a judge: "polling" re-checks an
+// evidence marker each round via `gk run poll` until it is satisfied or
+// max_wait_ms/max_rounds exhaust (poll_timeout); "counting" exits on a
+// deterministic predicate over run state (exit_when).
+export const LoopKindSchema = z.enum(["judged", "polling", "counting"]);
+export type LoopKind = z.infer<typeof LoopKindSchema>;
+
+const PollConfig = z
+  .strictObject({
+    // The deterministic check: does a fresh (non-stale, non-superseded)
+    // evidence marker exist for this key.
+    evidence_key: z.string().min(1).optional(),
+    // Advisory pacing for the orchestrator — `gk run poll` itself never sleeps.
+    interval_ms: z.number().int().min(1).default(5000),
+    max_wait_ms: z.number().int().min(1).default(600000),
+  })
+  .strict();
+
+// Zero-judgment exit predicate: satisfied when every listed evidence key is
+// fresh OR the round count reaches rounds_eq — whichever first. At least one
+// predicate is required; an empty exit_when could never be evaluated.
+const ExitWhen = z
+  .strictObject({
+    evidence_all_fresh: z.array(z.string().min(1)).min(1).optional(),
+    rounds_eq: z.number().int().min(1).optional(),
+  })
+  .refine((d) => d.evidence_all_fresh != null || d.rounds_eq != null, {
+    message: "exit_when requires at least one predicate: evidence_all_fresh or rounds_eq",
+  });
 
 export const LoopGroupSchema = z
   .strictObject({
     nodes: z.array(z.string().min(1)).min(1),
     max_rounds: z.number().int().min(1),
+    kind: LoopKindSchema.default("judged"),
     stop_when: z.string().min(1).optional(),
     gate_evidence: z.array(z.string().min(1)).min(1).optional(),
+    poll: PollConfig.optional(),
+    exit_when: ExitWhen.optional(),
     no_progress_limit: z.number().int().min(2).optional(),
+    // Jaccard threshold over normalized failure signatures: consecutive rounds
+    // whose fingerprints differ but whose signatures are this similar still
+    // count toward the no-progress streak. Unset = byte-exact matching only.
+    no_progress_similarity: z.number().min(0).max(1).optional(),
   })
-  .refine((data) => Boolean(data.stop_when || data.gate_evidence), {
-    message: "At least one of stop_when or gate_evidence must be provided",
+  .superRefine((data, ctx) => {
+    if (data.kind === "polling") {
+      if (!data.poll)
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["poll"],
+          message: 'kind "polling" requires a poll: block',
+        });
+      return;
+    }
+    if (data.kind === "counting") {
+      if (!data.exit_when)
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["exit_when"],
+          message: 'kind "counting" requires an exit_when: predicate',
+        });
+      return;
+    }
+    if (!data.stop_when && !data.gate_evidence) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "At least one of stop_when or gate_evidence must be provided",
+      });
+    }
   });
 
 export type LoopGroup = z.infer<typeof LoopGroupSchema>;
@@ -108,9 +194,11 @@ const NodeDefSchema = z
     evidence: z.array(z.string()).default([]),
     // Free-form label. Compiler-recognized roles: "eval-gate" (authoring-time
     // contract — requires an `eval` config block and a depend_on, checked by
-    // the compiler and resume; run analysis lists these nodes) and
-    // "supervisor" (materialized with read-only tools, node-agents.ts).
-    // Neither role drives engine execution. Any other value surfaces an
+    // the compiler and resume; run analysis lists these nodes),
+    // "supervisor" (materialized with read-only tools, node-agents.ts), and
+    // "initializer" (expected producer of the feature list — validate warns
+    // when features.required is set but no node carries it).
+    // None of these roles drive engine execution. Any other value surfaces an
     // unknown-role advisory warning in the compiler.
     role: z.string().optional(),
     eval: EvalConfig.optional(),
@@ -169,6 +257,17 @@ const EvidenceSchema = z
     threshold: z.number().min(0).max(1).optional(),
     freshness: z.enum(["report", "strict"]).default("report"),
     require_landed: z.boolean().default(false),
+  })
+  .strict();
+
+// The durable backlog the initializer → worker → gate loop drives: when
+// `required` is true, `gk gate` BLOCKs while any item in the list has
+// `passes: false` (verdict reason FEATURES_OPEN:n). `path` relocates the
+// store (default .graphkit/feature-list.json, resolved from project root).
+const FeaturesConfig = z
+  .object({
+    required: z.boolean().default(false),
+    path: z.string().min(1).optional(),
   })
   .strict();
 
@@ -246,6 +345,8 @@ export const GraphSchema = z
       report: ".graphkit/reports/{name}.md",
     })),
     loops: z.array(LoopGroupSchema).optional(),
+    features: FeaturesConfig.optional(),
+    schedule: ScheduleConfig.optional(),
   })
   .strict()
   .superRefine((graph, ctx) => {

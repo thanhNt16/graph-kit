@@ -93,6 +93,16 @@
       ]
     },
     {
+      "name": "features",
+      "description": "Feature-list commands\nSubcommands: init list next pass status",
+      "options": [
+        "--graph <file>",
+        "--note <text>",
+        "--force",
+        "--json"
+      ]
+    },
+    {
       "name": "status",
       "description": "Summarize active graph run and evidence coverage",
       "options": [
@@ -101,7 +111,7 @@
     },
     {
       "name": "run",
-      "description": "Run ledger commands\nSubcommands: start node dispatch land end status resume take round analyze",
+      "description": "Run ledger commands\nSubcommands: start node dispatch land end status resume take round poll analyze verify",
       "options": [
         "--graph <path>",
         "--input <pair>",
@@ -111,7 +121,7 @@
         "--wave <n>",
         "--agent <agent>",
         "--model <model>",
-        "--evidence <keys>",
+        "--evidence [keys]",
         "--duration-ms <n>",
         "--notes <text>",
         "--json",
@@ -144,6 +154,15 @@
         "--dismiss <id>",
         "--all",
         "--json"
+      ]
+    },
+    {
+      "name": "schedule",
+      "description": "Schedule commands\nSubcommands: list emit",
+      "options": [
+        "--json",
+        "--format <format>",
+        "--out <path>"
       ]
     }
   ]

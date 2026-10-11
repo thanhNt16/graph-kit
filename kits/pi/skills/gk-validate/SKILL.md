@@ -31,5 +31,6 @@ If the command is not found, the kit is not installed. Tell the user to install 
 Read the findings, explain each in plain language, and suggest the fix. For example:
 - `agent-binding`: "Agent 'X' not found. Change to a name matching a file in .omp/agents/ (e.g. software-architect)."
 - `refs-exist`: "Ref path 'docs/foo.md' doesn't exist. Create it or remove the ref."
+- `holdout-leak` (HOLDOUT_LEAK): "Node 'X' refs a sealed holdout (criteria/*.holdout.md or refs holdout: true). Only role: eval-gate nodes may see holdout criteria — remove the ref or make the node an eval-gate." (`holdout-dead-seal` is advisory: holdouts declared but no eval-gate node reads them.)
 - `cycle`: "depend_on has a cycle: a→b→a. Break the loop."
 - `loop-exit`: "Loop enabled but no stop_when. Add a stop_when (or a loop-level gate_evidence)."

@@ -5,12 +5,14 @@ import { join } from "node:path";
 import { cac } from "cac";
 import { groupNames, subcommandsFor } from "../../src/cli/command-registry.js";
 import { registerEvidenceCommand } from "../../src/cli/commands/evidence.js";
+import { registerFeaturesCommand } from "../../src/cli/commands/features.js";
 import { registerGraphCommands } from "../../src/cli/commands/graph.js";
 import { registerInventoryCommands } from "../../src/cli/commands/inventory.js";
 import { registerKitCommands } from "../../src/cli/commands/kit.js";
 import { registerMemoryCommands } from "../../src/cli/commands/memory.js";
 import { registerModelsCommands } from "../../src/cli/commands/models.js";
 import { registerRunCommands } from "../../src/cli/commands/run.js";
+import { registerScheduleCommands } from "../../src/cli/commands/schedule.js";
 import { registerTemplateCommands } from "../../src/cli/commands/template.js";
 import { fail } from "../../src/cli/output.js";
 import { APP_VERSION } from "../../src/version.js";
@@ -29,7 +31,9 @@ function fullCli() {
   registerTemplateCommands(cli);
   registerInventoryCommands(cli);
   registerEvidenceCommand(cli);
+  registerFeaturesCommand(cli);
   registerRunCommands(cli);
+  registerScheduleCommands(cli);
   cli.help();
   return cli;
 }

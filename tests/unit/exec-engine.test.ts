@@ -487,6 +487,105 @@ describe("exec engine — runGraph", () => {
     expect(fan.outcome?.output).toContain("briefs-malformed");
   });
 
+  const fanGraph = (reduce: "append" | "merge" | "vote", briefs: Array<{ id: string; body: string }>) => {
+    const g = GraphSchema.parse({
+      metadata: { name: "demo" },
+      topology: "diamond",
+      nodes: {
+        planner: { agent: "plan", objective: "plan" },
+        fan: {
+          agent: "worker",
+          objective: "fan out",
+          depend_on: ["planner"],
+          fan_out: { briefs_from: "planner", reduce },
+        },
+      },
+    });
+    mkdirSync(join(cwd, ".graphkit", "evidence"), { recursive: true });
+    writeFileSync(join(cwd, ".graphkit", "evidence", "briefs.json"), JSON.stringify(briefs));
+    return g;
+  };
+
+  test("fan_out reduce=merge: dedupes normalized lines, keeps first-seen order", async () => {
+    const g = fanGraph("merge", [
+      { id: "b1", body: "x" },
+      { id: "b2", body: "y" },
+    ]);
+    const runner = new StubRunner()
+      .on("fan-b1", ok("alpha\n  beta   gamma\nalpha"))
+      .on("fan-b2", ok("beta gamma\n\n delta \nalpha"));
+    const v = await run(g, runner);
+    expect(v.status).toBe("merged");
+    const fan = v.nodes.find((n) => n.id === "fan")!;
+    expect(fan.status).toBe("ok");
+    expect(fan.outcome?.output).toBe("alpha\nbeta gamma\ndelta");
+    const line = readTrace(cwd, v.runId)
+      .filter(isNodeLine)
+      .find((l) => l.node === "fan");
+    expect(line?.notes).toContain("reduce=merge");
+  });
+
+  test("fan_out reduce=vote: majority output wins deterministically", async () => {
+    const g = fanGraph("vote", [
+      { id: "b1", body: "x" },
+      { id: "b2", body: "y" },
+      { id: "b3", body: "z" },
+    ]);
+    const runner = new StubRunner().on("fan-b1", ok(" ship it \n")).on("fan-b2", ok("no")).on("fan-b3", ok("ship  it")); // normalized-equal to b1
+    const v = await run(g, runner);
+    const fan = v.nodes.find((n) => n.id === "fan")!;
+    expect(fan.status).toBe("ok");
+    expect(fan.outcome?.output).toBe("ship it");
+    const line = readTrace(cwd, v.runId)
+      .filter(isNodeLine)
+      .find((l) => l.node === "fan");
+    expect(line?.notes).toContain("reduce=vote");
+    expect(line?.notes).toContain("winner=fan-b1");
+    expect(line?.notes).toContain("votes=2/3");
+    expect(line?.notes).toContain("fan-b3:"); // per-member digests recorded
+    expect(line?.notes).not.toContain("vote_tie=true");
+  });
+
+  test("fan_out reduce=vote: tie resolves to first member and flags vote_tie", async () => {
+    const g = fanGraph("vote", [
+      { id: "b1", body: "x" },
+      { id: "b2", body: "y" },
+    ]);
+    const runner = new StubRunner().on("fan-b1", ok("one")).on("fan-b2", ok("two"));
+    const v = await run(g, runner);
+    const fan = v.nodes.find((n) => n.id === "fan")!;
+    expect(fan.outcome?.output).toBe("one");
+    const line = readTrace(cwd, v.runId)
+      .filter(isNodeLine)
+      .find((l) => l.node === "fan");
+    expect(line?.notes).toContain("vote_tie=true");
+    expect(line?.notes).toContain("winner=fan-b1");
+  });
+
+  test("fan_out reduce=merge/vote: empty member outputs are handled gracefully", async () => {
+    const g = fanGraph("merge", [
+      { id: "b1", body: "x" },
+      { id: "b2", body: "y" },
+    ]);
+    const runner = new StubRunner().on("fan-b1", ok("")).on("fan-b2", ok("real line"));
+    const v = await run(g, runner);
+    const fan = v.nodes.find((n) => n.id === "fan")!;
+    expect(fan.status).toBe("ok");
+    expect(fan.outcome?.output).toBe("real line");
+  });
+
+  test("fan_out reduce=vote: all-empty outputs vote to empty without crashing", async () => {
+    const g = fanGraph("vote", [
+      { id: "b1", body: "x" },
+      { id: "b2", body: "y" },
+    ]);
+    const runner = new StubRunner().on("fan-b1", ok("  ")).on("fan-b2", ok(""));
+    const v = await run(g, runner);
+    const fan = v.nodes.find((n) => n.id === "fan")!;
+    expect(fan.status).toBe("ok");
+    expect(fan.outcome?.output).toBe("");
+  });
+
   test("budget_tokens: oversized upstream context compacts per node and spills the full text", async () => {
     const g = diamond();
     g.nodes["worker-a"].budget_tokens = 100;

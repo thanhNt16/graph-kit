@@ -71,12 +71,25 @@ const GROUP_SUBCOMMANDS: Record<string, Leaf[]> = {
     { name: "resume", usage: "<run-id> [--from-node <id>] [--dry-run] [--force]" },
     { name: "take", usage: "<run-id> [--force]" },
     { name: "round", usage: "<index>" },
+    { name: "poll", usage: "<index>" },
     { name: "analyze", usage: "[run-id]" },
+    { name: "verify", usage: "<run-id> [--evidence]" },
   ],
   evidence: [
     { name: "add", usage: "<file> --key <k> [--note <text>] [--graph <file>]" },
     { name: "invalidate", usage: "--key <k> [--note <text>] [--graph <file>]" },
     { name: "report", usage: "[--html] [--graph <file>]" },
+  ],
+  features: [
+    { name: "init", usage: "[--force] [--graph <file>]" },
+    { name: "list", usage: "[--graph <file>]" },
+    { name: "next", usage: "[--graph <file>]" },
+    { name: "pass", usage: "<id> [--note <text>] [--graph <file>]" },
+    { name: "status", usage: "[--graph <file>]" },
+  ],
+  schedule: [
+    { name: "list", usage: "[file]" },
+    { name: "emit", usage: "<file> --format github-actions|cron|launchd|claude-loop [--out <path>]" },
   ],
 };
 
