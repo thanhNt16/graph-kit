@@ -5,7 +5,7 @@ import { join } from "node:path";
 import YAML from "yaml";
 import { GraphKitError } from "../../src/errors.js";
 import { appendNode, startRun } from "../../src/runs/ledger.js";
-import { recordRound } from "../../src/runs/loops.js";
+import { normalizeFailureText, recordRound, signatureSimilarity } from "../../src/runs/loops.js";
 import { GraphSchema } from "../../src/schemas/graph.schema.js";
 
 const GRAPH = [
@@ -30,12 +30,42 @@ const GRAPH = [
   "    no_progress_limit: 2",
 ].join("\n");
 
-function setup(name: string): string {
+const GRAPH_SIM = `${GRAPH}\n    no_progress_similarity: 0.85`;
+
+function setup(name: string, graph = GRAPH): string {
   const cwd = join(tmpdir(), `gk-loops-${name}-${process.pid}-${Date.now()}`);
   mkdirSync(cwd, { recursive: true });
-  writeFileSync(join(cwd, "graph.yaml"), GRAPH);
+  writeFileSync(join(cwd, "graph.yaml"), graph);
   startRun(cwd, join(cwd, "graph.yaml"));
   return cwd;
+}
+
+/** One round of both nodes failing, with `implement` producing the given
+ * test-report evidence bytes (or none when null). */
+function failRound(cwd: string, evidence: string | null) {
+  if (evidence != null) {
+    mkdirSync(join(cwd, ".graphkit/evidence"), { recursive: true });
+    writeFileSync(join(cwd, ".graphkit/evidence/test-report.md"), evidence);
+  }
+  for (const node of ["implement", "test"]) {
+    appendNode(cwd, {
+      node,
+      wave: 1,
+      agent: null,
+      model: null,
+      status: "fail",
+      evidence: node === "implement" && evidence != null ? ["test-report"] : [],
+      duration_ms: null,
+      notes: null,
+    });
+  }
+}
+
+function readJournalLines(cwd: string, run: string, stem = "0") {
+  return readFileSync(join(cwd, ".graphkit/runs", run, `rounds/${stem}.jsonl`), "utf-8")
+    .trim()
+    .split("\n")
+    .map((l) => JSON.parse(l));
 }
 
 describe("recordRound", () => {
@@ -393,5 +423,198 @@ describe("no_progress_limit schema", () => {
     const base = YAML.parse(GRAPH) as { loops: { no_progress_limit?: number }[] };
     expect(GraphSchema.safeParse(base).success).toBe(true);
     expect(GraphSchema.safeParse({ ...base, loops: [{ ...base.loops[0], no_progress_limit: 1 }] }).success).toBe(false);
+  });
+
+  test("no_progress_similarity accepts [0,1] and rejects out-of-range", () => {
+    const base = YAML.parse(GRAPH_SIM) as { loops: { no_progress_similarity?: number }[] };
+    expect(GraphSchema.safeParse(base).success).toBe(true);
+    for (const ok of [0, 0.5, 1])
+      expect(
+        GraphSchema.safeParse({ ...base, loops: [{ ...base.loops[0], no_progress_similarity: ok }] }).success,
+      ).toBe(true);
+    for (const bad of [-0.1, 1.01, 2])
+      expect(
+        GraphSchema.safeParse({ ...base, loops: [{ ...base.loops[0], no_progress_similarity: bad }] }).success,
+      ).toBe(false);
+  });
+});
+
+describe("normalizeFailureText", () => {
+  test("strips paths, positions, timestamps, digests and numbers", () => {
+    expect(normalizeFailureText("ENOENT /tmp/abc123/work/foo.ts:12 cannot open")).toBe("enoent <path> cannot open");
+    expect(normalizeFailureText("failed at 2026-10-11T13:45:12Z commit 9f8e7d6a5b4c")).toBe(
+      "failed at <ts> commit <id>",
+    );
+    expect(normalizeFailureText("timeout after 30s  \n\n retry 3")).toBe("timeout after <n> retry <n>");
+    // Same failure in a different temp dir and line number normalizes identically.
+    expect(
+      normalizeFailureText("ENOENT /tmp/xyz789/tmp9/foo.ts:347 cannot open") ===
+        normalizeFailureText("ENOENT /tmp/abc123/work/foo.ts:12 cannot open"),
+    ).toBe(true);
+  });
+});
+
+describe("signatureSimilarity", () => {
+  test("Jaccard over 3-word shingles; short texts degrade to token sets", () => {
+    expect(signatureSimilarity("a b c d e", "a b c d e")).toBe(1);
+    expect(signatureSimilarity("a b c", "x y z")).toBe(0);
+    const partial = signatureSimilarity("a b c d e", "a b c x y");
+    expect(partial).toBeGreaterThan(0);
+    expect(partial).toBeLessThan(1);
+    expect(signatureSimilarity("a b", "a c")).toBeCloseTo(1 / 3, 5);
+    expect(signatureSimilarity("", "")).toBe(1);
+  });
+});
+
+describe("recordRound with no_progress_similarity", () => {
+  test("near-identical failure text trips no_progress via similarity", () => {
+    const cwd = setup("sim", GRAPH_SIM);
+    try {
+      failRound(cwd, "ENOENT /tmp/abc123/work/foo.ts:12 cannot open\n");
+      const r1 = recordRound(cwd, 0);
+      expect(r1).toMatchObject({
+        signature_similarity: null,
+        similarity_threshold: 0.85,
+        no_progress_via: null,
+      });
+
+      // Different bytes (path + line number) → different fingerprint, but the
+      // normalized signature is identical → counts as no-progress.
+      failRound(cwd, "ENOENT /tmp/xyz789/tmp9/foo.ts:347 cannot open\n");
+      const r2 = recordRound(cwd, 0);
+      expect(r2.fingerprint).not.toBe(r1.fingerprint);
+      expect(r2.signature_similarity).toBe(1);
+      expect(r2).toMatchObject({
+        repeated: 2,
+        no_progress_exhausted: true,
+        stop_reason: "no_progress",
+        no_progress_via: "similarity",
+      });
+
+      const journal = readJournalLines(cwd, r2.run);
+      expect(journal).toHaveLength(2);
+      expect(journal[1].signature).toContain("enoent <path> cannot open");
+      expect(journal[1].signature_similarity).toBe(1);
+      expect(journal[1].similarity_threshold).toBe(0.85);
+    } finally {
+      rmSync(cwd, { recursive: true, force: true });
+    }
+  });
+
+  test("genuinely different errors do not extend the streak", () => {
+    const cwd = setup("sim-diff", GRAPH_SIM);
+    try {
+      failRound(cwd, "ENOENT /tmp/abc123/foo.ts:12 cannot open\n");
+      recordRound(cwd, 0);
+      failRound(cwd, "TypeError: expected string, got object in serializer\n");
+      const r2 = recordRound(cwd, 0);
+      expect(r2.signature_similarity).not.toBeNull();
+      expect(r2.signature_similarity as number).toBeLessThan(0.85);
+      expect(r2).toMatchObject({
+        repeated: 1,
+        no_progress_exhausted: false,
+        stop_reason: null,
+        no_progress_via: null,
+      });
+    } finally {
+      rmSync(cwd, { recursive: true, force: true });
+    }
+  });
+
+  test("identical bytes still win as fingerprint, similarity stays null", () => {
+    const cwd = setup("sim-fp", GRAPH_SIM);
+    try {
+      failRound(cwd, "ENOENT /tmp/abc123/foo.ts:12 cannot open\n");
+      recordRound(cwd, 0);
+      failRound(cwd, "ENOENT /tmp/abc123/foo.ts:12 cannot open\n");
+      const r2 = recordRound(cwd, 0);
+      expect(r2).toMatchObject({
+        repeated: 2,
+        signature_similarity: null,
+        no_progress_exhausted: true,
+        stop_reason: "no_progress",
+        no_progress_via: "fingerprint",
+      });
+    } finally {
+      rmSync(cwd, { recursive: true, force: true });
+    }
+  });
+
+  test("mixed exact + similar rounds extend one streak to the limit", () => {
+    const graph = GRAPH_SIM.replace("no_progress_limit: 2", "no_progress_limit: 3");
+    const cwd = setup("sim-streak", graph);
+    try {
+      failRound(cwd, "ENOENT /tmp/aaa111/foo.ts:1 cannot open\n");
+      recordRound(cwd, 0);
+      // Similar (normalized-identical) to round 1.
+      failRound(cwd, "ENOENT /tmp/bbb222/bar.ts:99 cannot open\n");
+      const r2 = recordRound(cwd, 0);
+      expect(r2.no_progress_via).toBeNull(); // streak 2 < limit 3 — no stop yet
+      expect(r2.repeated).toBe(2);
+      // Byte-identical to round 2 → fingerprint match on top of a similar streak.
+      failRound(cwd, "ENOENT /tmp/bbb222/bar.ts:99 cannot open\n");
+      const r3 = recordRound(cwd, 0);
+      expect(r3).toMatchObject({
+        repeated: 3,
+        no_progress_exhausted: true,
+        stop_reason: "no_progress",
+        no_progress_via: "fingerprint",
+      });
+    } finally {
+      rmSync(cwd, { recursive: true, force: true });
+    }
+  });
+
+  test("threshold edge cases: 0 counts any differing round, 1 requires identical signature", () => {
+    const zero = setup("sim-zero", `${GRAPH}\n    no_progress_similarity: 0`);
+    try {
+      failRound(zero, "ENOENT /tmp/abc123/foo.ts:12 cannot open\n");
+      recordRound(zero, 0);
+      failRound(zero, "TypeError: totally different failure class\n");
+      const r2 = recordRound(zero, 0);
+      expect(r2.signature_similarity).not.toBeNull();
+      expect(r2).toMatchObject({ repeated: 2, stop_reason: "no_progress", no_progress_via: "similarity" });
+    } finally {
+      rmSync(zero, { recursive: true, force: true });
+    }
+
+    const one = setup("sim-one", `${GRAPH}\n    no_progress_similarity: 1`);
+    try {
+      failRound(one, "ENOENT /tmp/abc123/foo.ts:12 cannot open\n");
+      recordRound(one, 0);
+      // Same failure class but a different normalized tail → similarity < 1.
+      failRound(one, "ENOENT /tmp/abc123/foo.ts:12 cannot open — also permission denied\n");
+      const r2 = recordRound(one, 0);
+      expect(r2.signature_similarity).not.toBeNull();
+      expect(r2.signature_similarity as number).toBeLessThan(1);
+      expect(r2).toMatchObject({ repeated: 1, no_progress_exhausted: false, stop_reason: null });
+    } finally {
+      rmSync(one, { recursive: true, force: true });
+    }
+  });
+
+  test("unset similarity keeps byte-exact behavior and records no signature", () => {
+    const cwd = setup("sim-unset", GRAPH);
+    try {
+      failRound(cwd, "ENOENT /tmp/abc123/foo.ts:12 cannot open\n");
+      const r1 = recordRound(cwd, 0);
+      failRound(cwd, "ENOENT /tmp/xyz789/foo.ts:34 cannot open\n");
+      const r2 = recordRound(cwd, 0);
+      expect(r2.fingerprint).not.toBe(r1.fingerprint);
+      expect(r2).toMatchObject({
+        repeated: 1,
+        signature_similarity: null,
+        similarity_threshold: null,
+        no_progress_exhausted: false,
+        stop_reason: null,
+        no_progress_via: null,
+      });
+      const journal = readJournalLines(cwd, r2.run);
+      expect("signature" in journal[0]).toBe(false);
+      expect(journal[1].signature_similarity).toBeNull();
+      expect(journal[1].similarity_threshold).toBeNull();
+    } finally {
+      rmSync(cwd, { recursive: true, force: true });
+    }
   });
 });

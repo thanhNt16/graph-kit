@@ -105,6 +105,10 @@ export const LoopGroupSchema = z
     stop_when: z.string().min(1).optional(),
     gate_evidence: z.array(z.string().min(1)).min(1).optional(),
     no_progress_limit: z.number().int().min(2).optional(),
+    // Jaccard threshold over normalized failure signatures: consecutive rounds
+    // whose fingerprints differ but whose signatures are this similar still
+    // count toward the no-progress streak. Unset = byte-exact matching only.
+    no_progress_similarity: z.number().min(0).max(1).optional(),
   })
   .refine((data) => Boolean(data.stop_when || data.gate_evidence), {
     message: "At least one of stop_when or gate_evidence must be provided",
