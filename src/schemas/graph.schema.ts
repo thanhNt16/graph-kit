@@ -327,6 +327,18 @@ export const GraphSchema = z
     loops: z.array(LoopGroupSchema).optional(),
     features: FeaturesConfig.optional(),
     schedule: ScheduleConfig.optional(),
+    // Run-level context budget — a planning-currency cap over the SUM of
+    // nodes' declared budget_tokens allocations, never metered API tokens
+    // (only the host can count those). Recorded into the run's meta.json at
+    // `gk run start`; the engine stops the run with stop_reason
+    // "budget_exceeded" when a dispatch would overrun it.
+    budget: z
+      .object({
+        max_tokens: z.number().int().positive(),
+        warn_at: z.number().min(0).max(1).default(0.8),
+      })
+      .strict()
+      .optional(),
   })
   .strict()
   .superRefine((graph, ctx) => {

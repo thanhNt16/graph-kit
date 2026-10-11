@@ -7,6 +7,7 @@ import { isBlocking, validateGraph } from "../../compiler/validate.js";
 import { GraphKitError } from "../../errors.js";
 import { parseMarker } from "../../evidence/marker.js";
 import { analyzeRun } from "../../runs/analyze.js";
+import { budgetStatus } from "../../runs/budget.js";
 import {
   activeRun,
   activeRunPointer,
@@ -186,7 +187,9 @@ export function registerRunCommands(cli: CAC) {
             );
             return;
           }
-          const started = startRun(cwd, graphPath);
+          // The graph's declared budget is recorded into the run's meta so
+          // status/enforcement read it even if graph.yaml later drifts.
+          const started = startRun(cwd, graphPath, undefined, undefined, graph.budget);
           if (Object.keys(provided).length > 0) recordRunInputs(started.dir, provided);
           // Stale-kit installs run outdated skills/extensions (observed: a run
           // executed with a pre-orchestration-fields gk-execute). Surface it at
@@ -443,12 +446,16 @@ export function registerRunCommands(cli: CAC) {
             }
           }
           const meta = dir ? readRunMeta(cwd, basename(dir)) : null;
+          const budget = dir && meta ? budgetStatus(cwd, basename(dir), meta) : null;
           emit(
             ok({
               active: dir,
               active_age_ms: meta ? Date.now() - Date.parse(meta.started_at) : null,
               advisor_events,
               resumes_chain: chain,
+              // Planning-currency accounting over declared budget_tokens —
+              // present only when the run recorded a graph budget.
+              ...(budget ? { budget } : {}),
               ...(ptr?.dangling ? { dangling: true, dangling_run: basename(ptr.dir) } : {}),
             }),
           );
