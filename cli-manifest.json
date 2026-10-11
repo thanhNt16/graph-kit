@@ -43,12 +43,13 @@
     },
     {
       "name": "memory",
-      "description": "Memory commands\nSubcommands: trace touch recall consolidate",
+      "description": "Memory commands\nSubcommands: trace touch recall consolidate lifecycle archive revive",
       "options": [
         "--json",
         "--explain",
         "--html",
-        "--origin <origin>"
+        "--origin <origin>",
+        "--dry-run"
       ]
     },
     {

@@ -2,6 +2,18 @@ import { z } from "zod";
 
 const MemoryDate = z.string().datetime({ offset: true });
 
+/** Adherence lifecycle state for an adopted (learned) artifact. Counts are
+ *  opportunity-relative: `use`/`view` are measured against recall invocations
+ *  since `anchor`, never wall-clock, so idle time ages nothing out. */
+export const AdherenceSchema = z.object({
+  adopted_by: z.enum(["gk-learn", "human"]).default("gk-learn"),
+  anchor: z.number().int().min(0).default(0), // request index at adoption
+  use: z.number().int().min(0).default(0), // recall hit → loaded/followed (touchMemory bumps here)
+  view: z.number().int().min(0).default(0), // surfaced in recall
+  patch: z.number().int().min(0).default(0), // adopt-step revisions landed
+  absorbed_into: z.string().trim().min(1).nullable().optional(),
+});
+
 export const MemoryFileSchema = z
   .object({
     id: z.string().trim().min(1),
@@ -18,6 +30,7 @@ export const MemoryFileSchema = z
     recorded_at: MemoryDate.optional(),
     status: z.enum(["draft", "stable", "deprecated"]).optional(),
     sources: z.array(z.object({ resource: z.string().min(1) })).optional(),
+    adherence: AdherenceSchema.optional(),
   })
   .passthrough();
 
@@ -49,6 +62,16 @@ export const SuggestionFileSchema = MemoryFileSchema.extend({
   sources: z.array(z.object({ resource: z.string().min(1) })).min(1),
 });
 
+/** Adherence lifecycle policy for the store `gk learn` populates. Probation
+ *  runs `maturity` requests past `anchor`; the mature pool is capped at
+ *  `capacity` live items. */
+export const MemoryLifecycleConfig = z.object({
+  maturity: z.number().int().min(1).default(100), // probation: min requests since anchor
+  capacity: z.number().int().min(1).default(50), // cap on mature live items
+  graduation_suspended: z.boolean().default(false),
+  expire_policy: z.enum(["act_r", "lifecycle"]).default("act_r"),
+});
+
 export const MemoryConfig = z
   .object({
     project: z.string().default("graph-kit-memory"),
@@ -58,6 +81,7 @@ export const MemoryConfig = z
     recall_topk: z.number().int().min(1).default(5),
     expire_policy: z.enum(["act_r", "manual"]).default("act_r"),
     null_intervention_allowed: z.boolean().default(true),
+    lifecycle: MemoryLifecycleConfig.optional(),
   })
   .refine((c) => c.cadence !== "every" || (c.every ?? 0) >= 1, {
     message: "cadence 'every' requires every >= 1",

@@ -49,6 +49,8 @@ export const LearnProposalSchema = z.strictObject({
       installed: z.array(z.string()),
       // "ok" | "failed:<err>" | "needed" (no generator found) | "skipped"
       kit_regen: z.string(),
+      // The learned artifact landed in the memory store (.graphkit/memory/<id>.md).
+      artifact: z.string().optional(),
     })
     .nullable(),
   rejected: z.strictObject({ at: z.string().min(1), reason: z.string().nullable() }).nullable(),

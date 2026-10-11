@@ -229,6 +229,44 @@ gk learn list                     # all proposals with status
 * `revert` removes the installed files and marks the proposal `reverted`, so
   adoption is always undoable.
 
+## Learned-artifact lifecycle
+
+`gk learn adopt` lands a `learned-artifact` memory file with an `adherence`
+block (`adopted_by`, `anchor`, `use`/`view`/`patch` counters). The lifecycle
+bounds that store — scoring is *uses when offered*, so idle time never ages
+anything out:
+
+* **Denominator** — every `gk recall`/`gk suggest` invocation appends one line
+  to `.graphkit/memory/.requests.jsonl`; `anchor` snapshots its length at
+  adoption, so `denom = requests − anchor` is opportunity-relative.
+* **Probation** — `denom < lifecycle.maturity` (default 100 requests): live,
+  unevictable, excluded from the capacity pool.
+* **Graduation review** — past maturity with `use == 0 && view == 0` (never
+  offered and never loaded) → archived with cause `graduation`;
+  `graduation_suspended: true` parks the review.
+* **Capacity** — mature pool over `lifecycle.capacity` (default 50) evicts the
+  lowest `use/denom` rates (sha256(name) tiebreak → deterministic), cause
+  `capacity`.
+* **Archive, never delete** — eviction moves the file to
+  `.graphkit/memory/.archive/<id>.md` (frontmatter + trace-log preserved);
+  `gk memory revive <id>` moves it back with counters intact. Human-authored
+  files (no `adherence` block, or `adopted_by: human`) are never eligible.
+
+```bash
+gk memory lifecycle [--dry-run]   # one lazy pass (also runs once per `gk run start`)
+gk memory archive <id>            # manual move + ledger line
+gk memory revive <id>             # restore under the live store
+gk memory trace                   # report carries probation/mature/archived/
+                                  # graduated/capacity_evicted counts
+```
+
+Archived members are invisible to recall/suggest/injection (the walk skips
+dot-dirs); `absorbed_into` merges (curator/learn) stay distinct from lifecycle
+eviction. Config lives at `topology_config.memory.lifecycle`
+(`{maturity, capacity, graduation_suspended, expire_policy}` —
+`expire_policy: lifecycle` hands adopted items to this flow instead of ACT-R
+expiry).
+
 ## The gallery template
 
 `gk template materialize software-factory` emits an 8-phase production line

@@ -49,6 +49,9 @@ const GROUP_SUBCOMMANDS: Record<string, Leaf[]> = {
     { name: "touch", usage: "<id>" },
     { name: "recall", usage: "<query...> [--explain] [--html] [--origin <origin>]" },
     { name: "consolidate", usage: "" },
+    { name: "lifecycle", usage: "[--dry-run]" },
+    { name: "archive", usage: "<id>" },
+    { name: "revive", usage: "<id>" },
   ],
   models: listTargets().map((t) => ({ name: t.id, usage: "[set --map <k=v,...> | reset]" })),
   template: [
