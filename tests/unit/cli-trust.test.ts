@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { cac } from "cac";
 import { groupNames, subcommandsFor } from "../../src/cli/command-registry.js";
 import { registerEvidenceCommand } from "../../src/cli/commands/evidence.js";
+import { registerFeaturesCommand } from "../../src/cli/commands/features.js";
 import { registerGraphCommands } from "../../src/cli/commands/graph.js";
 import { registerInventoryCommands } from "../../src/cli/commands/inventory.js";
 import { registerKitCommands } from "../../src/cli/commands/kit.js";
@@ -29,6 +30,7 @@ function fullCli() {
   registerTemplateCommands(cli);
   registerInventoryCommands(cli);
   registerEvidenceCommand(cli);
+  registerFeaturesCommand(cli);
   registerRunCommands(cli);
   cli.help();
   return cli;

@@ -7,6 +7,7 @@ import { GraphKitError } from "../../errors.js";
 import { scoreWorkProduct } from "../../eval/rubrics.js";
 import { fingerprint } from "../../evidence/fingerprint.js";
 import { type Freshness, freshnessOf, parseMarker } from "../../evidence/marker.js";
+import { featureListPath, readFeatureList } from "../../features/store.js";
 import { activeRun, readRunIndex, readTrace } from "../../runs/ledger.js";
 import { resumeChain } from "../../runs/resume.js";
 import { previewGraph } from "../graph-resolve.js";
@@ -30,12 +31,33 @@ export interface GateResult {
   warnings: string[];
   unlanded: string[];
   manifest: Record<string, { path: string; sha256: string; bytes: number }>;
+  /** Feature-list gate verdict — present only when the graph declares
+   *  features.required. "missing"/"invalid" states also block: a required
+   *  backlog that doesn't exist or can't be parsed can't be all-passed. */
+  features?: {
+    required: true;
+    path: string;
+    state: "ok" | "missing" | "invalid";
+    total: number;
+    done: number;
+    open: number;
+    open_items: string[];
+  };
+  /** Machine-readable block reasons — "FEATURES_OPEN:n" when open feature
+   *  items hold the gate, "FEATURE_LIST_MISSING"/"FEATURE_LIST_INVALID" when
+   *  a required list can't be read. */
+  reasons: string[];
 }
 
 export function gateGraph(
   requiredKeys: string[],
   evidenceDir: string,
-  opts?: { cwd?: string; strict?: boolean; requireLanded?: boolean },
+  opts?: {
+    cwd?: string;
+    strict?: boolean;
+    requireLanded?: boolean;
+    features?: { required: boolean; path?: string };
+  },
 ): GateResult {
   const evidence: Record<string, string | undefined> = {};
   const manifest: Record<string, { path: string; sha256: string; bytes: number }> = {};
@@ -98,8 +120,33 @@ export function gateGraph(
       unlanded.push(...[...open].reverse());
     }
   }
+  const reasons: string[] = [];
+  let features: GateResult["features"];
+  if (opts?.features?.required && opts.cwd) {
+    const path = featureListPath(opts.cwd, { features: opts.features });
+    try {
+      const list = readFeatureList(path);
+      const openItems = list.items.filter((i) => !i.passes).map((i) => i.id);
+      features = {
+        required: true,
+        path,
+        state: "ok",
+        total: list.items.length,
+        done: list.items.length - openItems.length,
+        open: openItems.length,
+        open_items: openItems,
+      };
+      if (openItems.length > 0) reasons.push(`FEATURES_OPEN:${openItems.length}`);
+    } catch (e) {
+      const state = e instanceof GraphKitError && e.code === "FEATURE_LIST_INVALID" ? "invalid" : "missing";
+      features = { required: true, path, state, total: 0, done: 0, open: 0, open_items: [] };
+      reasons.push(state === "invalid" ? "FEATURE_LIST_INVALID" : "FEATURE_LIST_MISSING");
+    }
+  }
   const verdict =
-    (opts?.strict && (stale.length > 0 || unknown.length > 0 || foreign.length > 0)) || unlanded.length > 0
+    (opts?.strict && (stale.length > 0 || unknown.length > 0 || foreign.length > 0)) ||
+    unlanded.length > 0 ||
+    reasons.length > 0
       ? "BLOCK"
       : base.verdict;
   return {
@@ -112,6 +159,8 @@ export function gateGraph(
     warnings,
     unlanded,
     manifest,
+    ...(features ? { features } : {}),
+    reasons,
   };
 }
 
@@ -128,19 +177,20 @@ export function registerGateCommand(cli: CAC) {
           return;
         }
         const evidenceDir = join(process.cwd(), graph.outputs.evidence_dir);
-        const { verdict, scorecard, freshness, missing, warnings, unlanded, manifest } = gateGraph(
+        const { verdict, scorecard, freshness, missing, warnings, unlanded, manifest, features, reasons } = gateGraph(
           graph.evidence.required_keys,
           evidenceDir,
           {
             cwd: process.cwd(),
             strict: graph.evidence.freshness === "strict",
             requireLanded: graph.evidence.require_landed === true,
+            features: graph.features,
           },
         );
         const stale = Object.keys(freshness).filter((k) => freshness[k] === "stale" && scorecard[k] === "ok");
         const foreign = Object.keys(freshness).filter((k) => freshness[k] === "foreign" && scorecard[k] === "ok");
         if (verdict === "MERGE") {
-          emit(ok({ verdict, scorecard, freshness, warnings, unlanded, manifest }));
+          emit(ok({ verdict, scorecard, freshness, warnings, unlanded, manifest, ...(features ? { features } : {}) }));
           return;
         }
         emit(
@@ -153,6 +203,8 @@ export function registerGateCommand(cli: CAC) {
             scorecard,
             freshness,
             manifest,
+            reasons,
+            ...(features ? { features } : {}),
           }),
         );
       } catch (e) {

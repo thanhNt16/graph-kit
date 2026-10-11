@@ -5,6 +5,7 @@ import YAML from "yaml";
 import { planGraph } from "../../compiler/plan.js";
 import { isBlocking, validateGraph } from "../../compiler/validate.js";
 import { GraphKitError } from "../../errors.js";
+import { featureListPath, featureStatus, readFeatureList } from "../../features/store.js";
 import type { Graph } from "../../schemas/graph.schema.js";
 import { type GraphTemplate, materializeTemplate } from "../../schemas/template.schema.js";
 import { getTopologyConfigKeys, TOPOLOGY_NAMES, type TopologyName } from "../../schemas/topology/index.js";
@@ -774,6 +775,26 @@ export function registerGraphCommands(cli: CAC) {
             })),
             evidence_required: graph.evidence?.required_keys || [],
             on_graph_complete: graph.hooks?.on_graph_complete ?? [],
+            // Feature-list contract rides the payload so orchestrating agents
+            // see the declared backlog store and its live status without a
+            // second command. Absent `features` config → the block is omitted;
+            // a declared-but-unwritten list reports status: null (the
+            // initializer has not produced it yet).
+            ...(graph.features
+              ? {
+                  features: {
+                    required: graph.features.required,
+                    path: featureListPath(process.cwd(), graph),
+                    status: (() => {
+                      try {
+                        return featureStatus(readFeatureList(featureListPath(process.cwd(), graph)));
+                      } catch {
+                        return null;
+                      }
+                    })(),
+                  },
+                }
+              : {}),
             // Advisory findings ride the ok payload (audit F5) — a typo'd
             // constraint shouldn't require a separate `gk validate` to be seen.
             warnings: findings.filter((f) => !isBlocking(f)),

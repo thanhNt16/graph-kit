@@ -240,9 +240,10 @@ export function validateGraph(graph: Graph, projectRoot: string): Finding[] {
     }
   }
 
-  // 7. Node role contract. eval-gate and supervisor are semantic roles; any
-  // other string is allowed (free-form) but surfaces an advisory warning so
-  // typos like "supervsor" are visible.
+  // 7. Node role contract. eval-gate, supervisor, and initializer are
+  // recognized roles; any other string is allowed (free-form) but surfaces an
+  // advisory warning so typos like "supervsor" are visible.
+  const KNOWN_ROLES = new Set(["eval-gate", "supervisor", "initializer"]);
   for (const [id, node] of Object.entries(graph.nodes)) {
     if (node.role === "eval-gate") {
       if (!node.eval) {
@@ -260,14 +261,29 @@ export function validateGraph(graph: Graph, projectRoot: string): Finding[] {
         });
       }
     }
-    if (node.role && node.role !== "eval-gate" && node.role !== "supervisor") {
+    if (node.role && !KNOWN_ROLES.has(node.role)) {
       findings.push({
         check: "unknown-role",
         path: `nodes.${id}.role`,
-        message: `Unknown role "${node.role}" — advisory warning only; known roles: eval-gate, supervisor`,
+        message: `Unknown role "${node.role}" — advisory warning only; known roles: ${[...KNOWN_ROLES].join(", ")}`,
         severity: "warn",
       });
     }
+  }
+
+  // 7a. features.required producer (ADVISORY): the gate blocks while any item
+  // in the feature list has passes:false. A node flagged `role: initializer`
+  // is the expected producer of that list — without one, nothing in the
+  // declared graph ever writes it (seeding via `gk features init` outside the
+  // graph stays possible, so this is a warning, not an error).
+  if (graph.features?.required === true && !Object.values(graph.nodes).some((n) => n.role === "initializer")) {
+    findings.push({
+      check: "features-producer",
+      path: "features.required",
+      message:
+        'features.required is set but no node carries role: "initializer" — the feature list must be written by an initializer node or seeded via `gk features init` for the gate to pass',
+      severity: "warn",
+    });
   }
   // 7b. Owned-scope overlap (HEURISTIC ADVISORY WARNING, not an error): two
   // nodes in the same topological wave declaring owns globs with a shared
