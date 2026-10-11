@@ -6,6 +6,7 @@ import { planGraph } from "../../compiler/plan.js";
 import { isBlocking, validateGraph } from "../../compiler/validate.js";
 import { GraphKitError } from "../../errors.js";
 import { featureListPath, featureStatus, readFeatureList } from "../../features/store.js";
+import { learnIndex } from "../../learn/index.js";
 import { progressRecitation } from "../../runs/ledger.js";
 import type { Graph } from "../../schemas/graph.schema.js";
 import { type GraphTemplate, materializeTemplate } from "../../schemas/template.schema.js";
@@ -763,8 +764,12 @@ export function registerGraphCommands(cli: CAC) {
           const plan = planGraph(graph, { source: resolved });
 
           // Recitation channel: with an active run, every node brief re-reads
-          // the tail of progress.md so fresh contexts see what prior nodes did.
+          // the tail of progress.md so fresh contexts see what prior nodes
+          // did; the learned-items index rides the same append so adopted
+          // patterns are offered at dispatch.
           const recite = progressRecitation(process.cwd(), graph.progress_tail);
+          const learnIdx = learnIndex(process.cwd(), graph.learn_index_tail);
+          const briefExtra = [recite, learnIdx].filter(Boolean).join("\n\n");
 
           const payload: Record<string, unknown> = {
             graph: graph.metadata?.name,
@@ -776,7 +781,9 @@ export function registerGraphCommands(cli: CAC) {
               wave: w.index,
               parallel: w.parallel,
               curator: w.curator,
-              nodes: recite ? w.nodes.map((n) => ({ ...n, objective: `${n.objective}\n\n${recite}` })) : w.nodes,
+              nodes: briefExtra
+                ? w.nodes.map((n) => ({ ...n, objective: `${n.objective}\n\n${briefExtra}` }))
+                : w.nodes,
             })),
             evidence_required: graph.evidence?.required_keys || [],
             on_graph_complete: graph.hooks?.on_graph_complete ?? [],

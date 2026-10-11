@@ -1,5 +1,14 @@
 import { execFileSync, execSync } from "node:child_process";
-import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  appendFileSync,
+  cpSync,
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { basename, dirname, isAbsolute, join, resolve } from "node:path";
 import YAML from "yaml";
 import { GraphKitError } from "../errors.js";
@@ -11,10 +20,12 @@ import { readMemoryFile, writeMemoryFile } from "../memory/store.js";
 import { listRunIds, RUN_ID_PATTERN, readRunMeta } from "../runs/ledger.js";
 import { GraphSchema } from "../schemas/graph.schema.js";
 import { AdherenceSchema } from "../schemas/memory.schema.js";
+import { lintProposal } from "./lint.js";
 import {
   type CriterionVerdict,
   type LearnProposal,
   LearnProposalSchema,
+  type LintFinding,
   type SourceCase,
   SourceCaseSchema,
 } from "./schema.js";
@@ -30,6 +41,7 @@ import {
 
 const learnDir = (cwd: string) => join(cwd, ".graphkit", "learn");
 const proposalPath = (cwd: string, id: string) => join(learnDir(cwd), `${id}.yaml`);
+const verdictsPath = (cwd: string) => join(learnDir(cwd), ".verdicts.jsonl");
 
 const LEARN_GENERATOR = "process:gk-learn-adopt";
 
@@ -209,6 +221,7 @@ export function propose(cwd: string, opts: ProposeOptions): ProposeResult {
     source_run: run,
     source_case: sourceCase,
     hypothesis: opts.note ?? "",
+    evidence: null,
     proposal_kind: "procedure",
     proposes: null,
     fix: null,
@@ -219,6 +232,49 @@ export function propose(cwd: string, opts: ProposeOptions): ProposeResult {
     reverted: null,
   };
   return { id, file: writeProposal(cwd, proposal), source_case: sourceCase, warnings };
+}
+
+export interface VerdictLine {
+  at: string;
+  proposal: string;
+  action: "evaluate" | "adopt" | "reject" | "revert";
+  verdict: "pass" | "fail" | "landed" | "rejected" | "reverted";
+  families: string[];
+}
+
+/** Verdict account (autoharness §verdict visibility): every learn action
+ *  appends one line to `.graphkit/learn/.verdicts.jsonl` — including blocked
+ *  adopt attempts, so rejected evaluations stay visible instead of silent. */
+function recordVerdict(cwd: string, entry: Omit<VerdictLine, "at">): void {
+  mkdirSync(learnDir(cwd), { recursive: true });
+  appendFileSync(verdictsPath(cwd), `${JSON.stringify({ at: new Date().toISOString(), ...entry })}\n`);
+}
+
+export function readVerdicts(cwd: string): VerdictLine[] {
+  const f = verdictsPath(cwd);
+  if (!existsSync(f)) return [];
+  return readFileSync(f, "utf-8")
+    .split("\n")
+    .filter((l) => l.trim())
+    .flatMap((l) => {
+      try {
+        return [JSON.parse(l) as VerdictLine];
+      } catch {
+        return [];
+      }
+    });
+}
+
+/** The `gk learn list` summary footer: outcome tallies over the verdict
+ *  account (evaluate pass/fail lines don't count — they're not decisions). */
+export function verdictSummary(cwd: string): { landed: number; rejected: number; reverted: number } {
+  const summary = { landed: 0, rejected: 0, reverted: 0 };
+  for (const v of readVerdicts(cwd)) {
+    if (v.verdict === "landed") summary.landed++;
+    else if (v.verdict === "rejected") summary.rejected++;
+    else if (v.verdict === "reverted") summary.reverted++;
+  }
+  return summary;
 }
 
 export interface EvaluateResult {
@@ -282,6 +338,12 @@ export function evaluateProposal(cwd: string, id: string): EvaluateResult {
     status: "evaluated",
     evaluation: { at: new Date().toISOString(), evidence_dir: evidenceDirRel, verdicts, after_fix: afterFix },
   };
+  recordVerdict(cwd, {
+    proposal: id,
+    action: "evaluate",
+    verdict: verdicts.length > 0 && verdicts.every((v) => v.pass) ? "pass" : "fail",
+    families: [],
+  });
   return {
     id,
     file: writeProposal(cwd, next),
@@ -306,6 +368,7 @@ export interface AdoptResult {
   kit_regen: string;
   /** The learned artifact landed in the memory store (`.graphkit/memory/<id>.md`). */
   artifact: string;
+  lint: LintFinding[];
 }
 
 /** Land the adopted proposal into `.graphkit/memory/<id>.md` — the store the
@@ -360,11 +423,39 @@ export function adoptProposal(cwd: string, id: string): AdoptResult {
       `proposal "${id}" is ${proposal.status} — run \`gk learn evaluate ${id}\` first`,
       { status: proposal.status },
     );
+  // LED rule (autoharness): every learned mutation cites the episode that
+  // motivated it — an empty hypothesis or evidence field cannot land.
+  if (!proposal.hypothesis.trim() || !(proposal.evidence ?? "").trim()) {
+    recordVerdict(cwd, { proposal: id, action: "adopt", verdict: "rejected", families: ["no_evidence"] });
+    throw new GraphKitError(
+      "LEARN_NO_EVIDENCE",
+      `proposal "${id}" has an empty hypothesis or evidence field — cite the episode that motivated it`,
+      { id },
+    );
+  }
   const failing = effectiveVerdicts(proposal).filter((v) => !v.pass);
-  if (failing.length > 0)
+  if (failing.length > 0) {
+    recordVerdict(cwd, { proposal: id, action: "adopt", verdict: "rejected", families: ["failing"] });
     throw new GraphKitError("LEARN_FAILING", `proposal "${id}" still fails ${failing.length} criterion(s)`, {
       failing: failing.map((v) => v.criterion),
     });
+  }
+
+  // Admission lint over the learned content: hard findings reject, advisory
+  // findings land in the proposal record (gk's advisory-findings convention).
+  const lint = lintProposal(cwd, proposal);
+  const hard = lint.filter((f) => f.severity === "hard");
+  if (hard.length > 0) {
+    recordVerdict(cwd, {
+      proposal: id,
+      action: "adopt",
+      verdict: "rejected",
+      families: [...new Set(hard.map((f) => f.family))],
+    });
+    throw new GraphKitError("LEARN_LINT", `proposal "${id}" fails admission lint (${hard.length} hard finding(s))`, {
+      findings: hard as unknown as Record<string, unknown>[],
+    });
+  }
 
   const installed: string[] = [];
   let kitRegen = "skipped";
@@ -398,9 +489,15 @@ export function adoptProposal(cwd: string, id: string): AdoptResult {
   const next: LearnProposal = {
     ...proposal,
     status: "adopted",
-    adopted: { at: now, installed, kit_regen: kitRegen, artifact },
+    adopted: { at: now, installed, kit_regen: kitRegen, artifact, lint },
   };
-  return { id, file: writeProposal(cwd, next), status: "adopted", installed, kit_regen: kitRegen, artifact };
+  recordVerdict(cwd, {
+    proposal: id,
+    action: "adopt",
+    verdict: "landed",
+    families: [...new Set(lint.map((f) => f.family))],
+  });
+  return { id, file: writeProposal(cwd, next), status: "adopted", installed, kit_regen: kitRegen, artifact, lint };
 }
 
 export function rejectProposal(
@@ -418,6 +515,7 @@ export function rejectProposal(
     status: "rejected",
     rejected: { at: new Date().toISOString(), reason: reason ?? null },
   };
+  recordVerdict(cwd, { proposal: id, action: "reject", verdict: "rejected", families: [] });
   return { id, file: writeProposal(cwd, next), status: "rejected" };
 }
 
@@ -447,6 +545,7 @@ export function revertProposal(
     status: "reverted",
     reverted: { at: new Date().toISOString() },
   };
+  recordVerdict(cwd, { proposal: id, action: "revert", verdict: "reverted", families: [] });
   return { id, file: writeProposal(cwd, next), status: "reverted", removed };
 }
 
@@ -459,16 +558,24 @@ export interface ListedProposal {
   status: string;
 }
 
-export function listProposals(cwd: string): ListedProposal[] {
+/** Every parseable proposal file under `.graphkit/learn/` — the index and
+ *  the run-status learn section read full proposals, not just the list row. */
+export function readAllProposals(cwd: string): LearnProposal[] {
   const dir = learnDir(cwd);
   if (!existsSync(dir)) return [];
-  const out: ListedProposal[] = [];
+  const out: LearnProposal[] = [];
   for (const f of readdirSync(dir)
     .filter((f) => f.endsWith(".yaml"))
     .sort()) {
     const parsed = LearnProposalSchema.safeParse(YAML.parse(readFileSync(join(dir, f), "utf-8")));
-    if (!parsed.success) continue;
-    const p = parsed.data;
+    if (parsed.success) out.push(parsed.data);
+  }
+  return out;
+}
+
+export function listProposals(cwd: string): ListedProposal[] {
+  const out: ListedProposal[] = [];
+  for (const p of readAllProposals(cwd)) {
     out.push({
       id: p.id,
       created: p.created,

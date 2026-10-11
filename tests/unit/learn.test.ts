@@ -182,6 +182,10 @@ describe("learn adopt / reject / revert", () => {
     const { id } = propose(cwd, { run: "20260101-000005-a" });
     expect(() => adoptProposal(cwd, id)).toThrowError(/is proposed .* evaluate/);
     evaluateProposal(cwd, id); // design + verdict still missing → failing
+    const doc = readProposal(id);
+    doc.hypothesis = "when the gate misses freshness";
+    doc.evidence = "run blocked with verdict evidence absent";
+    writeProposal(id, doc);
     expect(() => adoptProposal(cwd, id)).toThrowError(/still fails 2 criterion/);
     expect(readProposal(id).status).toBe("evaluated");
   });
@@ -196,6 +200,8 @@ describe("learn adopt / reject / revert", () => {
     mkdirSync(join(cwd, "proposals"), { recursive: true });
     writeFileSync(join(cwd, "proposals", "missed-check.md"), "# missed-check\n\nCatch the failure earlier.\n");
     const doc = readProposal(id);
+    doc.hypothesis = "use when the gate misses a criterion";
+    doc.evidence = "run 20260101-000006-a blocked without verdict evidence";
     doc.proposal_kind = "skill";
     doc.proposes = { skill_path: "proposals/missed-check.md" };
     writeProposal(id, doc);

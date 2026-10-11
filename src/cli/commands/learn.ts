@@ -7,6 +7,7 @@ import {
   propose,
   rejectProposal,
   revertProposal,
+  verdictSummary,
 } from "../../learn/learn.js";
 import { leafUsageFor, subcommandsFor } from "../command-registry.js";
 import { emit, fail, ok } from "../output.js";
@@ -69,7 +70,7 @@ export function registerLearnCommand(cli: CAC) {
           return;
         }
         if (subcommand === "list") {
-          emit(ok({ proposals: listProposals(cwd) }));
+          emit(ok({ proposals: listProposals(cwd), summary: verdictSummary(cwd) }));
           return;
         }
         emit(

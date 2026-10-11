@@ -4,6 +4,7 @@ import { join } from "node:path";
 import YAML from "yaml";
 import { GraphKitError } from "../errors.js";
 import { parseMarker } from "../evidence/marker.js";
+import { learnIndex } from "../learn/index.js";
 import type { Graph } from "../schemas/graph.schema.js";
 import { GraphSchema, type LoopGroup } from "../schemas/graph.schema.js";
 import { saveSessionGraph, setActiveGraphId } from "../store/index.js";
@@ -325,8 +326,10 @@ export function deriveResumeGraph(rec: Reconciliation, parentRunId: string): Gra
   const advisorLast = new Map<string, AdvisorEvent>();
   for (const ev of readAdvisorEvents(rec.cwd, rec.runId)) advisorLast.set(ev.node, ev);
   // Recitation carryover: the parent run's progress.md tail rides the derived
-  // objectives — a resumed worker starts from what prior nodes logged.
+  // objectives — a resumed worker starts from what prior nodes logged — and
+  // the learned-items index tells it which adopted patterns apply.
   const recite = progressRecitation(rec.cwd, rec.graph.progress_tail, rec.runId);
+  const learnIdx = learnIndex(rec.cwd, rec.graph.learn_index_tail);
   const nodes: Graph["nodes"] = {};
   for (const [name, node] of Object.entries(rec.graph.nodes)) {
     if (!pending.has(name)) continue;
@@ -353,7 +356,8 @@ export function deriveResumeGraph(rec: Reconciliation, parentRunId: string): Gra
       );
     const objective =
       (carry.length ? `${node.objective}\n\n## Resume context\n${carry.join("\n")}` : node.objective) +
-      (recite ? `\n\n${recite}` : "");
+      (recite ? `\n\n${recite}` : "") +
+      (learnIdx ? `\n\n${learnIdx}` : "");
     nodes[name] = {
       ...nodeRest,
       objective,

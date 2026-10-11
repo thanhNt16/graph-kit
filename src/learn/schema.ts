@@ -17,6 +17,14 @@ export const LearnFixSchema = z.strictObject({
   value: z.string().min(1),
 });
 
+/** One admission-lint finding: `hard` findings block adoption (LEARN_LINT),
+ *  `advisory` findings land in the record without blocking. */
+export const LintFindingSchema = z.strictObject({
+  family: z.string().min(1),
+  line: z.string(),
+  severity: z.enum(["hard", "advisory"]),
+});
+
 export const LearnEvaluationSchema = z.strictObject({
   at: z.string().min(1),
   // Repo-relative evidence dir the verdicts were read from (null when the
@@ -36,6 +44,10 @@ export const LearnProposalSchema = z.strictObject({
   // under scenarios/promoted/ — null when the run was never promoted.
   source_case: z.string().nullable(),
   hypothesis: z.string(),
+  // The episode that motivated the proposal (run/case notes, observed
+  // failure) — adopt refuses without it (LEARN_NO_EVIDENCE). Nullable so
+  // proposals written before the field existed still parse.
+  evidence: z.string().nullable().default(null),
   proposal_kind: z.enum(["skill", "check", "graph", "procedure"]),
   // What adoption installs; today only skill installs are materialized.
   proposes: z.strictObject({ skill_path: z.string().nullable() }).nullable(),
@@ -51,6 +63,8 @@ export const LearnProposalSchema = z.strictObject({
       kit_regen: z.string(),
       // The learned artifact landed in the memory store (.graphkit/memory/<id>.md).
       artifact: z.string().optional(),
+      // Advisory lint findings recorded at adopt (hard findings blocked it).
+      lint: z.array(LintFindingSchema).default([]),
     })
     .nullable(),
   rejected: z.strictObject({ at: z.string().min(1), reason: z.string().nullable() }).nullable(),
@@ -59,6 +73,7 @@ export const LearnProposalSchema = z.strictObject({
 
 export type LearnProposal = z.infer<typeof LearnProposalSchema>;
 export type CriterionVerdict = z.infer<typeof CriterionVerdictSchema>;
+export type LintFinding = z.infer<typeof LintFindingSchema>;
 
 /** The slice of a promoted scenario `case.yaml` learn reads back. */
 export const SourceCaseSchema = z.object({

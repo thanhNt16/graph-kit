@@ -252,6 +252,7 @@ describe("learn adopt populates the store", () => {
         source_run: "20260101-000001-a",
         source_case: null,
         hypothesis: "always verify before merge",
+        evidence: "run 20260101-000001-a blocked on missing persistence check",
         proposal_kind: "procedure",
         proposes: null,
         fix: null,
