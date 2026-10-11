@@ -74,16 +74,74 @@ const FanOutConfig = z
   })
   .strict();
 
+// Loop kinds: "judged" (default, today's behavior) exits on a model-evaluated
+// predicate (stop_when) or an evidence gate — the right tool for fuzzy
+// conditions. Mechanical kinds never invoke a judge: "polling" re-checks an
+// evidence marker each round via `gk run poll` until it is satisfied or
+// max_wait_ms/max_rounds exhaust (poll_timeout); "counting" exits on a
+// deterministic predicate over run state (exit_when).
+export const LoopKindSchema = z.enum(["judged", "polling", "counting"]);
+export type LoopKind = z.infer<typeof LoopKindSchema>;
+
+const PollConfig = z
+  .strictObject({
+    // The deterministic check: does a fresh (non-stale, non-superseded)
+    // evidence marker exist for this key.
+    evidence_key: z.string().min(1).optional(),
+    // Advisory pacing for the orchestrator — `gk run poll` itself never sleeps.
+    interval_ms: z.number().int().min(1).default(5000),
+    max_wait_ms: z.number().int().min(1).default(600000),
+  })
+  .strict();
+
+// Zero-judgment exit predicate: satisfied when every listed evidence key is
+// fresh OR the round count reaches rounds_eq — whichever first. At least one
+// predicate is required; an empty exit_when could never be evaluated.
+const ExitWhen = z
+  .strictObject({
+    evidence_all_fresh: z.array(z.string().min(1)).min(1).optional(),
+    rounds_eq: z.number().int().min(1).optional(),
+  })
+  .refine((d) => d.evidence_all_fresh != null || d.rounds_eq != null, {
+    message: "exit_when requires at least one predicate: evidence_all_fresh or rounds_eq",
+  });
+
 export const LoopGroupSchema = z
   .strictObject({
     nodes: z.array(z.string().min(1)).min(1),
     max_rounds: z.number().int().min(1),
+    kind: LoopKindSchema.default("judged"),
     stop_when: z.string().min(1).optional(),
     gate_evidence: z.array(z.string().min(1)).min(1).optional(),
+    poll: PollConfig.optional(),
+    exit_when: ExitWhen.optional(),
     no_progress_limit: z.number().int().min(2).optional(),
   })
-  .refine((data) => Boolean(data.stop_when || data.gate_evidence), {
-    message: "At least one of stop_when or gate_evidence must be provided",
+  .superRefine((data, ctx) => {
+    if (data.kind === "polling") {
+      if (!data.poll)
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["poll"],
+          message: 'kind "polling" requires a poll: block',
+        });
+      return;
+    }
+    if (data.kind === "counting") {
+      if (!data.exit_when)
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["exit_when"],
+          message: 'kind "counting" requires an exit_when: predicate',
+        });
+      return;
+    }
+    if (!data.stop_when && !data.gate_evidence) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "At least one of stop_when or gate_evidence must be provided",
+      });
+    }
   });
 
 export type LoopGroup = z.infer<typeof LoopGroupSchema>;

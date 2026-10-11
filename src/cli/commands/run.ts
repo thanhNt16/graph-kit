@@ -20,7 +20,7 @@ import {
   stampTakeover,
   startRun,
 } from "../../runs/ledger.js";
-import { recordRound } from "../../runs/loops.js";
+import { recordPoll, recordRound } from "../../runs/loops.js";
 import { reconcileRun, resumeRun } from "../../runs/resume.js";
 import type { Graph } from "../../schemas/graph.schema.js";
 import { leafUsageFor, subcommandsFor } from "../command-registry.js";
@@ -370,6 +370,25 @@ export function registerRunCommands(cli: CAC) {
           }
           try {
             emit(ok(recordRound(cwd, idx)));
+          } catch (e) {
+            const gke = toGraphKitError(e, "RUN_ERROR");
+            emit(fail(gke.code, gke.message, gke.details));
+          }
+          return;
+        }
+        if (subcommand === "poll") {
+          const arg = Array.isArray(args) ? args[0] : args;
+          const idx = Number(arg);
+          if (arg == null || arg === "") {
+            emit(fail("MISSING_ARG", "poll requires a loop-group index"));
+            return;
+          }
+          if (!Number.isInteger(idx) || idx < 0) {
+            emit(fail("BAD_ARG", "poll requires an integer loop-group index >= 0"));
+            return;
+          }
+          try {
+            emit(ok(recordPoll(cwd, idx)));
           } catch (e) {
             const gke = toGraphKitError(e, "RUN_ERROR");
             emit(fail(gke.code, gke.message, gke.details));
