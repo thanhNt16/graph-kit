@@ -9,6 +9,11 @@ export interface Criterion {
   kind: CriterionKind;
 }
 
+/** graph.yaml `evidence.criteria[]` entry: bare id (weight 1) or weighted ref. */
+export type CriterionRef = string | { id: string; weight: number };
+export const criterionId = (c: CriterionRef): string => (typeof c === "string" ? c : c.id);
+export const criterionWeight = (c: CriterionRef): number => (typeof c === "string" ? 1 : c.weight);
+
 const KINDS: CriterionKind[] = ["report", "screenshot", "json", "metrics", "text"];
 
 /**
@@ -16,9 +21,9 @@ const KINDS: CriterionKind[] = ["report", "screenshot", "json", "metrics", "text
  * optional frontmatter `id`, body = description). Never throws — `gk validate`'s
  * `criteria-file` check is the layer that reports missing/unreadable files.
  */
-export function loadCriteria(cwd: string, ids: string[]): Map<string, Criterion> {
+export function loadCriteria(cwd: string, ids: CriterionRef[]): Map<string, Criterion> {
   const out = new Map<string, Criterion>();
-  for (const id of ids) {
+  for (const id of ids.map(criterionId)) {
     const p = join(cwd, "criteria", `${id}.md`);
     if (!existsSync(p)) {
       out.set(id, { id, description: "", kind: "report" });
