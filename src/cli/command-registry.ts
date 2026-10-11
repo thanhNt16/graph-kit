@@ -78,6 +78,10 @@ const GROUP_SUBCOMMANDS: Record<string, Leaf[]> = {
     { name: "invalidate", usage: "--key <k> [--note <text>] [--graph <file>]" },
     { name: "report", usage: "[--html] [--graph <file>]" },
   ],
+  schedule: [
+    { name: "list", usage: "[file]" },
+    { name: "emit", usage: "<file> --format github-actions|cron|launchd|claude-loop [--out <path>]" },
+  ],
 };
 
 /** Space-joined leaf names for a command group — injected into group --help and error hints. */

@@ -5,6 +5,7 @@ import type { Issue } from "../cli/diagnostics.js";
 import type { Graph } from "../schemas/graph.schema.js";
 import { agentDirsFor, agentFileName } from "../targets/registry.js";
 import { topoWaves } from "./plan.js";
+import { cronError } from "./schedule.js";
 
 /** A semantic check result. Shape-compatible with the schema `Issue` envelope:
  *  check and severity ride along as extra fields on the same object. */
@@ -336,6 +337,20 @@ export function validateGraph(graph: Graph, projectRoot: string): Finding[] {
           });
         }
       }
+    }
+  }
+
+  // 8b. Declared schedule (automation heartbeat): emitters codegen platform
+  // artifacts straight from schedule.cron, so a malformed expression is a
+  // hard finding — a warning would let `gk schedule emit` produce garbage.
+  if (graph.schedule) {
+    const err = cronError(graph.schedule.cron);
+    if (err) {
+      findings.push({
+        check: "schedule-cron",
+        path: "schedule.cron",
+        message: `schedule.cron is not a valid 5-field cron expression: ${err}`,
+      });
     }
   }
 

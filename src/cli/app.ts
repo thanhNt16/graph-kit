@@ -12,6 +12,7 @@ import { registerKitCommands } from "./commands/kit.js";
 import { registerMemoryCommands } from "./commands/memory.js";
 import { registerModelsCommands } from "./commands/models.js";
 import { registerRunCommands } from "./commands/run.js";
+import { registerScheduleCommands } from "./commands/schedule.js";
 import { registerStatusCommand } from "./commands/status.js";
 import { registerSuggestCommands } from "./commands/suggest.js";
 import { registerTemplateCommands } from "./commands/template.js";
@@ -30,5 +31,6 @@ export function buildCli(): CAC {
   registerRunCommands(cli);
   registerExecCommand(cli);
   registerSuggestCommands(cli);
+  registerScheduleCommands(cli);
   return cli;
 }
