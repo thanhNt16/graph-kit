@@ -329,8 +329,8 @@ describe("deriveResumeGraph", () => {
     // group 1 [a,b]: a dropped → [b], a-out pruned; group 2 [d]: emptied → dropped;
     // group 3 [c]: c-ghost undeclared by kept member → gate_evidence field dropped, stop_when keeps group
     expect(derived.loops).toEqual([
-      { nodes: ["b"], max_rounds: 3, gate_evidence: ["b-out"] },
-      { nodes: ["c"], max_rounds: 2, stop_when: "no blockers" },
+      { nodes: ["b"], max_rounds: 3, kind: "judged", gate_evidence: ["b-out"] },
+      { nodes: ["c"], max_rounds: 2, kind: "judged", stop_when: "no blockers" },
     ]);
     expect(GraphSchema.safeParse(derived).success).toBe(true);
   });

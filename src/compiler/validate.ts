@@ -463,6 +463,62 @@ export function validateGraph(graph: Graph, projectRoot: string): Finding[] {
         }
       }
 
+      // Rule 5: loop_kind_coherent (ADVISORY) — kind-specific fields belong to
+      // their own kind. The engine ignores them otherwise: stop_when/
+      // gate_evidence on mechanical kinds, poll/exit_when on mismatched kinds.
+      if (loop.kind !== "polling" && loop.poll) {
+        findings.push({
+          check: "loop_kind_fields",
+          path: `loops[${i}].poll`,
+          message: `poll: block is ignored on kind "${loop.kind}" loops — only kind: polling evaluates it`,
+          severity: "warn",
+        });
+      }
+      if (loop.kind !== "counting" && loop.exit_when) {
+        findings.push({
+          check: "loop_kind_fields",
+          path: `loops[${i}].exit_when`,
+          message: `exit_when: predicate is ignored on kind "${loop.kind}" loops — only kind: counting evaluates it`,
+          severity: "warn",
+        });
+      }
+      if (loop.kind !== "judged" && (loop.stop_when || loop.gate_evidence)) {
+        findings.push({
+          check: "loop_kind_fields",
+          path: `loops[${i}]`,
+          message: `kind "${loop.kind}" loops exit on their deterministic check — stop_when/gate_evidence are never evaluated`,
+          severity: "warn",
+        });
+      }
+      // Rule 6: loop_poll_evidence_key (ADVISORY) — a poll with no
+      // evidence_key has nothing to check and can never be satisfied.
+      if (loop.kind === "polling" && loop.poll && !loop.poll.evidence_key) {
+        findings.push({
+          check: "loop_poll_evidence_key",
+          path: `loops[${i}].poll`,
+          message: "poll: block declares no evidence_key — the deterministic check can never be satisfied",
+          severity: "warn",
+        });
+      }
+      // Rule 7: loop_mechanical_evidence (ADVISORY) — keys the mechanical
+      // checks wait on but no node produces. External stamping (gk evidence
+      // add by a human or another run) is legitimate, so this stays a warning
+      // rather than the error gate_evidence undeclared keys get.
+      const mechanicalKeys = [
+        ...(loop.poll?.evidence_key ? [loop.poll.evidence_key] : []),
+        ...(loop.exit_when?.evidence_all_fresh ?? []),
+      ];
+      for (const key of mechanicalKeys) {
+        if (!produced.has(key)) {
+          findings.push({
+            check: "loop_mechanical_evidence",
+            path: `loops[${i}]`,
+            message: `kind "${loop.kind}" loop waits on evidence key "${key}" that no node produces — it may never be satisfied`,
+            severity: "warn",
+          });
+        }
+      }
+
       // Rule 4: loop_contiguous (topological wave span closure)
       // Every loop-node dependency must either be within the loop group or strictly upstream of its minimum wave.
       if (allNodesExist && loop.nodes.length > 0) {

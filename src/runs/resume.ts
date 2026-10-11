@@ -366,7 +366,9 @@ export function deriveResumeGraph(rec: Reconciliation, parentRunId: string): Gra
     if (kept.length === 0) return [];
     const declared = new Set(kept.flatMap((n) => nodes[n]?.evidence ?? []));
     const gate = group.gate_evidence?.filter((k) => declared.has(k));
-    if (!group.stop_when && (!gate || gate.length === 0)) return [];
+    // Only judged groups lose their exit condition with their gate/stop text —
+    // mechanical kinds (polling/counting) keep evaluating their own check.
+    if (group.kind === "judged" && !group.stop_when && (!gate || gate.length === 0)) return [];
     const next: LoopGroup = { ...group, nodes: kept };
     if (gate && gate.length > 0) next.gate_evidence = gate;
     else delete next.gate_evidence;
