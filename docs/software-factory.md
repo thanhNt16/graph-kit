@@ -31,12 +31,20 @@ features:
 
 ```bash
 gk features list                    # show backlog state
+gk features next                    # next open item (declared order)
+gk features add --description "user can reset password"   # append a missing capability
 gk features pass login-form         # mark an item verified (locked write)
-gk features check                   # exit 1 while any item is open
+gk gate                             # exit 1 while any item is open
 ```
 
 Writes are guarded by an atomic lock directory so parallel workers cannot
 clobber each other's completions; a stale lock is reclaimed after 15 s.
+
+The backlog is writable mid-run, not only at init: an agent operating the
+shipped software feeds each missing capability back with `gk features add`,
+closing the operate→build loop. Appends land at the tail of the priority
+queue, so `next` stays deterministic; `--evidence <key>` predeclares the
+artifact expected to mark the item done.
 
 ## Run-level context budget
 

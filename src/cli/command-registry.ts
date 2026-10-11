@@ -84,6 +84,7 @@ const GROUP_SUBCOMMANDS: Record<string, Leaf[]> = {
   ],
   features: [
     { name: "init", usage: "[--force] [--graph <file>]" },
+    { name: "add", usage: "--description <text> [--id <id>] [--evidence <key>] [--graph <file>]" },
     { name: "list", usage: "[--graph <file>]" },
     { name: "next", usage: "[--graph <file>]" },
     { name: "pass", usage: "<id> [--note <text>] [--graph <file>]" },
