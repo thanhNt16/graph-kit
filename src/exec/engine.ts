@@ -1,4 +1,5 @@
 import { execSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import type { PlanGraph, PlannedNode, PlanWave } from "../compiler/plan.js";
@@ -90,6 +91,72 @@ function compactUpstream(run: NodeRun): string {
 
 function renderUpstream(run: NodeRun): string {
   return `## ${run.id} — ${run.status}\n${(run.outcome?.output ?? "").trim()}`;
+}
+
+/** fan_out.reduce joins: `append` concatenates member outputs in brief order;
+ *  `merge` concatenates then deduplicates normalized lines (trim, collapse
+ *  whitespace, drop empty) keeping first-seen order; `vote` picks the whole
+ *  output shared by the most members after normalization — a tie resolves to
+ *  the first member in brief order and is flagged in the join notes. */
+interface FanMember {
+  id: string;
+  outcome: DispatchOutcome;
+}
+
+const normalizeLine = (line: string): string => line.trim().replace(/\s+/gu, " ");
+const normalizeWhole = (output: string): string => normalizeLine(output.replace(/\s+/gu, " "));
+
+function reduceFanOut(
+  reduce: "append" | "merge" | "vote",
+  members: FanMember[],
+): { output: string; notes: string | null } {
+  if (reduce === "merge") {
+    const seen = new Set<string>();
+    const lines: string[] = [];
+    let dupes = 0;
+    for (const member of members) {
+      for (const raw of member.outcome.output.split("\n")) {
+        const line = normalizeLine(raw);
+        if (line.length === 0) continue;
+        if (seen.has(line)) {
+          dupes++;
+          continue;
+        }
+        seen.add(line);
+        lines.push(line);
+      }
+    }
+    return { output: lines.join("\n"), notes: `reduce=merge lines=${lines.length} deduped=${dupes}` };
+  }
+  if (reduce === "vote") {
+    const ballots = members.map((m) => ({ member: m, digest: normalizeWhole(m.outcome.output) }));
+    const tally = new Map<string, { count: number; first: number }>();
+    for (const [i, b] of ballots.entries()) {
+      const t = tally.get(b.digest);
+      if (t) t.count++;
+      else tally.set(b.digest, { count: 1, first: i });
+    }
+    let winner = ballots[0]!;
+    let top = 0;
+    let tie = false;
+    for (const t of tally.values()) {
+      if (t.count > top) {
+        top = t.count;
+        tie = false;
+        winner = ballots[t.first]!;
+      } else if (t.count === top) {
+        tie = true;
+      }
+    }
+    const digests = ballots
+      .map((b) => `${b.member.id}:${createHash("sha256").update(b.digest).digest("hex").slice(0, 12)}`)
+      .join(",");
+    return {
+      output: winner.member.outcome.output.trim(),
+      notes: `reduce=vote winner=${winner.member.id} votes=${top}/${members.length}${tie ? " vote_tie=true" : ""} digests=${digests}`,
+    };
+  }
+  return { output: members.map((m) => m.outcome.output.trim()).join("\n\n"), notes: null };
 }
 
 /** Brief template render: `{brief.title}` / `{brief.body}` (any `brief.X`
@@ -342,12 +409,9 @@ export async function runGraph(plan: PlanGraph, opts: RunGraphOptions): Promise<
 
   /** fan_out: read [{id,title,body}] briefs from the source node's evidence,
    *  dispatch every brief as a parallel sub-task (no per-brief trace lines -
-   *  the parent node traces once), join outputs in brief order. Missing or
-   *  malformed briefs are a failed round, not a crash.
-   *
-   *  ponytail: fan.reduce (append/merge/vote) rides as plain append; the
-   *  vote/merge reducers need multi-run aggregation semantics nobody has
-   *  specified yet - add when a graph actually declares them. */
+   *  the parent node traces once), join outputs in brief order via the
+   *  declared fan_out.reduce mode (append/merge/vote — see reduceFanOut).
+   *  Missing or malformed briefs are a failed round, not a crash. */
   async function runFanOut(
     node: PlannedNode,
     wave: PlanWave,
@@ -391,7 +455,7 @@ export async function runGraph(plan: PlanGraph, opts: RunGraphOptions): Promise<
       };
 
     const dispatched = await Promise.all(
-      briefs.map((raw, i) => {
+      briefs.map(async (raw, i) => {
         const brief = (raw ?? {}) as Record<string, unknown>;
         const id = typeof brief.id === "string" && brief.id.trim() ? brief.id.trim() : `n${i}`;
         const target: PlannedNode = {
@@ -406,12 +470,12 @@ export async function runGraph(plan: PlanGraph, opts: RunGraphOptions): Promise<
           evidence: [],
           hooks: [],
         };
-        return dispatchNode(target, upstream, null, () => null, false);
+        const result = await dispatchNode(target, upstream, null, () => null, false);
+        return { id: target.id, ...result };
       }),
     );
     const attempts = dispatched.reduce((n, d) => n + d.attempts, 0);
     const durationMs = Math.max(0, ...dispatched.map((d) => d.outcome.durationMs));
-    const output = dispatched.map((d) => d.outcome.output.trim()).join("\n\n");
     const failed = dispatched.filter((d) => !d.outcome.ok);
     if (failed.length > 0)
       return {
@@ -423,9 +487,10 @@ export async function runGraph(plan: PlanGraph, opts: RunGraphOptions): Promise<
         },
         attempts,
       };
-    const joined: DispatchOutcome = { ok: true, output, exitCode: 0, durationMs };
+    const reduced = reduceFanOut(fan.reduce, dispatched);
+    const joined: DispatchOutcome = { ok: true, output: reduced.output, exitCode: 0, durationMs };
     await stampEvidence(node, joined);
-    traceLine(node, "ok", wave.index, { outcome: joined, attempt: attempts });
+    traceLine(node, "ok", wave.index, { outcome: joined, attempt: attempts, notes: reduced.notes });
     return { outcome: joined, attempts };
   }
 
