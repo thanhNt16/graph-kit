@@ -130,6 +130,51 @@ loops:
 Lower the value to catch more paraphrased stagnation; `1.0` degrades to the
 old byte-identical fingerprint behavior.
 
+## Continual learning (`gk learn`)
+
+`gk evidence promote` freezes a blocked run into a regression scenario — but
+freezing the failure doesn't explain why verification missed it. `gk learn`
+is the second half of the loop: draft an improvement proposal, evaluate it
+before adoption, and keep the adopted change reversible.
+
+```bash
+gk run end --status blocked
+gk evidence promote --run <run-id>            # freeze the failure (optional but recommended)
+
+gk learn propose --run <run-id> --note "gate never checked freshness"
+# → .graphkit/learn/learn-<run-id>.yaml       (status: proposed)
+
+# edit the proposal: fill hypothesis, proposal_kind, proposes.skill_path, fix
+gk learn evaluate learn-<run-id>
+# → verdicts per criterion linked in the source case, replayed over the
+#   recorded evidence dir; when `fix` is recorded, it is applied in a
+#   throwaway git worktree and re-run (evaluation.after_fix)
+
+gk learn adopt learn-<run-id>     # only when status: evaluated and every
+                                  # effective verdict passes (LEARN_FAILING)
+gk learn reject learn-<run-id> --reason "fix costs more than the failure"
+gk learn revert learn-<run-id>    # uninstall an adopted skill, status: reverted
+gk learn list                     # all proposals with status
+```
+
+* `propose` auto-discovers the run's promoted `case.yaml` under
+  `scenarios/promoted/` and links it as `source_case`; without one it warns
+  and drafts anyway — proposals can precede the fixture.
+* `evaluate` replays each linked criterion (`criteria/*.md` /
+  `*.holdout.md` ids from the case's `failed_criteria`) against the recorded
+  evidence dir with the same strict exists-and-non-empty read the gate makes.
+  A recorded `fix` (`{kind: patch, value: <diff-file>}` or
+  `{kind: command, value: <shell>}`) is rehearsed inside a temp git worktree
+  so `after_fix` verdicts never touch the working tree.
+* `adopt` is gated: status must be `evaluated` and every verdict in the
+  effective set (`after_fix` when present, else baseline) must pass — else
+  `LEARN_NOT_EVALUATED` / `LEARN_FAILING`. A proposal naming
+  `proposes.skill_path` installs to `kits/_core/skills/<name>/SKILL.md` and
+  re-runs the kit generator when `scripts/gen-kits.ts` exists
+  (`adopted.kit_regen` records `ok` / `failed:*` / `needed` / `skipped`).
+* `revert` removes the installed files and marks the proposal `reverted`, so
+  adoption is always undoable.
+
 ## The gallery template
 
 `gk template materialize software-factory` emits an 8-phase production line

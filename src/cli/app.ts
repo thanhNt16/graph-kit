@@ -10,6 +10,7 @@ import { registerGateCommand } from "./commands/gate.js";
 import { registerGraphCommands } from "./commands/graph.js";
 import { registerInventoryCommands } from "./commands/inventory.js";
 import { registerKitCommands } from "./commands/kit.js";
+import { registerLearnCommand } from "./commands/learn.js";
 import { registerMemoryCommands } from "./commands/memory.js";
 import { registerModelsCommands } from "./commands/models.js";
 import { registerRunCommands } from "./commands/run.js";
@@ -34,5 +35,6 @@ export function buildCli(): CAC {
   registerExecCommand(cli);
   registerSuggestCommands(cli);
   registerScheduleCommands(cli);
+  registerLearnCommand(cli);
   return cli;
 }
