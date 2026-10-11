@@ -172,6 +172,16 @@
         "--format <format>",
         "--out <path>"
       ]
+    },
+    {
+      "name": "learn",
+      "description": "Continual-learning proposals\nSubcommands: propose evaluate adopt reject revert list",
+      "options": [
+        "--run <id>",
+        "--note <text>",
+        "--reason <text>",
+        "--json"
+      ]
     }
   ]
 }

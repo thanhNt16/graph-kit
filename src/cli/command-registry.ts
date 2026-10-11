@@ -94,6 +94,14 @@ const GROUP_SUBCOMMANDS: Record<string, Leaf[]> = {
     { name: "list", usage: "[file]" },
     { name: "emit", usage: "<file> --format github-actions|cron|launchd|claude-loop [--out <path>]" },
   ],
+  learn: [
+    { name: "propose", usage: "--run <run-id> [--note <text>]" },
+    { name: "evaluate", usage: "<id>" },
+    { name: "adopt", usage: "<id>" },
+    { name: "reject", usage: "<id> [--reason <text>]" },
+    { name: "revert", usage: "<id>" },
+    { name: "list", usage: "" },
+  ],
 };
 
 /** Space-joined leaf names for a command group — injected into group --help and error hints. */
