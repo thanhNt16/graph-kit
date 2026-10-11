@@ -155,6 +155,15 @@
         "--all",
         "--json"
       ]
+    },
+    {
+      "name": "schedule",
+      "description": "Schedule commands\nSubcommands: list emit",
+      "options": [
+        "--json",
+        "--format <format>",
+        "--out <path>"
+      ]
     }
   ]
 }

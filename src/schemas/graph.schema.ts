@@ -70,6 +70,24 @@ const GateConfig = z
   })
   .strict();
 
+// The automation heartbeat: a declared cadence the graph is meant to run on.
+// gk is a local CLI with no daemon — `gk schedule` reads this block and emits
+// platform-native artifacts (crontab line, GitHub Actions workflow, launchd
+// plist, Claude Code /loop snippet) the host scheduler actually executes.
+// Cron *syntax* is not enforced here (a string can't carry a named finding):
+// malformed expressions surface as the `schedule-cron` check in validate.ts.
+const ScheduleConfig = z
+  .object({
+    cron: z.string().min(1),
+    // Which gk verb the cadence drives: "exec" (headless run, default) or
+    // "run" (emitters render `gk run start`).
+    command: z.enum(["exec", "run"]).default("exec"),
+    description: z.string().optional(),
+  })
+  .strict();
+
+export type Schedule = z.infer<typeof ScheduleConfig>;
+
 const FanOutConfig = z
   .object({
     briefs_from: z.string().min(1),
@@ -246,6 +264,7 @@ export const GraphSchema = z
     })),
     loops: z.array(LoopGroupSchema).optional(),
     features: FeaturesConfig.optional(),
+    schedule: ScheduleConfig.optional(),
   })
   .strict()
   .superRefine((graph, ctx) => {
