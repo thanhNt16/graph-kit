@@ -18,6 +18,7 @@ import {
   type TraceLine,
 } from "../runs/ledger.js";
 import { recordNodeRound } from "../runs/loops.js";
+import { materializeNodeTrace } from "../runs/trace-eval.js";
 import type { Graph } from "../schemas/graph.schema.js";
 import type { DispatchOutcome, InteractiveHooks, NodeRun, Runner, RunVerdict, WaveRun } from "./types.js";
 
@@ -336,6 +337,21 @@ export async function runGraph(plan: PlanGraph, opts: RunGraphOptions): Promise<
   const judgePredicate = (node: PlannedNode, predicate: string, upstream: ReadonlyMap<string, NodeRun>) =>
     judge ? judge(node, predicate, upstream) : Promise.resolve(false);
 
+  /** Trace-level evaluation: eval-role nodes (planned `trace` scope set) get
+   *  a materialized, scoped view of the run journal regenerated each round at
+   *  `.graphkit/runs/<id>/trace/<node>.jsonl` — derived data, never appended,
+   *  so resume/retry rewrites the same deterministic file. Returns the brief
+   *  line pointing the grader at it, or null for non-eval nodes. */
+  function traceNoteFor(node: PlannedNode): string | null {
+    if (node.trace == null) return null;
+    const file = materializeNodeTrace(cwd, runId, node.id, node.trace.scope);
+    return (
+      `## Run trace\n` +
+      `The run journal for the nodes you evaluate (${node.trace.scope.join(", ") || "none"}) is materialized at ${file} — ` +
+      `a derived, scoped view of the run ledger. Grade their actions (dispatches, rounds, evidence digests, advisor escalations), not just their artifacts.`
+    );
+  }
+
   /** Upstream context within budget_tokens (chars ~= tokens*4): compact
    *  per-node skeletons when over, spill the full render to
    *  .graphkit/artifacts/<node>-input.md and pass the path in the objective. */
@@ -591,6 +607,7 @@ export async function runGraph(plan: PlanGraph, opts: RunGraphOptions): Promise<
       const objective = [
         `${memoryPrefix}${node.objective}`,
         spillNote,
+        traceNoteFor(node),
         guidance.length > 0 ? `## Advisor guidance\n${guidance}` : null,
       ]
         .filter((s): s is string => s != null)
