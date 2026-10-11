@@ -73,24 +73,89 @@ function collectPlaceholders(node: unknown, path: string, out: PlaceholderUse[])
   }
 }
 
+// Placeholders may sit in non-string positions (e.g. loops[].max_rounds).
+// Substitute only the placeholders that actually fail GraphSchema in a
+// non-string position — replacing them with the parameter's declared default
+// — and leave every other placeholder intact so materialize can still
+// override it. A placeholder in a bad position without a default stays put
+// and fails validation as an authoring error.
+function solePlaceholderAt(node: unknown, path: PropertyKey[]): string | null {
+  let cur: unknown = node;
+  for (const key of path) {
+    if (cur == null || typeof cur !== "object") return null;
+    cur = (cur as Record<PropertyKey, unknown>)[key];
+  }
+  if (typeof cur !== "string") return null;
+  const m = SOLE_PLACEHOLDER_RE.exec(cur.trim());
+  return m ? m[1] : null;
+}
+
+function setAtPath(node: unknown, path: PropertyKey[], value: unknown): void {
+  let cur = node as Record<PropertyKey, unknown>;
+  for (let i = 0; i < path.length - 1; i++) cur = cur[path[i]] as Record<PropertyKey, unknown>;
+  cur[path[path.length - 1]] = value;
+}
+
+interface PlaceholderPatch {
+  path: (string | number)[];
+  placeholder: string;
+}
+
+function applyParamDefaults(doc: unknown): unknown {
+  if (!doc || typeof doc !== "object") return doc;
+  const raw = doc as Record<string, unknown>;
+  if (!raw.graph || typeof raw.graph !== "object") return doc;
+  const params = (raw.parameters ?? {}) as Record<string, { default?: unknown }>;
+  const probe = GraphSchema.safeParse(raw.graph);
+  if (probe.success) return doc;
+  const graph = structuredClone(raw.graph);
+  const patches: PlaceholderPatch[] = [];
+  for (const issue of probe.error.issues) {
+    const placeholder = solePlaceholderAt(raw.graph, issue.path);
+    if (!placeholder) continue;
+    const def = params[placeholder]?.default;
+    if (def === undefined) continue;
+    setAtPath(graph, issue.path, def);
+    patches.push({ path: issue.path.filter((k): k is string | number => typeof k !== "symbol"), placeholder });
+  }
+  if (patches.length === 0) return doc;
+  // The patch list rides into the parsed output so the final transform can
+  // restore the placeholders — a template must keep them live for
+  // materialize-time overrides even though GraphSchema only sees defaults.
+  return { ...raw, graph, __placeholderPatches: patches };
+}
+
 export const GraphTemplateSchema = z
-  .object({
-    apiVersion: z.literal("graphkit.dev/v1"),
-    kind: z.literal("GraphTemplate"),
-    metadata: z.object({
-      name: z.string().regex(TEMPLATE_NAME_RE, "Template name must match ^[a-z0-9]+(?:-[a-z0-9]+)*$"),
-      description: z.string().min(1),
-      version: z.number().int().nonnegative(),
+  .preprocess(
+    applyParamDefaults,
+    z.object({
+      apiVersion: z.literal("graphkit.dev/v1"),
+      kind: z.literal("GraphTemplate"),
+      metadata: z.object({
+        name: z.string().regex(TEMPLATE_NAME_RE, "Template name must match ^[a-z0-9]+(?:-[a-z0-9]+)*$"),
+        description: z.string().min(1),
+        version: z.number().int().nonnegative(),
+      }),
+      parameters: z.record(z.string(), ParamDefSchema).default({}),
+      recommendations: RecommendationsSchema.optional().default(() => ({
+        agents: [],
+        skills: [],
+        tools: [],
+        capabilities: [],
+      })),
+      graph: GraphSchema,
+      // Internal: patch locations where applyParamDefaults swapped a
+      // placeholder for its default so the embedded graph could validate.
+      __placeholderPatches: z
+        .array(
+          z.object({
+            path: z.array(z.union([z.string(), z.number()])),
+            placeholder: z.string(),
+          }),
+        )
+        .optional(),
     }),
-    parameters: z.record(z.string(), ParamDefSchema).default({}),
-    recommendations: RecommendationsSchema.optional().default(() => ({
-      agents: [],
-      skills: [],
-      tools: [],
-      capabilities: [],
-    })),
-    graph: GraphSchema,
-  })
+  )
   .superRefine((template, ctx) => {
     const params = template.parameters as Record<string, z.infer<typeof ParamDefSchema>>;
     const declared = new Set(Object.keys(params));
@@ -146,8 +211,26 @@ export const GraphTemplateSchema = z
       }
     }
 
+    // applyParamDefaults already substituted every defaulted placeholder,
+    // so a param referenced only in non-string positions (e.g. a numeric
+    // max_rounds) leaves no placeholder to count above — treat its default
+    // value appearing in the parsed graph as the reference instead.
+    const containsValue = (node: unknown, target: unknown): boolean => {
+      // String defaults substitute into text, so they survive as substrings;
+      // scalar defaults (numbers, booleans) land as exact values.
+      if (typeof node === "string" && typeof target === "string") return node.includes(target);
+      if (node === target) return true;
+      if (Array.isArray(node)) return node.some((v) => containsValue(v, target));
+      if (node && typeof node === "object" && typeof target !== "object") {
+        return Object.values(node as Record<string, unknown>).some((v) => containsValue(v, target));
+      }
+      return false;
+    };
+
     for (const name of declared) {
-      if (!referenced.has(name)) {
+      const def = params[name]?.default;
+      const consumed = def !== undefined && containsValue(template.graph, def);
+      if (!referenced.has(name) && !consumed) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
           path: ["parameters", name],
@@ -155,6 +238,15 @@ export const GraphTemplateSchema = z
         });
       }
     }
+  })
+  .transform((template) => {
+    // Restore placeholders into the parsed graph so materialize-time values
+    // still reach them (GraphSchema only ever saw the declared defaults).
+    const { __placeholderPatches, ...rest } = template;
+    for (const patch of __placeholderPatches ?? []) {
+      setAtPath(rest.graph, patch.path, `{{${patch.placeholder}}}`);
+    }
+    return rest;
   });
 
 export type GraphTemplate = z.infer<typeof GraphTemplateSchema>;

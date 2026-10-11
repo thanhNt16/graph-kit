@@ -1,0 +1,232 @@
+# templates/gallery/software-factory.gk.yaml
+#
+# The AI Agent Factory as a materializable graph: a full production line from
+# a one-line task to a gated merge. Its five-layer production architecture
+# maps onto GraphKit primitives:
+#
+#   (1) Human / Delegate — intent, authority, budget, approval
+#       → the `task`/`modules` params plus the `gate:` plan-review node.
+#   (2) Management layer — assigns jobs, enforces policy
+#       → architect (decomposition + contracts) and plan-review (approval).
+#   (3) AI workers — the build-* nodes, write-capable but contract-bound.
+#   (4) Execution environment — sandboxed, isolated
+#       → worktree merge protocol + per-node `owns:` globs + `constraints`.
+#   (5) System of record — authoritative state + audit
+#       → content-addressed evidence artifacts + `evidence.required_keys`
+#         (the store is the ledger, NOT chat memory).
+#
+# Upgrade points for follow-on factory features (deliberately plain today):
+#   - holdout-eval can read sealed criteria at `criteria/<id>.holdout.md`
+#     once a registry file exists (refs + `holdout: true` — eval-gate only).
+#   - features.required can drive the durable backlog once an initializer
+#     node seeds the feature list.
+apiVersion: graphkit.dev/v1
+kind: GraphTemplate
+metadata:
+  name: software-factory
+  description: >-
+    AI Agent Factory production line — scout, architect, gated plan review,
+    contract-bound parallel builders, integrate, holdout eval gate, iterate, merge
+  version: 1
+parameters:
+  task:
+    description: What the factory should build (e.g. "a markdown export pipeline")
+    required: true
+  modules:
+    description: Optional decomposition hint (target modules or fan-out size); blank = architect decides
+    required: false
+  max-iterate-rounds:
+    type: number
+    description: Max build→integrate→holdout-eval loop rounds before the factory stops
+    required: false
+    default: 3
+graph:
+  apiVersion: graphkit.dev/v2
+  kind: Graph
+  metadata:
+    name: software-factory
+    description: >-
+      Production line for {{task}} — a five-layer AI-native org skeleton:
+      delegate (params + plan gate), management (architect + review), workers
+      (contract-bound builders), environment (worktree isolation + owns
+      scopes), system of record (evidence store).
+    task: "{{task}}"
+  topology: custom
+  inputs:
+    task:
+      type: string
+      required: true
+    modules:
+      type: string
+      required: false
+    max-iterate-rounds:
+      type: string
+      required: false
+      default: "{{max-iterate-rounds}}"
+  nodes:
+    # Layer 3 (worker, read-only): reconnaissance. Cheap tier — it only reads.
+    scout:
+      agent: codebase-scout
+      model: haiku
+      objective: >-
+        Index and analyze the codebase for the task "{{task}}": entry points,
+        module boundaries, existing patterns, and likely touch surfaces.
+        Output research_findings only — a digest the architect will
+        decompose. No writes.
+      tools: [Read, Grep, Glob]
+      constraints:
+        - no_write: true
+      depend_on: []
+      evidence: [research_findings]
+    # Layer 2 (management): decompose the task into module specs with
+    # interface contracts and owns-globs — the assignment sheet for the
+    # worker pool. Strong tier: the contracts bound every downstream write.
+    architect:
+      agent: software-architect
+      model: opus
+      objective: >-
+        Using research_findings, decompose "{{task}}" into module specs:
+        per-module interface contracts, owned path globs, and acceptance
+        signals. Decomposition hint (may be empty): "{{modules}}". Emit
+        module_contracts — the binding document for the build-* nodes.
+      tools: [Read, Grep, Glob, Write]
+      depend_on: [scout]
+      evidence: [module_contracts]
+    # Layers 1-2 (delegate authority): Dark Factory's "small plans
+    # auto-approve, complex pause" — the run suspends here for human
+    # approval of the module count, scope, and expected diff size.
+    plan-review:
+      agent: planner
+      model: haiku
+      objective: >-
+        Present module_contracts for "{{task}}" to the operator: module
+        count, owned scopes, and expected diff size. The gate suspends the
+        run until a human approves or rejects the plan.
+      tools: [Read]
+      constraints:
+        - no_write: true
+      depend_on: [architect]
+      gate:
+        question: >-
+          Approve this module decomposition (count, owns scopes, expected
+          diff size) for "{{task}}"?
+        details: >-
+          Small plans should be quick approvals; a module count or diff
+          size beyond your comfort line is the signal to reject and re-scope
+          via the `modules` parameter.
+      evidence: [plan_review_decision]
+    # Layer 3 (workers) inside layer 4 (isolated environment): each builder
+    # is write-capable but contract-bound — `owns:` scopes are the sandbox
+    # walls and `--worktree` gives each a separate checkout. Owns globs are
+    # the demonstrated pattern; align them with module_contracts after
+    # materializing.
+    build-core:
+      agent: implementer
+      model: sonnet
+      objective: >-
+        Implement the core/logic module of "{{task}}" exactly to its spec in
+        module_contracts — interface first, inside your owned scope only.
+      tools: [Read, Grep, Glob, Write, Edit, Bash]
+      owns:
+        - "src/core/**"
+      depend_on: [plan-review]
+      evidence: [build_core_report]
+    build-ui:
+      agent: implementer
+      model: sonnet
+      objective: >-
+        Implement the interface/UI module of "{{task}}" exactly to its spec
+        in module_contracts — consume only the declared interfaces, inside
+        your owned scope only.
+      tools: [Read, Grep, Glob, Write, Edit, Bash]
+      owns:
+        - "src/ui/**"
+      depend_on: [plan-review]
+      evidence: [build_ui_report]
+    build-cli:
+      agent: implementer
+      model: sonnet
+      objective: >-
+        Implement the CLI/edge module of "{{task}}" exactly to its spec in
+        module_contracts — consume only the declared interfaces, inside your
+        owned scope only.
+      tools: [Read, Grep, Glob, Write, Edit, Bash]
+      owns:
+        - "src/cli/**"
+      depend_on: [plan-review]
+      evidence: [build_cli_report]
+    # Barrier: merge worktree outputs and check the contract boundaries the
+    # builders were confined to (docs/worktree-merge-protocol.md).
+    integrate:
+      agent: release-manager
+      model: sonnet
+      objective: >-
+        Merge all builder outputs into one tree and verify contract
+        boundaries: every cross-module call resolves through an interface
+        declared in module_contracts, no builder wrote outside its owns
+        scope. Emit integration_report.
+      tools: [Read, Grep, Glob, Bash]
+      depend_on: [build-core, build-ui, build-cli]
+      evidence: [integration_report]
+    # Layer 2 (management policy): the holdout evaluator. It judges against
+    # criteria the builders never see — today the rubric lives in `eval`,
+    # inline in the objective, and any file the operator adds later as a
+    # sealed `criteria/*.holdout.md` ref (eval-gate role only; a builder ref
+    # is a HOLDOUT_LEAK error).
+    holdout-eval:
+      agent: qa-engineer
+      role: eval-gate
+      model: opus
+      objective: >-
+        Evaluate the integrated build for "{{task}}" against the holdout
+        criteria: behavior against acceptance signals, contract conformance,
+        and regression risk — never builder self-reports alone. Evidence
+        must match the code under review; stale or unstamped evidence is a
+        BLOCK. Emit MERGE or BLOCK as holdout_verdict.
+      tools: [Read, Grep, Glob, Bash]
+      constraints:
+        - no_write: true
+          source: author
+      depend_on: [integrate]
+      evidence: [holdout_verdict]
+      eval:
+        mode: work_product
+        rubric: strict
+        prompt: >-
+          Judge the integrated tree against the holdout criteria, not the
+          builders' reports. MERGE only when contract conformance and
+          acceptance signals both hold; otherwise BLOCK with the failing
+          criterion named.
+        on_fail: >-
+          Route back into the iterate loop: builders re-scope to the failing
+          criterion in the next round.
+    # Layer 1 (delegate) finalize: land the approved line and record the
+    # merge summary — the audit tail of the system of record.
+    merge:
+      agent: release-manager
+      model: sonnet
+      objective: >-
+        On a MERGE holdout_verdict: finalize "{{task}}", land the work, and
+        write merge_summary — what shipped, per-module evidence keys, rounds
+        the iterate loop spent, and any deferred items.
+      tools: [Read, Grep, Glob, Bash]
+      depend_on: [holdout-eval]
+      evidence: [merge_summary]
+  # The iterate loop: build → integrate → holdout-eval re-runs until the
+  # evaluator emits a fresh holdout_verdict MERGE, two rounds make no
+  # progress, or max_rounds from {{max-iterate-rounds}} is spent.
+  loops:
+    - nodes: [build-core, build-ui, build-cli, integrate, holdout-eval]
+      max_rounds: "{{max-iterate-rounds}}"
+      gate_evidence: [holdout_verdict]
+      no_progress_limit: 2
+  # Layer 5 (system of record): the merge gate reads these keys — strict
+  # freshness so a stale verdict cannot pass as a fresh one.
+  evidence:
+    required_keys:
+      - research_findings
+      - module_contracts
+      - integration_report
+      - holdout_verdict
+      - merge_summary
+    freshness: strict
