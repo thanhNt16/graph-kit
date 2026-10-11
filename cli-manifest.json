@@ -82,10 +82,13 @@
     },
     {
       "name": "evidence",
-      "description": "Evidence commands\nSubcommands: add invalidate report",
+      "description": "Evidence commands\nSubcommands: add invalidate report promote",
       "options": [
         "--key <k>",
         "--node <n>",
+        "--run <id>",
+        "--out <dir>",
+        "--holdout",
         "--note <text>",
         "--html",
         "--graph <file>",
