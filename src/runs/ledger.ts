@@ -16,6 +16,11 @@ export interface TraceLine {
   duration_ms: number | null;
   notes: string | null;
   attempt?: number;
+  /** Hash-chain fields: prev = the previous line's hash ("genesis" on line 1),
+   *  hash = sha256(prev + canonical(line-without-hash)). Optional: ledgers
+   *  written before the chain existed carry neither and verify as `legacy`. */
+  prev?: string;
+  hash?: string;
 }
 
 /** Integration stamp on its own line, appended AFTER the node's ok line.
@@ -26,6 +31,8 @@ export interface LandEvent {
   node: string;
   status: "landed";
   commit: string;
+  prev?: string;
+  hash?: string;
 }
 
 /** Everything trace.jsonl can hold: node rounds plus landed events. */
@@ -60,6 +67,52 @@ export interface RunIndexLine {
   node_count: number;
   failures: number;
   evidence_keys: string[];
+}
+
+/** Deterministic JSON: object keys sorted recursively, undefined dropped —
+ *  the byte-stable form the trace hash chain is computed over. */
+export function canonicalJson(v: unknown): string {
+  if (v === null || typeof v !== "object") return JSON.stringify(v);
+  if (Array.isArray(v)) return `[${v.map(canonicalJson).join(",")}]`;
+  const o = v as Record<string, unknown>;
+  return `{${Object.keys(o)
+    .filter((k) => o[k] !== undefined)
+    .sort()
+    .map((k) => `${JSON.stringify(k)}:${canonicalJson(o[k])}`)
+    .join(",")}}`;
+}
+
+const sha256 = (s: string) => createHash("sha256").update(s).digest("hex");
+
+/** Chain sentinel for the first line of a trace. */
+export const CHAIN_GENESIS = "genesis";
+
+/** The `prev` a line must cite given the raw previous line: that line's own
+ *  `hash` when chained, else the hash of ITS canonical form (legacy lines
+ *  still pin what follows — a rewritten legacy byte invalidates the chain).
+ *  Torn lines pin their raw text so deleting/rewriting them is detectable. */
+function prevOf(rawLine: string): string {
+  try {
+    const e = JSON.parse(rawLine) as { hash?: unknown };
+    if (typeof e.hash === "string" && e.hash) return e.hash;
+    return sha256(canonicalJson(e));
+  } catch {
+    return sha256(canonicalJson(rawLine));
+  }
+}
+
+/** Seal + append one entry to trace.jsonl: stamp `prev`/`hash` onto it so the
+ *  file is a sha256 hash chain `gk run verify` can re-walk. Reads only the
+ *  file's last line — append-only, O(1) per line. */
+function appendChainedTraceLine(dir: string, entry: TraceEntry): void {
+  const f = join(dir, "trace.jsonl");
+  const raw = readFileSync(f, "utf-8");
+  const lastNl = raw.lastIndexOf("\n", raw.length - 2);
+  const last = lastNl < 0 ? raw.trimEnd() : raw.slice(lastNl + 1).trimEnd();
+  const prev = last ? prevOf(last) : CHAIN_GENESIS;
+  const withPrev = { ...entry, prev };
+  const hash = sha256(prev + canonicalJson(withPrev));
+  appendFileSync(f, `${JSON.stringify({ ...withPrev, hash })}\n`);
 }
 
 const runsDir = (cwd: string) => join(cwd, ".graphkit", "runs");
@@ -215,7 +268,7 @@ export function appendNode(cwd: string, line: Omit<TraceLine, "at">, now = new D
   // Strict on purpose: an orphan trace line silently corrupts pattern statistics.
   if (!dir) throw new GraphKitError("NO_ACTIVE_RUN", "start a run with `gk run start` before recording nodes");
   const entry: TraceLine = { at: now, ...line };
-  appendFileSync(join(dir, "trace.jsonl"), `${JSON.stringify(entry)}\n`);
+  appendChainedTraceLine(dir, entry);
   const detail = [line.agent, line.duration_ms == null ? null : `${line.duration_ms}ms`, line.notes]
     .filter(Boolean)
     .join(" · ");
@@ -306,7 +359,7 @@ export function landNode(cwd: string, node: string, commit: string, now = new Da
   if (last.status !== "ok")
     throw new GraphKitError("LAND_NOT_OK", `latest trace for node "${node}" in run ${id} is "${last.status}", not ok`);
   const event: LandEvent = { at: now, node, status: "landed", commit };
-  appendFileSync(join(dir, "trace.jsonl"), `${JSON.stringify(event)}\n`);
+  appendChainedTraceLine(dir, event);
   return { run: id, node };
 }
 
@@ -323,6 +376,79 @@ export function readAdvisorEvents(cwd: string, id: string): AdvisorEvent[] {
         return []; // skip a torn line rather than abort the whole scan
       }
     });
+}
+
+/** First chain divergence, if any. `index` is the 0-based line number;
+ *  `expected`/`actual` compare hash-ish values (null = absent). */
+export interface ChainDivergence {
+  index: number;
+  kind: "unparseable" | "missing_hash" | "prev" | "hash";
+  expected: string;
+  actual: string | null;
+}
+
+export interface ChainVerdict {
+  ok: boolean;
+  lines: number;
+  legacy_lines: number;
+  chained_lines: number;
+  divergence: ChainDivergence | null;
+}
+
+/** Re-walk trace.jsonl and recompute the hash chain. Lines before the first
+ *  hashed entry are a tolerated `legacy` segment (pre-chain ledgers); once the
+ *  chain begins every line must carry a valid `prev`/`hash`. Works on raw
+ *  lines — a torn or hashless line mid-chain IS the finding, not skipped. */
+export function verifyTraceChain(cwd: string, id: string): ChainVerdict {
+  const f = join(runsDir(cwd), id, "trace.jsonl");
+  if (!RUN_ID_PATTERN.test(id) || !existsSync(join(runsDir(cwd), id)))
+    throw new GraphKitError("RESUME_RUN_NOT_FOUND", `no run "${id}" under ${runsDir(cwd)}`);
+  const verdict: ChainVerdict = { ok: true, lines: 0, legacy_lines: 0, chained_lines: 0, divergence: null };
+  if (!existsSync(f)) return verdict;
+  const rawLines = readFileSync(f, "utf-8")
+    .split("\n")
+    .filter((l) => l.trim());
+  let prevRaw: string | null = null;
+  let inChain = false;
+  const diverge = (index: number, kind: ChainDivergence["kind"], expected: string, actual: string | null) => {
+    verdict.ok = false;
+    verdict.divergence = { index, kind, expected, actual };
+  };
+  for (let i = 0; i < rawLines.length; i++) {
+    const raw = rawLines[i];
+    verdict.lines++;
+    let entry: Record<string, unknown>;
+    try {
+      entry = JSON.parse(raw) as Record<string, unknown>;
+    } catch {
+      diverge(i, "unparseable", "valid JSON line", null);
+      break;
+    }
+    const { hash, ...rest } = entry;
+    if (typeof hash !== "string" || !hash) {
+      if (inChain) {
+        diverge(i, "missing_hash", "chained line", null);
+        break;
+      }
+      verdict.legacy_lines++;
+      prevRaw = raw;
+      continue;
+    }
+    inChain = true;
+    verdict.chained_lines++;
+    const expectedPrev = prevRaw == null ? CHAIN_GENESIS : prevOf(prevRaw);
+    if (rest.prev !== expectedPrev) {
+      diverge(i, "prev", expectedPrev, typeof rest.prev === "string" ? rest.prev : null);
+      break;
+    }
+    const expectedHash = sha256(expectedPrev + canonicalJson(rest));
+    if (hash !== expectedHash) {
+      diverge(i, "hash", expectedHash, hash);
+      break;
+    }
+    prevRaw = raw;
+  }
+  return verdict;
 }
 
 export function readTrace(cwd: string, id: string): TraceEntry[] {

@@ -74,6 +74,7 @@ const GROUP_SUBCOMMANDS: Record<string, Leaf[]> = {
     { name: "poll", usage: "<index>" },
     { name: "progress", usage: "<run-id> [note] [--node <id>] [--tail N]" },
     { name: "analyze", usage: "[run-id]" },
+    { name: "verify", usage: "<run-id> [--evidence]" },
   ],
   evidence: [
     { name: "add", usage: "<file> --key <k> [--note <text>] [--graph <file>]" },

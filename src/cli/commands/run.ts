@@ -1,8 +1,11 @@
 import { execFileSync } from "node:child_process";
+import { createHash } from "node:crypto";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import type { CAC } from "cac";
 import { isBlocking, validateGraph } from "../../compiler/validate.js";
 import { GraphKitError } from "../../errors.js";
+import { parseMarker } from "../../evidence/marker.js";
 import { analyzeRun } from "../../runs/analyze.js";
 import {
   activeRun,
@@ -22,6 +25,7 @@ import {
   readRunMeta,
   stampTakeover,
   startRun,
+  verifyTraceChain,
 } from "../../runs/ledger.js";
 import { recordPoll, recordRound } from "../../runs/loops.js";
 import { reconcileRun, resumeRun } from "../../runs/resume.js";
@@ -92,6 +96,32 @@ export function liveDispatchPids(
     .filter((pid) => isAlive(pid));
 }
 
+/** `--evidence` half of `gk run verify`: re-hash every artifact file the run's
+ *  evidence markers pinned (marker run_id === run id) and flag byte drift or
+ *  missing files. Markers are the signed claims; artifacts are the bytes. */
+function verifyRunEvidence(
+  cwd: string,
+  id: string,
+  graphFlag?: string,
+): { checked: number; mismatches: { key: string; artifact: string; expected: string; actual: string | null }[] } {
+  const meta = readRunMeta(cwd, id);
+  const graphPath = meta.graph_path ?? resolveGraphPath(cwd, graphFlag).path;
+  const evidenceDir = join(cwd, loadGraph(graphPath).outputs.evidence_dir);
+  const mismatches: { key: string; artifact: string; expected: string; actual: string | null }[] = [];
+  let checked = 0;
+  if (!existsSync(evidenceDir)) return { checked, mismatches };
+  for (const file of readdirSync(evidenceDir).filter((f) => f.endsWith(".md"))) {
+    const marker = parseMarker(readFileSync(join(evidenceDir, file), "utf-8"));
+    if (!marker || marker.run_id !== id || !marker.artifact || !marker.artifact_sha256) continue;
+    checked++;
+    const abs = join(evidenceDir, marker.artifact);
+    const actual = existsSync(abs) ? createHash("sha256").update(readFileSync(abs)).digest("hex") : null;
+    if (actual !== marker.artifact_sha256)
+      mismatches.push({ key: marker.key, artifact: marker.artifact, expected: marker.artifact_sha256, actual });
+  }
+  return { checked, mismatches };
+}
+
 export function registerRunCommands(cli: CAC) {
   cli
     .command("run [subcommand] [...args]", `Run ledger commands\nSubcommands: ${subcommandsFor("run")}`)
@@ -104,7 +134,7 @@ export function registerRunCommands(cli: CAC) {
     .option("--wave <n>", "wave index")
     .option("--agent <agent>", "agent id")
     .option("--model <model>", "model tier")
-    .option("--evidence <keys>", "comma-separated evidence keys")
+    .option("--evidence [keys]", "node: comma-separated evidence keys — verify: re-hash run evidence artifacts")
     .option("--duration-ms <n>", "node duration in ms")
     .option("--notes <text>", "free-text note")
     .option("--json", "JSON output")
@@ -233,12 +263,13 @@ export function registerRunCommands(cli: CAC) {
             agent: opts.agent ?? null,
             model: opts.model ?? null,
             status: opts.status,
-            evidence: opts.evidence
-              ? String(opts.evidence)
-                  .split(",")
-                  .map((s) => s.trim())
-                  .filter(Boolean)
-              : [],
+            evidence:
+              typeof opts.evidence === "string"
+                ? opts.evidence
+                    .split(",")
+                    .map((s: string) => s.trim())
+                    .filter(Boolean)
+                : [],
             duration_ms: opts.durationMs == null ? null : Number(opts.durationMs),
             attempt: opts.attempt == null ? undefined : Number(opts.attempt),
             notes: opts.notes ?? null,
@@ -452,6 +483,48 @@ export function registerRunCommands(cli: CAC) {
             console.log(progressTail(cwd, String(target), n).join("\n"));
           } else {
             console.log((readProgress(cwd, String(target)) ?? "").replace(/\n+$/, ""));
+          }
+          return;
+        }
+        if (subcommand === "verify") {
+          const target = Array.isArray(args) ? args[0] : args;
+          if (!target) {
+            emit(fail("MISSING_ARG", "verify requires a run id"));
+            return;
+          }
+          try {
+            const chain = verifyTraceChain(cwd, String(target));
+            // --evidence: re-hash every artifact this run's markers stamped.
+            // A bare trailing `--evidence` parses as boolean true; a value form
+            // is accepted too (node shares the flag for evidence keys).
+            const wantEvidence = opts.evidence != null && opts.evidence !== false;
+            let evidence: { checked: number; mismatches: unknown[] } | null = null;
+            if (wantEvidence) evidence = verifyRunEvidence(cwd, String(target), opts.graph);
+            if (!chain.ok) {
+              const d = chain.divergence!;
+              emit(
+                fail("RUN_TAMPERED", `run ${target} trace diverges at line ${d.index} (${d.kind})`, {
+                  run: target,
+                  ...chain,
+                  ...(evidence ? { evidence } : {}),
+                }),
+              );
+              return;
+            }
+            if (evidence && evidence.mismatches.length > 0) {
+              emit(
+                fail("RUN_TAMPERED", `run ${target} evidence diverges: ${evidence.mismatches.length} artifact(s)`, {
+                  run: target,
+                  ...chain,
+                  evidence,
+                }),
+              );
+              return;
+            }
+            emit(ok({ run: target, verdict: "OK", ...chain, ...(evidence ? { evidence } : {}) }));
+          } catch (e) {
+            const gke = toGraphKitError(e, "RUN_ERROR");
+            emit(fail(gke.code, gke.message, gke.details));
           }
           return;
         }
