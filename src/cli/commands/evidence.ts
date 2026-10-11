@@ -3,6 +3,7 @@ import { dirname, join } from "node:path";
 import type { CAC } from "cac";
 import { GraphKitError } from "../../errors.js";
 import { parseMarker, renderMarker } from "../../evidence/marker.js";
+import { promoteFailure } from "../../evidence/promote.js";
 import { buildViews, renderHtml, renderMarkdown, scoreViews } from "../../evidence/report.js";
 import { addEvidence, maxBytesFromConfig } from "../../evidence/store.js";
 import { leafUsageFor, subcommandsFor } from "../command-registry.js";
@@ -13,7 +14,10 @@ export function registerEvidenceCommand(cli: CAC) {
   cli
     .command("evidence [subcommand] [args...]", `Evidence commands\nSubcommands: ${subcommandsFor("evidence")}`)
     .option("--key <k>", "add: evidence key")
-    .option("--node <n>", "add: producing node id")
+    .option("--node <n>", "add: producing node id; promote: node to promote (default: last failed)")
+    .option("--run <id>", "promote: run id (default: latest run)")
+    .option("--out <dir>", "promote: scenario output dir (default: scenarios/promoted)")
+    .option("--holdout", "promote: also emit a sealed criteria/<slug>.holdout.md rubric")
     .option("--note <text>", "add: free-text provenance note")
     .option("--html", "report: write self-contained HTML page")
     .option(
@@ -116,6 +120,24 @@ export function registerEvidenceCommand(cli: CAC) {
           emit(ok({ key: opts.key, superseded: true }));
         } catch (e) {
           emit(fail("EVIDENCE_ERROR", e instanceof Error ? e.message : String(e)));
+        }
+        return;
+      }
+      if (subcommand === "promote") {
+        try {
+          const result = promoteFailure(cwd, {
+            run: opts.run ? String(opts.run) : undefined,
+            node: opts.node ? String(opts.node) : undefined,
+            out: opts.out ? String(opts.out) : undefined,
+            holdout: opts.holdout === true,
+          });
+          emit(ok(result));
+        } catch (e) {
+          emit(
+            e instanceof GraphKitError
+              ? fail(e.code, e.message, e.details)
+              : fail("EVIDENCE_ERROR", e instanceof Error ? e.message : String(e)),
+          );
         }
         return;
       }
