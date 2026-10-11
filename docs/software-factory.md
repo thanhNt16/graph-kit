@@ -229,7 +229,6 @@ gk learn list                     # all proposals with status
 * `revert` removes the installed files and marks the proposal `reverted`, so
   adoption is always undoable.
 
-<<<<<<< HEAD
 ## Learned-artifact lifecycle
 
 `gk learn adopt` lands a `learned-artifact` memory file with an `adherence`
@@ -268,8 +267,6 @@ eviction. Config lives at `topology_config.memory.lifecycle`
 `expire_policy: lifecycle` hands adopted items to this flow instead of ACT-R
 expiry).
 
-||||||| 88701d0
-=======
 Adoption also passes a deterministic admission lint (no model call, so the
 text cannot argue its way past the gate). `LEARN_NO_EVIDENCE` fires when
 `hypothesis`/`evidence` are empty — every learned mutation must cite the
@@ -286,7 +283,79 @@ briefs inject a `## Learned patterns` index (adopted proposals + memory items
 stamped `adopted_by: "gk-learn"`, grouped by kind/category, ~20 newest
 entries, `learn_index_tail: 0` to disable) alongside `## Progress so far`.
 
->>>>>>> origin/devin/factory-learn-gate
+## Self-learning (AutoHarness port)
+
+`gk learn` improves the graph between runs. `gk selflearn` (a TypeScript port
+of [tigerless-labs/autoharness](https://github.com/tigerless-labs/autoharness),
+MIT) improves the *skills agents carry* within and across sessions: agents
+running under a gk kit distill durable lessons and funnel them through a
+lint-gated admission pipeline — a self-improving factory with the same
+capture → reflect → stage → promote → index mechanics as the original.
+
+The pipeline is daemon-free and lazy: every step happens inside a host hook
+invocation or a `gk selflearn` CLI call. It is deterministic everywhere
+except the reflector, and the reflector can only *stage* — landing belongs
+exclusively to the promote lint.
+
+```text
+transcript window ── capture ──▶ episodes/<session>.jsonl
+      ▲ (PreToolUse tick, every N calls) │
+      reflect_due ──▶ `gk selflearn reflect` ──▶ bundles/reflect-*.md
+                                                  │ gk-reflector (read-only)
+                                                  ▼
+                                 intents/<id>.json  ── promote lint ──▶ landed SKILL.md
+                                                  └─ reject ──▶ <id>.rejected.json
+```
+
+**capture** (`src/selflearn/capture.ts`) slices the host transcript from the
+session's byte watermark to EOF, clips records to 4KB and the window to
+200KB, redacts secrets/PII at egress (`redact.ts` — the autoharness rule
+families), and persists the watermark under
+`.graphkit/selflearn/watermarks/<session>.json`.
+
+**stage** is the reflector's only emit path: `gk selflearn stage --intent
+<json>` validates `{kind: create|update|patch|delete, target, reason,
+evidence, body|old/new}` via zod and appends `intents/<id>.json`. Nothing
+lands at stage time.
+
+**promote** (`src/selflearn/promote.ts`, `lint.ts`) is the validating
+admission gate and sole writer: it shapes each intent against the live
+target in memory, runs the lint taxonomy (safety/exfil/injection/
+destructive/persistence/network/obfuscation families, secret scan,
+frontmatter structure, ≤60-char trigger-cued description, ≤25-line altitude
+cap, placeholder ban, reason+evidence required, only-touch-self-produced),
+then lands atomically — evidence slice first, `SKILL.md` last as the commit
+point. Rejects get `.rejected.json` markers, never silent; `delete` archives
+the whole skill dir under `.graphkit/selflearn/archive/`.
+
+**index** (`src/selflearn/session_index.ts`) emits a `## Learned patterns`
+grouped index (category → name: ≤60-char description) injected at session
+start, plus a one-line `landed N, rejected M` digest of the previous drain
+consumed once.
+
+**Per target:**
+
+- **claude** — `kits/claude/hooks/gk-selflearn.cjs` registered in
+  `settings.json`: `SessionStart` injects the index via `additionalContext`,
+  `PreToolUse` increments the per-session counter (crossing
+  `SELFLEARN_REFLECT_EVERY_N`, default 50, sets `reflect_due` and instructs
+  the session to run `gk selflearn reflect`), `Stop`/`SessionEnd` captures
+  the window and promotes. `agents/gk-reflector.md` ships with
+  `tools: Read, Grep, Glob, Bash` — no write tools; Bash is solely the
+  `gk selflearn stage` emit path.
+- **omp** — `kits/_core/extensions/gk-selflearn.ts` dispatches on the pi
+  `session_start` / `tool_call` / `agent_settled` events and shells out to
+  the same `gk selflearn` leaves, so the lint stays single-sourced. Skills
+  land under `.omp/skills/` (`--target omp`); episode records arrive via
+  `gk selflearn record` since omp streams no host transcript file.
+
+```bash
+gk selflearn status                      # episodes / staged / rejected counts
+gk selflearn index                       # the injected learned-patterns index
+gk selflearn reflect --session <id>      # materialize the reflector bundle
+gk selflearn promote --session <id>      # drain staged intents through lint
+```
+
 ## The gallery template
 
 `gk template materialize software-factory` emits an 8-phase production line

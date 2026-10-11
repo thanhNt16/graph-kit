@@ -22,7 +22,7 @@ afterAll(() => {
 });
 
 describe("AC01: gk init installs claude/ with all agents, skills, hooks, rules", () => {
-  test("all core agents, 10 gk-* skills, 4 hooks, 3 rules installed", () => {
+  test("all core agents, 10 gk-* skills, 5 hooks, 3 rules installed", () => {
     const coreCount = readdirSync(join(import.meta.dir, "..", "..", "kits", "_core", "agents")).filter((f) =>
       f.endsWith(".md"),
     ).length;
@@ -44,7 +44,7 @@ describe("AC01: gk init installs claude/ with all agents, skills, hooks, rules",
     ]) {
       expect(skills, `missing skill ${expected}`).toContain(expected);
     }
-    expect(readdirSync(join(TMP, ".claude", "hooks")).filter((f) => f.endsWith(".cjs")).length).toBe(4);
+    expect(readdirSync(join(TMP, ".claude", "hooks")).filter((f) => f.endsWith(".cjs")).length).toBe(5);
     expect(readdirSync(join(TMP, ".claude", "rules")).filter((f) => f.endsWith(".md")).length).toBe(3);
   });
 });

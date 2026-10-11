@@ -194,6 +194,20 @@
         "--reason <text>",
         "--json"
       ]
+    },
+    {
+      "name": "selflearn",
+      "description": "Self-learning pipeline (AutoHarness port)\nSubcommands: stage promote reflect status index context tick capture record",
+      "options": [
+        "--intent <json>",
+        "--session <id>",
+        "--transcript <path>",
+        "--record <text>",
+        "--stdin",
+        "--target <claude|omp>",
+        "--reason <text>",
+        "--json"
+      ]
     }
   ]
 }
