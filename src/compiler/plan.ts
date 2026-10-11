@@ -27,6 +27,27 @@ export function topoWaves(nodes: Record<string, { depend_on?: string[] } | undef
 
 type NodeDef = Graph["nodes"][string];
 
+// Roles whose dispatch payload carries a `trace` scope — the graders that
+// judge actions, not just artifacts. eval-gate is the authoring contract
+// (compiler rule 7); "eval"/"advisor" ride the same code path when a graph
+// names them.
+const TRACE_ROLES = new Set(["eval-gate", "eval", "advisor"]);
+
+/** Transitive depend_on closure of `id`, sorted — the node set an eval-role
+ *  node is understood to be grading. A malformed graph's cycles are already
+ *  a WAVES_INCOMPLETE error upstream; the visited set here is belt-and-
+ *  suspenders so this walk can never loop. */
+function ancestorScope(nodes: Record<string, NodeDef | undefined>, id: string): string[] {
+  const seen = new Set<string>();
+  const stack = [...(nodes[id]?.depend_on ?? [])];
+  for (let cur = stack.pop(); cur !== undefined; cur = stack.pop()) {
+    if (seen.has(cur)) continue;
+    seen.add(cur);
+    stack.push(...(nodes[cur]?.depend_on ?? []));
+  }
+  return [...seen].sort();
+}
+
 // One planned node: the exact payload shape /gk:execute dispatches against.
 // Every orchestration field rides even when unset (null), so consumers never
 // branch on missing keys — the verbatim-passthrough contract.
@@ -46,6 +67,11 @@ export interface PlannedNode {
   gate: NonNullable<NodeDef["gate"]> | null;
   role: string | null;
   eval: unknown;
+  // Trace-level evaluation: eval-role nodes get the scoped node set their
+  // materialized run journal covers (transitive depend_on closure, sorted) —
+  // the engine regenerates .graphkit/runs/<id>/trace/<node>.jsonl from the
+  // ledger at dispatch. null on builders: they get no journal view.
+  trace: { scope: string[] } | null;
   effort: NonNullable<NodeDef["effort"]>;
   timeout_ms: number | null;
   constraints: NodeDef["constraints"];
@@ -208,6 +234,7 @@ export function planGraph(graph: Graph, opts?: { source?: string }): PlanGraph {
       gate: n?.gate ?? null,
       role: n?.role ?? null,
       eval: rawDoc?.nodes?.[id]?.eval ?? null,
+      trace: n?.role != null && TRACE_ROLES.has(n.role) ? { scope: ancestorScope(nodes, id) } : null,
       effort: n?.effort ?? "standard",
       timeout_ms: n?.timeout_ms ?? null,
       constraints: n?.constraints || [],
