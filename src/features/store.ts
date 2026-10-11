@@ -132,7 +132,7 @@ export function nextFeature(list: FeatureList): FeatureItem | null {
 const LOCK_SPIN_MS = 4000;
 const LOCK_STALE_MS = 15_000;
 
-function withFeatureLock<T>(path: string, fn: () => T): T {
+export function withFeatureLock<T>(path: string, fn: () => T, errorCode = "FEATURE_LIST_LOCKED"): T {
   const lock = `${path}.lock`;
   mkdirSync(dirname(lock), { recursive: true }); // lock's parent may not exist yet
   const deadline = Date.now() + LOCK_SPIN_MS;
@@ -151,7 +151,7 @@ function withFeatureLock<T>(path: string, fn: () => T): T {
         continue; // holder released between stat and rm — retry
       }
       if (Date.now() > deadline) {
-        throw new GraphKitError("FEATURE_LIST_LOCKED", `feature list is locked by another process: ${lock}`, {
+        throw new GraphKitError(errorCode, `store is locked by another process: ${lock}`, {
           path,
           lock,
         });

@@ -169,6 +169,17 @@
         "--format <format>",
         "--out <path>"
       ]
+    },
+    {
+      "name": "queue",
+      "description": "Task-queue commands\nSubcommands: add claim status list done fail",
+      "options": [
+        "--node <claimer>",
+        "--note <text>",
+        "--evidence <keys>",
+        "--state <state>",
+        "--json"
+      ]
     }
   ]
 }
