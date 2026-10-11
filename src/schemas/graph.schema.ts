@@ -108,9 +108,11 @@ const NodeDefSchema = z
     evidence: z.array(z.string()).default([]),
     // Free-form label. Compiler-recognized roles: "eval-gate" (authoring-time
     // contract — requires an `eval` config block and a depend_on, checked by
-    // the compiler and resume; run analysis lists these nodes) and
-    // "supervisor" (materialized with read-only tools, node-agents.ts).
-    // Neither role drives engine execution. Any other value surfaces an
+    // the compiler and resume; run analysis lists these nodes),
+    // "supervisor" (materialized with read-only tools, node-agents.ts), and
+    // "initializer" (expected producer of the feature list — validate warns
+    // when features.required is set but no node carries it).
+    // None of these roles drive engine execution. Any other value surfaces an
     // unknown-role advisory warning in the compiler.
     role: z.string().optional(),
     eval: EvalConfig.optional(),
@@ -150,6 +152,17 @@ const EvidenceSchema = z
     criteria: z.array(z.string()).optional(),
     freshness: z.enum(["report", "strict"]).default("report"),
     require_landed: z.boolean().default(false),
+  })
+  .strict();
+
+// The durable backlog the initializer → worker → gate loop drives: when
+// `required` is true, `gk gate` BLOCKs while any item in the list has
+// `passes: false` (verdict reason FEATURES_OPEN:n). `path` relocates the
+// store (default .graphkit/feature-list.json, resolved from project root).
+const FeaturesConfig = z
+  .object({
+    required: z.boolean().default(false),
+    path: z.string().min(1).optional(),
   })
   .strict();
 
@@ -226,6 +239,7 @@ export const GraphSchema = z
       report: ".graphkit/reports/{name}.md",
     })),
     loops: z.array(LoopGroupSchema).optional(),
+    features: FeaturesConfig.optional(),
   })
   .strict()
   .superRefine((graph, ctx) => {

@@ -93,6 +93,16 @@
       ]
     },
     {
+      "name": "features",
+      "description": "Feature-list commands\nSubcommands: init list next pass status",
+      "options": [
+        "--graph <file>",
+        "--note <text>",
+        "--force",
+        "--json"
+      ]
+    },
+    {
       "name": "status",
       "description": "Summarize active graph run and evidence coverage",
       "options": [
