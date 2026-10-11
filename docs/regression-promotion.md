@@ -63,6 +63,9 @@ evidence:
 A run with nothing blocking it is an error (`NOTHING_TO_PROMOTE`, exit 1), not
 a no-op — there is no failure to freeze.
 
+Follow-on: [`gk learn`](./software-factory.md#continual-learning-gk-learn)
+turns the promoted failure into an evaluated, adoptable improvement proposal.
+
 ## When NOT to promote
 
 Promotion freezes a *signal*; only promote failures that say something durable

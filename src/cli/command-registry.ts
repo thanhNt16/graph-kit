@@ -84,6 +84,7 @@ const GROUP_SUBCOMMANDS: Record<string, Leaf[]> = {
   ],
   features: [
     { name: "init", usage: "[--force] [--graph <file>]" },
+    { name: "add", usage: "--description <text> [--id <id>] [--evidence <key>] [--graph <file>]" },
     { name: "list", usage: "[--graph <file>]" },
     { name: "next", usage: "[--graph <file>]" },
     { name: "pass", usage: "<id> [--note <text>] [--graph <file>]" },
@@ -100,6 +101,14 @@ const GROUP_SUBCOMMANDS: Record<string, Leaf[]> = {
     { name: "list", usage: "[--state queued|claimed|done|failed]" },
     { name: "done", usage: "<id> [--note <text>] [--evidence <k,...>]" },
     { name: "fail", usage: "<id> [--note <text>]" },
+  ],
+  learn: [
+    { name: "propose", usage: "--run <run-id> [--note <text>]" },
+    { name: "evaluate", usage: "<id>" },
+    { name: "adopt", usage: "<id>" },
+    { name: "reject", usage: "<id> [--reason <text>]" },
+    { name: "revert", usage: "<id>" },
+    { name: "list", usage: "" },
   ],
 };
 

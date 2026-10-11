@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { existsSync, mkdirSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { cac } from "cac";
@@ -8,6 +8,7 @@ import { gateGraph, registerGateCommand } from "../../src/cli/commands/gate.js";
 import { validateGraph } from "../../src/compiler/validate.js";
 import { GraphKitError } from "../../src/errors.js";
 import {
+  addFeature,
   featureListPath,
   featureStatus,
   initFeatureList,
@@ -132,6 +133,66 @@ describe("feature store", () => {
     expect(second.already_passed).toBe(true);
     expect(readFeatureList(path).items[0].note).toBe("shipped in abc123");
     expect(featureStatus(readFeatureList(path))).toEqual({ total: 2, done: 1, open: 1 });
+  });
+
+  test("add appends an open item at the tail; next stays deterministic (insertion order)", () => {
+    const path = featureListPath(tmp);
+    initFeatureList(path, TWO_ITEMS);
+    const { item } = addFeature(path, { description: "Gamma item", evidence: "gamma-proof" });
+    expect(item.id).toBe("gamma-item");
+    expect(item.passes).toBe(false);
+    expect(item.evidence).toBe("gamma-proof");
+    expect(readFeatureList(path).items.map((i) => i.id)).toEqual(["a", "b", "gamma-item"]);
+    // appended items join the back of the priority queue — next() never re-ranks
+    expect(nextFeature(readFeatureList(path))?.id).toBe("a");
+    passFeature(path, "a");
+    expect(nextFeature(readFeatureList(path))?.id).toBe("b");
+    passFeature(path, "b");
+    expect(nextFeature(readFeatureList(path))?.id).toBe("gamma-item");
+  });
+
+  test("add rejects an explicit id that already exists with FEATURE_EXISTS", () => {
+    const path = featureListPath(tmp);
+    initFeatureList(path, TWO_ITEMS);
+    try {
+      addFeature(path, { id: "a", description: "duplicate" });
+      expect.unreachable();
+    } catch (e) {
+      expect((e as GraphKitError).code).toBe("FEATURE_EXISTS");
+    }
+    expect(readFeatureList(path).items.map((i) => i.id)).toEqual(["a", "b"]);
+  });
+
+  test("add derives a slug id from the description, suffixed on collision", () => {
+    const path = featureListPath(tmp);
+    initFeatureList(path, TWO_ITEMS);
+    const first = addFeature(path, { description: "Ship the UI!" });
+    const second = addFeature(path, { description: "ship the ui" });
+    expect(first.item.id).toBe("ship-the-ui");
+    expect(second.item.id).toBe("ship-the-ui-2");
+  });
+
+  test("add + pass share the lock: interleaved writes stay consistent, no lock residue", () => {
+    const path = featureListPath(tmp);
+    initFeatureList(path, TWO_ITEMS);
+    addFeature(path, { description: "third" });
+    passFeature(path, "a");
+    addFeature(path, { description: "fourth" });
+    passFeature(path, "third");
+    const list = readFeatureList(path);
+    expect(list.items.map((i) => `${i.id}:${i.passes}`)).toEqual(["a:true", "b:false", "third:true", "fourth:false"]);
+    expect(existsSync(`${path}.lock`)).toBe(false);
+  });
+
+  test("add reclaims a stale lock instead of bricking the backlog", () => {
+    const path = featureListPath(tmp);
+    initFeatureList(path, TWO_ITEMS);
+    mkdirSync(`${path}.lock`);
+    const stale = new Date(Date.now() - 60_000);
+    utimesSync(`${path}.lock`, stale, stale);
+    const { item } = addFeature(path, { description: "reclaimed" });
+    expect(item.id).toBe("reclaimed");
+    expect(existsSync(`${path}.lock`)).toBe(false);
   });
 
   test("pass on unknown id fails FEATURE_ITEM_NOT_FOUND", () => {
@@ -412,6 +473,36 @@ features:
     const next2 = JSON.parse(runCli(["features", "next"], tmp).stdout);
     expect(next2.data.item).toBeNull();
     expect(next2.data.done).toBe(true);
+  });
+
+  test("add via CLI: derived slug, --evidence stored, open item reaches next", () => {
+    runCli(["features", "init"], tmp);
+    const add = runCli(["features", "add", "--description", "User can export CSV", "--evidence", "export-csv"], tmp);
+    expect(add.code).toBe(0);
+    const addJson = JSON.parse(add.stdout);
+    expect(addJson.data.item.id).toBe("user-can-export-csv");
+    expect(addJson.data.item.passes).toBe(false);
+    expect(addJson.data.item.evidence).toBe("export-csv");
+    expect(addJson.data).toMatchObject({ total: 1, done: 0, open: 1 });
+    const next = JSON.parse(runCli(["features", "next"], tmp).stdout);
+    expect(next.data.item.id).toBe("user-can-export-csv");
+  });
+
+  test("add via CLI: explicit --id, duplicate --id fails FEATURE_EXISTS", () => {
+    runCli(["features", "init"], tmp);
+    const add = runCli(["features", "add", "--id", "billing", "--description", "Billing page"], tmp);
+    expect(add.code).toBe(0);
+    expect(JSON.parse(add.stdout).data.item.id).toBe("billing");
+    const dup = runCli(["features", "add", "--id", "billing", "--description", "Billing again"], tmp);
+    expect(dup.code).toBe(1);
+    expect(JSON.parse(dup.stdout).error.code).toBe("FEATURE_EXISTS");
+  });
+
+  test("add via CLI: missing --description fails MISSING_ARG", () => {
+    runCli(["features", "init"], tmp);
+    const r = runCli(["features", "add"], tmp);
+    expect(r.code).toBe(1);
+    expect(JSON.parse(r.stdout).error.code).toBe("MISSING_ARG");
   });
 
   test("features commands work with no graph resolvable (default store path)", () => {

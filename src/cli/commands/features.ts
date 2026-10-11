@@ -1,6 +1,7 @@
 import type { CAC } from "cac";
 import { GraphKitError } from "../../errors.js";
 import {
+  addFeature,
   featureListPath,
   featureStatus,
   initFeatureList,
@@ -44,6 +45,9 @@ export function registerFeaturesCommand(cli: CAC) {
     .command("features [subcommand] [args...]", `Feature-list commands\nSubcommands: ${subcommandsFor("features")}`)
     .option("--graph <file>", "graph.yaml to resolve the features.path store location from")
     .option("--note <text>", "pass: free-text note recorded on the item")
+    .option("--id <id>", "add: explicit item id (default: slug derived from --description)")
+    .option("--description <text>", "add: item description (required)")
+    .option("--evidence <key>", "add: predeclare the evidence key expected to mark the item done")
     .option("--force", "init: overwrite an existing feature list")
     .option("--json", "JSON output")
     .example(leafUsageFor("features"))
@@ -61,6 +65,21 @@ export function registerFeaturesCommand(cli: CAC) {
           const items = graph ? seedFromGraph(graph) : [];
           const list = initFeatureList(path, items, { force: opts.force === true });
           emit(ok({ path, seeded: items.length, list }));
+          return;
+        }
+        if (subcommand === "add") {
+          const description = opts.description !== undefined ? String(opts.description) : undefined;
+          if (!description) {
+            emit(fail("MISSING_ARG", "features add requires --description <text>"));
+            return;
+          }
+          const { path } = storePath(cwd, opts.graph);
+          const { item, list } = addFeature(path, {
+            description,
+            id: opts.id !== undefined ? String(opts.id) : undefined,
+            evidence: opts.evidence !== undefined ? String(opts.evidence) : undefined,
+          });
+          emit(ok({ path, item, ...featureStatus(list) }));
           return;
         }
         if (subcommand === "list") {

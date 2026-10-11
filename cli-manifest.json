@@ -97,10 +97,13 @@
     },
     {
       "name": "features",
-      "description": "Feature-list commands\nSubcommands: init list next pass status",
+      "description": "Feature-list commands\nSubcommands: init add list next pass status",
       "options": [
         "--graph <file>",
         "--note <text>",
+        "--id <id>",
+        "--description <text>",
+        "--evidence <key>",
         "--force",
         "--json"
       ]
@@ -178,6 +181,16 @@
         "--note <text>",
         "--evidence <keys>",
         "--state <state>",
+        "--json"
+      ]
+    },
+    {
+      "name": "learn",
+      "description": "Continual-learning proposals\nSubcommands: propose evaluate adopt reject revert list",
+      "options": [
+        "--run <id>",
+        "--note <text>",
+        "--reason <text>",
         "--json"
       ]
     }

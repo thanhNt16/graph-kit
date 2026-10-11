@@ -31,12 +31,20 @@ features:
 
 ```bash
 gk features list                    # show backlog state
+gk features next                    # next open item (declared order)
+gk features add --description "user can reset password"   # append a missing capability
 gk features pass login-form         # mark an item verified (locked write)
-gk features check                   # exit 1 while any item is open
+gk gate                             # exit 1 while any item is open
 ```
 
 Writes are guarded by an atomic lock directory so parallel workers cannot
 clobber each other's completions; a stale lock is reclaimed after 15 s.
+
+The backlog is writable mid-run, not only at init: an agent operating the
+shipped software feeds each missing capability back with `gk features add`,
+closing the operate→build loop. Appends land at the tail of the priority
+queue, so `next` stays deterministic; `--evidence <key>` predeclares the
+artifact expected to mark the item done.
 
 ## Run-level context budget
 
@@ -175,6 +183,51 @@ Guarantees that make it safe to run unattended:
   and records `--evidence` keys + `--note` on the item; `fail` leaves a
   `blocked` marker that `gk queue status` surfaces — failed tasks and the
   items stranded behind them.
+
+## Continual learning (`gk learn`)
+
+`gk evidence promote` freezes a blocked run into a regression scenario — but
+freezing the failure doesn't explain why verification missed it. `gk learn`
+is the second half of the loop: draft an improvement proposal, evaluate it
+before adoption, and keep the adopted change reversible.
+
+```bash
+gk run end --status blocked
+gk evidence promote --run <run-id>            # freeze the failure (optional but recommended)
+
+gk learn propose --run <run-id> --note "gate never checked freshness"
+# → .graphkit/learn/learn-<run-id>.yaml       (status: proposed)
+
+# edit the proposal: fill hypothesis, proposal_kind, proposes.skill_path, fix
+gk learn evaluate learn-<run-id>
+# → verdicts per criterion linked in the source case, replayed over the
+#   recorded evidence dir; when `fix` is recorded, it is applied in a
+#   throwaway git worktree and re-run (evaluation.after_fix)
+
+gk learn adopt learn-<run-id>     # only when status: evaluated and every
+                                  # effective verdict passes (LEARN_FAILING)
+gk learn reject learn-<run-id> --reason "fix costs more than the failure"
+gk learn revert learn-<run-id>    # uninstall an adopted skill, status: reverted
+gk learn list                     # all proposals with status
+```
+
+* `propose` auto-discovers the run's promoted `case.yaml` under
+  `scenarios/promoted/` and links it as `source_case`; without one it warns
+  and drafts anyway — proposals can precede the fixture.
+* `evaluate` replays each linked criterion (`criteria/*.md` /
+  `*.holdout.md` ids from the case's `failed_criteria`) against the recorded
+  evidence dir with the same strict exists-and-non-empty read the gate makes.
+  A recorded `fix` (`{kind: patch, value: <diff-file>}` or
+  `{kind: command, value: <shell>}`) is rehearsed inside a temp git worktree
+  so `after_fix` verdicts never touch the working tree.
+* `adopt` is gated: status must be `evaluated` and every verdict in the
+  effective set (`after_fix` when present, else baseline) must pass — else
+  `LEARN_NOT_EVALUATED` / `LEARN_FAILING`. A proposal naming
+  `proposes.skill_path` installs to `kits/_core/skills/<name>/SKILL.md` and
+  re-runs the kit generator when `scripts/gen-kits.ts` exists
+  (`adopted.kit_regen` records `ok` / `failed:*` / `needed` / `skipped`).
+* `revert` removes the installed files and marks the proposal `reverted`, so
+  adoption is always undoable.
 
 ## The gallery template
 
