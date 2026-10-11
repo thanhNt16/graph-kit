@@ -163,9 +163,9 @@ describe("evidence promote", () => {
   test("--holdout emits a sealed criterion the criteria loader accepts", () => {
     seedRun("20260101-000005-a", { status: "blocked", trace: BLOCKED_TRACE });
     const result = promoteFailure(cwd, { run: "20260101-000005-a", holdout: true });
-    expect(result.holdout_file).toBe(join("criteria", "evaluator-regression.holdout.md"));
-    const criteria = loadCriteria(cwd, ["evaluator-regression"]);
-    const c = criteria.get("evaluator-regression");
+    expect(result.holdout_file).toBe(join("criteria", "evaluator-regression-20260101-000005-a.holdout.md"));
+    const criteria = loadCriteria(cwd, ["evaluator-regression-20260101-000005-a"]);
+    const c = criteria.get("evaluator-regression-20260101-000005-a");
     expect(c).toBeDefined();
     expect(c!.holdout).toBe(true);
     expect(c!.kind).toBe("report");

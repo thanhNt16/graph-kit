@@ -268,6 +268,27 @@ gk memory consolidate
 
 `--explain` prints a diagnostic table (term overlap, salience math, link penalties, `expired`/`superseded`/`outranked` verdicts) without side effects. `--html` (requires `--explain`) additionally writes a standalone dual-theme report to `.graphkit/diagrams/recall-<query>-<timestamp>.html`. Real recalls append JSONL rows to `.graphkit/memory/.recall-log.jsonl`, tagged with `--origin` (default `cli`), for planned-vs-actual retrieval comparison.
 
+### Software factory features
+
+The production-line layer on top of gates and loops (see
+[docs/software-factory.md](./docs/software-factory.md)):
+
+| Feature | What it adds |
+|---|---|
+| `gk features` | Machine-checkable backlog (`feature-list.json`) that gates MERGE while items are open — survives context resets |
+| `budget:` | Run-level token cap; over-budget dispatches are refused, over-budget runs can't close `merged` |
+| `gk run verify` | Hash-chained ledger audit; `--evidence` re-checks every referenced artifact |
+| `gk run progress` | `## Progress so far` recitation injected into briefs — no re-deriving history after a reset |
+| `fan_out.reduce` | Deterministic merge / majority-vote / first-past-the-post over parallel candidates |
+| `no_progress_similarity` | Semantic stagnation detection (Jaccard shingles) — catches paraphrased failures, not just byte-identical ones |
+| `gk schedule emit` | Export `schedule:` to cron / launchd / GitHub Actions / systemd / claude-loop |
+| `loop kind:` | `polling` / `counting` deterministic loops + `gk run poll`, `exit_when` |
+| Sealed holdouts | `refs[].holdout` + `criteria/*.holdout.md` — eval-only cases builders never see (`HOLDOUT_LEAK`) |
+| `evidence.verdict: scored` | Weighted criteria + threshold on top of the required-keys floor |
+| `gk evidence promote` | Turn a blocked run into a permanent regression scenario + optional sealed criterion |
+| Trace-level eval | `.graphkit/runs/<id>/trace/<node>.jsonl` — graders judge actions, not just artifacts |
+| `software-factory` template | `gk template materialize software-factory` — 8-phase production line combining all of the above |
+
 ---
 
 ## Works across coding agents
@@ -343,8 +364,10 @@ $ gk --help
 - **Live Documentation Site:** [thanhnt16.github.io/graph-kit](https://thanhnt16.github.io/graph-kit/)
 - **Changelog:** [CHANGELOG.md](./CHANGELOG.md)
 - **Worktree Merge Protocol:** [docs/worktree-merge-protocol.md](./docs/worktree-merge-protocol.md)
+- **Software Factory:** [docs/software-factory.md](./docs/software-factory.md)
 - **Context Engineering:** [docs/context-engineering.md](./docs/context-engineering.md)
 - **Honest Gaps:** [docs/honest-gaps.md](./docs/honest-gaps.md)
+- **Scheduling:** [docs/scheduling.md](./docs/scheduling.md) · **Holdouts:** [docs/holdout-scenarios.md](./docs/holdout-scenarios.md) · **Loop Kinds:** [docs/loop-kinds.md](./docs/loop-kinds.md) · **Scored Gates:** [docs/scored-gates.md](./docs/scored-gates.md) · **Regression Promotion:** [docs/regression-promotion.md](./docs/regression-promotion.md) · **Trace Eval:** [docs/trace-evaluation.md](./docs/trace-evaluation.md)
 - **Interactive Diagram Gallery:** [docs/diagrams/](./docs/diagrams/)
 
 ```bash

@@ -89,6 +89,7 @@ export function registerScheduleCommands(cli: CAC) {
             format as ScheduleFormat,
             resolved.path,
             graph.metadata?.name ?? "graph",
+            (graph.loops?.length ?? 0) > 0,
           );
           if (opts.out) {
             const outPath = resolve(process.cwd(), String(opts.out));

@@ -172,7 +172,7 @@ describe("schedule emitters", () => {
     const doc = YAML.parse(out);
     expect(doc.on.schedule[0].cron).toBe("0 9 * * 1-5");
     const steps = doc.jobs["scheduled-run"].steps.map((s: { run?: string }) => s.run).filter(Boolean);
-    expect(steps.some((r: string) => r.includes("gk exec graph.yaml"))).toBe(true);
+    expect(steps.some((r: string) => r.includes("gk exec 'graph.yaml'"))).toBe(true);
   });
 
   test("cron emits a 5-field crontab line plus command", () => {
@@ -184,7 +184,7 @@ describe("schedule emitters", () => {
     expect(line).toBeDefined();
     const fields = (line as string).split(/\s+/);
     expect(fields.slice(0, 5)).toEqual(["0", "9", "*", "*", "1-5"]);
-    expect(line).toContain("gk exec graph.yaml");
+    expect(line).toContain("gk exec 'graph.yaml'");
   });
 
   test("launchd emits a plist with StartCalendarInterval dicts per weekday", () => {
@@ -200,12 +200,12 @@ describe("schedule emitters", () => {
   test("claude-loop emits a /loop markdown snippet carrying the cron", () => {
     const out = emitSchedule(schedule, "claude-loop", "graph.yaml", "nightly-audit");
     expect(out).toContain("/loop 0 9 * * 1-5");
-    expect(out).toContain("gk exec graph.yaml");
+    expect(out).toContain("gk exec 'graph.yaml'");
   });
 
   test("command: run renders `gk run start --graph`", () => {
     const out = emitSchedule({ ...schedule, command: "run" }, "cron", "graph.yaml", "nightly-audit");
-    expect(out).toContain("gk run start --graph graph.yaml");
+    expect(out).toContain("gk run start --graph 'graph.yaml'");
   });
 
   test("dense cron fails loudly for launchd (SCHEDULE_DENSE)", () => {
@@ -287,7 +287,7 @@ describe("gk schedule CLI", () => {
     const { logs, code } = runCli(["schedule", "emit", graphFile(), "--format", "cron"], cwd);
     expect(code).toBe(0);
     const text = logs.join("\n");
-    expect(text).toContain(`0 9 * * 1-5 cd /ABS/PATH/TO/REPO && gk exec ${graphFile()}`);
+    expect(text).toContain(`0 9 * * 1-5 cd /ABS/PATH/TO/REPO && gk exec '${graphFile()}'`);
     expect(() => JSON.parse(text)).toThrow();
   });
 

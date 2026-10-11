@@ -218,10 +218,12 @@ describe("run-level context budget", () => {
     const after = JSON.parse(runCli(["run", "status"], cwd).stdout);
     expect(after.data.budget).toMatchObject({ allocated: 60, remaining: 40, warn: true, exceeded: false });
 
-    // dispatching the second declared 60 pushes past the cap → exceeded flag
-    JSON.parse(runCli(["run", "dispatch", "second"], cwd).stdout);
+    // dispatching the second declared 60 would push past the cap → refused
+    const refused = JSON.parse(runCli(["run", "dispatch", "second"], cwd).stdout);
+    expect(refused.status).toBe("fail");
+    expect(refused.error.code).toBe("BUDGET_EXCEEDED");
     const over = JSON.parse(runCli(["run", "status"], cwd).stdout);
-    expect(over.data.budget).toMatchObject({ allocated: 120, remaining: -20, warn: true, exceeded: true });
+    expect(over.data.budget).toMatchObject({ allocated: 60, remaining: 40, warn: true, exceeded: false });
   });
 
   test("gk run status omits the budget block for graphs without one", () => {

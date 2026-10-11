@@ -7,7 +7,7 @@ import { isBlocking, validateGraph } from "../../compiler/validate.js";
 import { GraphKitError } from "../../errors.js";
 import { parseMarker } from "../../evidence/marker.js";
 import { analyzeRun } from "../../runs/analyze.js";
-import { budgetStatus } from "../../runs/budget.js";
+import { budgetStatus, declaredNodeBudget } from "../../runs/budget.js";
 import {
   activeRun,
   activeRunPointer,
@@ -18,12 +18,14 @@ import {
   clearActiveRun,
   type DispatchLine,
   endRun,
+  isNodeLine,
   landNode,
   progressTail,
   readAdvisorEvents,
   readDispatches,
   readProgress,
   readRunMeta,
+  readTrace,
   stampTakeover,
   startRun,
   verifyTraceChain,
@@ -119,6 +121,16 @@ function verifyRunEvidence(
     const actual = existsSync(abs) ? createHash("sha256").update(readFileSync(abs)).digest("hex") : null;
     if (actual !== marker.artifact_sha256)
       mismatches.push({ key: marker.key, artifact: marker.artifact, expected: marker.artifact_sha256, actual });
+  }
+  // Deleting a marker must not silently verify: every evidence key the run's
+  // node lines claimed needs its marker file to exist on disk.
+  for (const key of new Set(
+    readTrace(cwd, id)
+      .filter(isNodeLine)
+      .flatMap((l) => l.evidence),
+  )) {
+    if (!existsSync(join(evidenceDir, `${key}.md`)))
+      mismatches.push({ key, artifact: `${key}.md`, expected: "marker file", actual: null });
   }
   return { checked, mismatches };
 }
@@ -295,6 +307,36 @@ export function registerRunCommands(cli: CAC) {
             emit(fail("UNKNOWN_NODE", `node '${node}' not in graph ${g.path}`, { available: g.ids }));
             return;
           }
+          // Host-driven runs honor the same declared cap the engine enforces:
+          // charging this node's budget_tokens must not push allocated past
+          // max. Re-dispatch of an already-counted node charges 0 (retries
+          // never double-spend — budgetStatus dedupes by node id).
+          {
+            const dir = activeRun(cwd);
+            const runId = dir ? basename(dir) : null;
+            const meta = runId ? readRunMeta(cwd, runId) : null;
+            const budget = runId && meta ? budgetStatus(cwd, runId, meta) : null;
+            if (budget) {
+              const charge = declaredNodeBudget(meta?.graph_path, String(node));
+              const alreadyDispatched =
+                readDispatches(cwd, runId!).some((d) => d.node === String(node)) ||
+                readTrace(cwd, runId!).some((l) => isNodeLine(l) && l.node === String(node));
+              const projected = budget.allocated + (alreadyDispatched ? 0 : charge);
+              if (projected > budget.max) {
+                emit(
+                  fail("BUDGET_EXCEEDED", `dispatch of '${node}' would exceed the run's context budget`, {
+                    run_id: runId,
+                    node: String(node),
+                    charge,
+                    allocated: budget.allocated,
+                    projected,
+                    max: budget.max,
+                  }),
+                );
+                return;
+              }
+            }
+          }
           emit(
             ok(
               appendDispatch(cwd, {
@@ -376,6 +418,27 @@ export function registerRunCommands(cli: CAC) {
           if (!["merged", "blocked", "failed"].includes(status)) {
             emit(fail("BAD_STATUS", "end requires --status merged|blocked|failed"));
             return;
+          }
+          // An over-budget run may not close as merged — the cap is part of
+          // the run's contract, not advisory telemetry.
+          if (status === "merged") {
+            const dir = activeRun(cwd);
+            const runId = dir ? basename(dir) : null;
+            const meta = runId ? readRunMeta(cwd, runId) : null;
+            const budget = runId && meta ? budgetStatus(cwd, runId, meta) : null;
+            if (budget?.exceeded) {
+              emit(
+                fail(
+                  "BUDGET_EXCEEDED",
+                  `run ${runId} allocated ${budget.allocated}/${budget.max} declared tokens — end it blocked|failed, not merged`,
+                  {
+                    run_id: runId,
+                    ...budget,
+                  },
+                ),
+              );
+              return;
+            }
           }
           emit(ok({ ...endRun(cwd, status), ...orphanedGkArtifacts(cwd) }));
           return;

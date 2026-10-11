@@ -37,6 +37,13 @@ jobs:
           <a href="worktree-merge-protocol.md">Worktree merge protocol</a> ·
           <a href="context-engineering.md">Context engineering</a> ·
           <a href="honest-gaps.md">Honest gaps</a> ·
+          <a href="software-factory.md">Software factory</a> ·
+          <a href="scheduling.md">Scheduling</a> ·
+          <a href="holdout-scenarios.md">Holdout scenarios</a> ·
+          <a href="loop-kinds.md">Loop kinds</a> ·
+          <a href="scored-gates.md">Scored gates</a> ·
+          <a href="regression-promotion.md">Regression promotion</a> ·
+          <a href="trace-evaluation.md">Trace evaluation</a> ·
           <a href="superpowers/specs/2026-09-04-fable-advisor-orchestration-design.md">Advisor &amp; fan-out design</a>
           </body></html>
           HTML

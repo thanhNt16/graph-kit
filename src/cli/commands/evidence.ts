@@ -63,7 +63,7 @@ export function registerEvidenceCommand(cli: CAC) {
         try {
           const graph = resolveGraph(cwd, opts.graph);
           const views = buildViews(cwd, graph);
-          const score = scoreViews(graph, views);
+          const score = scoreViews(cwd, graph, views);
           if (opts.html) {
             const outPath = join(cwd, ".graphkit", "reports", `${graph.metadata.name}-evidence.html`);
             mkdirSync(dirname(outPath), { recursive: true });

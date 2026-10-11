@@ -8,7 +8,7 @@
 // queue, so the store never re-sorts. All writes are tmp-file + rename so
 // a worker crash mid-write can never tear the file a gate is reading.
 
-import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { z } from "zod";
 import { formatZodIssues } from "../cli/diagnostics.js";
@@ -123,23 +123,73 @@ export function nextFeature(list: FeatureList): FeatureItem | null {
   return list.items.find((item) => !item.passes) ?? null;
 }
 
+/** Cross-process mutex for read-modify-write list updates: an atomic
+ *  mkdir lock dir beside the file. Workers in parallel waves share the
+ *  list — without serialization, concurrent `pass` calls each rewrite the
+ *  whole file from a stale snapshot and the last writer silently un-passes
+ *  the other's item. Locks held > STALE_MS are reclaimed (a holder that
+ *  died mid-write must not brick the backlog). */
+const LOCK_SPIN_MS = 4000;
+const LOCK_STALE_MS = 15_000;
+
+function withFeatureLock<T>(path: string, fn: () => T): T {
+  const lock = `${path}.lock`;
+  mkdirSync(dirname(lock), { recursive: true }); // lock's parent may not exist yet
+  const deadline = Date.now() + LOCK_SPIN_MS;
+  for (;;) {
+    try {
+      mkdirSync(lock); // exclusive create — atomic across processes
+      break;
+    } catch (e) {
+      if ((e as NodeJS.ErrnoException).code !== "EEXIST") throw e;
+      try {
+        if (Date.now() - statSync(lock).mtimeMs > LOCK_STALE_MS) {
+          rmSync(lock, { recursive: true, force: true });
+          continue;
+        }
+      } catch {
+        continue; // holder released between stat and rm — retry
+      }
+      if (Date.now() > deadline) {
+        throw new GraphKitError("FEATURE_LIST_LOCKED", `feature list is locked by another process: ${lock}`, {
+          path,
+          lock,
+        });
+      }
+      const spinUntil = Date.now() + 5;
+      while (Date.now() < spinUntil) {
+        /* short busy spin — locks are held for microseconds */
+      }
+    }
+  }
+  try {
+    return fn();
+  } finally {
+    rmSync(lock, { recursive: true, force: true });
+  }
+}
+
 /** Flip one item's flag (+ optional provenance note). Idempotent: passing an
  *  already-passed id is a no-op reported as already_passed, not an error —
- *  a worker re-firing after a crash must not fail its own ledger line. */
+ *  a worker re-firing after a crash must not fail its own ledger line.
+ *  Read-modify-write runs inside the per-list lock so parallel workers
+ *  can't overwrite each other's completions. */
 export function passFeature(path: string, id: string, note?: string): { item: FeatureItem; already_passed: boolean } {
-  const list = readFeatureList(path);
-  const item = list.items.find((i) => i.id === id);
-  if (!item) {
-    throw new GraphKitError("FEATURE_ITEM_NOT_FOUND", `no feature with id "${id}"`, {
-      id,
-      available: list.items.map((i) => i.id),
-    });
-  }
-  const already = item.passes;
-  item.passes = true;
-  if (note !== undefined) item.note = note;
-  if (!already || note !== undefined) writeFeatureList(path, list);
-  return { item, already_passed: already };
+  return withFeatureLock(path, () => {
+    const list = readFeatureList(path);
+    const item = list.items.find((i) => i.id === id);
+    if (!item) {
+      throw new GraphKitError("FEATURE_ITEM_NOT_FOUND", `no feature with id "${id}"`, {
+        id,
+        available: list.items.map((i) => i.id),
+      });
+    }
+    const already = item.passes;
+    item.passes = true;
+    if (note !== undefined) item.note = note;
+    if (!already || note !== undefined) writeFeatureList(path, list);
+    return { item, already_passed: already };
+  });
 }
 
 export function featureStatus(list: FeatureList): { total: number; done: number; open: number } {

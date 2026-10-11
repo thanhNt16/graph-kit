@@ -21,6 +21,13 @@ export interface BudgetStatus {
   tripped_by: string | null;
 }
 
+/** Declared `budget_tokens` for one node in the run's recorded graph
+ *  (0 when undeclared or the graph can't be read). Exported so `gk run
+ *  dispatch` can charge host-driven dispatches the same way the engine does. */
+export function declaredNodeBudget(graphPath: string | undefined, node: string): number {
+  return declaredBudgets(graphPath).get(node) ?? 0;
+}
+
 /** Declared `budget_tokens` per node id, parsed from the run's recorded
  *  graph. An unreadable or drifted graph degrades to an empty map (zero
  *  allocations), matching analyze.ts's loadGraph posture. */

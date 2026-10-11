@@ -237,12 +237,15 @@ export async function runGraph(plan: PlanGraph, opts: RunGraphOptions): Promise<
     outcome?: DispatchOutcome,
     notes?: string | null,
     trace = true,
+    runHooks = true,
   ): NodeRun {
     if (trace) traceLine(node, status, wave.index, { outcome, notes, attempt: attempts > 0 ? attempts : null });
     const run: NodeRun = { id: node.id, wave: wave.index, status, outcome, attempts };
     nodeRuns.set(node.id, run);
     interactive?.onNodeResult(run);
-    if (status !== "skipped") runNodeHooks(node);
+    // runHooks=false on pre-dispatch rejections (budget charge): an unstarted
+    // node must not fire on_node_complete side effects reserved for real work.
+    if (status !== "skipped" && runHooks) runNodeHooks(node);
     return run;
   }
 
@@ -547,7 +550,7 @@ export async function runGraph(plan: PlanGraph, opts: RunGraphOptions): Promise<
   async function runCurator(wave: PlanWave): Promise<NodeRun> {
     const node = wave.nodes[0];
     if (node == null) throw new GraphKitError("BAD_PLAN", "curator wave carries no node");
-    if (!chargeBudget(node)) return finish(node, wave, "fail", 0, undefined, budgetExceededNotes(node));
+    if (!chargeBudget(node)) return finish(node, wave, "fail", 0, undefined, budgetExceededNotes(node), true, false);
     const forbidden = plan.memory?.null_intervention_allowed === false;
     const target: PlannedNode = {
       ...node,
@@ -593,7 +596,7 @@ export async function runGraph(plan: PlanGraph, opts: RunGraphOptions): Promise<
       }
     }
 
-    if (!chargeBudget(node)) return finish(node, wave, "fail", 0, undefined, budgetExceededNotes(node));
+    if (!chargeBudget(node)) return finish(node, wave, "fail", 0, undefined, budgetExceededNotes(node), true, false);
 
     const { upstream, spillNote } = contextFor(node, new Map([...nodeRuns].filter(([, r]) => r.outcome != null)));
     const loop = node.loop?.enabled === true ? node.loop : null;

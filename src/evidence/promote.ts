@@ -76,12 +76,23 @@ export function promoteFailure(cwd: string, opts: PromoteOptions): PromoteResult
   // Replay the deterministic gate over the recorded graph's evidence contract.
   // The gate is pure-read, so the verdict reflects the criteria as they stand —
   // the same read `gk gate` made when the run was blocked.
+  // Scored verdicts replay with the graph's weighted criteria + threshold —
+  // same normalization gate.ts applies — otherwise a run blocked purely on
+  // score would replay as MERGE and promote the wrong fixture.
+  const scored =
+    graph?.evidence.verdict === "scored"
+      ? {
+          criteria: (graph.evidence.criteria ?? []).map((c) => (typeof c === "string" ? { id: c, weight: 1 } : c)),
+          threshold: graph.evidence.threshold ?? 1,
+        }
+      : undefined;
   const gate = graph
     ? gateGraph(graph.evidence.required_keys, join(cwd, graph.outputs.evidence_dir), {
         cwd,
         strict: graph.evidence.freshness === "strict",
         requireLanded: graph.evidence.require_landed === true,
         features: graph.features,
+        scored,
       })
     : null;
 
@@ -100,6 +111,8 @@ export function promoteFailure(cwd: string, opts: PromoteOptions): PromoteResult
   if (gate)
     for (const [k, f] of Object.entries(gate.freshness))
       if ((f === "stale" || f === "foreign") && gate.scorecard[k] === "ok") failed.add(k);
+  // Weighted criteria that flunked the scored replay also hold the gate.
+  for (const c of gate?.per_criterion ?? []) if (!c.passed) failed.add(c.id);
 
   // Node statuses: latest node-round per node (landed events carry no verdict).
   const nodeStatuses = new Map<string, string>();
@@ -170,7 +183,9 @@ export function promoteFailure(cwd: string, opts: PromoteOptions): PromoteResult
 
   let holdoutFile: string | null = null;
   if (opts.holdout) {
-    const slug = slugify(`${node}-regression`);
+    // The run id is part of the criterion identity: two promotions of the
+    // same node from different runs must not overwrite each other's rubric.
+    const slug = slugify(`${node}-regression-${id}`);
     const descriptions = loadCriteria(cwd, [...failed]);
     const lines = [...failed]
       .sort()

@@ -1,5 +1,6 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import { featureListPath, readFeatureList } from "../features/store.js";
 import type { Graph } from "../schemas/graph.schema.js";
 import { criterionId, criterionWeight, loadCriteria } from "./criteria.js";
 import { fingerprint } from "./fingerprint.js";
@@ -80,6 +81,10 @@ export interface ScoreView {
   verdict: "MERGE" | "BLOCK";
   score: number;
   threshold: number;
+  /** Why the hard floor blocked even when the score met threshold — same
+   *  floor gk gate applies: required keys must pass (fresh under strict) and
+   *  a required feature list must be complete. Empty when the floor passes. */
+  floor_reasons: string[];
   per_criterion: {
     id: string;
     weight: number;
@@ -89,7 +94,7 @@ export interface ScoreView {
   }[];
 }
 
-export function scoreViews(graph: Graph, views: CriterionView[]): ScoreView | null {
+export function scoreViews(cwd: string, graph: Graph, views: CriterionView[]): ScoreView | null {
   if (graph.evidence.verdict !== "scored") return null;
   const strict = graph.evidence.freshness === "strict";
   const byId = new Map(views.map((v) => [v.id, v]));
@@ -109,7 +114,24 @@ export function scoreViews(graph: Graph, views: CriterionView[]): ScoreView | nu
   const total = per_criterion.reduce((s, c) => s + c.weight, 0);
   const score = total > 0 ? per_criterion.reduce((s, c) => s + c.contribution, 0) / total : 0;
   const threshold = graph.evidence.threshold ?? 1;
-  return { verdict: score >= threshold ? "MERGE" : "BLOCK", score, threshold, per_criterion };
+  // The score can never merge over a broken floor — same conditions gk gate
+  // checks before it even looks at the weighted criteria.
+  const floor_reasons: string[] = [];
+  for (const k of graph.evidence.required_keys) {
+    const v = byId.get(k);
+    if (!v || v.status !== "present") floor_reasons.push(`required key ${k}: ${v?.status ?? "missing"}`);
+    else if (strict && v.freshness !== "fresh") floor_reasons.push(`required key ${k}: ${v.freshness}`);
+  }
+  if (graph.features?.required) {
+    try {
+      const open = readFeatureList(featureListPath(cwd, { features: graph.features })).items.filter((i) => !i.passes);
+      if (open.length > 0) floor_reasons.push(`FEATURES_OPEN:${open.length}`);
+    } catch {
+      floor_reasons.push("FEATURE_LIST_MISSING");
+    }
+  }
+  const verdict = floor_reasons.length === 0 && score >= threshold ? "MERGE" : "BLOCK";
+  return { verdict, score, threshold, floor_reasons, per_criterion };
 }
 
 export function renderMarkdown(name: string, views: CriterionView[], score?: ScoreView | null): string {
@@ -118,6 +140,7 @@ export function renderMarkdown(name: string, views: CriterionView[], score?: Sco
     lines.push(`## Gate score`, "");
     lines.push(
       `**SCORE ${score.score.toFixed(2)} ${score.score >= score.threshold ? ">=" : "<"} ${score.threshold.toFixed(2)} → ${score.verdict}**`,
+      ...(score.floor_reasons.length > 0 ? ["", `Floor blocked: ${score.floor_reasons.join(", ")}`] : []),
       "",
     );
     lines.push(`| criterion | weight | pass | contribution |`, `| --- | --- | --- | --- |`);
@@ -164,6 +187,9 @@ export function renderHtml(
     cards.push(
       `<section class="card score"><h2>Gate score</h2>` +
         `<p><strong>SCORE ${escapeHtml(score.score.toFixed(2))} ${score.score >= score.threshold ? "&gt;=" : "&lt;"} ${escapeHtml(score.threshold.toFixed(2))} → ${escapeHtml(score.verdict)}</strong></p>` +
+        (score.floor_reasons.length > 0
+          ? `<p class="floor">Floor blocked: ${escapeHtml(score.floor_reasons.join(", "))}</p>`
+          : "") +
         `<table><thead><tr><th>criterion</th><th>weight</th><th>pass</th><th>contribution</th></tr></thead><tbody>${rows}</tbody></table></section>`,
     );
   }

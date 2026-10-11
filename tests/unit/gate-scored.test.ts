@@ -385,7 +385,7 @@ evidence:
     const g = scoredGraph();
     const views = buildViews(cwd, g);
     expect(views.map((v) => v.id)).toEqual(["a", "b"]); // union: b is produced, not required
-    const s = scoreViews(g, views);
+    const s = scoreViews(cwd, g, views);
     expect(s).not.toBeNull();
     expect(s?.score).toBeCloseTo(1, 5);
     expect(s?.verdict).toBe("MERGE");
@@ -402,14 +402,14 @@ evidence:
   required_keys: [a]
 `),
     );
-    expect(scoreViews(binary, buildViews(cwd, binary))).toBeNull();
+    expect(scoreViews(cwd, binary, buildViews(cwd, binary))).toBeNull();
   });
 
   test("markdown report carries the gate-score table", () => {
     writeFileSync(join(cwd, ".graphkit", "evidence", "a.md"), "ok\n");
     const g = scoredGraph();
     const views = buildViews(cwd, g);
-    const s = scoreViews(g, views);
+    const s = scoreViews(cwd, g, views);
     expect(s?.score).toBeCloseTo(2 / 3, 5);
     expect(s?.verdict).toBe("MERGE"); // 0.67 >= 0.6
     const md = renderMarkdown("t", views, s);
