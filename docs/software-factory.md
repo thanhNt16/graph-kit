@@ -138,6 +138,52 @@ loops:
 Lower the value to catch more paraphrased stagnation; `1.0` degrades to the
 old byte-identical fingerprint behavior.
 
+## Task queue
+
+`gk schedule` starts a whole graph on a cadence; `gk queue` is how discrete
+work enters the factory between runs — a durable intake surface backed by
+one YAML file per task at `.graphkit/queue/items/<id>.yaml`. An
+orchestrator (or a human) appends tasks; worker sessions claim them in
+dependency order; terminal outcomes are journaled back on the item itself.
+
+```bash
+gk queue add task.yaml            # or `-` to read the task from stdin
+gk queue claim --node worker-3    # oldest item whose depends_on are all done
+gk queue done <id> --evidence api-works,ui-works --note "shipped"
+gk queue fail <id> --note "oom in build"
+gk queue status                   # counts by state + blocked items
+gk queue list --state queued
+```
+
+A task file is the work contract:
+
+```yaml
+id: build-api                # optional — task-<ts>-<hash6> is minted when absent
+objective: ship the REST endpoints
+acceptance_criteria: [api-works, tests-pass]   # strings — evidence keys the worker must produce
+depends_on: [design-schema]                    # other task ids
+budget_tokens: 50000                           # optional cap for the claimed work
+graph: build-graph.yaml                        # optional graph path or template name
+metadata: {priority: high}
+```
+
+Guarantees that make it safe to run unattended:
+
+* **No duplicate execution.** `add` fails `QUEUE_DUPLICATE` when the id —
+  or a content hash of the work contract — already exists in `queued`,
+  `claimed`, or `done`. (`failed` doesn't hold an identity; a failed task
+  may be re-queued.)
+* **Dependency order.** `claim` hands out the *oldest* queued item whose
+  `depends_on` are all `done`; `depends_on` must reference known ids at add
+  time (`QUEUE_UNKNOWN_DEP`). A blocked head never starves later ready work.
+* **Atomic claims.** Read-modify-write runs inside the same mkdir lock the
+  feature list uses, so two workers can never claim the same item. An empty
+  queue is not an error: `claim` emits `{claimed: null}`.
+* **Honest terminals.** `done` requires a prior claim (`QUEUE_NOT_CLAIMED`)
+  and records `--evidence` keys + `--note` on the item; `fail` leaves a
+  `blocked` marker that `gk queue status` surfaces — failed tasks and the
+  items stranded behind them.
+
 ## Continual learning (`gk learn`)
 
 `gk evidence promote` freezes a blocked run into a regression scenario — but

@@ -18,6 +18,10 @@ Nodes do not write into a shared mutable store that later nodes reduce. They pro
 
 Agents cannot message each other. There are no channels, no inboxes, no node-to-node calls at runtime. Nodes read only what the orchestrator-mediated brief carries — upstream results selected by `depend_on`, files pointed to by `refs`, recall hits. This is the product: **determinism requires that a run's information flow be fully declared in `graph.yaml`**. A message-passing swarm's behavior emerges at runtime; a GraphKit run's data flow is reviewable before dispatch, auditable after, and identical on replay. `role: supervisor` nodes get read-only tools for the same reason — oversight without a back channel.
 
+## Not a work-queue broker
+
+`gk queue` is file-based intake, not a message broker. There is no daemon, no push delivery, no retry/backoff machinery, no at-least-once semantics — a task is a YAML file with a `state` field, and claiming is a locked read-modify-write, not a subscription. The orchestrator polls `claim` and decides what to do with the result; `gk` never dispatches work on its own. That's the boundary: a broker would hide scheduling policy (ordering, retries, routing) inside runtime machinery, whereas the factory needs every queue decision — what was added, what was claimed by whom, what failed and blocked whom — to stay inspectable bytes on disk that `gk queue status` can render and `git` can diff.
+
 ## Not a model runner
 
 `gk` never calls an LLM. It compiles, validates, plans, journals, gates, and reports — execution is dispatched to your host coding agent (Claude Code, Pi, Cursor, OpenCode, Codex). No token billing, no model lock-in, no hidden inference in the CLI itself. The boundary keeps `gk` deterministic and cheap to trust: anything the CLI emits is reproducible bytes, and every model decision happens inside a dispatched node where `constraints` apply.

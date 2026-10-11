@@ -12,6 +12,7 @@ import { registerKitCommands } from "../../src/cli/commands/kit.js";
 import { registerLearnCommand } from "../../src/cli/commands/learn.js";
 import { registerMemoryCommands } from "../../src/cli/commands/memory.js";
 import { registerModelsCommands } from "../../src/cli/commands/models.js";
+import { registerQueueCommand } from "../../src/cli/commands/queue.js";
 import { registerRunCommands } from "../../src/cli/commands/run.js";
 import { registerScheduleCommands } from "../../src/cli/commands/schedule.js";
 import { registerTemplateCommands } from "../../src/cli/commands/template.js";
@@ -35,6 +36,7 @@ function fullCli() {
   registerFeaturesCommand(cli);
   registerRunCommands(cli);
   registerScheduleCommands(cli);
+  registerQueueCommand(cli);
   registerLearnCommand(cli);
   cli.help();
   return cli;
