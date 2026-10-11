@@ -25,6 +25,9 @@ const FeatureItemSchema = z
     steps: z.array(z.string()).default([]),
     passes: z.boolean().default(false),
     note: z.string().optional(),
+    // Predeclared evidence key expected to mark the item done — set at add
+    // time so the closing `pass` can cite the artifact that proved it.
+    evidence: z.string().optional(),
   })
   .strict();
 
@@ -192,6 +195,44 @@ export function passFeature(path: string, id: string, note?: string): { item: Fe
   });
 }
 
+/** Append one item — the operate→build feedback path: an agent running the
+ *  software feeds a missing capability back into the backlog without
+ *  hand-editing the file. The item lands at the tail (declared order IS the
+ *  priority queue) with `passes: false`. Runs inside the same lock as
+ *  `pass` so a concurrent write can't clobber it. An explicit id that
+ *  already exists fails FEATURE_EXISTS — silently merging would hide a
+ *  duplicate backlog entry; an omitted id derives a collision-free slug. */
+export function addFeature(
+  path: string,
+  item: Partial<FeatureItem> & { description: string },
+): { item: FeatureItem; list: FeatureList } {
+  return withFeatureLock(path, () => {
+    const list = readFeatureList(path);
+    let id = item.id;
+    if (id !== undefined) {
+      if (list.items.some((i) => i.id === id)) {
+        throw new GraphKitError("FEATURE_EXISTS", `feature "${id}" already exists`, {
+          path,
+          id,
+          hint: "omit --id to derive a unique slug from the description",
+        });
+      }
+    } else {
+      id = itemId(item.description, new Set(list.items.map((i) => i.id)), list.items.length);
+    }
+    const parsed = FeatureItemSchema.safeParse({ ...item, id });
+    if (!parsed.success) {
+      throw new GraphKitError("FEATURE_ITEM_INVALID", "new feature item failed validation", {
+        path,
+        issues: formatZodIssues(parsed.error, FeatureItemSchema),
+      });
+    }
+    list.items.push(parsed.data);
+    writeFeatureList(path, list);
+    return { item: parsed.data, list };
+  });
+}
+
 export function featureStatus(list: FeatureList): { total: number; done: number; open: number } {
   const done = list.items.filter((i) => i.passes).length;
   return { total: list.items.length, done, open: list.items.length - done };
@@ -230,6 +271,7 @@ export function seedFromGraph(graph: Graph): FeatureItem[] {
       steps: z.array(z.string()).default([]),
       passes: z.boolean().default(false),
       note: z.string().optional(),
+      evidence: z.string().optional(),
     })
     .strict();
   for (const input of Object.values(graph.inputs)) {

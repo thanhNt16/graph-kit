@@ -275,7 +275,7 @@ The production-line layer on top of gates and loops (see
 
 | Feature | What it adds |
 |---|---|
-| `gk features` | Machine-checkable backlog (`feature-list.json`) that gates MERGE while items are open — survives context resets |
+| `gk features` | Machine-checkable backlog (`feature-list.json`) that gates MERGE while items are open — `add`/`pass` keep it live across context resets |
 | `budget:` | Run-level token cap; over-budget dispatches are refused, over-budget runs can't close `merged` |
 | `gk run verify` | Hash-chained ledger audit; `--evidence` re-checks every referenced artifact |
 | `gk run progress` | `## Progress so far` recitation injected into briefs — no re-deriving history after a reset |
