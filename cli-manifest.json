@@ -101,7 +101,7 @@
     },
     {
       "name": "run",
-      "description": "Run ledger commands\nSubcommands: start node dispatch land end status resume take round analyze",
+      "description": "Run ledger commands\nSubcommands: start node dispatch land end status resume take round analyze verify",
       "options": [
         "--graph <path>",
         "--input <pair>",
@@ -111,7 +111,7 @@
         "--wave <n>",
         "--agent <agent>",
         "--model <model>",
-        "--evidence <keys>",
+        "--evidence [keys]",
         "--duration-ms <n>",
         "--notes <text>",
         "--json",
