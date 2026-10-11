@@ -5,8 +5,12 @@ import YAML from "yaml";
 import { GraphKitError } from "../errors.js";
 import { scoreWorkProduct } from "../eval/rubrics.js";
 import { registryFileFor } from "../evidence/criteria.js";
+import type { Adherence } from "../memory/lifecycle.js";
+import { requestCount } from "../memory/lifecycle-store.js";
+import { readMemoryFile, writeMemoryFile } from "../memory/store.js";
 import { listRunIds, RUN_ID_PATTERN, readRunMeta } from "../runs/ledger.js";
 import { GraphSchema } from "../schemas/graph.schema.js";
+import { AdherenceSchema } from "../schemas/memory.schema.js";
 import {
   type CriterionVerdict,
   type LearnProposal,
@@ -26,6 +30,8 @@ import {
 
 const learnDir = (cwd: string) => join(cwd, ".graphkit", "learn");
 const proposalPath = (cwd: string, id: string) => join(learnDir(cwd), `${id}.yaml`);
+
+const LEARN_GENERATOR = "process:gk-learn-adopt";
 
 const slugify = (s: string) =>
   s
@@ -298,6 +304,52 @@ export interface AdoptResult {
   status: "adopted";
   installed: string[];
   kit_regen: string;
+  /** The learned artifact landed in the memory store (`.graphkit/memory/<id>.md`). */
+  artifact: string;
+}
+
+/** Land the adopted proposal into `.graphkit/memory/<id>.md` — the store the
+ *  adherence lifecycle bounds. First adoption anchors at the current recall
+ *  request index; a re-adopt onto an existing file is a revision → patch++. */
+function upsertLearnedArtifact(cwd: string, proposal: LearnProposal, installed: string[], now: string): string {
+  const memDir = join(cwd, ".graphkit", "memory");
+  mkdirSync(memDir, { recursive: true });
+  const file = `${proposal.id}.md`;
+  const path = join(memDir, file);
+  const prior = existsSync(path) ? readMemoryFile(path) : null;
+  const priorAdherence = prior ? AdherenceSchema.safeParse(prior.fm.adherence) : null;
+  const adherence: Adherence =
+    priorAdherence?.success === true
+      ? { ...priorAdherence.data, patch: priorAdherence.data.patch + 1 }
+      : { adopted_by: "gk-learn", anchor: requestCount(memDir), use: 0, view: 0, patch: 0 };
+  const frontmatter = {
+    ...(prior?.error == null ? (prior?.fm ?? {}) : {}),
+    id: proposal.id,
+    type: "learned-artifact",
+    source: `learn:${proposal.id}`,
+    created_at: prior?.fm.created_at ?? now,
+    valid_from: now,
+    salience: typeof prior?.fm.salience === "number" ? prior.fm.salience : 0.5,
+    expired: false,
+    tags: ["learn", proposal.proposal_kind],
+    sources: [{ resource: `run:${proposal.source_run}` }],
+    generated: { by: LEARN_GENERATOR, at: now },
+    recorded_at: now,
+    status: "stable",
+    adherence,
+  };
+  const body = [
+    proposal.hypothesis || `Adopted learn proposal ${proposal.id}.`,
+    "",
+    `- kind: ${proposal.proposal_kind}`,
+    proposal.source_case ? `- source_case: ${proposal.source_case}` : null,
+    installed.length > 0 ? `- installed: ${installed.join(", ")}` : null,
+    "",
+  ]
+    .filter((l): l is string => l != null)
+    .join("\n");
+  writeMemoryFile(path, frontmatter, body);
+  return file;
 }
 
 export function adoptProposal(cwd: string, id: string): AdoptResult {
@@ -340,12 +392,15 @@ export function adoptProposal(cwd: string, id: string): AdoptResult {
     }
   }
 
+  const now = new Date().toISOString();
+  const artifact = upsertLearnedArtifact(cwd, proposal, installed, now);
+
   const next: LearnProposal = {
     ...proposal,
     status: "adopted",
-    adopted: { at: new Date().toISOString(), installed, kit_regen: kitRegen },
+    adopted: { at: now, installed, kit_regen: kitRegen, artifact },
   };
-  return { id, file: writeProposal(cwd, next), status: "adopted", installed, kit_regen: kitRegen };
+  return { id, file: writeProposal(cwd, next), status: "adopted", installed, kit_regen: kitRegen, artifact };
 }
 
 export function rejectProposal(

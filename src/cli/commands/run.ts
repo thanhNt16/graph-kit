@@ -6,6 +6,7 @@ import type { CAC } from "cac";
 import { isBlocking, validateGraph } from "../../compiler/validate.js";
 import { GraphKitError } from "../../errors.js";
 import { parseMarker } from "../../evidence/marker.js";
+import { runLifecycle } from "../../memory/lifecycle-store.js";
 import { analyzeRun } from "../../runs/analyze.js";
 import { budgetStatus, declaredNodeBudget } from "../../runs/budget.js";
 import {
@@ -33,6 +34,7 @@ import {
 import { recordPoll, recordRound } from "../../runs/loops.js";
 import { reconcileRun, resumeRun } from "../../runs/resume.js";
 import type { Graph } from "../../schemas/graph.schema.js";
+import { MemoryConfig, MemoryLifecycleConfig } from "../../schemas/memory.schema.js";
 import { leafUsageFor, subcommandsFor } from "../command-registry.js";
 import { toGraphKitError } from "../diagnostics.js";
 import { parseInputs, recordRunInputs, requiredMissing } from "../graph-inputs.js";
@@ -212,6 +214,17 @@ export function registerRunCommands(cli: CAC) {
           // executed with a pre-orchestration-fields gk-execute). Surface it at
           // the one moment the orchestrator is guaranteed to look — run start.
           const warnings = kitVersionWarnings(cwd);
+          // Cheap single scan: the adherence lifecycle also runs once per run
+          // start so the learned-artifact store stays bounded between manual
+          // `gk memory lifecycle` passes. Advisory only — a corrupt memory
+          // store must never block run start.
+          try {
+            const memCfg = MemoryConfig.safeParse(graph.topology_config?.memory);
+            const scan = runLifecycle(cwd, MemoryLifecycleConfig.parse(memCfg.success ? memCfg.data.lifecycle : {}));
+            if (scan.archived > 0) warnings.push(`lifecycle archived ${scan.archived} learned item(s)`);
+          } catch {
+            /* advisory — never block startRun */
+          }
           emit(ok(warnings.length ? { ...started, warnings } : started));
           return;
         }

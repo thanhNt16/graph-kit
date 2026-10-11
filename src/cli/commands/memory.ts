@@ -6,10 +6,18 @@ import { actRScore, shouldExpire } from "../../eval/forgetting.js";
 import { docStatusFor, isSuggestionFrontmatter } from "../../eval/memory-recall.js";
 import { consolidate } from "../../memory/consolidate.js";
 import { explainRecall, type RecallExplanation } from "../../memory/explain-recall.js";
+import {
+  archiveMember,
+  findArchived,
+  findLiveMember,
+  lifecycleCounts,
+  reviveMember,
+  runLifecycle,
+} from "../../memory/lifecycle-store.js";
 import { expandedRecall } from "../../memory/recall-expanded.js";
 import { renderRecallAscii, renderRecallHtml } from "../../memory/render-recall.js";
 import { readMemoryFile, walkMemoryFiles, writeMemoryFile } from "../../memory/store.js";
-import { MemoryConfig, MemoryFileSchema } from "../../schemas/memory.schema.js";
+import { AdherenceSchema, MemoryConfig, MemoryFileSchema, MemoryLifecycleConfig } from "../../schemas/memory.schema.js";
 import { leafUsageFor, subcommandsFor } from "../command-registry.js";
 import { resolveGraphPath } from "../graph-resolve.js";
 import { emit, fail, ok } from "../output.js";
@@ -28,7 +36,20 @@ export interface MemoryTraceReport {
   newly_expired: number;
   superseded: number;
   malformed: number;
+  lifecycle: { probation: number; mature: number; archived: number; graduated: number; capacity_evicted: number };
   memories: MemoryTrace[];
+}
+
+/** The graph's topology_config.memory block, parsed — null when no graph
+ *  resolves (recall/trace fall back to their own defaults). */
+function memoryConfig(cwd: string): ReturnType<(typeof MemoryConfig)["parse"]> | null {
+  try {
+    const graph = YAML.parse(readFileSync(resolveGraphPath(cwd).path, "utf-8"));
+    const parsed = MemoryConfig.safeParse(graph?.topology_config?.memory);
+    return parsed.success ? parsed.data : null;
+  } catch {
+    return null;
+  }
 }
 
 // Stage 5 of the memory pipeline (decay): score every memory with ACT-R and
@@ -42,6 +63,7 @@ export function traceMemory(
   opts?: { expire_policy?: "act_r" | "manual" },
 ): MemoryTraceReport {
   const memDir = join(cwd, ".graphkit", "memory");
+  const lifecycleCfg = memoryConfig(cwd)?.lifecycle;
   const report: MemoryTraceReport = {
     total: 0,
     live: 0,
@@ -49,12 +71,16 @@ export function traceMemory(
     newly_expired: 0,
     superseded: 0,
     malformed: 0,
+    lifecycle: lifecycleCounts(memDir, MemoryLifecycleConfig.parse(lifecycleCfg ?? {})),
     memories: [],
   };
   const files = walkMemoryFiles(memDir); // root + one sublevel, reserved names skipped
   if (files.length === 0) return report;
 
   const expireActive = opts?.expire_policy !== "manual";
+  // expire_policy: lifecycle hands retirement of adopted items to the
+  // adherence lifecycle — ACT-R still scores them but never marks expired.
+  const lifecycleOwnsAdopted = lifecycleCfg?.expire_policy === "lifecycle";
 
   for (const { rel, path } of files) {
     const { fm, head, body, error } = readMemoryFile(path);
@@ -121,7 +147,7 @@ export function traceMemory(
     // multiply, so a neutral memory (salience 0.5 × connectivity 0.5) scores
     // ~0.15 at peak. `expire_policy: manual` scores and reports only, never
     // mutates the store.
-    if (!wasExpired && expireActive && shouldExpire(score)) {
+    if (!wasExpired && expireActive && !(lifecycleOwnsAdopted && fm.adherence != null) && shouldExpire(score)) {
       fm.expired = true;
       fm.valid_to = now;
       if (!suggestionShaped) fm.status = "deprecated"; // suggestions mark decay via expired+valid_to, not status
@@ -164,6 +190,13 @@ export function touchMemory(
     const useCount = (typeof fm.use_count === "number" ? fm.use_count : 1) + 1;
     fm.use_count = useCount;
     fm.last_used_at = now;
+    // A touch is a loaded recall hit — the adherence `use` counter is the
+    // lifecycle's numerator (view counts the surface, use the follow-through).
+    const adherence = AdherenceSchema.safeParse(fm.adherence);
+    if (adherence.success) {
+      adherence.data.use += 1;
+      fm.adherence = adherence.data;
+    }
     const validated = MemoryFileSchema.safeParse({
       ...fm,
       id: typeof fm.id === "string" && fm.id.trim() ? fm.id : base,
@@ -190,17 +223,53 @@ export function registerMemoryCommands(cli: CAC) {
     .option("--explain", "Explain recall scoring and filter decisions (read-only)")
     .option("--html", "With --explain: render the explanation as a standalone HTML report")
     .option("--origin <origin>", "Origin marker for the recall capture log (e.g. cli, curator, agent)")
+    .option("--dry-run", "lifecycle: report archive verdicts without moving files")
     .example(leafUsageFor("memory"))
     .action(async (subcommand, _args, opts) => {
       if (!subcommand) {
         // Bare `gk memory` prints usage and exits 0 — a documented surface, not an error.
         console.log(
-          `gk memory — memory lifecycle commands\n\nUsage:\n  gk memory <subcommand> [args...]\n\nSubcommands:\n${leafUsageFor("memory")}\n\nOptions:\n  --json               JSON output\n\nRecall options:\n  --explain            Explain recall scoring and filter decisions (read-only)\n  --html               With --explain: render a standalone HTML report to .graphkit/diagrams/\n  --origin <origin>    Origin marker for the recall capture log (e.g. cli, curator, agent)`,
+          `gk memory — memory lifecycle commands\n\nUsage:\n  gk memory <subcommand> [args...]\n\nSubcommands:\n${leafUsageFor("memory")}\n\nOptions:\n  --json               JSON output\n  --dry-run            lifecycle: report archive verdicts without moving files\n\nRecall options:\n  --explain            Explain recall scoring and filter decisions (read-only)\n  --html               With --explain: render a standalone HTML report to .graphkit/diagrams/\n  --origin <origin>    Origin marker for the recall capture log (e.g. cli, curator, agent)`,
         );
         return;
       }
       if (subcommand === "consolidate") {
         emit(ok(consolidate(process.cwd())));
+        return;
+      }
+      if (subcommand === "lifecycle") {
+        // Lazy recompute: one evaluate() pass over adopted members; archives
+        // every verdict unless --dry-run. Also invoked once per `gk run start`.
+        const cfg = MemoryLifecycleConfig.parse(memoryConfig(process.cwd())?.lifecycle ?? {});
+        emit(ok(runLifecycle(process.cwd(), cfg, { dryRun: opts.dryRun === true })));
+        return;
+      }
+      if (subcommand === "archive" || subcommand === "revive") {
+        const id = Array.isArray(_args) ? _args[0] : _args;
+        if (!id) {
+          emit(fail("MISSING_ARG", `memory ${subcommand} requires <id>`));
+          return;
+        }
+        const memDir = join(process.cwd(), ".graphkit", "memory");
+        try {
+          if (subcommand === "archive") {
+            const member = findLiveMember(memDir, String(id));
+            if (!member) {
+              emit(fail("MEMORY_NOT_FOUND", `No live memory with id "${id}"`));
+              return;
+            }
+            emit(ok({ archived: archiveMember(memDir, member.rel, "manual") }));
+          } else {
+            const rel = findArchived(memDir, String(id));
+            if (!rel) {
+              emit(fail("MEMORY_NOT_FOUND", `No archived memory with id "${id}"`));
+              return;
+            }
+            emit(ok({ revived: reviveMember(memDir, rel) }));
+          }
+        } catch (e) {
+          emit(fail("MEMORY_ARCHIVE_FAILED", String((e as Error)?.message ?? e)));
+        }
         return;
       }
       if (subcommand === "trace") {

@@ -15,10 +15,11 @@ import {
   readTrace,
   type TraceLine,
 } from "../runs/ledger.js";
-import { PatternFileSchema, SuggestionFileSchema } from "../schemas/memory.schema.js";
+import { AdherenceSchema, PatternFileSchema, SuggestionFileSchema } from "../schemas/memory.schema.js";
+import { archiveMember } from "./lifecycle-store.js";
 import { buildLinks, writeLinks } from "./links.js";
 import { extractPatterns, type Pattern, patternSalience } from "./patterns.js";
-import { tokenize } from "./store.js";
+import { readMemoryFile, tokenize } from "./store.js";
 
 export interface ConsolidateResult {
   runs: number;
@@ -174,15 +175,24 @@ function writeEntry(dir: string, file: string, frontmatter: Record<string, unkno
 }
 
 /** Delete generated files in `dir` whose basename is not in `keep`. Hand-written
- *  files (no `generated.by` of ours) are never touched. */
-function prune(dir: string, keep: Set<string>): number {
+ *  files (no `generated.by` of ours, or `adopted_by: "human"`) are never
+ *  eligible. Learn-adopted items (`adopted_by: "gk-learn"`) are NEVER deleted —
+ *  prune archives them (reversible) instead of rmSync. */
+function prune(dir: string, keep: Set<string>, now: string): number {
   if (!existsSync(dir)) return 0;
+  const memDir = join(dir, "..");
   let pruned = 0;
   for (const f of readdirSync(dir)) {
     if (!f.endsWith(".md") || keep.has(f)) continue;
     const raw = readFileSync(join(dir, f), "utf-8");
-    if (!raw.includes(GENERATOR)) continue;
-    rmSync(join(dir, f));
+    const adherence = AdherenceSchema.safeParse(readMemoryFile(join(dir, f)).fm.adherence);
+    if (adherence.success && adherence.data.adopted_by === "human") continue;
+    if (!raw.includes(GENERATOR) && !adherence.success) continue;
+    if (adherence.success && adherence.data.adopted_by === "gk-learn") {
+      archiveMember(memDir, `${dir.slice(memDir.length + 1)}/${f}`, "prune", now);
+    } else {
+      rmSync(join(dir, f));
+    }
     pruned += 1;
   }
   return pruned;
@@ -283,7 +293,7 @@ export function consolidate(cwd: string, now = new Date().toISOString()): Consol
     writeEntry(suggestionsDir, file, frontmatter, `${s.rationale}\n`);
   }
 
-  const pruned = prune(patternsDir, keptPatterns) + prune(suggestionsDir, keptSuggestions);
+  const pruned = prune(patternsDir, keptPatterns, now) + prune(suggestionsDir, keptSuggestions, now);
 
   const linkGraph = buildLinks(memDir, now);
   writeLinks(memDir, linkGraph);
