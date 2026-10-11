@@ -327,6 +327,10 @@ export const GraphSchema = z
     loops: z.array(LoopGroupSchema).optional(),
     features: FeaturesConfig.optional(),
     schedule: ScheduleConfig.optional(),
+    // Recitation channel: how many lines of .graphkit/runs/<id>/progress.md
+    // node briefs re-read as `## Progress so far` (waves payload, materialized
+    // agents, resume-derived objectives). 0 disables the injection.
+    progress_tail: z.number().int().min(0).default(20),
   })
   .strict()
   .superRefine((graph, ctx) => {

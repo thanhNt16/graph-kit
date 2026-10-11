@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { GraphKitError } from "../errors.js";
+import { progressRecitation } from "../runs/ledger.js";
 import type { Graph } from "../schemas/graph.schema.js";
 import { agentFileName, getTarget } from "../targets/registry.js";
 
@@ -78,6 +79,9 @@ export function materializeNodeAgents(cwd: string, graph: Graph): Record<string,
   const nodes = graph.nodes ?? {};
   const mapping: Record<string, string> = {};
   const wanted = new Set<string>();
+  // Recitation channel: the active run's progress.md tail rides each agent
+  // body so a fresh node context sees what prior nodes logged.
+  const recite = progressRecitation(cwd, graph.progress_tail);
 
   for (const [nodeId, node] of Object.entries(nodes)) {
     const fragmentPath = join(agentsDir, agentFileName(node.agent));
@@ -106,7 +110,8 @@ export function materializeNodeAgents(cwd: string, graph: Graph): Record<string,
         : "") +
       (node.owns.length > 0
         ? scopeSection("Owned scope", "You may edit only paths matching these globs; read anything.", node.owns)
-        : "");
+        : "") +
+      (recite ? `\n${recite}\n` : "");
     const fm: string[] = [
       "---",
       `name: ${agentName}`,

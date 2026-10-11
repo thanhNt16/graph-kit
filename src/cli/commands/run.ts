@@ -10,12 +10,15 @@ import {
   appendAdvisor,
   appendDispatch,
   appendNode,
+  appendProgress,
   clearActiveRun,
   type DispatchLine,
   endRun,
   landNode,
+  progressTail,
   readAdvisorEvents,
   readDispatches,
+  readProgress,
   readRunMeta,
   stampTakeover,
   startRun,
@@ -91,7 +94,7 @@ export function liveDispatchPids(
 
 export function registerRunCommands(cli: CAC) {
   cli
-    .command("run [subcommand] [args...]", `Run ledger commands\nSubcommands: ${subcommandsFor("run")}`)
+    .command("run [subcommand] [...args]", `Run ledger commands\nSubcommands: ${subcommandsFor("run")}`)
     .option("--graph <path>", "graph.yaml path (default: ./graph.yaml)")
     // ==== FixGraph slice (audit F4): --input wiring — helpers in cli/graph-inputs.ts ====
     .option("--input <pair>", "run input as k=v (repeatable; enforced against graph.inputs)")
@@ -113,6 +116,8 @@ export function registerRunCommands(cli: CAC) {
     .option("--via <via>", "dispatch: task|extension")
     .option("--pid <pid>", "dispatch: child pid")
     .option("--from <run>", "take: run id to take over")
+    .option("--node <id>", "progress: node id the note is attributed to")
+    .option("--tail <n>", "progress: print only the last N lines")
     .example(leafUsageFor("run"))
     .action((subcommand, args, opts) => {
       const cwd = process.cwd();
@@ -421,6 +426,33 @@ export function registerRunCommands(cli: CAC) {
               ...(ptr?.dangling ? { dangling: true, dangling_run: basename(ptr.dir) } : {}),
             }),
           );
+          return;
+        }
+        if (subcommand === "progress") {
+          const list = Array.isArray(args) ? args : [args];
+          const target = list[0];
+          const note = list.slice(1).join(" ").trim();
+          if (!target) {
+            emit(fail("MISSING_ARG", "progress requires a run id"));
+            return;
+          }
+          if (note) {
+            emit(ok(appendProgress(cwd, String(target), note, opts.node == null ? undefined : String(opts.node))));
+            return;
+          }
+          // Read mode: whole file, or the last --tail N progress entries.
+          // Plain stdout (like `graph ascii`) — the file IS the payload.
+          readRunMeta(cwd, String(target)); // RUN_NOT_FOUND parity for bogus ids
+          if (opts.tail != null) {
+            const n = Number(opts.tail);
+            if (!Number.isInteger(n) || n < 0) {
+              emit(fail("BAD_ARG", "--tail requires an integer >= 0"));
+              return;
+            }
+            console.log(progressTail(cwd, String(target), n).join("\n"));
+          } else {
+            console.log((readProgress(cwd, String(target)) ?? "").replace(/\n+$/, ""));
+          }
           return;
         }
         if (subcommand === "analyze") {

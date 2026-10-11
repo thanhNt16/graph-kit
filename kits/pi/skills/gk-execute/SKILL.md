@@ -26,6 +26,7 @@ Headless, no judgment needed: `gk exec graph.yaml [--json] [--worktree] [--yes]`
    - a node with `evidence: [keys]` writes `<evidence_dir>/<key>.md` per key — pass the obligation + the evidence dir in its dispatch; `gk gate` (step 6) checks exactly those files.
    - mid-run steering (the frontmatter promise): `hub list` shows live dispatches, `hub send` redirects one; record direction changes in the evidence dir.
    - a `timeout_ms` node routes through `gk_dispatch_agent` (hard process-group kill), never plain task dispatch.
+   - recitation: after a node lands, append one progress line the next wave's briefs re-read as `## Progress so far`: `gk run progress <run-id> "<what changed>" --node <id>`.
 5. **Curator wave** (`curator: true`) — dispatch the memory-curator node, read its terminal line (judgment below), continue.
 6. **After the last wave** — close the evidence gate, then report: `gk gate <graph>` (MERGE → continue; BLOCK → dispatch the owning node to write its missing evidence, re-stamp `gk run node --evidence`, re-gate). With `features.required`, BLOCK also fires while backlog items stay open — work them down (below) before re-gating. Then write `.graphkit/reports/<graph-name>.md` (per-node verdicts, gate verdict, overall verdict), then the `on_graph_complete` commands from the step-1 `gk graph waves --json` payload (`gk run end`, `gk memory consolidate`).
 

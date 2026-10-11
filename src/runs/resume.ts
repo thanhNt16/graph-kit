@@ -12,6 +12,7 @@ import {
   activeRun,
   hasDisposition,
   isNodeLine,
+  progressRecitation,
   readAdvisorEvents,
   readDispatches,
   readRunMeta,
@@ -323,6 +324,9 @@ export function deriveResumeGraph(rec: Reconciliation, parentRunId: string): Gra
       unadjudicated.set(line.node, [...(unadjudicated.get(line.node) ?? []), line]);
   const advisorLast = new Map<string, AdvisorEvent>();
   for (const ev of readAdvisorEvents(rec.cwd, rec.runId)) advisorLast.set(ev.node, ev);
+  // Recitation carryover: the parent run's progress.md tail rides the derived
+  // objectives — a resumed worker starts from what prior nodes logged.
+  const recite = progressRecitation(rec.cwd, rec.graph.progress_tail, rec.runId);
   const nodes: Graph["nodes"] = {};
   for (const [name, node] of Object.entries(rec.graph.nodes)) {
     if (!pending.has(name)) continue;
@@ -347,7 +351,9 @@ export function deriveResumeGraph(rec: Reconciliation, parentRunId: string): Gra
       carry.push(
         `- advisor fired at round ${adv.round} (tier ${adv.tier}${adv.streak ? `, streak ${adv.streak}` : ""})`,
       );
-    const objective = carry.length ? `${node.objective}\n\n## Resume context\n${carry.join("\n")}` : node.objective;
+    const objective =
+      (carry.length ? `${node.objective}\n\n## Resume context\n${carry.join("\n")}` : node.objective) +
+      (recite ? `\n\n${recite}` : "");
     nodes[name] = {
       ...nodeRest,
       objective,

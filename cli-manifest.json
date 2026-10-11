@@ -111,7 +111,7 @@
     },
     {
       "name": "run",
-      "description": "Run ledger commands\nSubcommands: start node dispatch land end status resume take round poll analyze",
+      "description": "Run ledger commands\nSubcommands: start node dispatch land end status resume take round poll progress analyze",
       "options": [
         "--graph <path>",
         "--input <pair>",
@@ -132,7 +132,9 @@
         "--commit <sha>",
         "--via <via>",
         "--pid <pid>",
-        "--from <run>"
+        "--from <run>",
+        "--node <id>",
+        "--tail <n>"
       ]
     },
     {

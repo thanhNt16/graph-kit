@@ -192,6 +192,12 @@ export function startRun(
       "",
     ].join("\n"),
   );
+  // Recitation channel (append-only): nodes log one line per milestone via
+  // `gk run progress`; later briefs re-read the tail as `## Progress so far`.
+  writeFileSync(
+    join(dir, "progress.md"),
+    [`# Progress — run ${id}`, "", `- graph: ${name}`, `- started_at: ${now}`, ""].join("\n"),
+  );
   try {
     writeFileSync(activeFile(cwd), dir, { flag: "wx" }); // atomic: no check-then-write window
   } catch (e) {
@@ -411,4 +417,62 @@ export function readRunMeta(cwd: string, id: string): RunMeta {
   if (!RUN_ID_PATTERN.test(id) || !existsSync(file))
     throw new GraphKitError("RESUME_RUN_NOT_FOUND", `no run "${id}" under ${runsDir(cwd)}`);
   return JSON.parse(readFileSync(file, "utf-8")) as RunMeta;
+}
+
+const progressFile = (cwd: string, id: string) => join(runsDir(cwd), id, "progress.md");
+
+/** Append one timestamped line to a run's progress.md. The file is
+ *  append-only and per-run, so appends also work on ended/failed runs
+ *  (resume chains re-read the parent's tail). Legacy runs that predate the
+ *  file get the standard header first. Newlines fold to spaces — one line
+ *  per entry keeps `--tail N` honest. */
+export function appendProgress(
+  cwd: string,
+  runId: string,
+  note: string,
+  node?: string,
+  now = new Date().toISOString(),
+): { run: string; file: string } {
+  const meta = readRunMeta(cwd, runId);
+  const f = progressFile(cwd, runId);
+  if (!existsSync(f))
+    writeFileSync(
+      f,
+      [`# Progress — run ${meta.id}`, "", `- graph: ${meta.graph}`, `- started_at: ${meta.started_at}`, ""].join("\n"),
+    );
+  appendFileSync(f, `- [${now}]${node ? ` (${node})` : ""} ${note.replace(/\s*\n\s*/g, " ").trim()}\n`);
+  return { run: runId, file: f };
+}
+
+/** progress.md contents, or null when the run has none (pre-feature run). */
+export function readProgress(cwd: string, runId: string): string | null {
+  const f = progressFile(cwd, runId);
+  return existsSync(f) ? readFileSync(f, "utf-8") : null;
+}
+
+/** Last n appended entries (`- [iso] ...` lines) of progress.md — the
+ *  header never counts as progress. n <= 0 → []. */
+export function progressTail(cwd: string, runId: string, n: number): string[] {
+  if (n <= 0) return [];
+  const text = readProgress(cwd, runId);
+  if (!text) return [];
+  return text
+    .split("\n")
+    .filter((l) => l.startsWith("- ["))
+    .slice(-n);
+}
+
+/** The `## Progress so far` recitation block appended to node briefs and
+ *  resume-derived objectives, or null when disabled (tail <= 0), when no run
+ *  resolves, or when nothing has been logged yet. runId defaults to the
+ *  active run; resume passes the parent run id explicitly — its accumulated
+ *  notes are the context being carried forward. */
+export function progressRecitation(cwd: string, tail: number, runId?: string): string | null {
+  if (tail <= 0) return null;
+  const active = runId ?? activeRun(cwd);
+  const id = active == null ? null : basename(active);
+  if (!id) return null;
+  const lines = progressTail(cwd, id, tail);
+  if (lines.length === 0) return null;
+  return `## Progress so far\n${lines.join("\n")}`;
 }
