@@ -2,6 +2,7 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import YAML from "yaml";
 import type { Issue } from "../cli/diagnostics.js";
+import { isHoldoutCriterion, isHoldoutRef, registryFileFor } from "../evidence/criteria.js";
 import type { Graph } from "../schemas/graph.schema.js";
 import { agentDirsFor, agentFileName } from "../targets/registry.js";
 import { topoWaves } from "./plan.js";
@@ -162,24 +163,59 @@ export function validateGraph(graph: Graph, projectRoot: string): Finding[] {
       });
     }
     seenCriteria.add(id);
-    const file = join(projectRoot, "criteria", `${id}.md`);
-    if (!existsSync(file)) {
+    // The registry file is `criteria/<id>.md` or its sealed twin
+    // `criteria/<id>.holdout.md` (holdout scenarios — see below).
+    const registry = registryFileFor(projectRoot, id);
+    if (!registry) {
       findings.push({
         check: "criteria-file",
         path: "evidence.criteria",
-        message: `Criterion "${id}" has no registry file at criteria/${id}.md`,
+        message: `Criterion "${id}" has no registry file at criteria/${id}.md (or criteria/${id}.holdout.md)`,
       });
     } else {
-      const head = readFileSync(file, "utf-8").match(/^---\n([\s\S]*?)\n---/);
+      const head = readFileSync(registry.path, "utf-8").match(/^---\n([\s\S]*?)\n---/);
       const fmId = head ? YAML.parse(head[1])?.id : undefined;
       if (fmId !== undefined && fmId !== id) {
         findings.push({
           check: "criteria-file",
-          path: `criteria/${id}.md`,
+          path: `criteria/${id}${registry.holdout ? ".holdout" : ""}.md`,
           message: `Registry file frontmatter id "${fmId}" does not match filename "${id}"`,
         });
       }
     }
+  }
+
+  // 5e. Holdout seal (anti-gaming): validation criteria the builders must
+  // never see are sealed — registry files named `criteria/<id>.holdout.md`
+  // and/or refs entries flagged `holdout: true`. A node that is not
+  // `role: eval-gate` (unset counts as a builder) referencing a sealed path
+  // is a HOLDOUT_LEAK error; eval-gate nodes may reference them freely.
+  let declaresHoldouts = false;
+  for (const id of graph.evidence.criteria ?? []) {
+    if (isHoldoutCriterion(projectRoot, id)) declaresHoldouts = true;
+  }
+  for (const [id, node] of Object.entries(graph.nodes)) {
+    for (const ref of node.refs) {
+      if (!isHoldoutRef(ref)) continue;
+      declaresHoldouts = true;
+      if (node.role !== "eval-gate") {
+        findings.push({
+          check: "holdout-leak",
+          path: `nodes.${id}.refs`,
+          message: `HOLDOUT_LEAK: node "${id}" (${node.role ? `role "${node.role}"` : "no role — builder"}) references sealed holdout "${ref.path}" — only role: eval-gate nodes may see holdout criteria`,
+        });
+      }
+    }
+  }
+  // Dead seal (ADVISORY): sealed criteria exist but no eval-gate node is
+  // declared to read them — the holdout never gets evaluated.
+  if (declaresHoldouts && !Object.values(graph.nodes).some((n) => n.role === "eval-gate")) {
+    findings.push({
+      check: "holdout-dead-seal",
+      path: "nodes",
+      message: "Graph declares holdout criteria but has no role: eval-gate node — the sealed rubric is never evaluated",
+      severity: "warn",
+    });
   }
 
   // 6. memory-augmented topology contract

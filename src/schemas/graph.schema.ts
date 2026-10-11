@@ -26,6 +26,12 @@ const RefSchema = z
   .object({
     path: z.string(),
     purpose: z.string(),
+    // Seals the ref as a holdout scenario: only `role: eval-gate` nodes may
+    // reference it — a builder (any other role, unset included) is a
+    // HOLDOUT_LEAK compiler error, and the planner strips it from non-eval-gate
+    // payloads. The `criteria/<id>.holdout.md` filename convention seals
+    // without the flag (src/evidence/criteria.ts).
+    holdout: z.boolean().default(false),
   })
   .strict();
 

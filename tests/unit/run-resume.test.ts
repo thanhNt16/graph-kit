@@ -261,7 +261,7 @@ describe("deriveResumeGraph", () => {
     expect(derived.metadata.name).toBe("demo-resume");
     expect(derived.nodes.b!.depend_on).toEqual([]);
     expect(derived.nodes.b!.refs).toEqual([
-      { path: ".graphkit/evidence/a-out.md", purpose: `resumed evidence from node a (run ${id})` },
+      { path: ".graphkit/evidence/a-out.md", purpose: `resumed evidence from node a (run ${id})`, holdout: false },
     ]);
     expect(derived.nodes.c!.depend_on).toEqual(["b"]);
     expect(derived.topology).toBe("custom");

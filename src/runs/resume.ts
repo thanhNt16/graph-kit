@@ -333,6 +333,7 @@ export function deriveResumeGraph(rec: Reconciliation, parentRunId: string): Gra
         (lastOk.get(d)?.evidence ?? []).map((k) => ({
           path: join(rec.evidenceDir, `${k}.md`),
           purpose: `resumed evidence from node ${d} (run ${parentRunId})`,
+          holdout: false,
         })),
       );
     // fan_out.briefs_from naming a dropped (satisfied) node would dangle — its
