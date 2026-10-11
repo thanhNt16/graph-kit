@@ -3,7 +3,7 @@ import { dirname, join } from "node:path";
 import type { CAC } from "cac";
 import { GraphKitError } from "../../errors.js";
 import { parseMarker, renderMarker } from "../../evidence/marker.js";
-import { buildViews, renderHtml, renderMarkdown } from "../../evidence/report.js";
+import { buildViews, renderHtml, renderMarkdown, scoreViews } from "../../evidence/report.js";
 import { addEvidence, maxBytesFromConfig } from "../../evidence/store.js";
 import { leafUsageFor, subcommandsFor } from "../command-registry.js";
 import { resolveGraph } from "../graph-resolve.js";
@@ -59,12 +59,16 @@ export function registerEvidenceCommand(cli: CAC) {
         try {
           const graph = resolveGraph(cwd, opts.graph);
           const views = buildViews(cwd, graph);
+          const score = scoreViews(graph, views);
           if (opts.html) {
             const outPath = join(cwd, ".graphkit", "reports", `${graph.metadata.name}-evidence.html`);
             mkdirSync(dirname(outPath), { recursive: true });
-            writeFileSync(outPath, renderHtml(graph.metadata.name, views, join(cwd, graph.outputs.evidence_dir)));
+            writeFileSync(
+              outPath,
+              renderHtml(graph.metadata.name, views, join(cwd, graph.outputs.evidence_dir), score),
+            );
           } else {
-            emit(ok({ markdown: renderMarkdown(graph.metadata.name, views), views }));
+            emit(ok({ markdown: renderMarkdown(graph.metadata.name, views, score), views, score }));
           }
         } catch (e) {
           emit(

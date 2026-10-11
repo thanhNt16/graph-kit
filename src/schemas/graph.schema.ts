@@ -231,11 +231,30 @@ const NodeDefSchema = z
     }
   });
 
+// A criterion ref is a bare id or {id, weight}; weights only matter under
+// verdict: "scored" (a bare id scores as weight 1). Positivity is enforced in
+// validateGraph (criteria-weight finding), not here, so a bad weight surfaces
+// alongside the other checks instead of failing schema parse alone.
+const CriterionRef = z.union([
+  z.string().min(1),
+  z
+    .object({
+      id: z.string().min(1),
+      weight: z.number(),
+    })
+    .strict(),
+]);
+
 const EvidenceSchema = z
   .object({
     required_keys: z.array(z.string()),
     format: z.enum(["markdown", "json"]).default("markdown"),
-    criteria: z.array(z.string()).optional(),
+    criteria: z.array(CriterionRef).optional(),
+    // Gate verdict: "binary" (default — every required key must pass) or
+    // "scored" (weighted criteria vs threshold, with required_keys still a
+    // hard floor). "scored" requires threshold — checked in validateGraph.
+    verdict: z.enum(["binary", "scored"]).default("binary"),
+    threshold: z.number().min(0).max(1).optional(),
     freshness: z.enum(["report", "strict"]).default("report"),
     require_landed: z.boolean().default(false),
   })
@@ -300,6 +319,7 @@ export const GraphSchema = z
     evidence: EvidenceSchema.optional().default(() => ({
       required_keys: [],
       format: "markdown" as const,
+      verdict: "binary" as const,
       freshness: "report" as const,
       require_landed: false as const,
     })),

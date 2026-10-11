@@ -23,6 +23,15 @@ import { emit, fail, ok } from "../output.js";
  * parsing is trusted.
  */
 
+export interface CriterionScore {
+  id: string;
+  weight: number;
+  status: "ok" | "missing" | "empty";
+  freshness: Freshness;
+  passed: boolean;
+  contribution: number;
+}
+
 export interface GateResult {
   verdict: "MERGE" | "BLOCK";
   scorecard: Record<string, "ok" | "missing" | "empty">;
@@ -47,6 +56,15 @@ export interface GateResult {
    *  items hold the gate, "FEATURE_LIST_MISSING"/"FEATURE_LIST_INVALID" when
    *  a required list can't be read. */
   reasons: string[];
+  // Present only under evidence.verdict: "scored".
+  score?: number;
+  threshold?: number;
+  per_criterion?: CriterionScore[];
+}
+
+export interface ScoredGate {
+  criteria: { id: string; weight: number }[];
+  threshold: number;
 }
 
 export function gateGraph(
@@ -56,6 +74,7 @@ export function gateGraph(
     cwd?: string;
     strict?: boolean;
     requireLanded?: boolean;
+    scored?: ScoredGate;
     features?: { required: boolean; path?: string };
   },
 ): GateResult {
@@ -68,7 +87,12 @@ export function gateGraph(
   // gate stays usable on fresh checkouts.
   const activeDir = opts?.cwd ? activeRun(opts.cwd) : null;
   const lineage = opts?.cwd && activeDir ? resumeChain(opts.cwd, basename(activeDir)) : null;
-  for (const key of requiredKeys) {
+  // Scored gates evaluate the criteria on top of required_keys — union both
+  // lists so every scored id gets a real exists/non-empty/freshness reading.
+  const checkKeys = opts?.scored
+    ? [...new Set([...requiredKeys, ...opts.scored.criteria.map((c) => c.id)])]
+    : requiredKeys;
+  for (const key of checkKeys) {
     const p = join(evidenceDir, `${key}.md`);
     if (!existsSync(p)) {
       evidence[key] = undefined; // → "missing"
@@ -88,7 +112,7 @@ export function gateGraph(
       bytes: Buffer.byteLength(content),
     };
   }
-  const base = scoreWorkProduct({ required_keys: requiredKeys }, evidence, "strict");
+  const base = scoreWorkProduct({ required_keys: checkKeys }, evidence, "strict");
   const stale = requiredKeys.filter((k) => freshness[k] === "stale" && base.scorecard[k] === "ok");
   const unknown = requiredKeys.filter((k) => freshness[k] === "unknown" && base.scorecard[k] === "ok");
   const foreign = requiredKeys.filter((k) => freshness[k] === "foreign" && base.scorecard[k] === "ok");
@@ -143,12 +167,40 @@ export function gateGraph(
       reasons.push(state === "invalid" ? "FEATURE_LIST_INVALID" : "FEATURE_LIST_MISSING");
     }
   }
-  const verdict =
+  // required_keys remain a hard floor in every verdict mode: a scored gate can
+  // never merge while a declared required key fails, evidence is unlanded, or
+  // a required feature list is open/missing.
+  const floor =
     (opts?.strict && (stale.length > 0 || unknown.length > 0 || foreign.length > 0)) ||
     unlanded.length > 0 ||
     reasons.length > 0
       ? "BLOCK"
-      : base.verdict;
+      : requiredKeys.every((k) => base.scorecard[k] === "ok")
+        ? "MERGE"
+        : "BLOCK";
+  let score: number | undefined;
+  let per_criterion: CriterionScore[] | undefined;
+  if (opts?.scored) {
+    // Same pass rules as the binary gate, per criterion: exists + non-empty,
+    // plus fresh under freshness: strict (report mode never fails on freshness,
+    // mirroring the floor). A failing criterion contributes 0 to the numerator
+    // but keeps its weight in the denominator.
+    per_criterion = opts.scored.criteria.map((c) => {
+      const status = base.scorecard[c.id] ?? "missing";
+      const passed = status === "ok" && (!opts.strict || freshness[c.id] === "fresh");
+      return {
+        id: c.id,
+        weight: c.weight,
+        status,
+        freshness: freshness[c.id] ?? "unknown",
+        passed,
+        contribution: passed ? c.weight : 0,
+      };
+    });
+    const total = opts.scored.criteria.reduce((s, c) => s + c.weight, 0);
+    score = total > 0 ? per_criterion.reduce((s, c) => s + c.contribution, 0) / total : 0;
+  }
+  const verdict = floor === "MERGE" && (!opts?.scored || (score ?? 0) >= opts.scored.threshold) ? "MERGE" : "BLOCK";
   return {
     verdict,
     scorecard: base.scorecard,
@@ -161,6 +213,9 @@ export function gateGraph(
     manifest,
     ...(features ? { features } : {}),
     reasons,
+    score,
+    threshold: opts?.scored?.threshold,
+    per_criterion,
   };
 }
 
@@ -177,20 +232,61 @@ export function registerGateCommand(cli: CAC) {
           return;
         }
         const evidenceDir = join(process.cwd(), graph.outputs.evidence_dir);
-        const { verdict, scorecard, freshness, missing, warnings, unlanded, manifest, features, reasons } = gateGraph(
-          graph.evidence.required_keys,
-          evidenceDir,
-          {
-            cwd: process.cwd(),
-            strict: graph.evidence.freshness === "strict",
-            requireLanded: graph.evidence.require_landed === true,
-            features: graph.features,
-          },
-        );
+        // Scored verdict: bare criteria ids score as weight 1. threshold is
+        // guaranteed by validate (scored-threshold); the ?? 1 fallback is the
+        // conservative reading if the gate is ever driven around validation.
+        const scored =
+          graph.evidence.verdict === "scored"
+            ? {
+                criteria: (graph.evidence.criteria ?? []).map((c) =>
+                  typeof c === "string" ? { id: c, weight: 1 } : c,
+                ),
+                threshold: graph.evidence.threshold ?? 1,
+              }
+            : undefined;
+        const {
+          verdict,
+          scorecard,
+          freshness,
+          missing,
+          warnings,
+          unlanded,
+          manifest,
+          score,
+          threshold,
+          per_criterion,
+          features,
+          reasons,
+        } = gateGraph(graph.evidence.required_keys, evidenceDir, {
+          cwd: process.cwd(),
+          strict: graph.evidence.freshness === "strict",
+          requireLanded: graph.evidence.require_landed === true,
+          scored,
+          features: graph.features,
+        });
         const stale = Object.keys(freshness).filter((k) => freshness[k] === "stale" && scorecard[k] === "ok");
         const foreign = Object.keys(freshness).filter((k) => freshness[k] === "foreign" && scorecard[k] === "ok");
+        const scoredFields = scored
+          ? {
+              score,
+              threshold,
+              per_criterion,
+              summary: `SCORE ${(score ?? 0).toFixed(2)} ${(score ?? 0) >= (threshold ?? 1) ? ">=" : "<"} ${(threshold ?? 1).toFixed(2)} → ${verdict}`,
+            }
+          : {};
         if (verdict === "MERGE") {
-          emit(ok({ verdict, scorecard, freshness, warnings, unlanded, manifest, ...(features ? { features } : {}) }));
+          emit(
+            ok({
+              verdict,
+              scorecard,
+              freshness,
+              warnings,
+              unlanded,
+              manifest,
+              ...(features ? { features } : {}),
+              ...scoredFields,
+            }),
+          );
           return;
         }
         emit(
@@ -205,6 +301,7 @@ export function registerGateCommand(cli: CAC) {
             manifest,
             reasons,
             ...(features ? { features } : {}),
+            ...scoredFields,
           }),
         );
       } catch (e) {

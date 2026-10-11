@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { Graph } from "../schemas/graph.schema.js";
-import { loadCriteria } from "./criteria.js";
+import { criterionId, criterionWeight, loadCriteria } from "./criteria.js";
 import { fingerprint } from "./fingerprint.js";
 import { type Freshness, freshnessOf, parseMarker } from "./marker.js";
 
@@ -28,7 +28,14 @@ export function buildViews(cwd: string, graph: Graph): CriterionView[] {
   const criteria = loadCriteria(cwd, graph.evidence.criteria ?? []);
   const evDir = join(cwd, graph.outputs.evidence_dir);
   const cur = fingerprint(cwd);
-  return graph.evidence.required_keys.map((id) => {
+  // Scored gates evaluate criteria that may be produced-but-not-required —
+  // union both lists so every scored id gets a row. Binary reports keep their
+  // exact required_keys shape.
+  const ids =
+    graph.evidence.verdict === "scored"
+      ? [...new Set([...graph.evidence.required_keys, ...(graph.evidence.criteria ?? []).map(criterionId)])]
+      : graph.evidence.required_keys;
+  return ids.map((id) => {
     const c = criteria.get(id) ?? null;
     const p = join(evDir, `${id}.md`);
     if (!existsSync(p)) {
@@ -67,8 +74,58 @@ export function buildViews(cwd: string, graph: Graph): CriterionView[] {
   });
 }
 
-export function renderMarkdown(name: string, views: CriterionView[]): string {
+/** Gate-score summary for `verdict: scored` graphs — same pass rule as
+ * gate.ts (present + fresh under strict freshness), computed over views. */
+export interface ScoreView {
+  verdict: "MERGE" | "BLOCK";
+  score: number;
+  threshold: number;
+  per_criterion: {
+    id: string;
+    weight: number;
+    status: CriterionView["status"];
+    passed: boolean;
+    contribution: number;
+  }[];
+}
+
+export function scoreViews(graph: Graph, views: CriterionView[]): ScoreView | null {
+  if (graph.evidence.verdict !== "scored") return null;
+  const strict = graph.evidence.freshness === "strict";
+  const byId = new Map(views.map((v) => [v.id, v]));
+  const per_criterion = (graph.evidence.criteria ?? []).map((c) => {
+    const id = criterionId(c);
+    const weight = criterionWeight(c);
+    const v = byId.get(id);
+    const passed = v?.status === "present" && (!strict || v.freshness === "fresh");
+    return {
+      id,
+      weight,
+      status: v?.status ?? ("missing" as const),
+      passed,
+      contribution: passed ? weight : 0,
+    };
+  });
+  const total = per_criterion.reduce((s, c) => s + c.weight, 0);
+  const score = total > 0 ? per_criterion.reduce((s, c) => s + c.contribution, 0) / total : 0;
+  const threshold = graph.evidence.threshold ?? 1;
+  return { verdict: score >= threshold ? "MERGE" : "BLOCK", score, threshold, per_criterion };
+}
+
+export function renderMarkdown(name: string, views: CriterionView[], score?: ScoreView | null): string {
   const lines = [`# Evidence — ${name}`, ""];
+  if (score) {
+    lines.push(`## Gate score`, "");
+    lines.push(
+      `**SCORE ${score.score.toFixed(2)} ${score.score >= score.threshold ? ">=" : "<"} ${score.threshold.toFixed(2)} → ${score.verdict}**`,
+      "",
+    );
+    lines.push(`| criterion | weight | pass | contribution |`, `| --- | --- | --- | --- |`);
+    for (const c of score.per_criterion) {
+      lines.push(`| ${c.id} | ${c.weight} | ${c.passed ? "pass" : "fail"} | ${c.contribution} |`);
+    }
+    lines.push("");
+  }
   for (const v of views) {
     lines.push(`## ${v.id}`);
     if (v.description) lines.push(`> ${v.description}`);
@@ -90,8 +147,26 @@ function artifactAbs(evidenceDir: string, rel: string | null): string | null {
   return existsSync(p) ? p : null;
 }
 
-export function renderHtml(name: string, views: CriterionView[], evidenceDir: string): string {
+export function renderHtml(
+  name: string,
+  views: CriterionView[],
+  evidenceDir: string,
+  score?: ScoreView | null,
+): string {
   const cards: string[] = [];
+  if (score) {
+    const rows = score.per_criterion
+      .map(
+        (c) =>
+          `<tr><td>${escapeHtml(c.id)}</td><td>${escapeHtml(String(c.weight))}</td><td>${c.passed ? "pass" : "fail"}</td><td>${escapeHtml(String(c.contribution))}</td></tr>`,
+      )
+      .join("");
+    cards.push(
+      `<section class="card score"><h2>Gate score</h2>` +
+        `<p><strong>SCORE ${escapeHtml(score.score.toFixed(2))} ${score.score >= score.threshold ? "&gt;=" : "&lt;"} ${escapeHtml(score.threshold.toFixed(2))} → ${escapeHtml(score.verdict)}</strong></p>` +
+        `<table><thead><tr><th>criterion</th><th>weight</th><th>pass</th><th>contribution</th></tr></thead><tbody>${rows}</tbody></table></section>`,
+    );
+  }
   for (const v of views) {
     const badge = BADGE[v.status];
     const fresh =
@@ -131,7 +206,7 @@ export function renderHtml(name: string, views: CriterionView[], evidenceDir: st
   }
   return (
     `<!doctype html><html><head><meta charset="utf-8"><title>Evidence — ${escapeHtml(name)}</title>` +
-    `<style>body{font-family:system-ui;margin:2rem;max-width:60rem}.card{border:1px solid #ccc;border-radius:8px;padding:1rem;margin:1rem 0}.stale{color:#b45309}.unknown{color:#6b7280}pre{background:#f6f8fa;padding:.5rem;overflow:auto}img{max-width:100%}footer{color:#6b7280;font-size:.8rem;margin-top:.5rem}</style>` +
+    `<style>body{font-family:system-ui;margin:2rem;max-width:60rem}.card{border:1px solid #ccc;border-radius:8px;padding:1rem;margin:1rem 0}.stale{color:#b45309}.unknown{color:#6b7280}pre{background:#f6f8fa;padding:.5rem;overflow:auto}img{max-width:100%}footer{color:#6b7280;font-size:.8rem;margin-top:.5rem}table{border-collapse:collapse}td,th{border:1px solid #ccc;padding:.25rem .75rem;text-align:left}</style>` +
     `</head><body><h1>Evidence — ${escapeHtml(name)}</h1>${cards.join("")}</body></html>`
   );
 }

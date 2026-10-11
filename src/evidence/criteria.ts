@@ -10,6 +10,11 @@ export interface Criterion {
   holdout: boolean;
 }
 
+/** graph.yaml `evidence.criteria[]` entry: bare id (weight 1) or weighted ref. */
+export type CriterionRef = string | { id: string; weight: number };
+export const criterionId = (c: CriterionRef): string => (typeof c === "string" ? c : c.id);
+export const criterionWeight = (c: CriterionRef): number => (typeof c === "string" ? 1 : c.weight);
+
 const KINDS: CriterionKind[] = ["report", "screenshot", "json", "metrics", "text"];
 
 // Sealed holdout scenarios (anti-gaming): a criterion whose rubric builders
@@ -60,9 +65,9 @@ export function isHoldoutCriterion(cwd: string, id: string): boolean {
  * `id`, body = description). Never throws — `gk validate`'s `criteria-file`
  * check is the layer that reports missing/unreadable files.
  */
-export function loadCriteria(cwd: string, ids: string[]): Map<string, Criterion> {
+export function loadCriteria(cwd: string, ids: CriterionRef[]): Map<string, Criterion> {
   const out = new Map<string, Criterion>();
-  for (const id of ids) {
+  for (const id of ids.map(criterionId)) {
     const file = registryFileFor(cwd, id);
     if (!file) {
       out.set(id, { id, description: "", kind: "report", holdout: false });

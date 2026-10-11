@@ -146,9 +146,18 @@ export function validateGraph(graph: Graph, projectRoot: string): Finding[] {
     }
   }
 
-  // 5b. criteria: ids must be declared keys, unique, and backed by registry files
+  // 5b. criteria: ids must be declared keys, unique, and backed by registry files.
+  // Entries may be bare ids or {id, weight} refs (verdict: scored).
   const seenCriteria = new Set<string>();
-  for (const id of graph.evidence.criteria ?? []) {
+  for (const c of graph.evidence.criteria ?? []) {
+    const id = typeof c === "string" ? c : c.id;
+    if (typeof c !== "string" && !(c.weight > 0)) {
+      findings.push({
+        check: "criteria-weight",
+        path: "evidence.criteria",
+        message: `Criterion "${id}" weight must be a positive number, got ${c.weight}`,
+      });
+    }
     if (!produced.has(id) && !graph.evidence.required_keys.includes(id)) {
       findings.push({
         check: "criteria-keys",
@@ -186,13 +195,53 @@ export function validateGraph(graph: Graph, projectRoot: string): Finding[] {
     }
   }
 
-  // 5e. Holdout seal (anti-gaming): validation criteria the builders must
+  // 5e. Scored-gate contract: "scored" needs a threshold and at least one
+  // criterion to weight. A threshold (or criterion weights) under the binary
+  // default is dead config — advisory, like the other declared-but-ignored
+  // field warnings.
+  if (graph.evidence.verdict === "scored") {
+    if (graph.evidence.threshold === undefined) {
+      findings.push({
+        check: "scored-threshold",
+        path: "evidence.threshold",
+        message: 'verdict "scored" requires evidence.threshold (0-1)',
+      });
+    }
+    if ((graph.evidence.criteria ?? []).length === 0) {
+      findings.push({
+        check: "scored-criteria",
+        path: "evidence.criteria",
+        message: 'verdict "scored" requires at least one evidence.criteria entry to score',
+      });
+    }
+  } else {
+    if (graph.evidence.threshold !== undefined) {
+      findings.push({
+        check: "scored-threshold",
+        path: "evidence.threshold",
+        message: `evidence.threshold is set but verdict is "${graph.evidence.verdict}" — it only applies under verdict: scored`,
+        severity: "warn",
+      });
+    }
+    const weighted = (graph.evidence.criteria ?? []).filter((c) => typeof c !== "string");
+    if (weighted.length > 0) {
+      findings.push({
+        check: "scored-weight",
+        path: "evidence.criteria",
+        message: `criterion weights on ${weighted.map((c) => (typeof c === "string" ? c : c.id)).join(", ")} are ignored under verdict "${graph.evidence.verdict}" — set verdict: scored to apply them`,
+        severity: "warn",
+      });
+    }
+  }
+
+  // 5f. Holdout seal (anti-gaming): validation criteria the builders must
   // never see are sealed — registry files named `criteria/<id>.holdout.md`
   // and/or refs entries flagged `holdout: true`. A node that is not
   // `role: eval-gate` (unset counts as a builder) referencing a sealed path
   // is a HOLDOUT_LEAK error; eval-gate nodes may reference them freely.
   let declaresHoldouts = false;
-  for (const id of graph.evidence.criteria ?? []) {
+  for (const c of graph.evidence.criteria ?? []) {
+    const id = typeof c === "string" ? c : c.id;
     if (isHoldoutCriterion(projectRoot, id)) declaresHoldouts = true;
   }
   for (const [id, node] of Object.entries(graph.nodes)) {
