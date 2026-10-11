@@ -1,5 +1,6 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { budgetRemainingByNode } from "../compiler/plan.js";
 import { GraphKitError } from "../errors.js";
 import type { Graph } from "../schemas/graph.schema.js";
 import { agentFileName, getTarget } from "../targets/registry.js";
@@ -78,6 +79,8 @@ export function materializeNodeAgents(cwd: string, graph: Graph): Record<string,
   const nodes = graph.nodes ?? {};
   const mapping: Record<string, string> = {};
   const wanted = new Set<string>();
+  // Model-visible run budget: null unless the graph declares `budget:`.
+  const budgetRemaining = budgetRemainingByNode(graph);
 
   for (const [nodeId, node] of Object.entries(nodes)) {
     const fragmentPath = join(agentsDir, agentFileName(node.agent));
@@ -106,6 +109,9 @@ export function materializeNodeAgents(cwd: string, graph: Graph): Record<string,
         : "") +
       (node.owns.length > 0
         ? scopeSection("Owned scope", "You may edit only paths matching these globs; read anything.", node.owns)
+        : "") +
+      (budgetRemaining?.has(nodeId)
+        ? `\n## Context budget\n- Context budget remaining: ${budgetRemaining.get(nodeId)} tokens (planning currency — the run cap over declared budget_tokens, not metered usage)\n`
         : "");
     const fm: string[] = [
       "---",

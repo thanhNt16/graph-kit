@@ -103,7 +103,10 @@ function renderBrief(template: string, brief: Record<string, unknown>): string {
 
 export async function runGraph(plan: PlanGraph, opts: RunGraphOptions): Promise<RunVerdict> {
   const { cwd, runner, judge, interactive, graph } = opts;
-  const runId = opts.runId ? attachRun(cwd, opts.runId) : startRun(cwd, opts.graphPath ?? join(cwd, "graph.yaml")).id;
+  const budget = graph?.budget ?? null;
+  const runId = opts.runId
+    ? attachRun(cwd, opts.runId)
+    : startRun(cwd, opts.graphPath ?? join(cwd, "graph.yaml"), undefined, undefined, budget ?? undefined).id;
   const evidenceDir = graph?.outputs.evidence_dir ?? DEFAULT_EVIDENCE_DIR;
 
   const nodeRuns = new Map<string, NodeRun>();
@@ -112,6 +115,14 @@ export async function runGraph(plan: PlanGraph, opts: RunGraphOptions): Promise<
   let injection: string | null = null;
   let gateUnapproved = false;
   let challengeSeen = false;
+  // Run-level context budget (planning currency): each node's declared
+  // budget_tokens charges against the graph's max_tokens cap once, at
+  // dispatch-commit time — skipped nodes never charge, retries charge once.
+  // Overrun trips the run: the node finishes fail/budget_exceeded and the
+  // wave loop stops before the next wave.
+  let allocated = 0;
+  let budgetTripped: string | null = null;
+  let budgetWarned = false;
 
   // -- ledger adapters -----------------------------------------------------
 
@@ -283,6 +294,27 @@ export async function runGraph(plan: PlanGraph, opts: RunGraphOptions): Promise<
     };
   }
 
+  /** Charge `node`'s declared budget_tokens against the run cap. Returns
+   *  false when the charge would overrun — the caller finishes the node
+   *  fail/budget_exceeded and budgetTripped stops the wave loop. */
+  function chargeBudget(node: PlannedNode): boolean {
+    if (budget == null) return true;
+    const declared = node.budget_tokens ?? 0;
+    if (allocated + declared > budget.max_tokens) {
+      budgetTripped = node.id;
+      return false;
+    }
+    allocated += declared;
+    if (!budgetWarned && allocated >= budget.warn_at * budget.max_tokens) {
+      budgetWarned = true;
+      console.error(`[engine] context budget ${allocated}/${budget.max_tokens} allocated (warn_at ${budget.warn_at})`);
+    }
+    return true;
+  }
+
+  const budgetExceededNotes = (node: PlannedNode) =>
+    `budget_exceeded: node ${node.id} declared ${node.budget_tokens ?? 0} would push allocated ${allocated} past max ${budget?.max_tokens}`;
+
   function detectChallenge(outcome: DispatchOutcome): { target: string; finding: string; line: string } | null {
     const lines = lastLines(outcome.output);
     const m = lines[lines.length - 1]?.match(CHALLENGE_RE);
@@ -434,6 +466,7 @@ export async function runGraph(plan: PlanGraph, opts: RunGraphOptions): Promise<
   async function runCurator(wave: PlanWave): Promise<NodeRun> {
     const node = wave.nodes[0];
     if (node == null) throw new GraphKitError("BAD_PLAN", "curator wave carries no node");
+    if (!chargeBudget(node)) return finish(node, wave, "fail", 0, undefined, budgetExceededNotes(node));
     const forbidden = plan.memory?.null_intervention_allowed === false;
     const target: PlannedNode = {
       ...node,
@@ -478,6 +511,8 @@ export async function runGraph(plan: PlanGraph, opts: RunGraphOptions): Promise<
         );
       }
     }
+
+    if (!chargeBudget(node)) return finish(node, wave, "fail", 0, undefined, budgetExceededNotes(node));
 
     const { upstream, spillNote } = contextFor(node, new Map([...nodeRuns].filter(([, r]) => r.outcome != null)));
     const loop = node.loop?.enabled === true ? node.loop : null;
@@ -545,6 +580,7 @@ export async function runGraph(plan: PlanGraph, opts: RunGraphOptions): Promise<
 
   try {
     for (const wave of plan.waves) {
+      if (budgetTripped != null) break; // a tripped curator wave never reaches the fail barrier below
       interactive?.onWaveStart(wave);
       const waveRun: WaveRun = { index: wave.index, curator: wave.curator === true, nodes: [] };
       waves.push(waveRun);
@@ -575,6 +611,7 @@ export async function runGraph(plan: PlanGraph, opts: RunGraphOptions): Promise<
       .map((d) => d.node)
       .filter((n) => n.length > 0 && !traced.has(n));
     const verdict: RunVerdict = { status, runId, waves, nodes: all, unresolved };
+    if (budgetTripped != null) verdict.stop_reason = "budget_exceeded";
     try {
       endRun(cwd, status);
     } catch (e) {

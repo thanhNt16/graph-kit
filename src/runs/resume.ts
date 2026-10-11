@@ -64,7 +64,7 @@ export function resumeRun(
   validateDerivedGraph(derived);
   const session = saveSessionGraph(derived, derived.metadata.name, cwd);
   setActiveGraphId(session.id, cwd);
-  const run = startRun(cwd, session.path, new Date().toISOString(), runId);
+  const run = startRun(cwd, session.path, new Date().toISOString(), runId, derived.budget);
   return {
     resumed: true,
     session,

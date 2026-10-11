@@ -63,6 +63,32 @@ export interface PlanWave {
   nodes: PlannedNode[];
 }
 
+/** Run-level context budget riding the plan (`budget:` on the graph). */
+export interface PlanBudget {
+  max_tokens: number;
+  warn_at: number;
+}
+
+/** Per-node advisory: how much run budget remains once this node's declared
+ *  `budget_tokens` is charged. Computed over the plan's topological dispatch
+ *  order (waves flattened in order); a node may go negative — that is the
+ *  point, the number says "you are past the run cap" rather than clamping
+ *  away information. null when the graph declares no `budget:`. */
+export function budgetRemainingByNode(graph: Graph): Map<string, number> | null {
+  const budget = graph.budget;
+  if (budget == null) return null;
+  const { waves, unresolved } = topoWaves(graph.nodes);
+  const remaining = new Map<string, number>();
+  let allocated = 0;
+  for (const wave of [...waves, unresolved]) {
+    for (const id of wave) {
+      allocated += graph.nodes[id]?.budget_tokens ?? 0;
+      remaining.set(id, budget.max_tokens - allocated);
+    }
+  }
+  return remaining;
+}
+
 export interface PlanMemoryConfig {
   curator_node: string;
   cadence: string;
@@ -75,6 +101,7 @@ export interface PlanMemoryConfig {
 export interface PlanGraph {
   waves: PlanWave[];
   memory?: PlanMemoryConfig;
+  budget?: PlanBudget;
   topology_config?: Record<string, unknown>;
   warnings: string[];
 }
@@ -152,13 +179,19 @@ export function planGraph(graph: Graph, opts?: { source?: string }): PlanGraph {
   // re-reading graph.yaml. on_fanout_dispatch stays declared-but-unused:
   // no consumer exists, and inventing one would be speculative.
   const nodeHooks = graph.hooks?.on_node_complete ?? [];
+  // Model-visible budget: every node brief states how much of the run's
+  // declared-allocation cap remains once it is charged (advisory text — the
+  // payload schema gains no field, the objective gains one line).
+  const budgetRemaining = budgetRemainingByNode(graph);
   const nodeObj = (id: string): PlannedNode => {
     const n = nodes[id];
     return {
       id,
       agent: n?.agent,
       model: n?.model || "sonnet",
-      objective: n?.objective?.trim() || "",
+      objective:
+        (n?.objective?.trim() || "") +
+        (budgetRemaining?.has(id) ? `\n\nContext budget remaining: ${budgetRemaining.get(id)} tokens` : ""),
       tools: n?.tools || [],
       skills: n?.skills || [],
       refs: n?.refs || [],
@@ -197,6 +230,7 @@ export function planGraph(graph: Graph, opts?: { source?: string }): PlanGraph {
   // drop it). Schema default is {}, so authored config passes through
   // verbatim and absent config still surfaces as an empty object.
   out.topology_config = graph.topology_config;
+  if (graph.budget != null) out.budget = { max_tokens: graph.budget.max_tokens, warn_at: graph.budget.warn_at };
   if (hasCurator) {
     out.memory = {
       curator_node: curator,
