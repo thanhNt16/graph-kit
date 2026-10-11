@@ -49,6 +49,14 @@ export const DISPOSITION_PATTERN = /\bdisposition=(\w+)/;
 export const hasDisposition = (notes: string | null | undefined): boolean =>
   notes != null && DISPOSITION_PATTERN.test(notes);
 
+/** Run-level context budget, recorded into meta.json at startRun. Planning
+ *  currency: a cap over the sum of dispatched nodes' declared `budget_tokens`
+ *  allocations — not metered API tokens. */
+export interface RunBudget {
+  max_tokens: number;
+  warn_at: number;
+}
+
 export interface DispatchLine {
   at: string;
   node: string;
@@ -187,6 +195,7 @@ export function startRun(
   graphPath: string,
   now = new Date().toISOString(),
   resumes?: string,
+  budget?: RunBudget,
 ): { id: string; dir: string; graph_sha256: string } {
   const existing = activeRun(cwd);
   if (existing) throw new GraphKitError("RUN_ACTIVE", `run already active at ${existing}; run \`gk run end\` first`);
@@ -227,6 +236,9 @@ export function startRun(
   const takesOver = existsSync(takeoverFile) ? readFileSync(takeoverFile, "utf-8").trim() || null : null;
   if (takesOver) meta.takes_over = takesOver;
   if (resumes) meta.resumes = resumes;
+  // The graph's declared run budget rides meta so status/analyze/enforcement
+  // read it even when the source graph.yaml later drifts.
+  if (budget != null) meta.budget = budget;
   writeFileSync(join(dir, "meta.json"), `${JSON.stringify(meta, null, 2)}\n`);
   // GBrain layout: compiled truth above the rule, append-only timeline below.
   writeFileSync(
@@ -537,6 +549,7 @@ export interface RunMeta {
   started_at: string;
   ended_at?: string;
   resumes?: string;
+  budget?: RunBudget;
 }
 export function readRunMeta(cwd: string, id: string): RunMeta {
   const file = join(runsDir(cwd), id, "meta.json");

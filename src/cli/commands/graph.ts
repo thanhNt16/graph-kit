@@ -805,6 +805,7 @@ export function registerGraphCommands(cli: CAC) {
             warnings: findings.filter((f) => !isBlocking(f)),
           };
           if (plan.memory) payload.memory = plan.memory;
+          if (plan.budget) payload.budget = plan.budget;
 
           emit(ok(payload));
         } catch (e) {
