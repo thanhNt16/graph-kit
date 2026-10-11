@@ -292,6 +292,8 @@ One `gk init` command configures both host targets:
 | **Recovery** | Restart session from zero | State lost on crash | Reconciled checkpoint resume |
 | **Runtime footprint** | None | Heavy cloud SDKs / daemon | Zero-model local CLI compiler |
 
+GraphKit is also a **context-reset harness by construction**: every node dispatches a fresh agent with a compiled brief, instead of one agent compacting a degrading context window. Anthropic's harness research found resets — a clean context plus a structured handoff — outperform compaction on long tasks; in a `gk` run the handoff is declared in the graph itself (`depend_on`, `refs`, evidence artifacts). See [docs/context-engineering.md](./docs/context-engineering.md).
+
 ---
 
 ## What this isn't
@@ -341,6 +343,8 @@ $ gk --help
 - **Live Documentation Site:** [thanhnt16.github.io/graph-kit](https://thanhnt16.github.io/graph-kit/)
 - **Changelog:** [CHANGELOG.md](./CHANGELOG.md)
 - **Worktree Merge Protocol:** [docs/worktree-merge-protocol.md](./docs/worktree-merge-protocol.md)
+- **Context Engineering:** [docs/context-engineering.md](./docs/context-engineering.md)
+- **Honest Gaps:** [docs/honest-gaps.md](./docs/honest-gaps.md)
 - **Interactive Diagram Gallery:** [docs/diagrams/](./docs/diagrams/)
 
 ```bash
