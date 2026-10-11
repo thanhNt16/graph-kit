@@ -3,22 +3,80 @@
     "PreToolUse": [
       {
         "matcher": "Write|Edit",
-        "hooks": [{ "type": "command", "command": "node .claude/hooks/graph-state-guard.cjs" }]
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node .claude/hooks/graph-state-guard.cjs"
+          }
+        ]
+      },
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node .claude/hooks/gk-selflearn.cjs pre-tool"
+          }
+        ]
       }
     ],
     "PostToolUse": [
       {
         "matcher": "Write",
         "hooks": [
-          { "type": "command", "command": "node .claude/hooks/evidence-persist.cjs" },
-          { "type": "command", "command": "node .claude/hooks/memory-persist.cjs" }
+          {
+            "type": "command",
+            "command": "node .claude/hooks/evidence-persist.cjs"
+          },
+          {
+            "type": "command",
+            "command": "node .claude/hooks/memory-persist.cjs"
+          }
         ]
       }
     ],
     "SubagentStart": [
       {
         "matcher": "",
-        "hooks": [{ "type": "command", "command": "node .claude/hooks/lease-enforce.cjs" }]
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node .claude/hooks/lease-enforce.cjs"
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node .claude/hooks/gk-selflearn.cjs session-start"
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node .claude/hooks/gk-selflearn.cjs session-end"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node .claude/hooks/gk-selflearn.cjs session-end"
+          }
+        ]
       }
     ]
   },

@@ -52,7 +52,7 @@ describe("Full flow: init -> validate", () => {
     }
     // 4 hooks
     const hooks = readdirSync(join(TMP, ".claude", "hooks")).filter((f) => f.endsWith(".cjs"));
-    expect(hooks.length).toBe(4);
+    expect(hooks.length).toBe(5);
     // 3 rules
     const rules = readdirSync(join(TMP, ".claude", "rules")).filter((f) => f.endsWith(".md"));
     expect(rules.length).toBe(3);

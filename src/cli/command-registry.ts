@@ -110,6 +110,17 @@ const GROUP_SUBCOMMANDS: Record<string, Leaf[]> = {
     { name: "revert", usage: "<id>" },
     { name: "list", usage: "" },
   ],
+  selflearn: [
+    { name: "stage", usage: "--intent <json> [--session <id>]" },
+    { name: "promote", usage: "[--session <id>] [--target <claude|omp>]" },
+    { name: "reflect", usage: "--session <id> [--transcript <path>]" },
+    { name: "status", usage: "" },
+    { name: "index", usage: "" },
+    { name: "context", usage: "" },
+    { name: "tick", usage: "--session <id>" },
+    { name: "capture", usage: "--session <id> --transcript <path>" },
+    { name: "record", usage: "--session <id> --record <text>" },
+  ],
 };
 
 /** Space-joined leaf names for a command group — injected into group --help and error hints. */

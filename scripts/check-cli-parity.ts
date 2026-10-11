@@ -32,6 +32,7 @@ const UNKNOWN_CODES = [
   "UNKNOWN_SCHEDULE_SUBCOMMAND",
   "UNKNOWN_QUEUE_SUBCOMMAND",
   "UNKNOWN_LEARN_SUBCOMMAND",
+  "UNKNOWN_SELFLEARN_SUBCOMMAND",
 ];
 function isUnknownCommand(result: { stdout: string; stderr: string }, _parent: string): boolean {
   try {
