@@ -118,7 +118,7 @@
     },
     {
       "name": "run",
-      "description": "Run ledger commands\nSubcommands: start node dispatch land end status resume take round poll progress analyze verify",
+      "description": "Run ledger commands\nSubcommands: start node dispatch land end status resume take round poll progress analyze verify report",
       "options": [
         "--graph <path>",
         "--input <pair>",

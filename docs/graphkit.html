@@ -628,8 +628,8 @@ gk memory recall "auth tokens"    <span class="cmt"># retrieve contextual memory
 
 <div class="section" id="factory">
   <div class="section-label">Software Factory</div>
-  <h2>The Production-Line Layer</h2>
-  <p>Beyond gates and loops, GraphKit ships the operational machinery of an agentic software factory: a machine-checkable backlog, enforced token budgets, a tamper-evident audit chain, sealed eval cases, and deterministic reduce semantics — composed by the <code>software-factory</code> gallery template into an 8-phase production line.</p>
+  <h2>A Self-Improving Agentic Software Factory</h2>
+  <p>Beyond gates and loops, GraphKit ships the full operational machinery of an agentic software factory: a durable work queue, a machine-checkable backlog, enforced token budgets, a tamper-evident audit chain, sealed eval cases, deterministic reduce semantics — <em>and</em> a continual-learning plane that promotes real failures into permanent scenarios and mined session transcripts into reusable skills. The <code>software-factory</code> gallery template composes it all into an 8-phase production line: your role shifts from operator to owner — you write the spec and review the gate, the factory does the work.</p>
 
   <div class="bridge-grid">
     <div class="subsys" style="border-color:var(--acc)">
@@ -660,8 +660,41 @@ gk run poll &lt;loop&gt; · gk run progress</div></div>
       <div class="subsys-tag" style="background:rgba(210,153,34,0.15);color:#d29922">SEALED EVALUATION</div>
       <h3>Holdouts &amp; Scored Gates</h3>
       <p><code>refs[].holdout</code> and <code>criteria/*.holdout.md</code> keep eval cases invisible to builders (<code>HOLDOUT_LEAK</code> fails the gate). <code>evidence.verdict: scored</code> applies weighted criteria above a required-keys floor; <code>gk evidence promote</code> turns any blocked run into a permanent regression scenario.</p>
-      <div class="code-block" style="margin:0.6rem 0 0"><div class="code-body">gk template materialize software-factory
+      <div class="code-block" style="margin:0.6rem 0 0"><div class="code-body">gk evidence promote --run &lt;id&gt; --holdout
+gk template materialize software-factory
 <span class="cmt"># scout → architect → gate → build → integrate → eval → iterate → merge</span></div></div>
+    </div>
+
+    <div class="subsys" style="border-color:var(--acc)">
+      <div class="subsys-tag" style="background:rgba(88,166,255,0.15);color:var(--acc)">WORK INTAKE</div>
+      <h3>Durable Task Queue</h3>
+      <p><code>gk queue</code> is a file-backed intake: <code>add</code> queues items with acceptance criteria (<code>QUEUE_DUPLICATE</code> on repeats), <code>claim</code> hands out the next dependency-ready item atomically so two orchestrators never run the same work twice, and an empty queue is a clean no-op — not an error.</p>
+      <div class="code-block" style="margin:0.6rem 0 0"><div class="code-body">gk queue add --title "rate-limit the API"
+gk queue claim · gk queue done &lt;id&gt;</div></div>
+    </div>
+
+    <div class="subsys" style="border-color:var(--memory)">
+      <div class="subsys-tag" style="background:rgba(46,160,67,0.15);color:var(--memory)">CONTINUAL LEARNING</div>
+      <h3>Failure → Skill, Gated</h3>
+      <p><code>gk learn</code> runs propose → evaluate → adopt → revert over <code>.graphkit/learn/*.yaml</code>: a proposal must replay its promoted failure and pass <em>before</em> it's installed as a skill — with an injection/exfiltration lint gate and a landed/rejected verdict account in <code>gk run status</code>. Nothing gets adopted on vibes.</p>
+      <div class="code-block" style="margin:0.6rem 0 0"><div class="code-body">gk learn propose · gk learn evaluate
+gk learn adopt &lt;id&gt; · gk learn revert</div></div>
+    </div>
+
+    <div class="subsys" style="border-color:var(--bridge)">
+      <div class="subsys-tag" style="background:rgba(57,208,216,0.15);color:var(--bridge)">SELF-LEARNING HOSTS</div>
+      <h3>Session Mining Pipeline</h3>
+      <p><code>gk selflearn</code> ports the AutoHarness loop host-agnostically: transcript capture + redaction → reflector → staged intents → the gated <code>gk learn</code> admission path → index injection into the next run's briefs. Wired as Claude Code hooks and OMP extension handlers — the factory gets better every session.</p>
+      <div class="code-block" style="margin:0.6rem 0 0"><div class="code-body">gk selflearn stage --transcript run.jsonl
+gk selflearn promote · gk selflearn index</div></div>
+    </div>
+
+    <div class="subsys" style="border-color:var(--warn,#d29922)">
+      <div class="subsys-tag" style="background:rgba(210,153,34,0.15);color:#d29922">MEMORY LIFECYCLE</div>
+      <h3>Adherence &amp; Reviewable Reports</h3>
+      <p>Learned artifacts carry adherence counters (uses ÷ opportunities offered) — probation, graduation, and capacity-capped <em>archive</em> (never delete) keep the knowledge store bounded. Every run closes with a self-contained HTML report: timeline, evidence scorecard, ledger integrity, learn verdicts.</p>
+      <div class="code-block" style="margin:0.6rem 0 0"><div class="code-body">gk memory lifecycle · gk memory archive
+gk run end merged  <span class="cmt"># → .graphkit/reports/&lt;run&gt;-run.html</span></div></div>
     </div>
   </div>
 </div>

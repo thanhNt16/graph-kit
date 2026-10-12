@@ -83,6 +83,27 @@ gk run verify --evidence     # additionally confirm each referenced
 `--evidence` replays the recorded evidence references: a `<key>.md` marker
 file that no longer exists (or never existed) is reported as a mismatch.
 
+## End-of-run HTML report (`gk run report`)
+
+Every closed run leaves a reviewable record. `gk run end` automatically
+writes `.graphkit/reports/<run-id>-run.html` — a self-contained page
+(system font + inline CSS, no external requests, dark-mode aware) — and
+returns its path in the `report` field. Regenerate it any time with
+`gk run report <run-id>`.
+
+The page renders what an owner needs to review the run without opening
+the ledger: status/graph/timing, per-node timeline (status, evidence,
+agent, notes), dispatched pids, the evidence scorecard, advisor
+events, learn verdicts the run spawned, ledger integrity (chain
+divergence is flagged inline), and the tail of the progress journal.
+All trace content is HTML-escaped; missing pieces degrade to empty
+sections rather than failing — a damaged run dir still reports what it
+can.
+
+```bash
+gk run report 20261012-134500-a   # → .graphkit/reports/20261012-134500-a-run.html
+```
+
 ## Progress file (`## Progress so far`)
 
 Long-running orchestrations lose the plot when context resets. The
