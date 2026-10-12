@@ -33,6 +33,7 @@ import {
   verifyTraceChain,
 } from "../../runs/ledger.js";
 import { recordPoll, recordRound } from "../../runs/loops.js";
+import { writeRunReport } from "../../runs/report.js";
 import { reconcileRun, resumeRun } from "../../runs/resume.js";
 import type { Graph } from "../../schemas/graph.schema.js";
 import { MemoryConfig, MemoryLifecycleConfig } from "../../schemas/memory.schema.js";
@@ -463,7 +464,30 @@ export function registerRunCommands(cli: CAC) {
               return;
             }
           }
-          emit(ok({ ...endRun(cwd, status), ...orphanedGkArtifacts(cwd) }));
+          const ended = endRun(cwd, status);
+          // Every closed run leaves a reviewable HTML record. Advisory:
+          // a render failure must never block the run's closing.
+          let report: string | null = null;
+          try {
+            report = writeRunReport(cwd, ended.id);
+          } catch {
+            /* report is best-effort */
+          }
+          emit(ok({ ...ended, ...(report ? { report } : {}), ...orphanedGkArtifacts(cwd) }));
+          return;
+        }
+        if (subcommand === "report") {
+          const target = Array.isArray(args) ? args[0] : args;
+          if (!target) {
+            emit(fail("MISSING_ARG", "report requires a run id"));
+            return;
+          }
+          try {
+            emit(ok({ run: String(target), report: writeRunReport(cwd, String(target)) }));
+          } catch (e) {
+            const gke = toGraphKitError(e, "RUN_ERROR");
+            emit(fail(gke.code, gke.message, gke.details));
+          }
           return;
         }
         if (subcommand === "resume") {

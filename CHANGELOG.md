@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 ## [Unreleased]
+### Added
+- `gk run report <run-id>`: self-contained end-of-run HTML report
+  (`.graphkit/reports/<run>-run.html`) covering status/timeline, dispatches,
+  evidence scorecard, advisor events, learn verdicts, ledger integrity, and
+  the progress tail. `gk run end` writes it automatically and returns the
+  path.
 
 ## [0.3.43] - 2026-10-12
 ### Fixed
