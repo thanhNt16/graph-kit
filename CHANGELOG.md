@@ -7,8 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 ## [Unreleased]
+
+## [0.3.10] - 2026-10-11
 ### Added
-- **Software factory release** — 14 features from an agent-engineering research pass (context/harness/loop/graph/software-factory practices), landed together:
+- **Software factory release** — 20 features from an agent-engineering research pass (context/harness/loop/graph/software-factory practices plus continual-learning ports), landed together:
   - `gk features` (feature-list artifact): durable backlog at `.graphkit/feature-list.json` written by an `initializer`-role node and drained by workers; `features: {required: true}` in graph.yaml makes `gk gate` BLOCK with `FEATURES_OPEN:n` until every item passes; `gk graph waves` reports the feature-list status.
   - `schedule:` block in `graph.yaml` (`cron` + optional `command`, `description`) and `gk schedule list|emit` — compile a declared cadence into GitHub Actions workflow YAML, a crontab line, a launchd plist, or a Claude Code `/loop` snippet. Malformed crons fail `gk validate` as `schedule-cron`. See `docs/scheduling.md`.
   - Sealed holdout scenarios: `criteria/<id>.holdout.md` registry convention and `refs[].holdout` flag mark validation criteria as eval-gate-only; `gk validate` fails with `HOLDOUT_LEAK` when builder nodes reference them, warns on dead seals (holdouts without an `eval-gate` node), and planner payloads strip sealed refs from non-eval-gate nodes. See `docs/holdout-scenarios.md`.
