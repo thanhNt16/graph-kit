@@ -138,6 +138,7 @@
   <a class="nav-hide" href="#evidence">Evidence &amp; Gates</a>
   <a class="nav-hide" href="#ledger">Resume</a>
   <a class="nav-hide" href="#memory">Memory</a>
+  <a class="nav-hide" href="#factory">Factory</a>
   <a class="nav-hide" href="#hosts">Hosts</a>
   <a href="#cli">CLI</a>
   <a class="nav-gh" href="https://github.com/thanhNt16/graph-kit">GitHub ↗</a>
@@ -621,6 +622,46 @@ gk memory recall "auth tokens"    <span class="cmt"># retrieve contextual memory
       <div class="subsys-tag" style="background:rgba(57,208,216,0.15);color:var(--bridge)">CODE GRAPH VIA MCP</div>
       <h3>LSP-Backed Graph Queries</h3>
       <p>Code-graph search, caller/callee tracing, and Cypher queries come from the Codebase Memory MCP server, wired directly into your host session — workflow nodes query it like any other MCP tool.</p>
+    </div>
+  </div>
+</div>
+
+<div class="section" id="factory">
+  <div class="section-label">Software Factory</div>
+  <h2>The Production-Line Layer</h2>
+  <p>Beyond gates and loops, GraphKit ships the operational machinery of an agentic software factory: a machine-checkable backlog, enforced token budgets, a tamper-evident audit chain, sealed eval cases, and deterministic reduce semantics — composed by the <code>software-factory</code> gallery template into an 8-phase production line.</p>
+
+  <div class="bridge-grid">
+    <div class="subsys" style="border-color:var(--acc)">
+      <div class="subsys-tag" style="background:rgba(88,166,255,0.15);color:var(--acc)">BACKLOG &amp; BUDGET</div>
+      <h3>Verifiable Work Queue</h3>
+      <p><code>features.required</code> points gates at a <code>feature-list.json</code> backlog — MERGE is blocked while items stay open, and locked writes survive parallel workers. <code>budget.max_tokens</code> refuses over-capacity dispatches and blocks over-budget merges; briefs carry a remaining-budget line.</p>
+      <div class="code-block" style="margin:0.6rem 0 0"><div class="code-body">gk features list · gk features pass &lt;id&gt;
+gk run status        <span class="cmt"># allocated / remaining / warn</span></div></div>
+    </div>
+
+    <div class="subsys" style="border-color:var(--memory)">
+      <div class="subsys-tag" style="background:rgba(46,160,67,0.15);color:var(--memory)">AUDIT &amp; VERIFICATION</div>
+      <h3>Tamper-Evident Ledger</h3>
+      <p>Every ledger append is hash-chained; <code>gk run verify --evidence</code> replays recorded artifact references and flags missing markers. Trace eval materializes per-node <code>trace/&lt;node&gt;.jsonl</code> so graders judge actions, not just files.</p>
+      <div class="code-block" style="margin:0.6rem 0 0"><div class="code-body">gk run verify --evidence
+gk evidence promote --run &lt;id&gt; --holdout</div></div>
+    </div>
+
+    <div class="subsys" style="border-color:var(--bridge)">
+      <div class="subsys-tag" style="background:rgba(57,208,216,0.15);color:var(--bridge)">DETERMINISTIC CONTROL</div>
+      <h3>Loops, Reduce &amp; Stagnation</h3>
+      <p><code>fan_out.reduce</code> collapses parallel candidates by majority vote, union merge, or first-past-the-post — recorded with per-candidate digests. Loop <code>kind: polling|counting</code> adds deterministic exits, and <code>no_progress_similarity</code> catches paraphrased failures via Jaccard shingles.</p>
+      <div class="code-block" style="margin:0.6rem 0 0"><div class="code-body">gk schedule emit --format github-actions
+gk run poll &lt;loop&gt; · gk run progress</div></div>
+    </div>
+
+    <div class="subsys" style="border-color:var(--warn,#d29922)">
+      <div class="subsys-tag" style="background:rgba(210,153,34,0.15);color:#d29922">SEALED EVALUATION</div>
+      <h3>Holdouts &amp; Scored Gates</h3>
+      <p><code>refs[].holdout</code> and <code>criteria/*.holdout.md</code> keep eval cases invisible to builders (<code>HOLDOUT_LEAK</code> fails the gate). <code>evidence.verdict: scored</code> applies weighted criteria above a required-keys floor; <code>gk evidence promote</code> turns any blocked run into a permanent regression scenario.</p>
+      <div class="code-block" style="margin:0.6rem 0 0"><div class="code-body">gk template materialize software-factory
+<span class="cmt"># scout → architect → gate → build → integrate → eval → iterate → merge</span></div></div>
     </div>
   </div>
 </div>

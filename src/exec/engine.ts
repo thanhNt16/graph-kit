@@ -1,4 +1,5 @@
 import { execSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import type { PlanGraph, PlannedNode, PlanWave } from "../compiler/plan.js";
@@ -17,6 +18,7 @@ import {
   type TraceLine,
 } from "../runs/ledger.js";
 import { recordNodeRound } from "../runs/loops.js";
+import { materializeNodeTrace } from "../runs/trace-eval.js";
 import type { Graph } from "../schemas/graph.schema.js";
 import type { DispatchOutcome, InteractiveHooks, NodeRun, Runner, RunVerdict, WaveRun } from "./types.js";
 
@@ -92,6 +94,72 @@ function renderUpstream(run: NodeRun): string {
   return `## ${run.id} — ${run.status}\n${(run.outcome?.output ?? "").trim()}`;
 }
 
+/** fan_out.reduce joins: `append` concatenates member outputs in brief order;
+ *  `merge` concatenates then deduplicates normalized lines (trim, collapse
+ *  whitespace, drop empty) keeping first-seen order; `vote` picks the whole
+ *  output shared by the most members after normalization — a tie resolves to
+ *  the first member in brief order and is flagged in the join notes. */
+interface FanMember {
+  id: string;
+  outcome: DispatchOutcome;
+}
+
+const normalizeLine = (line: string): string => line.trim().replace(/\s+/gu, " ");
+const normalizeWhole = (output: string): string => normalizeLine(output.replace(/\s+/gu, " "));
+
+function reduceFanOut(
+  reduce: "append" | "merge" | "vote",
+  members: FanMember[],
+): { output: string; notes: string | null } {
+  if (reduce === "merge") {
+    const seen = new Set<string>();
+    const lines: string[] = [];
+    let dupes = 0;
+    for (const member of members) {
+      for (const raw of member.outcome.output.split("\n")) {
+        const line = normalizeLine(raw);
+        if (line.length === 0) continue;
+        if (seen.has(line)) {
+          dupes++;
+          continue;
+        }
+        seen.add(line);
+        lines.push(line);
+      }
+    }
+    return { output: lines.join("\n"), notes: `reduce=merge lines=${lines.length} deduped=${dupes}` };
+  }
+  if (reduce === "vote") {
+    const ballots = members.map((m) => ({ member: m, digest: normalizeWhole(m.outcome.output) }));
+    const tally = new Map<string, { count: number; first: number }>();
+    for (const [i, b] of ballots.entries()) {
+      const t = tally.get(b.digest);
+      if (t) t.count++;
+      else tally.set(b.digest, { count: 1, first: i });
+    }
+    let winner = ballots[0]!;
+    let top = 0;
+    let tie = false;
+    for (const t of tally.values()) {
+      if (t.count > top) {
+        top = t.count;
+        tie = false;
+        winner = ballots[t.first]!;
+      } else if (t.count === top) {
+        tie = true;
+      }
+    }
+    const digests = ballots
+      .map((b) => `${b.member.id}:${createHash("sha256").update(b.digest).digest("hex").slice(0, 12)}`)
+      .join(",");
+    return {
+      output: winner.member.outcome.output.trim(),
+      notes: `reduce=vote winner=${winner.member.id} votes=${top}/${members.length}${tie ? " vote_tie=true" : ""} digests=${digests}`,
+    };
+  }
+  return { output: members.map((m) => m.outcome.output.trim()).join("\n\n"), notes: null };
+}
+
 /** Brief template render: `{brief.title}` / `{brief.body}` (any `brief.X`
  *  field) substituted; unknown fields render empty. */
 function renderBrief(template: string, brief: Record<string, unknown>): string {
@@ -103,7 +171,10 @@ function renderBrief(template: string, brief: Record<string, unknown>): string {
 
 export async function runGraph(plan: PlanGraph, opts: RunGraphOptions): Promise<RunVerdict> {
   const { cwd, runner, judge, interactive, graph } = opts;
-  const runId = opts.runId ? attachRun(cwd, opts.runId) : startRun(cwd, opts.graphPath ?? join(cwd, "graph.yaml")).id;
+  const budget = graph?.budget ?? null;
+  const runId = opts.runId
+    ? attachRun(cwd, opts.runId)
+    : startRun(cwd, opts.graphPath ?? join(cwd, "graph.yaml"), undefined, undefined, budget ?? undefined).id;
   const evidenceDir = graph?.outputs.evidence_dir ?? DEFAULT_EVIDENCE_DIR;
 
   const nodeRuns = new Map<string, NodeRun>();
@@ -112,6 +183,14 @@ export async function runGraph(plan: PlanGraph, opts: RunGraphOptions): Promise<
   let injection: string | null = null;
   let gateUnapproved = false;
   let challengeSeen = false;
+  // Run-level context budget (planning currency): each node's declared
+  // budget_tokens charges against the graph's max_tokens cap once, at
+  // dispatch-commit time — skipped nodes never charge, retries charge once.
+  // Overrun trips the run: the node finishes fail/budget_exceeded and the
+  // wave loop stops before the next wave.
+  let allocated = 0;
+  let budgetTripped: string | null = null;
+  let budgetWarned = false;
 
   // -- ledger adapters -----------------------------------------------------
 
@@ -158,12 +237,15 @@ export async function runGraph(plan: PlanGraph, opts: RunGraphOptions): Promise<
     outcome?: DispatchOutcome,
     notes?: string | null,
     trace = true,
+    runHooks = true,
   ): NodeRun {
     if (trace) traceLine(node, status, wave.index, { outcome, notes, attempt: attempts > 0 ? attempts : null });
     const run: NodeRun = { id: node.id, wave: wave.index, status, outcome, attempts };
     nodeRuns.set(node.id, run);
     interactive?.onNodeResult(run);
-    if (status !== "skipped") runNodeHooks(node);
+    // runHooks=false on pre-dispatch rejections (budget charge): an unstarted
+    // node must not fire on_node_complete side effects reserved for real work.
+    if (status !== "skipped" && runHooks) runNodeHooks(node);
     return run;
   }
 
@@ -258,6 +340,21 @@ export async function runGraph(plan: PlanGraph, opts: RunGraphOptions): Promise<
   const judgePredicate = (node: PlannedNode, predicate: string, upstream: ReadonlyMap<string, NodeRun>) =>
     judge ? judge(node, predicate, upstream) : Promise.resolve(false);
 
+  /** Trace-level evaluation: eval-role nodes (planned `trace` scope set) get
+   *  a materialized, scoped view of the run journal regenerated each round at
+   *  `.graphkit/runs/<id>/trace/<node>.jsonl` — derived data, never appended,
+   *  so resume/retry rewrites the same deterministic file. Returns the brief
+   *  line pointing the grader at it, or null for non-eval nodes. */
+  function traceNoteFor(node: PlannedNode): string | null {
+    if (node.trace == null) return null;
+    const file = materializeNodeTrace(cwd, runId, node.id, node.trace.scope);
+    return (
+      `## Run trace\n` +
+      `The run journal for the nodes you evaluate (${node.trace.scope.join(", ") || "none"}) is materialized at ${file} — ` +
+      `a derived, scoped view of the run ledger. Grade their actions (dispatches, rounds, evidence digests, advisor escalations), not just their artifacts.`
+    );
+  }
+
   /** Upstream context within budget_tokens (chars ~= tokens*4): compact
    *  per-node skeletons when over, spill the full render to
    *  .graphkit/artifacts/<node>-input.md and pass the path in the objective. */
@@ -282,6 +379,27 @@ export async function runGraph(plan: PlanGraph, opts: RunGraphOptions): Promise<
       spillNote: `Full upstream context exceeded budget_tokens=${node.budget_tokens}; per-node full text: ${spill}`,
     };
   }
+
+  /** Charge `node`'s declared budget_tokens against the run cap. Returns
+   *  false when the charge would overrun — the caller finishes the node
+   *  fail/budget_exceeded and budgetTripped stops the wave loop. */
+  function chargeBudget(node: PlannedNode): boolean {
+    if (budget == null) return true;
+    const declared = node.budget_tokens ?? 0;
+    if (allocated + declared > budget.max_tokens) {
+      budgetTripped = node.id;
+      return false;
+    }
+    allocated += declared;
+    if (!budgetWarned && allocated >= budget.warn_at * budget.max_tokens) {
+      budgetWarned = true;
+      console.error(`[engine] context budget ${allocated}/${budget.max_tokens} allocated (warn_at ${budget.warn_at})`);
+    }
+    return true;
+  }
+
+  const budgetExceededNotes = (node: PlannedNode) =>
+    `budget_exceeded: node ${node.id} declared ${node.budget_tokens ?? 0} would push allocated ${allocated} past max ${budget?.max_tokens}`;
 
   function detectChallenge(outcome: DispatchOutcome): { target: string; finding: string; line: string } | null {
     const lines = lastLines(outcome.output);
@@ -342,12 +460,9 @@ export async function runGraph(plan: PlanGraph, opts: RunGraphOptions): Promise<
 
   /** fan_out: read [{id,title,body}] briefs from the source node's evidence,
    *  dispatch every brief as a parallel sub-task (no per-brief trace lines -
-   *  the parent node traces once), join outputs in brief order. Missing or
-   *  malformed briefs are a failed round, not a crash.
-   *
-   *  ponytail: fan.reduce (append/merge/vote) rides as plain append; the
-   *  vote/merge reducers need multi-run aggregation semantics nobody has
-   *  specified yet - add when a graph actually declares them. */
+   *  the parent node traces once), join outputs in brief order via the
+   *  declared fan_out.reduce mode (append/merge/vote — see reduceFanOut).
+   *  Missing or malformed briefs are a failed round, not a crash. */
   async function runFanOut(
     node: PlannedNode,
     wave: PlanWave,
@@ -391,7 +506,7 @@ export async function runGraph(plan: PlanGraph, opts: RunGraphOptions): Promise<
       };
 
     const dispatched = await Promise.all(
-      briefs.map((raw, i) => {
+      briefs.map(async (raw, i) => {
         const brief = (raw ?? {}) as Record<string, unknown>;
         const id = typeof brief.id === "string" && brief.id.trim() ? brief.id.trim() : `n${i}`;
         const target: PlannedNode = {
@@ -406,12 +521,12 @@ export async function runGraph(plan: PlanGraph, opts: RunGraphOptions): Promise<
           evidence: [],
           hooks: [],
         };
-        return dispatchNode(target, upstream, null, () => null, false);
+        const result = await dispatchNode(target, upstream, null, () => null, false);
+        return { id: target.id, ...result };
       }),
     );
     const attempts = dispatched.reduce((n, d) => n + d.attempts, 0);
     const durationMs = Math.max(0, ...dispatched.map((d) => d.outcome.durationMs));
-    const output = dispatched.map((d) => d.outcome.output.trim()).join("\n\n");
     const failed = dispatched.filter((d) => !d.outcome.ok);
     if (failed.length > 0)
       return {
@@ -423,9 +538,10 @@ export async function runGraph(plan: PlanGraph, opts: RunGraphOptions): Promise<
         },
         attempts,
       };
-    const joined: DispatchOutcome = { ok: true, output, exitCode: 0, durationMs };
+    const reduced = reduceFanOut(fan.reduce, dispatched);
+    const joined: DispatchOutcome = { ok: true, output: reduced.output, exitCode: 0, durationMs };
     await stampEvidence(node, joined);
-    traceLine(node, "ok", wave.index, { outcome: joined, attempt: attempts });
+    traceLine(node, "ok", wave.index, { outcome: joined, attempt: attempts, notes: reduced.notes });
     return { outcome: joined, attempts };
   }
 
@@ -434,6 +550,7 @@ export async function runGraph(plan: PlanGraph, opts: RunGraphOptions): Promise<
   async function runCurator(wave: PlanWave): Promise<NodeRun> {
     const node = wave.nodes[0];
     if (node == null) throw new GraphKitError("BAD_PLAN", "curator wave carries no node");
+    if (!chargeBudget(node)) return finish(node, wave, "fail", 0, undefined, budgetExceededNotes(node), true, false);
     const forbidden = plan.memory?.null_intervention_allowed === false;
     const target: PlannedNode = {
       ...node,
@@ -479,6 +596,8 @@ export async function runGraph(plan: PlanGraph, opts: RunGraphOptions): Promise<
       }
     }
 
+    if (!chargeBudget(node)) return finish(node, wave, "fail", 0, undefined, budgetExceededNotes(node), true, false);
+
     const { upstream, spillNote } = contextFor(node, new Map([...nodeRuns].filter(([, r]) => r.outcome != null)));
     const loop = node.loop?.enabled === true ? node.loop : null;
     const maxRounds = loop ? Math.max(1, loop.max_rounds) : 1;
@@ -491,6 +610,7 @@ export async function runGraph(plan: PlanGraph, opts: RunGraphOptions): Promise<
       const objective = [
         `${memoryPrefix}${node.objective}`,
         spillNote,
+        traceNoteFor(node),
         guidance.length > 0 ? `## Advisor guidance\n${guidance}` : null,
       ]
         .filter((s): s is string => s != null)
@@ -545,6 +665,7 @@ export async function runGraph(plan: PlanGraph, opts: RunGraphOptions): Promise<
 
   try {
     for (const wave of plan.waves) {
+      if (budgetTripped != null) break; // a tripped curator wave never reaches the fail barrier below
       interactive?.onWaveStart(wave);
       const waveRun: WaveRun = { index: wave.index, curator: wave.curator === true, nodes: [] };
       waves.push(waveRun);
@@ -575,6 +696,7 @@ export async function runGraph(plan: PlanGraph, opts: RunGraphOptions): Promise<
       .map((d) => d.node)
       .filter((n) => n.length > 0 && !traced.has(n));
     const verdict: RunVerdict = { status, runId, waves, nodes: all, unresolved };
+    if (budgetTripped != null) verdict.stop_reason = "budget_exceeded";
     try {
       endRun(cwd, status);
     } catch (e) {

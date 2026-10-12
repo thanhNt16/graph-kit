@@ -4,6 +4,7 @@ import { join } from "node:path";
 import YAML from "yaml";
 import { GraphKitError } from "../errors.js";
 import { parseMarker } from "../evidence/marker.js";
+import { learnIndex } from "../learn/index.js";
 import type { Graph } from "../schemas/graph.schema.js";
 import { GraphSchema, type LoopGroup } from "../schemas/graph.schema.js";
 import { saveSessionGraph, setActiveGraphId } from "../store/index.js";
@@ -12,6 +13,7 @@ import {
   activeRun,
   hasDisposition,
   isNodeLine,
+  progressRecitation,
   readAdvisorEvents,
   readDispatches,
   readRunMeta,
@@ -64,7 +66,7 @@ export function resumeRun(
   validateDerivedGraph(derived);
   const session = saveSessionGraph(derived, derived.metadata.name, cwd);
   setActiveGraphId(session.id, cwd);
-  const run = startRun(cwd, session.path, new Date().toISOString(), runId);
+  const run = startRun(cwd, session.path, new Date().toISOString(), runId, derived.budget);
   return {
     resumed: true,
     session,
@@ -323,6 +325,11 @@ export function deriveResumeGraph(rec: Reconciliation, parentRunId: string): Gra
       unadjudicated.set(line.node, [...(unadjudicated.get(line.node) ?? []), line]);
   const advisorLast = new Map<string, AdvisorEvent>();
   for (const ev of readAdvisorEvents(rec.cwd, rec.runId)) advisorLast.set(ev.node, ev);
+  // Recitation carryover: the parent run's progress.md tail rides the derived
+  // objectives — a resumed worker starts from what prior nodes logged — and
+  // the learned-items index tells it which adopted patterns apply.
+  const recite = progressRecitation(rec.cwd, rec.graph.progress_tail, rec.runId);
+  const learnIdx = learnIndex(rec.cwd, rec.graph.learn_index_tail);
   const nodes: Graph["nodes"] = {};
   for (const [name, node] of Object.entries(rec.graph.nodes)) {
     if (!pending.has(name)) continue;
@@ -333,6 +340,7 @@ export function deriveResumeGraph(rec: Reconciliation, parentRunId: string): Gra
         (lastOk.get(d)?.evidence ?? []).map((k) => ({
           path: join(rec.evidenceDir, `${k}.md`),
           purpose: `resumed evidence from node ${d} (run ${parentRunId})`,
+          holdout: false,
         })),
       );
     // fan_out.briefs_from naming a dropped (satisfied) node would dangle — its
@@ -346,7 +354,10 @@ export function deriveResumeGraph(rec: Reconciliation, parentRunId: string): Gra
       carry.push(
         `- advisor fired at round ${adv.round} (tier ${adv.tier}${adv.streak ? `, streak ${adv.streak}` : ""})`,
       );
-    const objective = carry.length ? `${node.objective}\n\n## Resume context\n${carry.join("\n")}` : node.objective;
+    const objective =
+      (carry.length ? `${node.objective}\n\n## Resume context\n${carry.join("\n")}` : node.objective) +
+      (recite ? `\n\n${recite}` : "") +
+      (learnIdx ? `\n\n${learnIdx}` : "");
     nodes[name] = {
       ...nodeRest,
       objective,
@@ -365,7 +376,9 @@ export function deriveResumeGraph(rec: Reconciliation, parentRunId: string): Gra
     if (kept.length === 0) return [];
     const declared = new Set(kept.flatMap((n) => nodes[n]?.evidence ?? []));
     const gate = group.gate_evidence?.filter((k) => declared.has(k));
-    if (!group.stop_when && (!gate || gate.length === 0)) return [];
+    // Only judged groups lose their exit condition with their gate/stop text —
+    // mechanical kinds (polling/counting) keep evaluating their own check.
+    if (group.kind === "judged" && !group.stop_when && (!gate || gate.length === 0)) return [];
     const next: LoopGroup = { ...group, nodes: kept };
     if (gate && gate.length > 0) next.gate_evidence = gate;
     else delete next.gate_evidence;

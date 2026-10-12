@@ -84,8 +84,8 @@ describe("criteria schema + validation", () => {
     writeFileSync(join(cwd, "criteria", "a.md"), "---\nkind: screenshot\n---\nshot of the thing\n");
     writeFileSync(join(cwd, "criteria", "b.md"), "just a body\n");
     const m = loadCriteria(cwd, ["a", "b", "missing"]);
-    expect(m.get("a")).toEqual({ id: "a", description: "shot of the thing", kind: "screenshot" });
-    expect(m.get("b")).toEqual({ id: "b", description: "just a body", kind: "report" });
-    expect(m.get("missing")).toEqual({ id: "missing", description: "", kind: "report" });
+    expect(m.get("a")).toEqual({ id: "a", description: "shot of the thing", kind: "screenshot", holdout: false });
+    expect(m.get("b")).toEqual({ id: "b", description: "just a body", kind: "report", holdout: false });
+    expect(m.get("missing")).toEqual({ id: "missing", description: "", kind: "report", holdout: false });
   });
 });

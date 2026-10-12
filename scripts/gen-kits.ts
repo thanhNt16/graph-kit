@@ -141,6 +141,8 @@ interface AgentMeta {
   graphRoles: string[];
   evidenceKeys: string[];
   source: string;
+  /** Claude Code agent frontmatter `tools:` allowlist (omitted = all tools). */
+  tools?: string[];
 }
 
 const AGENT_META: Record<string, AgentMeta> = {
@@ -179,6 +181,18 @@ const AGENT_META: Record<string, AgentMeta> = {
     graphRoles: ["synthesizer", "worker"],
     evidenceKeys: ["report", "executive_summary", "recommendations"],
     source: "agency-agents/specialized-specialized-document-generator",
+  },
+  "gk-reflector": {
+    title: "gk Reflector",
+    description:
+      "Self-learning distiller (read-only: Read/Grep/Glob): reads the captured episode window, compares against the existing skill description index, and stages durable lessons as intents via `gk selflearn stage` — the only non-deterministic piece of the selflearn pipeline; it can only stage, never land.",
+    tier: "sonnet",
+    graphRoles: ["worker"],
+    evidenceKeys: ["intents_staged", "no_durable_lessons"],
+    source: "autoharness/agents-reflector (MIT port)",
+    // Read/Grep/Glob only for analysis; Bash is the sole emit path
+    // (`gk selflearn stage` — validated intents, never a direct write).
+    tools: ["Read", "Grep", "Glob", "Bash"],
   },
   "memory-curator": {
     title: "Memory Curator",
@@ -450,6 +464,7 @@ function emitAgent(slug: string, raw: string, host: HostId): string {
     `evidence_keys: [${meta.evidenceKeys.join(", ")}]`,
     `source: ${meta.source}`,
   ];
+  if (meta.tools) fm.splice(2, 0, `tools: ${meta.tools.join(", ")}`);
   fm.push("---");
   return `${fm.join("\n")}\n\n${body}`;
 }

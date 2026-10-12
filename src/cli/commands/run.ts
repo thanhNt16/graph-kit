@@ -1,28 +1,41 @@
 import { execFileSync } from "node:child_process";
+import { createHash } from "node:crypto";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import type { CAC } from "cac";
 import { isBlocking, validateGraph } from "../../compiler/validate.js";
 import { GraphKitError } from "../../errors.js";
+import { parseMarker } from "../../evidence/marker.js";
+import { learnIndex, learnRunSummary } from "../../learn/index.js";
+import { runLifecycle } from "../../memory/lifecycle-store.js";
 import { analyzeRun } from "../../runs/analyze.js";
+import { budgetStatus, declaredNodeBudget } from "../../runs/budget.js";
 import {
   activeRun,
   activeRunPointer,
   appendAdvisor,
   appendDispatch,
   appendNode,
+  appendProgress,
   clearActiveRun,
   type DispatchLine,
   endRun,
+  isNodeLine,
   landNode,
+  progressTail,
   readAdvisorEvents,
   readDispatches,
+  readProgress,
   readRunMeta,
+  readTrace,
   stampTakeover,
   startRun,
+  verifyTraceChain,
 } from "../../runs/ledger.js";
-import { recordRound } from "../../runs/loops.js";
+import { recordPoll, recordRound } from "../../runs/loops.js";
 import { reconcileRun, resumeRun } from "../../runs/resume.js";
 import type { Graph } from "../../schemas/graph.schema.js";
+import { MemoryConfig, MemoryLifecycleConfig } from "../../schemas/memory.schema.js";
 import { leafUsageFor, subcommandsFor } from "../command-registry.js";
 import { toGraphKitError } from "../diagnostics.js";
 import { parseInputs, recordRunInputs, requiredMissing } from "../graph-inputs.js";
@@ -89,9 +102,45 @@ export function liveDispatchPids(
     .filter((pid) => isAlive(pid));
 }
 
+/** `--evidence` half of `gk run verify`: re-hash every artifact file the run's
+ *  evidence markers pinned (marker run_id === run id) and flag byte drift or
+ *  missing files. Markers are the signed claims; artifacts are the bytes. */
+function verifyRunEvidence(
+  cwd: string,
+  id: string,
+  graphFlag?: string,
+): { checked: number; mismatches: { key: string; artifact: string; expected: string; actual: string | null }[] } {
+  const meta = readRunMeta(cwd, id);
+  const graphPath = meta.graph_path ?? resolveGraphPath(cwd, graphFlag).path;
+  const evidenceDir = join(cwd, loadGraph(graphPath).outputs.evidence_dir);
+  const mismatches: { key: string; artifact: string; expected: string; actual: string | null }[] = [];
+  let checked = 0;
+  if (!existsSync(evidenceDir)) return { checked, mismatches };
+  for (const file of readdirSync(evidenceDir).filter((f) => f.endsWith(".md"))) {
+    const marker = parseMarker(readFileSync(join(evidenceDir, file), "utf-8"));
+    if (!marker || marker.run_id !== id || !marker.artifact || !marker.artifact_sha256) continue;
+    checked++;
+    const abs = join(evidenceDir, marker.artifact);
+    const actual = existsSync(abs) ? createHash("sha256").update(readFileSync(abs)).digest("hex") : null;
+    if (actual !== marker.artifact_sha256)
+      mismatches.push({ key: marker.key, artifact: marker.artifact, expected: marker.artifact_sha256, actual });
+  }
+  // Deleting a marker must not silently verify: every evidence key the run's
+  // node lines claimed needs its marker file to exist on disk.
+  for (const key of new Set(
+    readTrace(cwd, id)
+      .filter(isNodeLine)
+      .flatMap((l) => l.evidence),
+  )) {
+    if (!existsSync(join(evidenceDir, `${key}.md`)))
+      mismatches.push({ key, artifact: `${key}.md`, expected: "marker file", actual: null });
+  }
+  return { checked, mismatches };
+}
+
 export function registerRunCommands(cli: CAC) {
   cli
-    .command("run [subcommand] [args...]", `Run ledger commands\nSubcommands: ${subcommandsFor("run")}`)
+    .command("run [subcommand] [...args]", `Run ledger commands\nSubcommands: ${subcommandsFor("run")}`)
     .option("--graph <path>", "graph.yaml path (default: ./graph.yaml)")
     // ==== FixGraph slice (audit F4): --input wiring — helpers in cli/graph-inputs.ts ====
     .option("--input <pair>", "run input as k=v (repeatable; enforced against graph.inputs)")
@@ -101,7 +150,7 @@ export function registerRunCommands(cli: CAC) {
     .option("--wave <n>", "wave index")
     .option("--agent <agent>", "agent id")
     .option("--model <model>", "model tier")
-    .option("--evidence <keys>", "comma-separated evidence keys")
+    .option("--evidence [keys]", "node: comma-separated evidence keys — verify: re-hash run evidence artifacts")
     .option("--duration-ms <n>", "node duration in ms")
     .option("--notes <text>", "free-text note")
     .option("--json", "JSON output")
@@ -113,6 +162,8 @@ export function registerRunCommands(cli: CAC) {
     .option("--via <via>", "dispatch: task|extension")
     .option("--pid <pid>", "dispatch: child pid")
     .option("--from <run>", "take: run id to take over")
+    .option("--node <id>", "progress: node id the note is attributed to")
+    .option("--tail <n>", "progress: print only the last N lines")
     .example(leafUsageFor("run"))
     .action((subcommand, args, opts) => {
       const cwd = process.cwd();
@@ -156,13 +207,35 @@ export function registerRunCommands(cli: CAC) {
             );
             return;
           }
-          const started = startRun(cwd, graphPath);
+          // The graph's declared budget is recorded into the run's meta so
+          // status/enforcement read it even if graph.yaml later drifts.
+          const started = startRun(cwd, graphPath, undefined, undefined, graph.budget);
           if (Object.keys(provided).length > 0) recordRunInputs(started.dir, provided);
           // Stale-kit installs run outdated skills/extensions (observed: a run
           // executed with a pre-orchestration-fields gk-execute). Surface it at
           // the one moment the orchestrator is guaranteed to look — run start.
           const warnings = kitVersionWarnings(cwd);
-          emit(ok(warnings.length ? { ...started, warnings } : started));
+          // Cheap single scan: the adherence lifecycle also runs once per run
+          // start so the learned-artifact store stays bounded between manual
+          // `gk memory lifecycle` passes. Advisory only — a corrupt memory
+          // store must never block run start.
+          try {
+            const memCfg = MemoryConfig.safeParse(graph.topology_config?.memory);
+            const scan = runLifecycle(cwd, MemoryLifecycleConfig.parse(memCfg.success ? memCfg.data.lifecycle : {}));
+            if (scan.archived > 0) warnings.push(`lifecycle archived ${scan.archived} learned item(s)`);
+          } catch {
+            /* advisory — never block startRun */
+          }
+          // Learned-items index rides run start the same way the progress
+          // recitation rides briefs: run-start context sees landed patterns.
+          const learnIdx = learnIndex(cwd, graph.learn_index_tail);
+          emit(
+            ok({
+              ...started,
+              ...(learnIdx ? { learn_index: learnIdx } : {}),
+              ...(warnings.length ? { warnings } : {}),
+            }),
+          );
           return;
         }
         if (subcommand === "node") {
@@ -228,12 +301,13 @@ export function registerRunCommands(cli: CAC) {
             agent: opts.agent ?? null,
             model: opts.model ?? null,
             status: opts.status,
-            evidence: opts.evidence
-              ? String(opts.evidence)
-                  .split(",")
-                  .map((s) => s.trim())
-                  .filter(Boolean)
-              : [],
+            evidence:
+              typeof opts.evidence === "string"
+                ? opts.evidence
+                    .split(",")
+                    .map((s: string) => s.trim())
+                    .filter(Boolean)
+                : [],
             duration_ms: opts.durationMs == null ? null : Number(opts.durationMs),
             attempt: opts.attempt == null ? undefined : Number(opts.attempt),
             notes: opts.notes ?? null,
@@ -255,6 +329,36 @@ export function registerRunCommands(cli: CAC) {
           if (g && !g.ids.includes(String(node))) {
             emit(fail("UNKNOWN_NODE", `node '${node}' not in graph ${g.path}`, { available: g.ids }));
             return;
+          }
+          // Host-driven runs honor the same declared cap the engine enforces:
+          // charging this node's budget_tokens must not push allocated past
+          // max. Re-dispatch of an already-counted node charges 0 (retries
+          // never double-spend — budgetStatus dedupes by node id).
+          {
+            const dir = activeRun(cwd);
+            const runId = dir ? basename(dir) : null;
+            const meta = runId ? readRunMeta(cwd, runId) : null;
+            const budget = runId && meta ? budgetStatus(cwd, runId, meta) : null;
+            if (budget) {
+              const charge = declaredNodeBudget(meta?.graph_path, String(node));
+              const alreadyDispatched =
+                readDispatches(cwd, runId!).some((d) => d.node === String(node)) ||
+                readTrace(cwd, runId!).some((l) => isNodeLine(l) && l.node === String(node));
+              const projected = budget.allocated + (alreadyDispatched ? 0 : charge);
+              if (projected > budget.max) {
+                emit(
+                  fail("BUDGET_EXCEEDED", `dispatch of '${node}' would exceed the run's context budget`, {
+                    run_id: runId,
+                    node: String(node),
+                    charge,
+                    allocated: budget.allocated,
+                    projected,
+                    max: budget.max,
+                  }),
+                );
+                return;
+              }
+            }
           }
           emit(
             ok(
@@ -338,6 +442,27 @@ export function registerRunCommands(cli: CAC) {
             emit(fail("BAD_STATUS", "end requires --status merged|blocked|failed"));
             return;
           }
+          // An over-budget run may not close as merged — the cap is part of
+          // the run's contract, not advisory telemetry.
+          if (status === "merged") {
+            const dir = activeRun(cwd);
+            const runId = dir ? basename(dir) : null;
+            const meta = runId ? readRunMeta(cwd, runId) : null;
+            const budget = runId && meta ? budgetStatus(cwd, runId, meta) : null;
+            if (budget?.exceeded) {
+              emit(
+                fail(
+                  "BUDGET_EXCEEDED",
+                  `run ${runId} allocated ${budget.allocated}/${budget.max} declared tokens — end it blocked|failed, not merged`,
+                  {
+                    run_id: runId,
+                    ...budget,
+                  },
+                ),
+              );
+              return;
+            }
+          }
           emit(ok({ ...endRun(cwd, status), ...orphanedGkArtifacts(cwd) }));
           return;
         }
@@ -376,6 +501,25 @@ export function registerRunCommands(cli: CAC) {
           }
           return;
         }
+        if (subcommand === "poll") {
+          const arg = Array.isArray(args) ? args[0] : args;
+          const idx = Number(arg);
+          if (arg == null || arg === "") {
+            emit(fail("MISSING_ARG", "poll requires a loop-group index"));
+            return;
+          }
+          if (!Number.isInteger(idx) || idx < 0) {
+            emit(fail("BAD_ARG", "poll requires an integer loop-group index >= 0"));
+            return;
+          }
+          try {
+            emit(ok(recordPoll(cwd, idx)));
+          } catch (e) {
+            const gke = toGraphKitError(e, "RUN_ERROR");
+            emit(fail(gke.code, gke.message, gke.details));
+          }
+          return;
+        }
         if (subcommand === "status") {
           const ptr = activeRunPointer(cwd);
           const dir = ptr && !ptr.dangling ? ptr.dir : null;
@@ -393,15 +537,92 @@ export function registerRunCommands(cli: CAC) {
             }
           }
           const meta = dir ? readRunMeta(cwd, basename(dir)) : null;
+          const budget = dir && meta ? budgetStatus(cwd, basename(dir), meta) : null;
+          // Learn proposals this run produced — rejected ones stay visible
+          // here instead of disappearing from the account.
+          const learn = dir ? learnRunSummary(cwd, basename(dir)) : null;
           emit(
             ok({
               active: dir,
               active_age_ms: meta ? Date.now() - Date.parse(meta.started_at) : null,
               advisor_events,
               resumes_chain: chain,
+              // Planning-currency accounting over declared budget_tokens —
+              // present only when the run recorded a graph budget.
+              ...(budget ? { budget } : {}),
+              ...(learn ? { learn } : {}),
               ...(ptr?.dangling ? { dangling: true, dangling_run: basename(ptr.dir) } : {}),
             }),
           );
+          return;
+        }
+        if (subcommand === "progress") {
+          const list = Array.isArray(args) ? args : [args];
+          const target = list[0];
+          const note = list.slice(1).join(" ").trim();
+          if (!target) {
+            emit(fail("MISSING_ARG", "progress requires a run id"));
+            return;
+          }
+          if (note) {
+            emit(ok(appendProgress(cwd, String(target), note, opts.node == null ? undefined : String(opts.node))));
+            return;
+          }
+          // Read mode: whole file, or the last --tail N progress entries.
+          // Plain stdout (like `graph ascii`) — the file IS the payload.
+          readRunMeta(cwd, String(target)); // RUN_NOT_FOUND parity for bogus ids
+          if (opts.tail != null) {
+            const n = Number(opts.tail);
+            if (!Number.isInteger(n) || n < 0) {
+              emit(fail("BAD_ARG", "--tail requires an integer >= 0"));
+              return;
+            }
+            console.log(progressTail(cwd, String(target), n).join("\n"));
+          } else {
+            console.log((readProgress(cwd, String(target)) ?? "").replace(/\n+$/, ""));
+          }
+          return;
+        }
+        if (subcommand === "verify") {
+          const target = Array.isArray(args) ? args[0] : args;
+          if (!target) {
+            emit(fail("MISSING_ARG", "verify requires a run id"));
+            return;
+          }
+          try {
+            const chain = verifyTraceChain(cwd, String(target));
+            // --evidence: re-hash every artifact this run's markers stamped.
+            // A bare trailing `--evidence` parses as boolean true; a value form
+            // is accepted too (node shares the flag for evidence keys).
+            const wantEvidence = opts.evidence != null && opts.evidence !== false;
+            let evidence: { checked: number; mismatches: unknown[] } | null = null;
+            if (wantEvidence) evidence = verifyRunEvidence(cwd, String(target), opts.graph);
+            if (!chain.ok) {
+              const d = chain.divergence!;
+              emit(
+                fail("RUN_TAMPERED", `run ${target} trace diverges at line ${d.index} (${d.kind})`, {
+                  run: target,
+                  ...chain,
+                  ...(evidence ? { evidence } : {}),
+                }),
+              );
+              return;
+            }
+            if (evidence && evidence.mismatches.length > 0) {
+              emit(
+                fail("RUN_TAMPERED", `run ${target} evidence diverges: ${evidence.mismatches.length} artifact(s)`, {
+                  run: target,
+                  ...chain,
+                  evidence,
+                }),
+              );
+              return;
+            }
+            emit(ok({ run: target, verdict: "OK", ...chain, ...(evidence ? { evidence } : {}) }));
+          } catch (e) {
+            const gke = toGraphKitError(e, "RUN_ERROR");
+            emit(fail(gke.code, gke.message, gke.details));
+          }
           return;
         }
         if (subcommand === "analyze") {

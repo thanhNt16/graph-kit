@@ -43,12 +43,13 @@
     },
     {
       "name": "memory",
-      "description": "Memory commands\nSubcommands: trace touch recall consolidate",
+      "description": "Memory commands\nSubcommands: trace touch recall consolidate lifecycle archive revive",
       "options": [
         "--json",
         "--explain",
         "--html",
-        "--origin <origin>"
+        "--origin <origin>",
+        "--dry-run"
       ]
     },
     {
@@ -82,13 +83,29 @@
     },
     {
       "name": "evidence",
-      "description": "Evidence commands\nSubcommands: add invalidate report",
+      "description": "Evidence commands\nSubcommands: add invalidate report promote",
       "options": [
         "--key <k>",
         "--node <n>",
+        "--run <id>",
+        "--out <dir>",
+        "--holdout",
         "--note <text>",
         "--html",
         "--graph <file>",
+        "--json"
+      ]
+    },
+    {
+      "name": "features",
+      "description": "Feature-list commands\nSubcommands: init add list next pass status",
+      "options": [
+        "--graph <file>",
+        "--note <text>",
+        "--id <id>",
+        "--description <text>",
+        "--evidence <key>",
+        "--force",
         "--json"
       ]
     },
@@ -101,7 +118,7 @@
     },
     {
       "name": "run",
-      "description": "Run ledger commands\nSubcommands: start node dispatch land end status resume take round analyze",
+      "description": "Run ledger commands\nSubcommands: start node dispatch land end status resume take round poll progress analyze verify",
       "options": [
         "--graph <path>",
         "--input <pair>",
@@ -111,7 +128,7 @@
         "--wave <n>",
         "--agent <agent>",
         "--model <model>",
-        "--evidence <keys>",
+        "--evidence [keys]",
         "--duration-ms <n>",
         "--notes <text>",
         "--json",
@@ -122,7 +139,9 @@
         "--commit <sha>",
         "--via <via>",
         "--pid <pid>",
-        "--from <run>"
+        "--from <run>",
+        "--node <id>",
+        "--tail <n>"
       ]
     },
     {
@@ -143,6 +162,50 @@
       "options": [
         "--dismiss <id>",
         "--all",
+        "--json"
+      ]
+    },
+    {
+      "name": "schedule",
+      "description": "Schedule commands\nSubcommands: list emit",
+      "options": [
+        "--json",
+        "--format <format>",
+        "--out <path>"
+      ]
+    },
+    {
+      "name": "queue",
+      "description": "Task-queue commands\nSubcommands: add claim status list done fail",
+      "options": [
+        "--node <claimer>",
+        "--note <text>",
+        "--evidence <keys>",
+        "--state <state>",
+        "--json"
+      ]
+    },
+    {
+      "name": "learn",
+      "description": "Continual-learning proposals\nSubcommands: propose evaluate adopt reject revert list",
+      "options": [
+        "--run <id>",
+        "--note <text>",
+        "--reason <text>",
+        "--json"
+      ]
+    },
+    {
+      "name": "selflearn",
+      "description": "Self-learning pipeline (AutoHarness port)\nSubcommands: stage promote reflect status index context tick capture record",
+      "options": [
+        "--intent <json>",
+        "--session <id>",
+        "--transcript <path>",
+        "--record <text>",
+        "--stdin",
+        "--target <claude|omp>",
+        "--reason <text>",
         "--json"
       ]
     }

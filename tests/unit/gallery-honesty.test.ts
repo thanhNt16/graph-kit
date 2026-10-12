@@ -25,6 +25,7 @@ const REQUIRED_STUBS: Record<string, Record<string, string>> = {
   "doc-sweep": { topic: "CLI commands" },
   "cook-plan": { goal: "Ship the CSV export feature" },
   "refactor-module": { module: "src/store" },
+  "software-factory": { task: "a markdown export pipeline" },
 };
 
 // The honest label per template (audit F3): chains are `custom`, the
@@ -37,6 +38,7 @@ const EXPECTED_LABEL: Record<string, string> = {
   "doc-sweep": "custom",
   "cook-plan": "custom",
   "refactor-module": "custom",
+  "software-factory": "custom",
 };
 
 // Labels that promise a fan-out contract: a graph carrying one must actually

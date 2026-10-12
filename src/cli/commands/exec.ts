@@ -535,6 +535,7 @@ export function registerExecCommand(cli: CAC, deps: ExecDeps = {}): { settle: ()
               `nodes ${verdict.nodes.length} — ok ${by("ok") + by("landed")}, fail ${by("fail")}, skipped ${by("skipped")}, challenge ${by("challenge")}`,
             );
             for (const n of verdict.nodes) console.log(`  ${n.id}  ${n.status}`);
+            if (verdict.stop_reason) console.log(`stop_reason: ${verdict.stop_reason}`);
             console.log(`trace: .graphkit/runs/${verdict.runId}/trace.jsonl`);
             if (verdict.unresolved.length > 0) console.log(`unresolved dispatches: ${verdict.unresolved.join(", ")}`);
           }

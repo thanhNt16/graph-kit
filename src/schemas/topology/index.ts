@@ -30,6 +30,7 @@ const TOPOLOGY_CONFIG_KEYS: Record<TopologyName, string[]> = {
     "memory.expire_policy",
     "memory.every",
     "memory.null_intervention_allowed",
+    "memory.lifecycle",
   ],
   custom: [],
   sdd: [],

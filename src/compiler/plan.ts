@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import YAML from "yaml";
 import { GraphKitError } from "../errors.js";
+import { visibleRefs } from "../evidence/criteria.js";
 import type { Graph } from "../schemas/graph.schema.js";
 
 // Kahn levelization shared by the executor (`graph waves`), the renderers
@@ -26,6 +27,27 @@ export function topoWaves(nodes: Record<string, { depend_on?: string[] } | undef
 
 type NodeDef = Graph["nodes"][string];
 
+// Roles whose dispatch payload carries a `trace` scope — the graders that
+// judge actions, not just artifacts. eval-gate is the authoring contract
+// (compiler rule 7); "eval"/"advisor" ride the same code path when a graph
+// names them.
+const TRACE_ROLES = new Set(["eval-gate", "eval", "advisor"]);
+
+/** Transitive depend_on closure of `id`, sorted — the node set an eval-role
+ *  node is understood to be grading. A malformed graph's cycles are already
+ *  a WAVES_INCOMPLETE error upstream; the visited set here is belt-and-
+ *  suspenders so this walk can never loop. */
+function ancestorScope(nodes: Record<string, NodeDef | undefined>, id: string): string[] {
+  const seen = new Set<string>();
+  const stack = [...(nodes[id]?.depend_on ?? [])];
+  for (let cur = stack.pop(); cur !== undefined; cur = stack.pop()) {
+    if (seen.has(cur)) continue;
+    seen.add(cur);
+    stack.push(...(nodes[cur]?.depend_on ?? []));
+  }
+  return [...seen].sort();
+}
+
 // One planned node: the exact payload shape /gk:execute dispatches against.
 // Every orchestration field rides even when unset (null), so consumers never
 // branch on missing keys — the verbatim-passthrough contract.
@@ -45,6 +67,11 @@ export interface PlannedNode {
   gate: NonNullable<NodeDef["gate"]> | null;
   role: string | null;
   eval: unknown;
+  // Trace-level evaluation: eval-role nodes get the scoped node set their
+  // materialized run journal covers (transitive depend_on closure, sorted) —
+  // the engine regenerates .graphkit/runs/<id>/trace/<node>.jsonl from the
+  // ledger at dispatch. null on builders: they get no journal view.
+  trace: { scope: string[] } | null;
   effort: NonNullable<NodeDef["effort"]>;
   timeout_ms: number | null;
   constraints: NodeDef["constraints"];
@@ -63,6 +90,32 @@ export interface PlanWave {
   nodes: PlannedNode[];
 }
 
+/** Run-level context budget riding the plan (`budget:` on the graph). */
+export interface PlanBudget {
+  max_tokens: number;
+  warn_at: number;
+}
+
+/** Per-node advisory: how much run budget remains once this node's declared
+ *  `budget_tokens` is charged. Computed over the plan's topological dispatch
+ *  order (waves flattened in order); a node may go negative — that is the
+ *  point, the number says "you are past the run cap" rather than clamping
+ *  away information. null when the graph declares no `budget:`. */
+export function budgetRemainingByNode(graph: Graph): Map<string, number> | null {
+  const budget = graph.budget;
+  if (budget == null) return null;
+  const { waves, unresolved } = topoWaves(graph.nodes);
+  const remaining = new Map<string, number>();
+  let allocated = 0;
+  for (const wave of [...waves, unresolved]) {
+    for (const id of wave) {
+      allocated += graph.nodes[id]?.budget_tokens ?? 0;
+      remaining.set(id, budget.max_tokens - allocated);
+    }
+  }
+  return remaining;
+}
+
 export interface PlanMemoryConfig {
   curator_node: string;
   cadence: string;
@@ -75,6 +128,7 @@ export interface PlanMemoryConfig {
 export interface PlanGraph {
   waves: PlanWave[];
   memory?: PlanMemoryConfig;
+  budget?: PlanBudget;
   topology_config?: Record<string, unknown>;
   warnings: string[];
 }
@@ -152,16 +206,26 @@ export function planGraph(graph: Graph, opts?: { source?: string }): PlanGraph {
   // re-reading graph.yaml. on_fanout_dispatch stays declared-but-unused:
   // no consumer exists, and inventing one would be speculative.
   const nodeHooks = graph.hooks?.on_node_complete ?? [];
+  // Model-visible budget: every node brief states how much of the run's
+  // declared-allocation cap remains once it is charged (advisory text — the
+  // payload schema gains no field, the objective gains one line).
+  const budgetRemaining = budgetRemainingByNode(graph);
   const nodeObj = (id: string): PlannedNode => {
     const n = nodes[id];
     return {
       id,
       agent: n?.agent,
       model: n?.model || "sonnet",
-      objective: n?.objective?.trim() || "",
+      objective:
+        (n?.objective?.trim() || "") +
+        (budgetRemaining?.has(id) ? `\n\nContext budget remaining: ${budgetRemaining.get(id)} tokens` : ""),
       tools: n?.tools || [],
       skills: n?.skills || [],
-      refs: n?.refs || [],
+      // Holdout seal (belt-and-suspenders under the HOLDOUT_LEAK compiler
+      // check): sealed refs — `criteria/*.holdout.md` paths or `holdout: true`
+      // — are stripped from every non-eval-gate payload, so materialized
+      // builder agents never see the rubric even if validate was skipped.
+      refs: visibleRefs(n?.role, n?.refs || []),
       advisor: n?.advisor ?? null,
       fan_out: n?.fan_out ?? null,
       retry: n?.retry ?? null,
@@ -170,6 +234,7 @@ export function planGraph(graph: Graph, opts?: { source?: string }): PlanGraph {
       gate: n?.gate ?? null,
       role: n?.role ?? null,
       eval: rawDoc?.nodes?.[id]?.eval ?? null,
+      trace: n?.role != null && TRACE_ROLES.has(n.role) ? { scope: ancestorScope(nodes, id) } : null,
       effort: n?.effort ?? "standard",
       timeout_ms: n?.timeout_ms ?? null,
       constraints: n?.constraints || [],
@@ -197,6 +262,7 @@ export function planGraph(graph: Graph, opts?: { source?: string }): PlanGraph {
   // drop it). Schema default is {}, so authored config passes through
   // verbatim and absent config still surfaces as an empty object.
   out.topology_config = graph.topology_config;
+  if (graph.budget != null) out.budget = { max_tokens: graph.budget.max_tokens, warn_at: graph.budget.warn_at };
   if (hasCurator) {
     out.memory = {
       curator_node: curator,

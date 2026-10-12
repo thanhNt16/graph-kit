@@ -2,9 +2,11 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import YAML from "yaml";
 import type { Issue } from "../cli/diagnostics.js";
+import { isHoldoutCriterion, isHoldoutRef, registryFileFor } from "../evidence/criteria.js";
 import type { Graph } from "../schemas/graph.schema.js";
 import { agentDirsFor, agentFileName } from "../targets/registry.js";
 import { topoWaves } from "./plan.js";
+import { cronError } from "./schedule.js";
 
 /** A semantic check result. Shape-compatible with the schema `Issue` envelope:
  *  check and severity ride along as extra fields on the same object. */
@@ -144,9 +146,18 @@ export function validateGraph(graph: Graph, projectRoot: string): Finding[] {
     }
   }
 
-  // 5b. criteria: ids must be declared keys, unique, and backed by registry files
+  // 5b. criteria: ids must be declared keys, unique, and backed by registry files.
+  // Entries may be bare ids or {id, weight} refs (verdict: scored).
   const seenCriteria = new Set<string>();
-  for (const id of graph.evidence.criteria ?? []) {
+  for (const c of graph.evidence.criteria ?? []) {
+    const id = typeof c === "string" ? c : c.id;
+    if (typeof c !== "string" && !(c.weight > 0)) {
+      findings.push({
+        check: "criteria-weight",
+        path: "evidence.criteria",
+        message: `Criterion "${id}" weight must be a positive number, got ${c.weight}`,
+      });
+    }
     if (!produced.has(id) && !graph.evidence.required_keys.includes(id)) {
       findings.push({
         check: "criteria-keys",
@@ -162,24 +173,99 @@ export function validateGraph(graph: Graph, projectRoot: string): Finding[] {
       });
     }
     seenCriteria.add(id);
-    const file = join(projectRoot, "criteria", `${id}.md`);
-    if (!existsSync(file)) {
+    // The registry file is `criteria/<id>.md` or its sealed twin
+    // `criteria/<id>.holdout.md` (holdout scenarios — see below).
+    const registry = registryFileFor(projectRoot, id);
+    if (!registry) {
       findings.push({
         check: "criteria-file",
         path: "evidence.criteria",
-        message: `Criterion "${id}" has no registry file at criteria/${id}.md`,
+        message: `Criterion "${id}" has no registry file at criteria/${id}.md (or criteria/${id}.holdout.md)`,
       });
     } else {
-      const head = readFileSync(file, "utf-8").match(/^---\n([\s\S]*?)\n---/);
+      const head = readFileSync(registry.path, "utf-8").match(/^---\n([\s\S]*?)\n---/);
       const fmId = head ? YAML.parse(head[1])?.id : undefined;
       if (fmId !== undefined && fmId !== id) {
         findings.push({
           check: "criteria-file",
-          path: `criteria/${id}.md`,
+          path: `criteria/${id}${registry.holdout ? ".holdout" : ""}.md`,
           message: `Registry file frontmatter id "${fmId}" does not match filename "${id}"`,
         });
       }
     }
+  }
+
+  // 5e. Scored-gate contract: "scored" needs a threshold and at least one
+  // criterion to weight. A threshold (or criterion weights) under the binary
+  // default is dead config — advisory, like the other declared-but-ignored
+  // field warnings.
+  if (graph.evidence.verdict === "scored") {
+    if (graph.evidence.threshold === undefined) {
+      findings.push({
+        check: "scored-threshold",
+        path: "evidence.threshold",
+        message: 'verdict "scored" requires evidence.threshold (0-1)',
+      });
+    }
+    if ((graph.evidence.criteria ?? []).length === 0) {
+      findings.push({
+        check: "scored-criteria",
+        path: "evidence.criteria",
+        message: 'verdict "scored" requires at least one evidence.criteria entry to score',
+      });
+    }
+  } else {
+    if (graph.evidence.threshold !== undefined) {
+      findings.push({
+        check: "scored-threshold",
+        path: "evidence.threshold",
+        message: `evidence.threshold is set but verdict is "${graph.evidence.verdict}" — it only applies under verdict: scored`,
+        severity: "warn",
+      });
+    }
+    const weighted = (graph.evidence.criteria ?? []).filter((c) => typeof c !== "string");
+    if (weighted.length > 0) {
+      findings.push({
+        check: "scored-weight",
+        path: "evidence.criteria",
+        message: `criterion weights on ${weighted.map((c) => (typeof c === "string" ? c : c.id)).join(", ")} are ignored under verdict "${graph.evidence.verdict}" — set verdict: scored to apply them`,
+        severity: "warn",
+      });
+    }
+  }
+
+  // 5f. Holdout seal (anti-gaming): validation criteria the builders must
+  // never see are sealed — registry files named `criteria/<id>.holdout.md`
+  // and/or refs entries flagged `holdout: true`. A node that is not
+  // `role: eval-gate` (unset counts as a builder) referencing a sealed path
+  // is a HOLDOUT_LEAK error; eval-gate nodes may reference them freely.
+  let declaresHoldouts = false;
+  for (const c of graph.evidence.criteria ?? []) {
+    const id = typeof c === "string" ? c : c.id;
+    if (isHoldoutCriterion(projectRoot, id)) declaresHoldouts = true;
+  }
+  for (const [id, node] of Object.entries(graph.nodes)) {
+    for (const ref of node.refs) {
+      if (!isHoldoutRef(ref)) continue;
+      declaresHoldouts = true;
+      if (node.role !== "eval-gate") {
+        findings.push({
+          check: "holdout-leak",
+          path: `nodes.${id}.refs`,
+          message: `HOLDOUT_LEAK: node "${id}" (${node.role ? `role "${node.role}"` : "no role — builder"}) references sealed holdout "${ref.path}" — only role: eval-gate nodes may see holdout criteria`,
+        });
+      }
+    }
+  }
+  // Dead seal (ADVISORY): sealed criteria exist but no eval-gate node is
+  // declared to read them — the holdout never gets evaluated.
+  if (declaresHoldouts && !Object.values(graph.nodes).some((n) => n.role === "eval-gate")) {
+    findings.push({
+      check: "holdout-dead-seal",
+      path: "nodes",
+      message: "Graph declares holdout criteria but has no role: eval-gate node — the sealed rubric is never evaluated",
+      severity: "warn",
+    });
   }
 
   // 6. memory-augmented topology contract
@@ -204,9 +290,10 @@ export function validateGraph(graph: Graph, projectRoot: string): Finding[] {
     }
   }
 
-  // 7. Node role contract. eval-gate and supervisor are semantic roles; any
-  // other string is allowed (free-form) but surfaces an advisory warning so
-  // typos like "supervsor" are visible.
+  // 7. Node role contract. eval-gate, supervisor, and initializer are
+  // recognized roles; any other string is allowed (free-form) but surfaces an
+  // advisory warning so typos like "supervsor" are visible.
+  const KNOWN_ROLES = new Set(["eval-gate", "supervisor", "initializer"]);
   for (const [id, node] of Object.entries(graph.nodes)) {
     if (node.role === "eval-gate") {
       if (!node.eval) {
@@ -224,14 +311,29 @@ export function validateGraph(graph: Graph, projectRoot: string): Finding[] {
         });
       }
     }
-    if (node.role && node.role !== "eval-gate" && node.role !== "supervisor") {
+    if (node.role && !KNOWN_ROLES.has(node.role)) {
       findings.push({
         check: "unknown-role",
         path: `nodes.${id}.role`,
-        message: `Unknown role "${node.role}" — advisory warning only; known roles: eval-gate, supervisor`,
+        message: `Unknown role "${node.role}" — advisory warning only; known roles: ${[...KNOWN_ROLES].join(", ")}`,
         severity: "warn",
       });
     }
+  }
+
+  // 7a. features.required producer (ADVISORY): the gate blocks while any item
+  // in the feature list has passes:false. A node flagged `role: initializer`
+  // is the expected producer of that list — without one, nothing in the
+  // declared graph ever writes it (seeding via `gk features init` outside the
+  // graph stays possible, so this is a warning, not an error).
+  if (graph.features?.required === true && !Object.values(graph.nodes).some((n) => n.role === "initializer")) {
+    findings.push({
+      check: "features-producer",
+      path: "features.required",
+      message:
+        'features.required is set but no node carries role: "initializer" — the feature list must be written by an initializer node or seeded via `gk features init` for the gate to pass',
+      severity: "warn",
+    });
   }
   // 7b. Owned-scope overlap (HEURISTIC ADVISORY WARNING, not an error): two
   // nodes in the same topological wave declaring owns globs with a shared
@@ -273,19 +375,10 @@ export function validateGraph(graph: Graph, projectRoot: string): Finding[] {
     }
   }
 
-  // 7b'. Unimplemented orchestration fields (ADVISORY): `fan_out.reduce` other
-  // than "append" and `effort` scale semantics ride the plan payload but the
-  // engine doesn't evaluate them yet — surface so an author doesn't rely on
-  // merge/vote aggregation or effort widening that never happens.
+  // 7b'. Unimplemented orchestration fields (ADVISORY): `effort` scale
+  // semantics ride the plan payload but the engine doesn't evaluate it yet —
+  // surface so an author doesn't rely on effort widening that never happens.
   for (const [id, node] of Object.entries(graph.nodes)) {
-    if (node.fan_out && node.fan_out.reduce !== "append") {
-      findings.push({
-        check: "unimplemented-field",
-        path: `nodes.${id}.fan_out.reduce`,
-        message: `fan_out.reduce "${node.fan_out.reduce}" is declared but the engine appends all brief outputs unconditionally — merge/vote reducers are not implemented`,
-        severity: "warn",
-      });
-    }
     if (node.effort && node.effort !== "standard") {
       findings.push({
         check: "unimplemented-field",
@@ -336,6 +429,20 @@ export function validateGraph(graph: Graph, projectRoot: string): Finding[] {
           });
         }
       }
+    }
+  }
+
+  // 8b. Declared schedule (automation heartbeat): emitters codegen platform
+  // artifacts straight from schedule.cron, so a malformed expression is a
+  // hard finding — a warning would let `gk schedule emit` produce garbage.
+  if (graph.schedule) {
+    const err = cronError(graph.schedule.cron);
+    if (err) {
+      findings.push({
+        check: "schedule-cron",
+        path: "schedule.cron",
+        message: `schedule.cron is not a valid 5-field cron expression: ${err}`,
+      });
     }
   }
 
@@ -393,6 +500,62 @@ export function validateGraph(graph: Graph, projectRoot: string): Finding[] {
               message: `gate_evidence key "${key}" is not declared by any node in the loop group`,
             });
           }
+        }
+      }
+
+      // Rule 5: loop_kind_coherent (ADVISORY) — kind-specific fields belong to
+      // their own kind. The engine ignores them otherwise: stop_when/
+      // gate_evidence on mechanical kinds, poll/exit_when on mismatched kinds.
+      if (loop.kind !== "polling" && loop.poll) {
+        findings.push({
+          check: "loop_kind_fields",
+          path: `loops[${i}].poll`,
+          message: `poll: block is ignored on kind "${loop.kind}" loops — only kind: polling evaluates it`,
+          severity: "warn",
+        });
+      }
+      if (loop.kind !== "counting" && loop.exit_when) {
+        findings.push({
+          check: "loop_kind_fields",
+          path: `loops[${i}].exit_when`,
+          message: `exit_when: predicate is ignored on kind "${loop.kind}" loops — only kind: counting evaluates it`,
+          severity: "warn",
+        });
+      }
+      if (loop.kind !== "judged" && (loop.stop_when || loop.gate_evidence)) {
+        findings.push({
+          check: "loop_kind_fields",
+          path: `loops[${i}]`,
+          message: `kind "${loop.kind}" loops exit on their deterministic check — stop_when/gate_evidence are never evaluated`,
+          severity: "warn",
+        });
+      }
+      // Rule 6: loop_poll_evidence_key (ADVISORY) — a poll with no
+      // evidence_key has nothing to check and can never be satisfied.
+      if (loop.kind === "polling" && loop.poll && !loop.poll.evidence_key) {
+        findings.push({
+          check: "loop_poll_evidence_key",
+          path: `loops[${i}].poll`,
+          message: "poll: block declares no evidence_key — the deterministic check can never be satisfied",
+          severity: "warn",
+        });
+      }
+      // Rule 7: loop_mechanical_evidence (ADVISORY) — keys the mechanical
+      // checks wait on but no node produces. External stamping (gk evidence
+      // add by a human or another run) is legitimate, so this stays a warning
+      // rather than the error gate_evidence undeclared keys get.
+      const mechanicalKeys = [
+        ...(loop.poll?.evidence_key ? [loop.poll.evidence_key] : []),
+        ...(loop.exit_when?.evidence_all_fresh ?? []),
+      ];
+      for (const key of mechanicalKeys) {
+        if (!produced.has(key)) {
+          findings.push({
+            check: "loop_mechanical_evidence",
+            path: `loops[${i}]`,
+            message: `kind "${loop.kind}" loop waits on evidence key "${key}" that no node produces — it may never be satisfied`,
+            severity: "warn",
+          });
         }
       }
 

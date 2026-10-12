@@ -32,7 +32,7 @@ init-graph [--template <name>] [--task "<description>"]
      ```
      `template show` returns the template's structure — node table (`id`, `agent`, `wave`), `waveCount`, the full parameter list (`name`, `required`, `default`, `description`), and `recommendations` — use it for the gap analysis in step 4 instead of reading the YAML.
    - `--template <name>` names a canonical topology or flow preset: retain existing `gk graph new <name>` behavior.
-   - Without `--template`: compare the task to packaged template descriptions (bundled gallery: `audit-pr`, `cook-plan`, `dream`, `refactor-module`, `bench-eval`, `doc-sweep`) and the topology routing rules, then offer the best two candidates when ambiguous.
+   - Without `--template`: compare the task to packaged template descriptions (bundled gallery: `audit-pr`, `cook-plan`, `dream`, `refactor-module`, `bench-eval`, `doc-sweep`, `software-factory`) and the topology routing rules, then offer the best two candidates when ambiguous.
    Run `gk suggest --json` and fold relevant suggestions into the proposal: recurring
    chains suggest sub-graphs, graph-reuse suggests starting from a template.
 

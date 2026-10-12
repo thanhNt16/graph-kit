@@ -3,6 +3,7 @@
 // A thin projection of explainRecall — the explain lens owns the BM25 scoring,
 // the filters, and the link join; this module only reshapes its hits.
 import { explainRecall } from "./explain-recall.js";
+import { bumpAdherence, recordRequest } from "./lifecycle-store.js";
 
 export interface ExpandedHit {
   id: string;
@@ -26,5 +27,10 @@ export function expandedRecall(memDir: string, query: string, k = 5, now = new D
     salience: h.final_score,
     linked: h.linked_via !== undefined,
   }));
+  // Adherence bookkeeping: each invocation is one offer opportunity (the
+  // lifecycle denominator) and every surfaced hit gets a `view`. Loading a
+  // hit bumps `use` instead (touchMemory).
+  recordRequest(memDir, now);
+  for (const h of results) bumpAdherence(memDir, h.file, "view");
   return { results, linked: results.filter((h) => h.linked).length, scanned: exp.scanned_count };
 }

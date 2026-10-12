@@ -57,6 +57,10 @@ export interface RunVerdict {
   waves: WaveRun[];
   nodes: NodeRun[];
   unresolved: string[];
+  /** Run-level early-stop reason, when one fired before the plan completed.
+   *  "budget_exceeded": a node's declared allocation would have pushed the
+   *  run's planning-currency spend past budget.max_tokens. */
+  stop_reason?: "budget_exceeded";
 }
 
 /**
