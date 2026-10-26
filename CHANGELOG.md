@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `gk-factory-guard` omp extension: per-lane `GK_FACTORY_POLICY` enforcement — deny_bash regexes (provider APIs, pushes, history rewrites) + realpath-scoped writes; every decision journaled JSONL.
   - Providers: `IIssueBoardProvider`/`IVCSProvider`/`Workspace` contracts + file-backed `local` adapter (`.graphkit/factory/board/*.yaml` cards, `prs.json` PR records, real git worktrees/merges).
   - `planTick` pure planner + `gk factory init|validate|card|tick|run|lane|status|halt|resume` — journal'd Ready→Building→QA→Review→Done flow with marker-idempotent comments, halt sweep, bounce-with-rounds, and a full offline e2e test.
+  - P3: `github` providers — Projects v2 single-select board via `gh` + `gh pr` VCS (idempotent branch→PR, check rollup, squash/merge/rebase); injectable exec seam with fixture tests (no network). GitLab/Jira/Bitbucket remain `FACTORY_PROVIDER` stubs (P4).
 - **Factory skill pack** under `templates/factory/` — 11 lane skills (`factory-intake` … `context-docs`), 4 lane agents, 4 lane graph templates (`factory-{intake,build,qa,review}.gk.yaml`), seeded by `gk factory init`.
 
 ## [0.3.43] - 2026-10-12
