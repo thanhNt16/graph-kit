@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -7,6 +8,7 @@ import { type FactoryConfig, loadFactoryConfig, validateFactory } from "../../fa
 import { type Providers, runFactory, type TickDeps, tick } from "../../factory/dispatcher.js";
 import { listJournals, loadJournal, saveJournal } from "../../factory/journal.js";
 import { runLane } from "../../factory/lane-runner.js";
+import { GitHubBoardProvider, GitHubVCSProvider } from "../../factory/providers/github.js";
 import { LocalBoardProvider, LocalVCSProvider, LocalWorkspace } from "../../factory/providers/local.js";
 import { leafUsageFor, subcommandsFor } from "../command-registry.js";
 import { emit, fail, ok } from "../output.js";
@@ -34,19 +36,43 @@ function guardExtensionPath(cwd: string): string {
   );
 }
 
+/** Default `gh` exec — inherits env (GH_TOKEN/GITHUB_TOKEN). */
+const ghExec = (argv: string[]): string => execFileSync(argv[0], argv.slice(1), { encoding: "utf8" }).trim();
+
 function providers(cwd: string, cfg: FactoryConfig): Providers {
-  if (cfg.board.provider !== "local" || cfg.vcs.provider !== "local") {
-    throw new GraphKitError(
-      "FACTORY_PROVIDER",
-      `provider ${cfg.board.provider}/${cfg.vcs.provider} not yet implemented (v1: local only)`,
-    );
+  const workspace = new LocalWorkspace(cwd, cfg.vcs.branch_prefix);
+  let vcs: Providers["vcs"];
+  if (cfg.vcs.provider === "local") {
+    vcs = new LocalVCSProvider(cwd);
+  } else if (cfg.vcs.provider === "github") {
+    if (!cfg.vcs.github) throw new GraphKitError("FACTORY_CONFIG", "vcs.provider github requires vcs.github");
+    vcs = new GitHubVCSProvider({ owner: cfg.vcs.github.owner, name: cfg.vcs.github.repo }, ghExec);
+  } else {
+    throw new GraphKitError("FACTORY_PROVIDER", `vcs provider ${cfg.vcs.provider} not yet implemented (P4)`);
   }
-  const boardDir = cfg.board.local?.dir ? join(cwd, cfg.board.local.dir) : LocalBoardProvider.defaultDir(cwd);
-  return {
-    board: new LocalBoardProvider(boardDir),
-    vcs: new LocalVCSProvider(cwd),
-    workspace: new LocalWorkspace(cwd, cfg.vcs.branch_prefix),
-  };
+  if (cfg.board.provider === "local") {
+    const boardDir = cfg.board.local?.dir ? join(cwd, cfg.board.local.dir) : LocalBoardProvider.defaultDir(cwd);
+    return { board: new LocalBoardProvider(boardDir), vcs, workspace };
+  }
+  if (cfg.board.provider === "github") {
+    if (!cfg.board.github) throw new GraphKitError("FACTORY_CONFIG", "board.provider github requires board.github");
+    return {
+      board: new GitHubBoardProvider(
+        {
+          owner: cfg.board.github.owner,
+          repo: cfg.board.github.repo,
+          project_number: cfg.board.github.project_number,
+          status_field: cfg.board.github.status_field,
+          lanes: cfg.board.lanes,
+          halt_label: cfg.board.halt_label,
+        },
+        ghExec,
+      ),
+      vcs,
+      workspace,
+    };
+  }
+  throw new GraphKitError("FACTORY_PROVIDER", `board provider ${cfg.board.provider} not yet implemented (P4)`);
 }
 
 function tickDeps(cwd: string, cfg: FactoryConfig): TickDeps {
