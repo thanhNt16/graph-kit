@@ -1,0 +1,45 @@
+apiVersion: graphkit.dev/v1
+kind: GraphTemplate
+metadata:
+  name: factory-build
+  description: Lane graph — implement a board card in an isolated worktree, commit on the lane branch
+  version: 1
+parameters:
+  card-id:
+    description: Board card id
+    required: true
+  card-title:
+    description: Card title
+    required: true
+  card-body:
+    description: Card body/description (may be empty)
+    required: false
+  context:
+    description: Extra lane context (intake result, prior QA failures)
+    required: false
+graph:
+  apiVersion: graphkit.dev/v2
+  kind: Graph
+  metadata:
+    name: factory-build
+    description: Build card {{card-id}} — smallest correct change on the lane branch
+  topology: custom
+  inputs:
+    card-id: { type: string, required: true }
+    card-title: { type: string, required: true }
+    card-body: { type: string, required: false }
+    context: { type: string, required: false }
+  nodes:
+    build:
+      agent: factory-worker
+      model: sonnet
+      objective: >-
+        Implement board card {{card-id}} ("{{card-title}}"). Card body:
+        "{{card-body}}". Lane context: "{{context}}". Follow your skills:
+        smallest correct change, self-check, conventional commit on the
+        lane branch. Emit the gk-build JSON block.
+      tools: [Read, Grep, Glob, Find, Edit, Write, Bash, Lsp]
+      depend_on: []
+      evidence: [build_result]
+  evidence:
+    required_keys: [build_result]

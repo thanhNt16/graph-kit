@@ -1,0 +1,52 @@
+apiVersion: graphkit.dev/v1
+kind: GraphTemplate
+metadata:
+  name: factory-qa
+  description: Lane graph — verify a build result against card criteria by running declared QA commands (read+execute)
+  version: 1
+parameters:
+  card-id:
+    description: Board card id
+    required: true
+  card-title:
+    description: Card title
+    required: true
+  card-body:
+    description: Card body/description (may be empty)
+    required: false
+  qa-commands:
+    description: Newline-separated QA commands to run in the lane worktree
+    required: true
+  build-output:
+    description: The build lane's gk-build JSON block (self-reported)
+    required: false
+graph:
+  apiVersion: graphkit.dev/v2
+  kind: Graph
+  metadata:
+    name: factory-qa
+    description: QA card {{card-id}} — reproduce claims, verify criteria, hunt strays
+  topology: custom
+  inputs:
+    card-id: { type: string, required: true }
+    card-title: { type: string, required: true }
+    card-body: { type: string, required: false }
+    qa-commands: { type: string, required: true }
+    build-output: { type: string, required: false }
+  nodes:
+    qa:
+      agent: factory-qa
+      model: sonnet
+      objective: >-
+        Verify card {{card-id}} ("{{card-title}}") in this worktree. Card
+        body: "{{card-body}}". Build agent's self-report: "{{build-output}}".
+        Run these commands exactly, capturing exit + excerpt per command:
+        {{qa-commands}}
+        Check each criterion with citations; flag strays; emit gk-qa.
+      tools: [Read, Grep, Glob, Find, Bash]
+      constraints:
+        - no_write: true
+      depend_on: []
+      evidence: [qa_result]
+  evidence:
+    required_keys: [qa_result]
