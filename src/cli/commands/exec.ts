@@ -115,6 +115,8 @@ export class SpawnRunner implements Runner {
       attempt: ctx.attempt,
       cwd: ctx.cwd,
       child_cwd: this.worktrees?.get(node.id),
+      skills: node.skills.length > 0 ? node.skills : undefined,
+      thinking: node.thinking ?? undefined,
     };
     return spawnDispatch(args);
   }

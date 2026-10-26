@@ -181,6 +181,9 @@ const NodeDefSchema = z
     objective: z.string(),
     tools: z.array(z.string()).default([]),
     skills: z.array(z.string()).default([]),
+    // omp --thinking effort (minimal|low|medium|high|xhigh|max); forwarded to
+    // the dispatch child. Advisory for non-omp targets.
+    thinking: z.string().optional(),
     refs: z.array(RefSchema).default([]),
     depend_on: z.array(z.string()).default([]),
     loop: LoopConfig.optional(),

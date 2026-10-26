@@ -24,7 +24,7 @@ describe("buildPiArgs constraint precedence", () => {
     expect(buildPiArgs(args({ no_exec: true, tools_allowlist: ["Write"] }))).toEqual([
       "-p",
       "--tools",
-      "Read,Glob,Grep",
+      "read,glob,grep",
     ]);
   });
 
@@ -37,7 +37,62 @@ describe("buildPiArgs constraint precedence", () => {
   });
 
   test("no_write keeps Bash (best-effort)", () => {
-    expect(buildPiArgs(args({ no_write: true }))).toEqual(["-p", "--tools", "Read,Glob,Grep,Bash"]);
+    expect(buildPiArgs(args({ no_write: true }))).toEqual(["-p", "--tools", "read,glob,grep,bash"]);
+  });
+});
+
+describe("buildPiArgs omp flags", () => {
+  const base: DispatchArgs = { agent: "x", objective: "x" };
+
+  test("skills list joins into --skills; [] emits --no-skills; unset emits neither", () => {
+    expect(buildPiArgs({ ...base, skills: ["factory-build", "gk-recall"] })).toEqual([
+      "-p",
+      "--skills",
+      "factory-build,gk-recall",
+    ]);
+    expect(buildPiArgs({ ...base, skills: [] })).toEqual(["-p", "--no-skills"]);
+    expect(buildPiArgs(base)).toEqual(["-p"]);
+  });
+
+  test("thinking, max_time, extensions, mode_json, approval_mode, no_session", () => {
+    expect(
+      buildPiArgs({
+        ...base,
+        thinking: "medium",
+        max_time: "45m",
+        extensions: ["/a/guard.ts", "/b/log.ts"],
+        mode_json: true,
+        approval_mode: "yolo",
+        no_session: true,
+      }),
+    ).toEqual([
+      "-p",
+      "--thinking",
+      "medium",
+      "--max-time",
+      "45m",
+      "-e",
+      "/a/guard.ts",
+      "-e",
+      "/b/log.ts",
+      "--mode",
+      "json",
+      "--approval-mode",
+      "yolo",
+      "--no-session",
+    ]);
+  });
+
+  test("flags compose with constraints", () => {
+    expect(buildPiArgs({ ...base, constraints: { no_exec: true }, skills: ["s1"], model: "m1" })).toEqual([
+      "-p",
+      "--model",
+      "m1",
+      "--tools",
+      "read,glob,grep",
+      "--skills",
+      "s1",
+    ]);
   });
 });
 
@@ -155,6 +210,77 @@ describe("spawnDispatch (subprocess-isolated)", () => {
       const { spawnDispatch } = await import(process.env.GK_ROOT + "/src/exec/spawn.ts");
       const r = await spawnDispatch({ agent: "worker", objective: "x", cwd: tmp });
       if (!r.ok) throw new Error("dispatch without active run failed: " + r.output);
+      console.log("OK");
+    `);
+    expect(err).toBe("");
+    expect(out).toBe("OK");
+  });
+
+  test("env: replaces process.env — child never sees scrubbed vars", async () => {
+    const { out, err } = await runScript(`
+      ${setup}
+      writeFileSync(omp, '#!/bin/sh\\ncat >/dev/null\\nexec node -e "console.log((process.env.GH_TOKEN||\\'none\\') + \\'|\\' + (process.env.MYVAR||\\'none\\'))"');
+      chmodSync(omp, 0o755);
+      process.env.GH_TOKEN = "secret-token";
+      process.env.MYVAR = "mine";
+      const { spawnDispatch } = await import(process.env.GK_ROOT + "/src/exec/spawn.ts");
+      const r = await spawnDispatch({
+        agent: "worker", objective: "env check", cwd: tmp,
+        env: { PATH: process.env.PATH, HOME: process.env.HOME },
+      });
+      if (!r.ok) throw new Error("not ok: " + JSON.stringify(r));
+      if (r.output !== "none|none") throw new Error("env leak: " + JSON.stringify(r.output));
+      console.log("OK");
+    `);
+    expect(err).toBe("");
+    expect(out).toBe("OK");
+  });
+
+  test("GK_OMP_BIN: custom binary receives flags and stdin prompt", async () => {
+    const { out, err } = await runScript(`
+      ${setup}
+      const fake = join(stubDir, "fake-omp");
+      writeFileSync(fake, '#!/bin/sh\\ncat >/dev/null\\nexec node -e "console.log(process.argv.slice(1).join(\\',\\'))" -- "$@"');
+      chmodSync(fake, 0o755);
+      process.env.GK_OMP_BIN = fake;
+      const { spawnDispatch } = await import(process.env.GK_ROOT + "/src/exec/spawn.ts");
+      const r = await spawnDispatch({
+        agent: "worker", objective: "x", cwd: tmp,
+        skills: ["a","b"], thinking: "high", max_time: "10m",
+        extensions: ["/ext/g.ts"], mode_json: false, no_session: true,
+        approval_mode: "yolo",
+      });
+      if (!r.ok) throw new Error("not ok: " + JSON.stringify(r));
+      const want = "-p,--skills,a\\,b,--thinking,high,--max-time,10m,-e,/ext/g.ts,--approval-mode,yolo,--no-session";
+      if (r.output !== want) throw new Error("argv: " + JSON.stringify(r.output));
+      console.log("OK");
+    `);
+    expect(err).toBe("");
+    expect(out).toBe("OK");
+  });
+
+  test("mode_json: event stream persisted, text extracted, blocked surfaced", async () => {
+    const { out, err } = await runScript(`
+      ${setup}
+      const streamPath = join(tmp, "stream.jsonl");
+      writeFileSync(streamPath, [
+        '{"type":"session","id":"s1"}',
+        '{"type":"agent_start"}',
+        '{"type":"message_end","message":{"role":"assistant","content":[{"type":"text","text":"done ok"}],"stopReason":"stop"}}',
+        '{"type":"tool_execution_end","toolCallId":"c1","toolName":"bash","isError":true,"result":{"details":{"error":"gk-factory: denied"}}}',
+        '{"type":"agent_end","messages":[{"role":"assistant","content":[{"type":"text","text":"done ok"}],"stopReason":"stop"}],"isTerminal":true}',
+      ].join("\\n") + "\\n");
+      writeFileSync(omp, '#!/bin/sh\\ncat >/dev/null\\nexec cat "' + streamPath + '"');
+      chmodSync(omp, 0o755);
+      const { spawnDispatch } = await import(process.env.GK_ROOT + "/src/exec/spawn.ts");
+      const r = await spawnDispatch({ agent: "worker", objective: "x", node: "n9", attempt: 2, cwd: tmp, mode_json: true });
+      if (!r.ok) throw new Error("not ok: " + JSON.stringify(r));
+      if (r.output !== "done ok") throw new Error("output: " + JSON.stringify(r.output));
+      if (!r.eventsPath || !r.eventsPath.includes("omp-events/n9-a2.jsonl")) throw new Error("eventsPath: " + JSON.stringify(r));
+      const { existsSync } = require("node:fs");
+      if (!existsSync(r.eventsPath)) throw new Error("events file missing: " + r.eventsPath);
+      if (!r.blocked || r.blocked[0].tool !== "bash" || !r.blocked[0].reason.includes("denied"))
+        throw new Error("blocked: " + JSON.stringify(r.blocked));
       console.log("OK");
     `);
     expect(err).toBe("");

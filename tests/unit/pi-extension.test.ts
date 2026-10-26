@@ -21,7 +21,7 @@ describe("gk_dispatch_agent arg building", () => {
     expect(buildPiArgs({ agent: "x", objective: "y", constraints: { no_write: true } })).toEqual([
       "-p",
       "--tools",
-      "Read,Glob,Grep,Bash",
+      "read,glob,grep,bash",
     ]);
   });
 });

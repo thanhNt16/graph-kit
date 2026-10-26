@@ -58,6 +58,7 @@ export interface PlannedNode {
   objective: string;
   tools: string[];
   skills: string[];
+  thinking: string | null;
   refs: NodeDef["refs"];
   advisor: NonNullable<NodeDef["advisor"]> | null;
   fan_out: NonNullable<NodeDef["fan_out"]> | null;
@@ -221,6 +222,7 @@ export function planGraph(graph: Graph, opts?: { source?: string }): PlanGraph {
         (budgetRemaining?.has(id) ? `\n\nContext budget remaining: ${budgetRemaining.get(id)} tokens` : ""),
       tools: n?.tools || [],
       skills: n?.skills || [],
+      thinking: n?.thinking ?? null,
       // Holdout seal (belt-and-suspenders under the HOLDOUT_LEAK compiler
       // check): sealed refs — `criteria/*.holdout.md` paths or `holdout: true`
       // — are stripped from every non-eval-gate payload, so materialized
