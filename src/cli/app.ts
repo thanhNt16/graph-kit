@@ -5,6 +5,7 @@ import { type CAC, cac } from "cac";
 import { APP_VERSION } from "../version.js";
 import { registerEvidenceCommand } from "./commands/evidence.js";
 import { registerExecCommand } from "./commands/exec.js";
+import { registerFactoryCommand } from "./commands/factory.js";
 import { registerFeaturesCommand } from "./commands/features.js";
 import { registerGateCommand } from "./commands/gate.js";
 import { registerGraphCommands } from "./commands/graph.js";
@@ -38,6 +39,7 @@ export function buildCli(): CAC {
   registerSuggestCommands(cli);
   registerScheduleCommands(cli);
   registerQueueCommand(cli);
+  registerFactoryCommand(cli);
   registerLearnCommand(cli);
   registerSelflearnCommand(cli);
   return cli;

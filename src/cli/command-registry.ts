@@ -97,6 +97,17 @@ const GROUP_SUBCOMMANDS: Record<string, Leaf[]> = {
     { name: "list", usage: "[file]" },
     { name: "emit", usage: "<file> --format github-actions|cron|launchd|claude-loop [--out <path>]" },
   ],
+  factory: [
+    { name: "init", usage: "[--force]" },
+    { name: "validate", usage: "" },
+    { name: "card", usage: "add --title <t> [--body <md>] | list" },
+    { name: "tick", usage: "" },
+    { name: "run", usage: "[--max-ticks <n>]" },
+    { name: "lane", usage: "<card> <lane>" },
+    { name: "status", usage: "" },
+    { name: "halt", usage: "<card>" },
+    { name: "resume", usage: "<card>" },
+  ],
   queue: [
     { name: "add", usage: "<file.yaml|->" },
     { name: "claim", usage: "[--node <claimer>]" },

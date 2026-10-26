@@ -6,6 +6,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import YAML from "yaml";
 import { z } from "zod";
 import { formatZodIssues, type Issue } from "../cli/diagnostics.js";
@@ -208,7 +209,9 @@ export function validateFactory(cwd: string, cfg: FactoryConfig, opts?: { home?:
     }
     const g = binding.graph;
     if (!g.endsWith(".yaml") && !g.endsWith(".yml")) {
-      if (!existsSync(join(cwd, "templates", "gallery", `${g}.gk.yaml`)))
+      // Gallery name — resolve against the bundled gallery next to this module.
+      const bundled = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "templates", "gallery", `${g}.gk.yaml`);
+      if (!existsSync(bundled))
         findings.push({ check: "FACTORY_CONFIG", path: `lanes.${lane}.graph`, message: `gallery template not found: ${g}` });
     } else if (!existsSync(join(cwd, g))) {
       findings.push({ check: "FACTORY_CONFIG", path: `lanes.${lane}.graph`, message: `lane graph not found: ${g}` });
