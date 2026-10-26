@@ -40,7 +40,9 @@ describe("parseOmpJsonStream (omp 18.12.6 fixtures)", () => {
   });
 
   test("truncated stream → partial output, no crash", () => {
-    const p = parseOmpJsonStream('{"type":"message_end","message":{"role":"assistant","content":[{"type":"text","text":"partial"}],"stopReason":"stop"}}\n{"type":"agent_end","mes');
+    const p = parseOmpJsonStream(
+      '{"type":"message_end","message":{"role":"assistant","content":[{"type":"text","text":"partial"}],"stopReason":"stop"}}\n{"type":"agent_end","mes',
+    );
     expect(p.text).toBe("partial");
     expect(p.aborted).toBe(false);
   });

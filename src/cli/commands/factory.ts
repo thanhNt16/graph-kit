@@ -1,10 +1,10 @@
-import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { CAC } from "cac";
 import { GraphKitError } from "../../errors.js";
 import { type FactoryConfig, loadFactoryConfig, validateFactory } from "../../factory/config.js";
-import { runFactory, tick, type Providers, type TickDeps } from "../../factory/dispatcher.js";
+import { type Providers, runFactory, type TickDeps, tick } from "../../factory/dispatcher.js";
 import { listJournals, loadJournal, saveJournal } from "../../factory/journal.js";
 import { runLane } from "../../factory/lane-runner.js";
 import { LocalBoardProvider, LocalVCSProvider, LocalWorkspace } from "../../factory/providers/local.js";
@@ -28,12 +28,18 @@ function guardExtensionPath(cwd: string): string {
     join(factoryAssetsDir(), "..", "..", "kits", "_core", "extensions", "gk-factory-guard.ts"),
   ];
   for (const c of candidates) if (existsSync(c)) return c;
-  throw new GraphKitError("FACTORY_CONFIG", "gk-factory-guard.ts extension not found (run gk kit install or gk factory init)");
+  throw new GraphKitError(
+    "FACTORY_CONFIG",
+    "gk-factory-guard.ts extension not found (run gk kit install or gk factory init)",
+  );
 }
 
 function providers(cwd: string, cfg: FactoryConfig): Providers {
   if (cfg.board.provider !== "local" || cfg.vcs.provider !== "local") {
-    throw new GraphKitError("FACTORY_PROVIDER", `provider ${cfg.board.provider}/${cfg.vcs.provider} not yet implemented (v1: local only)`);
+    throw new GraphKitError(
+      "FACTORY_PROVIDER",
+      `provider ${cfg.board.provider}/${cfg.vcs.provider} not yet implemented (v1: local only)`,
+    );
   }
   const boardDir = cfg.board.local?.dir ? join(cwd, cfg.board.local.dir) : LocalBoardProvider.defaultDir(cwd);
   return {
@@ -70,7 +76,9 @@ export function registerFactoryCommand(cli: CAC) {
       const cwd = process.cwd();
       const json = Boolean(opts?.json);
       if (!subcommand) {
-        console.log(`gk factory — software-factory commands\n\nUsage:\n  gk factory <subcommand> [args...]\n\nSubcommands:\n${leafUsageFor("factory")}`);
+        console.log(
+          `gk factory — software-factory commands\n\nUsage:\n  gk factory <subcommand> [args...]\n\nSubcommands:\n${leafUsageFor("factory")}`,
+        );
         return;
       }
       const arg0 = Array.isArray(args) ? args[0] : args;
@@ -106,7 +114,14 @@ export function registerFactoryCommand(cli: CAC) {
             join(cwd, ".omp", "extensions", "gk-factory-guard.ts"),
             readFileSync(join(assets, "..", "..", "kits", "_core", "extensions", "gk-factory-guard.ts"), "utf8"),
           );
-          emit(ok({ written: ".omp/factory.yaml", skills: ".omp/skills/", agents: ".omp/agents/", guard: ".omp/extensions/gk-factory-guard.ts" }));
+          emit(
+            ok({
+              written: ".omp/factory.yaml",
+              skills: ".omp/skills/",
+              agents: ".omp/agents/",
+              guard: ".omp/extensions/gk-factory-guard.ts",
+            }),
+          );
           return;
         }
 
@@ -118,7 +133,8 @@ export function registerFactoryCommand(cli: CAC) {
           } else if (findings.length === 0) {
             console.log("factory config valid");
           } else {
-            for (const f of findings) console.log(`[${f.check}]${f.severity === "warn" ? " (warn)" : ""} ${f.path}: ${f.message}`);
+            for (const f of findings)
+              console.log(`[${f.check}]${f.severity === "warn" ? " (warn)" : ""} ${f.path}: ${f.message}`);
           }
           return;
         }
@@ -149,6 +165,16 @@ export function registerFactoryCommand(cli: CAC) {
             return;
           }
           emit(fail("MISSING_ARG", `factory card ${String(arg0)} unknown (add|list)`));
+          return;
+        }
+
+        const known = ["tick", "run", "lane", "status", "halt", "resume"];
+        if (!known.includes(subcommand)) {
+          emit(
+            fail("UNKNOWN_FACTORY_SUBCOMMAND", `Unknown factory subcommand "${subcommand}"`, {
+              known: subcommandsFor("factory"),
+            }),
+          );
           return;
         }
 
@@ -214,7 +240,11 @@ export function registerFactoryCommand(cli: CAC) {
           emit(ok({ resumed: arg0 }));
           return;
         }
-        emit(fail("MISSING_ARG", `unknown factory subcommand "${subcommand}"`, { known: subcommandsFor("factory") }));
+        emit(
+          fail("UNKNOWN_FACTORY_SUBCOMMAND", `Unknown factory subcommand "${subcommand}"`, {
+            known: subcommandsFor("factory"),
+          }),
+        );
       } catch (e) {
         if (e instanceof GraphKitError) {
           emit(fail(e.code, e.message, e.details ?? {}));

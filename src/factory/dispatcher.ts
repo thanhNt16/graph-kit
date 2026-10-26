@@ -1,30 +1,18 @@
 /** Factory dispatcher — applies planTick actions and owns every provider side
  *  effect (moves, comments, pushes, PRs, merges). `gk factory tick` = one
  *  reconcile pass; `gk factory run` = loop until quiescent. Spec §3.6. */
+
+import { mkdirSync } from "node:fs";
 import { join } from "node:path";
-import { existsSync, mkdirSync } from "node:fs";
 import type { FactoryConfig, LaneKey } from "./config.js";
-import {
-  type CardJournal,
-  listJournals,
-  loadJournal,
-  newJournal,
-  saveJournal,
-  transition,
-} from "./journal.js";
-import {
-  type LaneOutcome,
-  type LaneRunnerDeps,
-  loadRunRecord,
-  runLane,
-  saveRunRecord,
-} from "./lane-runner.js";
+import { listJournals, loadJournal, newJournal, saveJournal, transition } from "./journal.js";
+import { type LaneOutcome, type LaneRunnerDeps, loadRunRecord, runLane, saveRunRecord } from "./lane-runner.js";
 import { planTick } from "./planner.js";
 import {
   factoryMarker,
   type IIssueBoardProvider,
-  type IVCSProvider,
   type IssueTask,
+  type IVCSProvider,
   type Workspace,
 } from "./providers/types.js";
 
@@ -55,7 +43,7 @@ export interface TickResult {
   ran: Array<{ card: string; lane: LaneKey; verdict: string }>;
 }
 
-function markerBody(kind: string, markdown: string): string {
+function markerBody(_kind: string, markdown: string): string {
   return markdown;
 }
 
@@ -145,7 +133,10 @@ export async function tick(cwd: string, cfg: FactoryConfig, providers: Providers
         await providers.board.upsertComment(
           a.card,
           factoryMarker(a.card, a.from, j.run_id ?? "-", "advance"),
-          markerBody("advance", `Lane **${a.from}** → **${a.to}** (verdict ${a.verdict ?? "?"}${a.note ? ` — ${a.note}` : ""}).`),
+          markerBody(
+            "advance",
+            `Lane **${a.from}** → **${a.to}** (verdict ${a.verdict ?? "?"}${a.note ? ` — ${a.note}` : ""}).`,
+          ),
         );
         if (a.to === "review" || (a.to === "done" && cfg.vcs.merge)) {
           // ensure PR exists once review is entered / done reached
@@ -216,19 +207,11 @@ export async function tick(cwd: string, cfg: FactoryConfig, providers: Providers
       }
       case "merge_pr": {
         const { sha } = await providers.vcs.mergePR(a.number, cfg.vcs.merge.method);
-        await providers.board.upsertComment(
-          a.card,
-          factoryMarker(a.card, "review", "-", "merge"),
-          `Merged as ${sha}.`,
-        );
+        await providers.board.upsertComment(a.card, factoryMarker(a.card, "review", "-", "merge"), `Merged as ${sha}.`);
         break;
       }
       case "comment": {
-        await providers.board.upsertComment(
-          a.card,
-          factoryMarker(a.card, "blocked", "-", a.marker_kind),
-          a.markdown,
-        );
+        await providers.board.upsertComment(a.card, factoryMarker(a.card, "blocked", "-", a.marker_kind), a.markdown);
         break;
       }
     }

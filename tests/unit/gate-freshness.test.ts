@@ -97,7 +97,7 @@ describe("gateGraph freshness", () => {
     mkdirSync(join(runs, "run-2"), { recursive: true });
     writeFileSync(
       join(runs, "run-2", "trace.jsonl"),
-      [
+      `${[
         JSON.stringify({
           at: "t0",
           node: "build",
@@ -108,7 +108,7 @@ describe("gateGraph freshness", () => {
           notes: null,
         }),
         JSON.stringify({ at: "t1", node: "build", status: "landed", commit: "abc" }),
-      ].join("\n") + "\n",
+      ].join("\n")}\n`,
     );
     writeFileSync(
       join(runs, "index.jsonl"),

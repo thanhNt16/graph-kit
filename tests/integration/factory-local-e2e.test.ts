@@ -3,16 +3,15 @@
  *  records, and marker comments. No network, no omp. */
 import { describe, expect, test } from "bun:test";
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, writeFileSync, existsSync, readFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import YAML from "yaml";
+import type { DispatchOutcome } from "../../src/exec/types";
 import { loadFactoryConfig, validateFactory } from "../../src/factory/config";
 import { runFactory } from "../../src/factory/dispatcher";
 import { listJournals } from "../../src/factory/journal";
 import { loadRunRecord } from "../../src/factory/lane-runner";
 import { LocalBoardProvider, LocalVCSProvider, LocalWorkspace } from "../../src/factory/providers/local";
-import type { DispatchOutcome } from "../../src/exec/types";
 
 const TEMPLATE = join(import.meta.dir, "..", "..", "templates", "factory", "factory.yaml");
 
@@ -29,28 +28,43 @@ function repoWithConfig(): string {
   writeFileSync(join(dir, ".omp", "factory.yaml"), readFileSync(TEMPLATE, "utf8"));
   // skills the starter config references
   for (const s of [
-    "factory-intake", "factory-repro-check", "factory-build", "factory-dedup-ladder",
-    "factory-git-sync", "factory-scrutiny", "factory-ui-journey", "factory-proof",
-    "factory-adversarial-review", "factory-heresy-lint", "context-docs",
+    "factory-intake",
+    "factory-repro-check",
+    "factory-build",
+    "factory-dedup-ladder",
+    "factory-git-sync",
+    "factory-scrutiny",
+    "factory-ui-journey",
+    "factory-proof",
+    "factory-adversarial-review",
+    "factory-heresy-lint",
+    "context-docs",
   ]) {
     mkdirSync(join(dir, ".omp", "skills", s), { recursive: true });
     writeFileSync(join(dir, ".omp", "skills", s, "SKILL.md"), `---\nname: ${s}\ndescription: x\n---\n`);
   }
   return dir;
 }
+
 import { mkdirSync } from "node:fs";
 
 /** Scripted omp stand-in: emits a fenced verdict block per lane name found in
  *  the node id (`factory-<lane>-<card>`). Also applies a trivial file change
  *  + commit in the worktree on building so the review diff is non-empty. */
-function scriptedDispatch(): { calls: Array<{ node?: string; cwd?: string; env?: Record<string, string>; args: unknown }>; fn: NonNullable<Parameters<typeof runFactory>[3]["runLane"]> extends never ? never : (args: never) => Promise<DispatchOutcome> } {
+function scriptedDispatch(): {
+  calls: Array<{ node?: string; cwd?: string; env?: Record<string, string>; args: unknown }>;
+  fn: NonNullable<Parameters<typeof runFactory>[3]["runLane"]> extends never
+    ? never
+    : (args: never) => Promise<DispatchOutcome>;
+} {
   const calls: Array<Record<string, unknown>> = [];
   const fn = async (args: Record<string, never>) => {
     calls.push(args);
     const node = String((args as { node?: string }).node ?? "");
     const lane = node.split("-")[1];
     const blocks: Record<string, string> = {
-      ready: '{"classification": "feature", "summary": "s", "criteria": ["c"], "surfaces": ["f.txt"], "ambiguous": false, "questions": []}',
+      ready:
+        '{"classification": "feature", "summary": "s", "criteria": ["c"], "surfaces": ["f.txt"], "ambiguous": false, "questions": []}',
       building: '{"files_changed": ["f.txt"], "self_check": "ok", "commit": "x", "residual_risks": []}',
       qa: '{"verdict": "pass", "commands": [{"cmd": "bun test", "exit": 0, "excerpt": "ok"}], "criteria": [{"text": "c", "met": true, "proof": "f.txt:1"}], "strays": []}',
       review: '{"verdict": "approve", "issues": [], "praises": ["clean"]}',

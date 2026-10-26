@@ -89,7 +89,13 @@ export function planTick(cfg: FactoryConfig, input: TickInput): FactoryAction[] 
         continue;
       }
       actions.push({ kind: "move_board", card: j.card, to: "building" });
-      actions.push({ kind: "bounce", card: j.card, from: j.lane, to: "building", note: result.note ?? "verdict BLOCK" });
+      actions.push({
+        kind: "bounce",
+        card: j.card,
+        from: j.lane,
+        to: "building",
+        note: result.note ?? "verdict BLOCK",
+      });
       actions.push({ kind: "dispatch", card: j.card, lane: "building" });
       j.round = next;
       continue;

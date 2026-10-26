@@ -21,10 +21,8 @@ import {
   runsDir,
   type SelflearnTarget,
   SKILLS_MARKER,
-  selflearnDir,
   skillDirFor,
   skillFileFor,
-  skillsDirFor,
   sweepTmpFiles,
   writeTextAtomic,
 } from "./state.js";

@@ -1,6 +1,6 @@
 /** Per-card journal — `.graphkit/factory/cards/<id>.json`, atomic tmp+rename.
  *  Source of truth for *factory state* (the board owns *lane*). Spec §3.5. */
-import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { z } from "zod";
 import { GraphKitError } from "../errors.js";

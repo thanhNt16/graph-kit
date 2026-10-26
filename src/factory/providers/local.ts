@@ -8,7 +8,7 @@
  *  with a monotonic number; merge = `git merge --squash`/`--no-ff` of the
  *  lane branch into base_branch inside the main checkout. */
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import YAML from "yaml";
 import { GraphKitError } from "../../errors.js";

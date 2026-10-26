@@ -68,6 +68,8 @@ describe("LocalVCSProvider + LocalWorkspace", () => {
     expect(execFileSync("git", ["rev-parse", "HEAD"], { cwd: dir, encoding: "utf8" }).trim()).toBe(sha);
     expect(execFileSync("git", ["log", "--format=%s", "-1"], { cwd: dir, encoding: "utf8" })).toContain("(#1)");
     await ws.remove("card-x");
-    expect(() => execFileSync("git", ["rev-parse", "--verify", "HEAD"], { cwd: join(dir, ".graphkit/factory/wt/card-x") })).toThrow();
+    expect(() =>
+      execFileSync("git", ["rev-parse", "--verify", "HEAD"], { cwd: join(dir, ".graphkit/factory/wt/card-x") }),
+    ).toThrow();
   });
 });

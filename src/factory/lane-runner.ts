@@ -67,7 +67,10 @@ export function extractBlock(text: string, name: string): Record<string, unknown
 }
 
 /** Map a lane's fenced block to a MERGE/BLOCK verdict. */
-export function laneVerdict(lane: LaneKey, block: Record<string, unknown> | null): { verdict: "MERGE" | "BLOCK"; note?: string } {
+export function laneVerdict(
+  lane: LaneKey,
+  block: Record<string, unknown> | null,
+): { verdict: "MERGE" | "BLOCK"; note?: string } {
   if (!block) return { verdict: "BLOCK", note: `no gk-${lane === "ready" ? "intake" : lane} block in output` };
   switch (lane) {
     case "ready":
@@ -125,15 +128,18 @@ export async function runLane(
   deps: LaneRunnerDeps,
 ): Promise<LaneOutcome> {
   const binding =
-    lane === "ready" ? cfg.lanes.ready
-    : lane === "building" ? cfg.lanes.building
-    : lane === "qa" ? cfg.lanes.qa
-    : cfg.lanes.review;
+    lane === "ready"
+      ? cfg.lanes.ready
+      : lane === "building"
+        ? cfg.lanes.building
+        : lane === "qa"
+          ? cfg.lanes.qa
+          : cfg.lanes.review;
   if (!binding) throw new Error(`lane ${lane} has no binding`);
   const profile = cfg.agents[binding.agent];
   if (!profile) throw new Error(`agent ${binding.agent} not defined`);
 
-  const { path: wtPath, branch } = await deps.workspace.ensure(card.id, cfg.vcs.base_branch);
+  const { path: wtPath } = await deps.workspace.ensure(card.id, cfg.vcs.base_branch);
   const logPath = join(runsDir(cwd), `${card.id}-${lane}-guard.jsonl`);
   const policy = policyFor(cfg, card, lane, wtPath, logPath);
 

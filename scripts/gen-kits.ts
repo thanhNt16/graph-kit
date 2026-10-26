@@ -27,7 +27,6 @@
 // |                   | metadata.json settings.json .gk.json templates/ hooks/ schemas/ | — |
 import { cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
-import { TARGET_MODEL_DEFAULTS } from "../src/targets/model-tiers.js";
 
 const ROOT = resolve(import.meta.dir, "..");
 const CORE = join(ROOT, "kits", "_core");

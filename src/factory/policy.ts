@@ -35,10 +35,25 @@ export const DEFAULT_DENY_BASH: string[] = [
 
 /** Env names that must never reach a lane child (unless explicitly listed in
  *  dispatch.env_passthrough — e.g. a model API key the profile needs). */
-const SECRETY = /(^|_)(TOKEN|SECRET|PASSWORD|API_KEY|ACCESS_KEY|PRIVATE_KEY|CREDENTIALS)(_|$)|^SSH_AUTH_SOCK$|^AWS_SESSION_TOKEN$/;
+const SECRETY =
+  /(^|_)(TOKEN|SECRET|PASSWORD|API_KEY|ACCESS_KEY|PRIVATE_KEY|CREDENTIALS)(_|$)|^SSH_AUTH_SOCK$|^AWS_SESSION_TOKEN$/;
 
 /** Names a child always needs. */
-const BASE_ENV = ["PATH", "HOME", "USER", "LOGNAME", "LANG", "LC_ALL", "TERM", "TMPDIR", "SHELL", "XDG_CACHE_HOME", "XDG_CONFIG_HOME", "XDG_DATA_HOME", "XDG_STATE_HOME"];
+const BASE_ENV = [
+  "PATH",
+  "HOME",
+  "USER",
+  "LOGNAME",
+  "LANG",
+  "LC_ALL",
+  "TERM",
+  "TMPDIR",
+  "SHELL",
+  "XDG_CACHE_HOME",
+  "XDG_CONFIG_HOME",
+  "XDG_DATA_HOME",
+  "XDG_STATE_HOME",
+];
 
 export function policyFor(
   cfg: FactoryConfig,
@@ -62,11 +77,7 @@ export function policyFor(
 /** Scrubbed child env: base names + non-secrety extras + explicit
  *  passthrough. GIT_TERMINAL_PROMPT=0 makes credential prompts fail fast
  *  instead of hanging; GK_FACTORY_POLICY carries the guard contract. */
-export function laneEnv(
-  parent: NodeJS.ProcessEnv,
-  cfg: FactoryConfig,
-  policy: LanePolicy,
-): Record<string, string> {
+export function laneEnv(parent: NodeJS.ProcessEnv, cfg: FactoryConfig, policy: LanePolicy): Record<string, string> {
   const passthrough = new Set(cfg.dispatch.env_passthrough);
   const out: Record<string, string> = {};
   for (const name of BASE_ENV) {

@@ -3,13 +3,8 @@ import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import YAML from "yaml";
-import {
-  type FactoryConfig,
-  loadFactoryConfig,
-  parseDuration,
-  validateFactory,
-} from "../../src/factory/config";
 import { GraphKitError } from "../../src/errors";
+import { loadFactoryConfig, parseDuration, validateFactory } from "../../src/factory/config";
 
 const TEMPLATE = join(import.meta.dir, "..", "..", "templates", "factory", "factory.yaml");
 

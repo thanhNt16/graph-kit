@@ -1,8 +1,7 @@
 import { existsSync, readdirSync } from "node:fs";
-import { join } from "node:path";
 import type { CAC } from "cac";
 import { GraphKitError } from "../../errors.js";
-import { captureEpisode, readEpisodeTail, recordEpisode, sliceWindow, tick } from "../../selflearn/capture.js";
+import { captureEpisode, recordEpisode, tick } from "../../selflearn/capture.js";
 import { stageIntent } from "../../selflearn/intents.js";
 import { promoteIntents } from "../../selflearn/promote.js";
 import { reflect } from "../../selflearn/reflect.js";

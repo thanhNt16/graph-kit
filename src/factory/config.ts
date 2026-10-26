@@ -55,7 +55,10 @@ export const FactoryConfigSchema = z
           })
           .strict()
           .optional(),
-        gitlab: z.object({ project: z.string().min(1), host: z.string().default("https://gitlab.com") }).strict().optional(),
+        gitlab: z
+          .object({ project: z.string().min(1), host: z.string().default("https://gitlab.com") })
+          .strict()
+          .optional(),
         jira: z
           .object({ host: z.string().min(1), project: z.string().min(1), status_field: z.string().optional() })
           .strict()
@@ -70,9 +73,18 @@ export const FactoryConfigSchema = z
     vcs: z
       .object({
         provider: z.enum(["local", "github", "gitlab", "bitbucket"]),
-        github: z.object({ owner: z.string().min(1), repo: z.string().min(1) }).strict().optional(),
-        gitlab: z.object({ project: z.string().min(1), host: z.string().default("https://gitlab.com") }).strict().optional(),
-        bitbucket: z.object({ workspace: z.string().min(1), repo: z.string().min(1) }).strict().optional(),
+        github: z
+          .object({ owner: z.string().min(1), repo: z.string().min(1) })
+          .strict()
+          .optional(),
+        gitlab: z
+          .object({ project: z.string().min(1), host: z.string().default("https://gitlab.com") })
+          .strict()
+          .optional(),
+        bitbucket: z
+          .object({ workspace: z.string().min(1), repo: z.string().min(1) })
+          .strict()
+          .optional(),
         base_branch: z.string().default("main"),
         branch_prefix: z.string().default("factory/"),
         merge: z
@@ -112,7 +124,10 @@ export const FactoryConfigSchema = z
     qa: z
       .object({
         commands: z.array(z.string()).min(1),
-        ui: z.object({ dev_server: z.string().optional(), journeys: z.array(z.string()).default([]) }).strict().nullish(),
+        ui: z
+          .object({ dev_server: z.string().optional(), journeys: z.array(z.string()).default([]) })
+          .strict()
+          .nullish(),
       })
       .strict(),
   })
@@ -179,7 +194,11 @@ export function validateFactory(cwd: string, cfg: FactoryConfig, opts?: { home?:
   for (const [name, p] of Object.entries(cfg.agents)) {
     for (const t of p.tools) {
       if (!knownTools.has(t)) {
-        findings.push({ check: "FACTORY_UNKNOWN_TOOL", path: `agents.${name}.tools`, message: `unknown omp tool "${t}"` });
+        findings.push({
+          check: "FACTORY_UNKNOWN_TOOL",
+          path: `agents.${name}.tools`,
+          message: `unknown omp tool "${t}"`,
+        });
       }
       if (FACTORY_FORBIDDEN_TOOLS.has(t)) {
         findings.push({
@@ -191,7 +210,11 @@ export function validateFactory(cwd: string, cfg: FactoryConfig, opts?: { home?:
     }
     for (const s of p.skills) {
       if (!skillExists(s, cwd, opts?.home)) {
-        findings.push({ check: "FACTORY_UNKNOWN_SKILL", path: `agents.${name}.skills`, message: `no SKILL.md found for "${s}"` });
+        findings.push({
+          check: "FACTORY_UNKNOWN_SKILL",
+          path: `agents.${name}.skills`,
+          message: `no SKILL.md found for "${s}"`,
+        });
       }
     }
   }
@@ -212,7 +235,11 @@ export function validateFactory(cwd: string, cfg: FactoryConfig, opts?: { home?:
       // Gallery name — resolve against the bundled gallery next to this module.
       const bundled = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "templates", "gallery", `${g}.gk.yaml`);
       if (!existsSync(bundled))
-        findings.push({ check: "FACTORY_CONFIG", path: `lanes.${lane}.graph`, message: `gallery template not found: ${g}` });
+        findings.push({
+          check: "FACTORY_CONFIG",
+          path: `lanes.${lane}.graph`,
+          message: `gallery template not found: ${g}`,
+        });
     } else if (!existsSync(join(cwd, g))) {
       findings.push({ check: "FACTORY_CONFIG", path: `lanes.${lane}.graph`, message: `lane graph not found: ${g}` });
     }
@@ -249,9 +276,17 @@ export function validateFactory(cwd: string, cfg: FactoryConfig, opts?: { home?:
 
   // Provider blocks required by the selected providers.
   if (cfg.board.provider === "github" && !cfg.board.github)
-    findings.push({ check: "FACTORY_CONFIG", path: "board.github", message: "board.provider github requires board.github" });
+    findings.push({
+      check: "FACTORY_CONFIG",
+      path: "board.github",
+      message: "board.provider github requires board.github",
+    });
   if (cfg.board.provider === "gitlab" && !cfg.board.gitlab)
-    findings.push({ check: "FACTORY_CONFIG", path: "board.gitlab", message: "board.provider gitlab requires board.gitlab" });
+    findings.push({
+      check: "FACTORY_CONFIG",
+      path: "board.gitlab",
+      message: "board.provider gitlab requires board.gitlab",
+    });
   if (cfg.board.provider === "jira" && !cfg.board.jira)
     findings.push({ check: "FACTORY_CONFIG", path: "board.jira", message: "board.provider jira requires board.jira" });
   if (cfg.vcs.provider === "github" && !cfg.vcs.github)
@@ -259,7 +294,11 @@ export function validateFactory(cwd: string, cfg: FactoryConfig, opts?: { home?:
   if (cfg.vcs.provider === "gitlab" && !cfg.vcs.gitlab)
     findings.push({ check: "FACTORY_CONFIG", path: "vcs.gitlab", message: "vcs.provider gitlab requires vcs.gitlab" });
   if (cfg.vcs.provider === "bitbucket" && !cfg.vcs.bitbucket)
-    findings.push({ check: "FACTORY_CONFIG", path: "vcs.bitbucket", message: "vcs.provider bitbucket requires vcs.bitbucket" });
+    findings.push({
+      check: "FACTORY_CONFIG",
+      path: "vcs.bitbucket",
+      message: "vcs.provider bitbucket requires vcs.bitbucket",
+    });
 
   for (const [lane, v] of Object.entries(cfg.dispatch.max_parallel)) {
     if (v <= 0)

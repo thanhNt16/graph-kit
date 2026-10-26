@@ -428,11 +428,15 @@ export default async function gkSubagentExtension(pi: MinimalPiAPI): Promise<voi
       thinking: Type.Optional(Type.String({ description: "omp --thinking effort" })),
       max_time: Type.Optional(Type.String({ description: "omp --max-time duration (e.g. '45m')" })),
       extensions: Type.Optional(Type.Array(Type.String(), { description: "omp -e extension paths" })),
-      mode_json: Type.Optional(Type.Boolean({ description: "Emit --mode json; output is parsed from the event stream" })),
+      mode_json: Type.Optional(
+        Type.Boolean({ description: "Emit --mode json; output is parsed from the event stream" }),
+      ),
       no_session: Type.Optional(Type.Boolean({ description: "Emit --no-session" })),
       approval_mode: Type.Optional(Type.String({ description: "omp --approval-mode (yolo|write)" })),
       role_prompt: Type.Optional(
-        Type.String({ description: "'inline' (default) pipes the agent fragment via stdin; 'append' uses --append-system-prompt" }),
+        Type.String({
+          description: "'inline' (default) pipes the agent fragment via stdin; 'append' uses --append-system-prompt",
+        }),
       ),
       timeout_ms: Type.Optional(
         Type.Number({

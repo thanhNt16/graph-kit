@@ -119,7 +119,7 @@ export function scoreViews(cwd: string, graph: Graph, views: CriterionView[]): S
   const floor_reasons: string[] = [];
   for (const k of graph.evidence.required_keys) {
     const v = byId.get(k);
-    if (!v || v.status !== "present") floor_reasons.push(`required key ${k}: ${v?.status ?? "missing"}`);
+    if (v?.status !== "present") floor_reasons.push(`required key ${k}: ${v?.status ?? "missing"}`);
     else if (strict && v.freshness !== "fresh") floor_reasons.push(`required key ${k}: ${v.freshness}`);
   }
   if (graph.features?.required) {

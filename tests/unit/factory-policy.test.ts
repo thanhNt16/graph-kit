@@ -90,8 +90,15 @@ describe("laneEnv", () => {
   });
 
   test("env_passthrough admits a listed secret", () => {
-    const cfg2 = { vcs: { branch_prefix: "f/" }, dispatch: { env_passthrough: ["ANTHROPIC_API_KEY"] } } as unknown as FactoryConfig;
-    const env = laneEnv({ PATH: "/bin", ANTHROPIC_API_KEY: "k" }, cfg2, policyFor(cfg2, { id: "x" }, "building", "/w", "/l"));
+    const cfg2 = {
+      vcs: { branch_prefix: "f/" },
+      dispatch: { env_passthrough: ["ANTHROPIC_API_KEY"] },
+    } as unknown as FactoryConfig;
+    const env = laneEnv(
+      { PATH: "/bin", ANTHROPIC_API_KEY: "k" },
+      cfg2,
+      policyFor(cfg2, { id: "x" }, "building", "/w", "/l"),
+    );
     expect(env.ANTHROPIC_API_KEY).toBe("k");
   });
 });

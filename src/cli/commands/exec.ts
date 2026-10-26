@@ -140,10 +140,12 @@ function assertGitRepo(cwd: string): void {
   }
 }
 
+/** One engine dispatch this runner holds open until the wave settles. */
 interface WaveRec {
   node: PlannedNode;
   write: boolean;
   outcome?: DispatchOutcome;
+  resolve?: (o: DispatchOutcome) => void;
 }
 
 /**
@@ -176,7 +178,7 @@ export class WorktreeRunner implements Runner {
   constructor(
     private inner: Runner,
     private root: string,
-    private plan: PlanGraph,
+    _plan: PlanGraph,
     private note: (msg: string) => void = () => {},
     paths: Map<string, string> = new Map(),
   ) {
@@ -260,7 +262,7 @@ export class WorktreeRunner implements Runner {
     // merged, and a challenge defers the verdict to the host).
     const ready = writes.every((n) => {
       const o = cur.outcomes.get(n.id);
-      return o != null && o.ok && !CHALLENGE_RE.test(o.output.trim().split("\n").filter(Boolean).pop() ?? "");
+      return o?.ok && !CHALLENGE_RE.test(o.output.trim().split("\n").filter(Boolean).pop() ?? "");
     });
     if (!ready) return;
     for (const n of writes) {
@@ -364,14 +366,6 @@ export class WorktreeRunner implements Runner {
     }
     this.note(`[exec] branches kept: ${[...this.created.keys()].map((id) => `gk/${id}`).join(", ")}`);
   }
-}
-
-/** One engine dispatch this runner holds open until the wave settles. */
-interface WaveRec {
-  node: PlannedNode;
-  write: boolean;
-  outcome?: DispatchOutcome;
-  resolve?: (o: DispatchOutcome) => void;
 }
 
 // ---------------------------------------------------------------------------

@@ -46,7 +46,7 @@ afterEach(() => {
 
 const transcriptWith = (lines: string[]) => {
   const p = join(cwd, "transcript.jsonl");
-  writeFileSync(p, lines.join("\n") + "\n");
+  writeFileSync(p, `${lines.join("\n")}\n`);
   return p;
 };
 
