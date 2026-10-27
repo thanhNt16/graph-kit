@@ -97,6 +97,7 @@ export function registerFactoryCommand(cli: CAC) {
     .option("--title <t>", "card add: title")
     .option("--body <md>", "card add: description")
     .option("--max-ticks <n>", "run: tick cap (default 20)")
+    .option("--port <n>", "serve: dashboard port (default 4173)")
     .example(leafUsageFor("factory"))
     .action(async (subcommand, arg0, arg1, opts) => {
       const cwd = process.cwd();
@@ -193,7 +194,7 @@ export function registerFactoryCommand(cli: CAC) {
           return;
         }
 
-        const known = ["tick", "run", "lane", "status", "halt", "resume"];
+        const known = ["tick", "run", "lane", "status", "halt", "resume", "serve"];
         if (!known.includes(subcommand)) {
           emit(
             fail("UNKNOWN_FACTORY_SUBCOMMAND", `Unknown factory subcommand "${subcommand}"`, {
@@ -263,6 +264,14 @@ export function registerFactoryCommand(cli: CAC) {
             saveJournal(cwd, j);
           }
           emit(ok({ resumed: arg0 }));
+          return;
+        }
+        if (subcommand === "serve") {
+          const { serveFactoryDashboard } = await import("../../factory/dashboard.js");
+          const port = Number(opts?.port ?? 4173);
+          serveFactoryDashboard(cwd, cfg, prov, deps, port);
+          // keep the process alive; the server runs until SIGINT
+          await new Promise(() => {});
           return;
         }
         emit(

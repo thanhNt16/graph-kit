@@ -187,13 +187,14 @@
     },
     {
       "name": "factory",
-      "description": "Software factory\nSubcommands: init validate card tick run lane status halt resume",
+      "description": "Software factory\nSubcommands: init validate card tick run lane status halt resume serve",
       "options": [
         "--json",
         "--force",
         "--title <t>",
         "--body <md>",
-        "--max-ticks <n>"
+        "--max-ticks <n>",
+        "--port <n>"
       ]
     },
     {

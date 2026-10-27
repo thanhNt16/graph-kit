@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Providers: `IIssueBoardProvider`/`IVCSProvider`/`Workspace` contracts + file-backed `local` adapter (`.graphkit/factory/board/*.yaml` cards, `prs.json` PR records, real git worktrees/merges).
   - `planTick` pure planner + `gk factory init|validate|card|tick|run|lane|status|halt|resume` — journal'd Ready→Building→QA→Review→Done flow with marker-idempotent comments, halt sweep, bounce-with-rounds, and a full offline e2e test.
   - P3: `github` providers — Projects v2 single-select board via `gh` + `gh pr` VCS (idempotent branch→PR, check rollup, squash/merge/rebase); injectable exec seam with fixture tests (no network). GitLab/Jira/Bitbucket remain `FACTORY_PROVIDER` stubs (P4).
+  - `gk factory serve [--port <n>]` — local Kanban dashboard (node:http, no deps): 6 lane columns fed by the board, per-card drawer with journal history + comments + run records, live lane-runs table, and a `tick` button (`POST /api/tick`) that drives the planner while the board auto-refreshes.
 - **Factory skill pack** under `templates/factory/` — 11 lane skills (`factory-intake` … `context-docs`), 4 lane agents, 4 lane graph templates (`factory-{intake,build,qa,review}.gk.yaml`), seeded by `gk factory init`.
 
 ## [0.3.43] - 2026-10-12

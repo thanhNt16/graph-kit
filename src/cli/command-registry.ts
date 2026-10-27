@@ -107,6 +107,7 @@ const GROUP_SUBCOMMANDS: Record<string, Leaf[]> = {
     { name: "status", usage: "" },
     { name: "halt", usage: "<card>" },
     { name: "resume", usage: "<card>" },
+    { name: "serve", usage: "[--port <n>]" },
   ],
   queue: [
     { name: "add", usage: "<file.yaml|->" },
