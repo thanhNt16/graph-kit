@@ -91,14 +91,14 @@ function tickDeps(cwd: string, cfg: FactoryConfig): TickDeps {
 /** `gk factory` — board-driven agent production line. */
 export function registerFactoryCommand(cli: CAC) {
   cli
-    .command("factory [subcommand] [args...]", `Software factory\nSubcommands: ${subcommandsFor("factory")}`)
+    .command("factory [subcommand] [arg0] [arg1]", `Software factory\nSubcommands: ${subcommandsFor("factory")}`)
     .option("--json", "JSON output")
     .option("--force", "init: overwrite existing .omp/factory.yaml")
     .option("--title <t>", "card add: title")
     .option("--body <md>", "card add: description")
     .option("--max-ticks <n>", "run: tick cap (default 20)")
     .example(leafUsageFor("factory"))
-    .action(async (subcommand, args, opts) => {
+    .action(async (subcommand, arg0, arg1, opts) => {
       const cwd = process.cwd();
       const json = Boolean(opts?.json);
       if (!subcommand) {
@@ -107,8 +107,7 @@ export function registerFactoryCommand(cli: CAC) {
         );
         return;
       }
-      const arg0 = Array.isArray(args) ? args[0] : args;
-      const arg1 = Array.isArray(args) ? args[1] : undefined;
+
       try {
         if (subcommand === "init") {
           const dest = join(cwd, ".omp", "factory.yaml");

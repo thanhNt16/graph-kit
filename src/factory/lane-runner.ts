@@ -1,7 +1,7 @@
 /** LaneRunner — executes one lane pass for a card: worktree ensure, policy
  *  env, prompt assembly, omp dispatch (--mode json + guard extension),
  *  verdict extraction, run record. Spec §3.7. */
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { spawnDispatch } from "../exec/spawn.js";
 import type { FactoryConfig, LaneKey } from "./config.js";
@@ -143,7 +143,16 @@ export async function runLane(
   const logPath = join(runsDir(cwd), `${card.id}-${lane}-guard.jsonl`);
   const policy = policyFor(cfg, card, lane, wtPath, logPath);
 
-  const fragment = deps.agentFragment(LANE_AGENTS[lane] ?? binding.agent);
+  const agent = LANE_AGENTS[lane] ?? binding.agent;
+  // Skills are resolved by omp against child_cwd — materialize the lane
+  // profile's skills into the worktree so `--skills` names resolve there
+  // (silent-miss per the omp contract).
+  const skillSrc = join(cwd, ".omp", "skills");
+  for (const skill of profile.skills ?? []) {
+    const src = join(skillSrc, skill);
+    const dest = join(wtPath, ".omp", "skills", skill);
+    if (existsSync(src) && !existsSync(dest)) cpSync(src, dest, { recursive: true });
+  }
   const extra = deps.contextFor?.(card, lane) ?? "";
   const objective = [
     `Board card ${card.id} ("${card.title}").`,
@@ -160,10 +169,10 @@ export async function runLane(
   const env = laneEnv(process.env, cfg, policy);
   const dispatch = deps.dispatch ?? spawnDispatch;
   const outcome = await dispatch({
-    agent: fragment,
+    agent,
     model: profile.model,
     objective,
-    cwd: wtPath,
+    cwd, // agent prompt resolves under <cwd>/.omp/agents/
     child_cwd: wtPath,
     skills: profile.skills,
     thinking: profile.thinking,

@@ -82,9 +82,17 @@ export function planTick(cfg: FactoryConfig, input: TickInput): FactoryAction[] 
     const verdict = result.verdict;
     if (verdict === "BLOCK") {
       const next = j.round + 1;
-      if (next > cfg.dispatch.max_rounds) {
+      // Intake BLOCK = ambiguous card — park in Blocked with the questions;
+      // there is nothing to re-build (bounce loop starts at Building).
+      if (j.lane === "ready" || next > cfg.dispatch.max_rounds) {
         actions.push({ kind: "move_board", card: j.card, to: "blocked" });
-        actions.push({ kind: "bounce", card: j.card, from: j.lane, to: "blocked", note: result.note ?? "max rounds" });
+        actions.push({
+          kind: "bounce",
+          card: j.card,
+          from: j.lane,
+          to: "blocked",
+          note: j.lane === "ready" ? (result.note ?? "intake BLOCK") : (result.note ?? "max rounds"),
+        });
         j.phase = "blocked";
         continue;
       }
