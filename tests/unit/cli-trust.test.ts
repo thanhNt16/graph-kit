@@ -1,10 +1,11 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { cac } from "cac";
 import { groupNames, subcommandsFor } from "../../src/cli/command-registry.js";
 import { registerEvidenceCommand } from "../../src/cli/commands/evidence.js";
+import { registerFactoryCommand } from "../../src/cli/commands/factory.js";
 import { registerFeaturesCommand } from "../../src/cli/commands/features.js";
 import { registerGraphCommands } from "../../src/cli/commands/graph.js";
 import { registerInventoryCommands } from "../../src/cli/commands/inventory.js";
@@ -38,6 +39,7 @@ function fullCli() {
   registerRunCommands(cli);
   registerScheduleCommands(cli);
   registerQueueCommand(cli);
+  registerFactoryCommand(cli);
   registerLearnCommand(cli);
   registerSelflearnCommand(cli);
   cli.help();
@@ -81,7 +83,7 @@ function applyF1Guard(cli: ReturnType<typeof fullCli>) {
   return 0;
 }
 
-const DIAMOND = `apiVersion: graphkit.dev/v2
+const _DIAMOND = `apiVersion: graphkit.dev/v2
 kind: Graph
 metadata:
   name: trust-audit

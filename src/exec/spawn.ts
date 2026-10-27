@@ -4,8 +4,9 @@
 // sync-omp.ts) where no graph-kit src/ exists to import. This module is
 // canonical for `gk exec`; keep behavioral fixes in both until the P3 dedupe.
 import { spawn } from "node:child_process";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { parseOmpJsonStream } from "../factory/omp-events.js";
 import { activeRun, appendDispatch } from "../runs/ledger.js";
 import type { DispatchOutcome } from "./types.js";
 
@@ -31,6 +32,26 @@ export interface DispatchArgs {
    *  Agent-fragment loading and ledger writes stay on `cwd` — the repo root —
    *  while the agent process runs here. Unset → child inherits the caller's cwd. */
   child_cwd?: string;
+  /** omp `--skills` list; `[]` emits `--no-skills`. Unset → omp discovers. */
+  skills?: string[];
+  thinking?: string;
+  /** omp `--max-time` duration (e.g. "45m"). Distinct from timeout_ms, which
+   *  is gk's own process kill budget — max_time makes omp abort its turn. */
+  max_time?: string;
+  /** omp `-e` extension paths (order preserved). */
+  extensions?: string[];
+  /** "inline" (default): agent fragment + objective piped via stdin.
+   *  "append": fragment passed via --append-system-prompt, stdin gets the
+   *  objective/context only — keeps role prose out of the user turn. */
+  role_prompt?: "append" | "inline";
+  /** Emit `--mode json`; output is parsed via parseOmpJsonStream and the raw
+   *  stream is stored under the active run dir (events_path on the result). */
+  mode_json?: boolean;
+  /** Full environment for the child, replacing process.env (GK_PROMPT is
+   *  still injected). Use for factory credential scrubbing; unset inherits. */
+  env?: Record<string, string>;
+  approval_mode?: "yolo" | "write";
+  no_session?: boolean;
 }
 
 export interface DispatchResult {
@@ -40,6 +61,11 @@ export interface DispatchResult {
   /** true when the run was cut off by timeout_ms (or abort) — retry policies
    *  can match on this instead of scraping the output text. */
   timed_out?: boolean;
+  /** mode_json: path of the raw event stream under the run dir. */
+  events_path?: string;
+  /** mode_json: tool calls that ended as errors (extension-blocked, not
+   *  found, runtime failure). */
+  blocked?: Array<{ tool: string; reason: string }>;
 }
 
 export function loadAgentPrompt(agent: string, cwd = process.cwd()): string | null {
@@ -55,9 +81,20 @@ export function buildPiArgs(args: DispatchArgs): string[] {
   const constraints = args.constraints;
   // Exclusive precedence: no_exec removes the shell entirely; an explicit
   // allowlist beats the no_write default; no_write keeps Bash (best-effort).
-  if (constraints?.no_exec) argv.push("--tools", "Read,Glob,Grep");
+  // omp tool names are lowercase (tools/builtin-names.ts).
+  if (constraints?.no_exec) argv.push("--tools", "read,glob,grep");
   else if (constraints?.tools_allowlist?.length) argv.push("--tools", constraints.tools_allowlist.join(","));
-  else if (constraints?.no_write) argv.push("--tools", "Read,Glob,Grep,Bash");
+  else if (constraints?.no_write) argv.push("--tools", "read,glob,grep,bash");
+  if (args.skills !== undefined) {
+    if (args.skills.length === 0) argv.push("--no-skills");
+    else argv.push("--skills", args.skills.join(","));
+  }
+  if (args.thinking) argv.push("--thinking", args.thinking);
+  if (args.max_time) argv.push("--max-time", args.max_time);
+  for (const ext of args.extensions ?? []) argv.push("-e", ext);
+  if (args.mode_json) argv.push("--mode", "json");
+  if (args.approval_mode) argv.push("--approval-mode", args.approval_mode);
+  if (args.no_session) argv.push("--no-session");
   return argv;
 }
 
@@ -90,7 +127,12 @@ function recordIntent(args: DispatchArgs, pid: number | null): void {
 async function dispatch(args: DispatchArgs, signal?: AbortSignal): Promise<DispatchResult> {
   const fragment = loadAgentPrompt(args.agent, args.cwd);
   if (!fragment) return { ok: false, output: `Unknown agent: ${args.agent}`, exit_code: 1 };
-  const prompt = `${fragment}\n\n${buildPrompt(args)}`;
+  // "append" mode moves the role fragment to --append-system-prompt so the
+  // stdin turn carries only objective/context (factory role prompts).
+  const appendFragment = args.role_prompt === "append";
+  const prompt = appendFragment ? buildPrompt(args) : `${fragment}\n\n${buildPrompt(args)}`;
+  const piArgs = buildPiArgs(args);
+  if (appendFragment) piArgs.push("--append-system-prompt", fragment);
   const timeout = args.timeout_ms ?? 600_000;
   const { promise, resolve } = Promise.withResolvers<DispatchResult>();
   // omp -p reads the prompt from piped stdin. Prompt-as-argv and direct
@@ -115,12 +157,12 @@ async function dispatch(args: DispatchArgs, signal?: AbortSignal): Promise<Dispa
   recordIntent(args, null);
   const child = spawn(
     "/bin/sh",
-    ["-c", 'printf %s "$GK_PROMPT" | exec omp "$@"', "gk-dispatch", ...buildPiArgs(args)],
+    ["-c", `printf %s "$GK_PROMPT" | exec ${process.env.GK_OMP_BIN ?? "omp"} "$@"`, "gk-dispatch", ...piArgs],
     // Child cwd: the worktree when isolated, else the ledger/agent root —
     // never the orchestrator's process.cwd(), which under `gk exec` may be
     // any directory the user invoked from.
     {
-      env: { ...process.env, GK_PROMPT: prompt },
+      env: { ...(args.env ?? process.env), GK_PROMPT: prompt },
       detached: true,
       cwd: args.child_cwd ?? args.cwd,
     },
@@ -191,22 +233,58 @@ async function dispatch(args: DispatchArgs, signal?: AbortSignal): Promise<Dispa
     clearTimeout(timer);
     signal?.removeEventListener("abort", onAbort);
     const suffix = truncated ? "\n[output truncated at 10MB]" : "";
+    // mode_json: stdout is an event stream, not prose — persist it under the
+    // run dir and extract the final assistant text + blocked-tool reasons.
+    let eventsPath: string | undefined;
+    let blocked: Array<{ tool: string; reason: string }> | undefined;
+    let ompAborted = false;
+    let display = out;
+    if (args.mode_json) {
+      try {
+        const runDir = activeRun(args.cwd ?? process.cwd());
+        if (runDir) {
+          const evDir = join(runDir, "omp-events");
+          mkdirSync(evDir, { recursive: true });
+          eventsPath = join(evDir, `${args.node ?? "dispatch"}-a${args.attempt ?? 0}.jsonl`);
+          writeFileSync(eventsPath, out);
+        }
+      } catch {
+        /* event persistence is best-effort */
+      }
+      const parsed = parseOmpJsonStream(out);
+      blocked = parsed.blocked.length > 0 ? parsed.blocked : undefined;
+      display = parsed.text || out;
+      // omp --max-time ends the turn with stopReason "aborted" + exit 1 —
+      // surface it as timed_out (not gk's own kill, so no TIMEOUT marker).
+      ompAborted = parsed.aborted;
+    }
     if (timedOut) {
       // "TIMEOUT" marker is contractual: retry.non_retryable entries and the
       // orchestrator match on it. exit_code 124 mirrors GNU timeout.
       resolve({
         ok: false,
-        output: `${out}\nTIMEOUT: killed after ${timeout}ms (process group terminated)${suffix}`.trim(),
+        output: `${display}\nTIMEOUT: killed after ${timeout}ms (process group terminated)${suffix}`.trim(),
         exit_code: 124,
         timed_out: true,
+        ...(eventsPath ? { events_path: eventsPath } : {}),
+        ...(blocked ? { blocked } : {}),
       });
     } else if (code === 0) {
-      resolve({ ok: true, output: `${out.trim()}${suffix}`, exit_code: 0 });
+      resolve({
+        ok: true,
+        output: `${display.trim()}${suffix}`,
+        exit_code: 0,
+        ...(eventsPath ? { events_path: eventsPath } : {}),
+        ...(blocked ? { blocked } : {}),
+      });
     } else {
       resolve({
         ok: false,
-        output: `${out}\n${err}\nexit ${code ?? sig ?? "unknown"}${suffix}`.trim(),
+        output: `${display}\n${err}\nexit ${code ?? sig ?? "unknown"}${suffix}`.trim(),
         exit_code: typeof code === "number" ? code : 1,
+        ...(eventsPath ? { events_path: eventsPath } : {}),
+        ...(blocked ? { blocked } : {}),
+        ...(ompAborted ? { timed_out: true } : {}),
       });
     }
   });
@@ -224,5 +302,7 @@ export async function spawnDispatch(args: DispatchArgs, signal?: AbortSignal): P
     exitCode: r.exit_code,
     durationMs: Date.now() - started,
     ...(r.timed_out === undefined ? {} : { timedOut: r.timed_out }),
+    ...(r.events_path === undefined ? {} : { eventsPath: r.events_path }),
+    ...(r.blocked === undefined ? {} : { blocked: r.blocked }),
   };
 }

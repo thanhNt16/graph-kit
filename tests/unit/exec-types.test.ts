@@ -69,7 +69,7 @@ describe("exec types — Runner seam", () => {
   test("DispatchContext.upstream carries upstream NodeRuns to the dispatch", async () => {
     const runner = new RecordingRunner();
     const plan = planGraph(twoNodeGraph());
-    const [scouter, worker] = plan.waves.flatMap((w) => w.nodes);
+    const [_scouter, worker] = plan.waves.flatMap((w) => w.nodes);
     const scouterRun: NodeRun = {
       id: "scouter",
       wave: 0,

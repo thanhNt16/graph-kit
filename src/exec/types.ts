@@ -21,6 +21,10 @@ export interface DispatchOutcome {
   exitCode: number;
   durationMs: number;
   timedOut?: boolean;
+  /** mode_json dispatches: raw omp event stream under the run dir. */
+  eventsPath?: string;
+  /** mode_json dispatches: tool calls that ended as errors. */
+  blocked?: Array<{ tool: string; reason: string }>;
 }
 
 /** Everything a Runner needs to dispatch one node of one run. */

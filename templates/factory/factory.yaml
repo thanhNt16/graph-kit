@@ -1,0 +1,67 @@
+# gk factory starter config — `gk factory init` materializes this into
+# .omp/factory.yaml. Lanes reference gallery templates factory-{intake,build,qa,review}.
+version: 1
+
+board:
+  provider: local # file-backed board under .graphkit/factory/board
+  local: {}
+  lanes:
+    ready: Ready
+    building: Building
+    qa: In QA
+    review: Under Review
+    blocked: Blocked
+    done: Done
+  halt_label: factory:halt
+  intake_label: factory
+
+vcs:
+  provider: local # squash-merge into base_branch in the main checkout
+  base_branch: main
+  branch_prefix: factory/
+  merge: { method: squash, auto: false, require_checks: true }
+
+dispatch:
+  poll_interval: 60s
+  max_parallel: { building: 2, qa: 2, review: 1 }
+  max_rounds: 3
+  halt_poll: 15s
+  env_passthrough: [] # names the lane children may inherit (e.g. ANTHROPIC_API_KEY)
+
+agents:
+  intake:
+    model: "@smol"
+    thinking: low
+    tools: [read, grep, find, glob, todo]
+    skills: [factory-intake, factory-repro-check, context-docs]
+    max_time: 10m
+  worker:
+    model: "@default"
+    thinking: medium
+    tools: [read, grep, find, glob, edit, write, bash, lsp, todo]
+    skills: [factory-build, factory-dedup-ladder, factory-git-sync, context-docs]
+    max_time: 45m
+    budget_tokens: 120000
+  qa:
+    model: "@default"
+    thinking: medium
+    tools: [read, grep, find, glob, bash, todo]
+    skills: [factory-scrutiny, factory-ui-journey, factory-proof, context-docs]
+    max_time: 30m
+    approval_mode: yolo
+  reviewer:
+    model: "@slow"
+    thinking: high
+    tools: [read, grep, find, glob]
+    skills: [factory-adversarial-review, factory-heresy-lint, factory-proof, context-docs]
+    max_time: 20m
+
+lanes:
+  ready:    { agent: intake,   graph: factory-intake, next: building }
+  building: { agent: worker,   graph: factory-build,  next: qa }
+  qa:       { agent: qa,       graph: factory-qa,     next: review }
+  review:   { agent: reviewer, graph: factory-review, next: done }
+
+qa:
+  commands: ["bun run typecheck", "bun run lint", "bun test"]
+  ui: null

@@ -4,7 +4,7 @@ import { existsSync, mkdirSync, rmSync } from "node:fs";
 import { join } from "node:path";
 
 const TMP = join(import.meta.dir, "..", "..", ".tmp-init-test");
-const KITS = join(import.meta.dir, "..", "..", "kits");
+const _KITS = join(import.meta.dir, "..", "..", "kits");
 
 function initTmp(target: string): string {
   rmSync(TMP, { recursive: true, force: true });

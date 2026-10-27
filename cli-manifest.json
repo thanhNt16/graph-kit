@@ -186,6 +186,18 @@
       ]
     },
     {
+      "name": "factory",
+      "description": "Software factory\nSubcommands: init validate card tick run lane status halt resume serve",
+      "options": [
+        "--json",
+        "--force",
+        "--title <t>",
+        "--body <md>",
+        "--max-ticks <n>",
+        "--port <n>"
+      ]
+    },
+    {
       "name": "learn",
       "description": "Continual-learning proposals\nSubcommands: propose evaluate adopt reject revert list",
       "options": [

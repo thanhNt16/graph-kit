@@ -1,0 +1,43 @@
+apiVersion: graphkit.dev/v1
+kind: GraphTemplate
+metadata:
+  name: factory-intake
+  description: Lane graph — triage a board card before it enters the build lane (read-only intake)
+  version: 1
+parameters:
+  card-id:
+    description: Board card id
+    required: true
+  card-title:
+    description: Card title
+    required: true
+  card-body:
+    description: Card body/description (may be empty)
+    required: false
+graph:
+  apiVersion: graphkit.dev/v2
+  kind: Graph
+  metadata:
+    name: factory-intake
+    description: Triage card {{card-id}} — classify, criteria, ambiguity
+  topology: custom
+  inputs:
+    card-id: { type: string, required: true }
+    card-title: { type: string, required: true }
+    card-body: { type: string, required: false }
+  nodes:
+    intake:
+      agent: factory-intake
+      model: haiku
+      objective: >-
+        Triage board card {{card-id}} ("{{card-title}}"). Card body:
+        "{{card-body}}". Restate the ask, classify, extract checkable
+        acceptance criteria, flag ambiguity per your skills. Emit the
+        gk-intake JSON block.
+      tools: [Read, Grep, Glob, Find]
+      constraints:
+        - no_write: true
+      depend_on: []
+      evidence: [intake_result]
+  evidence:
+    required_keys: [intake_result]

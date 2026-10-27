@@ -42,7 +42,7 @@ describe("runtime contracts", () => {
     expect(buildPiArgs({ agent: "a", objective: "x", constraints: { no_exec: true } })).toEqual([
       "-p",
       "--tools",
-      "Read,Glob,Grep",
+      "read,glob,grep",
     ]);
     expect(
       buildPiArgs({
@@ -50,7 +50,7 @@ describe("runtime contracts", () => {
         objective: "x",
         constraints: { no_exec: true, no_write: true, tools_allowlist: ["Bash"] },
       }),
-    ).toEqual(["-p", "--tools", "Read,Glob,Grep"]);
+    ).toEqual(["-p", "--tools", "read,glob,grep"]);
   });
 
   test("tools and no_write use exclusive precedence", () => {
@@ -62,7 +62,7 @@ describe("runtime contracts", () => {
     expect(buildPiArgs({ agent: "a", objective: "x", constraints: { no_write: true } })).toEqual([
       "-p",
       "--tools",
-      "Read,Glob,Grep,Bash",
+      "read,glob,grep,bash",
     ]);
   });
 });

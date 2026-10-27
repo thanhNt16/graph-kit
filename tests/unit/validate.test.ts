@@ -1,6 +1,5 @@
 import { afterAll, afterEach, beforeAll, describe, expect, test } from "bun:test";
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { cac } from "cac";
 import YAML from "yaml";

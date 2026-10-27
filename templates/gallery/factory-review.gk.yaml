@@ -1,0 +1,52 @@
+apiVersion: graphkit.dev/v1
+kind: GraphTemplate
+metadata:
+  name: factory-review
+  description: Lane graph — adversarial review of the lane diff vs card intent (read-only, approve/request-changes)
+  version: 1
+parameters:
+  card-id:
+    description: Board card id
+    required: true
+  card-title:
+    description: Card title
+    required: true
+  card-body:
+    description: Card body/description (may be empty)
+    required: false
+  merge-base:
+    description: Merge base ref to diff against
+    required: true
+  qa-output:
+    description: The QA lane's gk-qa JSON block
+    required: false
+graph:
+  apiVersion: graphkit.dev/v2
+  kind: Graph
+  metadata:
+    name: factory-review
+    description: Review card {{card-id}} — hostile diff review vs card intent
+  topology: custom
+  inputs:
+    card-id: { type: string, required: true }
+    card-title: { type: string, required: true }
+    card-body: { type: string, required: false }
+    merge-base: { type: string, required: true }
+    qa-output: { type: string, required: false }
+  nodes:
+    review:
+      agent: factory-reviewer
+      model: opus
+      objective: >-
+        Review the diff for card {{card-id}} ("{{card-title}}"). Card body:
+        "{{card-body}}". QA report: "{{qa-output}}". Diff against merge base
+        "{{merge-base}}" (git diff {{merge-base}}...HEAD). Hunt regressions,
+        scope creep, missing tests, authority violations, solution-drift.
+        Emit gk-review.
+      tools: [Read, Grep, Glob, Find, Bash]
+      constraints:
+        - no_write: true
+      depend_on: []
+      evidence: [review_result]
+  evidence:
+    required_keys: [review_result]
