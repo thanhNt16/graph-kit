@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { cac } from "cac";
 import YAML from "yaml";
 import { registerScheduleCommands } from "../../src/cli/commands/schedule.js";
-import { cronError, emitSchedule, parseCron } from "../../src/compiler/schedule.js";
+import { cronError, emitSchedule, parseCron, SCHEDULE_FORMATS } from "../../src/compiler/schedule.js";
 import { validateGraph } from "../../src/compiler/validate.js";
 import { GraphSchema } from "../../src/schemas/graph.schema.js";
 import { APP_VERSION } from "../../src/version.js";
@@ -133,6 +133,13 @@ describe("cron parsing", () => {
       expect(cronError(expr)).not.toBeNull();
     });
   }
+
+  test("rejects a huge range endpoint even when the step skips it", () => {
+    expect(parseCron("0-1000000000/1000000001 * * * *")).toEqual({
+      ok: false,
+      error: "value 1000000000 out of range in minute (0-59)",
+    });
+  });
 
   test("expands lists, ranges, and steps", () => {
     const r = parseCron("0,30 9-11 * * MON,WED");
@@ -290,6 +297,19 @@ describe("gk schedule CLI", () => {
     expect(text).toContain(`0 9 * * 1-5 cd /ABS/PATH/TO/REPO && gk exec '${graphFile()}'`);
     expect(() => JSON.parse(text)).toThrow();
   });
+
+  for (const format of SCHEDULE_FORMATS) {
+    test(`emit rejects malformed cron for ${format}`, () => {
+      const expr = "0 9 * *";
+      writeFileSync(graphFile(), SCHEDULED.replace("0 9 * * 1-5", expr));
+      const { logs, code } = runCli(["schedule", "emit", graphFile(), "--format", format, "--json"], cwd);
+      expect(code).toBe(1);
+      const parsed = JSON.parse(logs.join("\n"));
+      expect(parsed.status).toBe("fail");
+      expect(parsed.error.code).toBe("SCHEDULE_CRON");
+      expect(parsed.error.message).toBe(`SCHEDULE_CRON: ${cronError(expr)}`);
+    });
+  }
 
   test("emit rejects an unknown --format", () => {
     const { logs, code } = runCli(["schedule", "emit", graphFile(), "--format", "systemd"], cwd);

@@ -93,16 +93,17 @@ function expandField(
         hi = b;
       }
     }
+    for (const bound of [lo, hi]) {
+      if (bound < spec.min || bound > spec.max) {
+        return { ok: false, error: `value ${bound} out of range in ${spec.key} (${spec.min}-${spec.max})` };
+      }
+    }
     for (let v = lo; v <= hi; v += step) {
       // day-of-week accepts both 0 and 7 for Sunday — normalize to 0.
       values.add(spec.key === "dow" && v === 7 ? 0 : v);
     }
   }
   const out = [...values].sort((a, b) => a - b);
-  for (const v of out) {
-    const bounded = spec.key === "dow" ? v >= 0 && v <= 6 : v >= spec.min && v <= spec.max;
-    if (!bounded) return { ok: false, error: `value ${v} out of range in ${spec.key} (${spec.min}-${spec.max})` };
-  }
   if (out.length === 0) return { ok: false, error: `empty ${spec.key} field` };
   return { ok: true, values: out };
 }
@@ -270,12 +271,10 @@ function plistDict(e: CalendarEntry, indent: string): string {
   return `${indent}<dict>\n${lines.join("\n")}\n${indent}</dict>`;
 }
 
-function emitLaunchd(schedule: Schedule, graphRef: string, graphName: string): string {
-  const parsed = parseCron(schedule.cron);
-  if (!parsed.ok) throw new GraphKitError("SCHEDULE_CRON", `SCHEDULE_CRON: ${parsed.error}`);
-  const entries = calendarEntries(parsed.fields);
-  const domRestricted = parsed.fields.dom.length < FIELD_SPECS[2].size;
-  const dowRestricted = parsed.fields.dow.length < FIELD_SPECS[4].size;
+function emitLaunchd(schedule: Schedule, fields: CronFields, graphRef: string, graphName: string): string {
+  const entries = calendarEntries(fields);
+  const domRestricted = fields.dom.length < FIELD_SPECS[2].size;
+  const dowRestricted = fields.dow.length < FIELD_SPECS[4].size;
   const approx =
     domRestricted && dowRestricted
       ? `\n     NOTE: this cron restricts BOTH day-of-month and day-of-week — cron\n     fires when EITHER matches; StartCalendarInterval requires BOTH. The\n     expansion below approximates as AND. Split into two plists for exact\n     OR semantics.`
@@ -358,13 +357,16 @@ export function emitSchedule(
       { loops: true, formats: ["claude-loop"] },
     );
   }
+  const parsed = parseCron(schedule.cron);
+  if (!parsed.ok) throw new GraphKitError("SCHEDULE_CRON", `SCHEDULE_CRON: ${parsed.error}`);
+
   switch (format) {
     case "github-actions":
       return emitGithubActions(schedule, graphRef, graphName);
     case "cron":
       return emitCrontab(schedule, graphRef);
     case "launchd":
-      return emitLaunchd(schedule, graphRef, graphName);
+      return emitLaunchd(schedule, parsed.fields, graphRef, graphName);
     case "claude-loop":
       return emitClaudeLoop(schedule, graphRef, graphName, hasLoops);
   }

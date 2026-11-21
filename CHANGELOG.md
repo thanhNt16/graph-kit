@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 ## [Unreleased]
+### Fixed
+- `gk schedule emit` rejects invalid cron in every format, and the cron parser bounds-checks range endpoints before expansion.
 
 ## [0.3.43] - 2026-10-12
 ### Fixed
