@@ -236,7 +236,7 @@ block (`adopted_by`, `anchor`, `use`/`view`/`patch` counters). The lifecycle
 bounds that store — scoring is *uses when offered*, so idle time never ages
 anything out:
 
-* **Denominator** — every `gk recall`/`gk suggest` invocation appends one line
+* **Denominator** — every `gk memory recall`/`gk suggest` invocation appends one line
   to `.graphkit/memory/.requests.jsonl`; `anchor` snapshots its length at
   adoption, so `denom = requests − anchor` is opportunity-relative.
 * **Probation** — `denom < lifecycle.maturity` (default 100 requests): live,

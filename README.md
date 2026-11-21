@@ -281,7 +281,7 @@ The production-line layer on top of gates and loops (see
 | `gk run progress` | `## Progress so far` recitation injected into briefs — no re-deriving history after a reset |
 | `fan_out.reduce` | Deterministic merge / majority-vote / first-past-the-post over parallel candidates |
 | `no_progress_similarity` | Semantic stagnation detection (Jaccard shingles) — catches paraphrased failures, not just byte-identical ones |
-| `gk schedule emit` | Export `schedule:` to cron / launchd / GitHub Actions / systemd / claude-loop |
+| `gk schedule emit` | Export `schedule:` to cron / launchd / GitHub Actions / claude-loop |
 | `loop kind:` | `polling` / `counting` deterministic loops + `gk run poll`, `exit_when` |
 | Sealed holdouts | `refs[].holdout` + `criteria/*.holdout.md` — eval-only cases builders never see (`HOLDOUT_LEAK`) |
 | `evidence.verdict: scored` | Weighted criteria + threshold on top of the required-keys floor |
