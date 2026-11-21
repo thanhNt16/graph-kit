@@ -7,6 +7,7 @@ import YAML from "yaml";
 import { registerLearnCommand } from "../../src/cli/commands/learn.js";
 import { promoteFailure } from "../../src/evidence/promote.js";
 import { adoptProposal, evaluateProposal, listProposals, propose, revertProposal } from "../../src/learn/learn.js";
+import { expandedRecall } from "../../src/memory/recall-expanded.js";
 import type { TraceLine } from "../../src/runs/ledger.js";
 
 const T0 = Date.parse("2026-01-01T00:00:00.000Z");
@@ -190,7 +191,7 @@ describe("learn adopt / reject / revert", () => {
     expect(readProposal(id).status).toBe("evaluated");
   });
 
-  test("adopt installs the proposed skill and revert removes it", () => {
+  function proposeSkill(): string {
     seedRun("20260101-000006-a", { status: "blocked", trace: BLOCKED_TRACE });
     promoteFailure(cwd, { run: "20260101-000006-a" });
     const { id } = propose(cwd, { run: "20260101-000006-a" });
@@ -205,7 +206,11 @@ describe("learn adopt / reject / revert", () => {
     doc.proposal_kind = "skill";
     doc.proposes = { skill_path: "proposals/missed-check.md" };
     writeProposal(id, doc);
+    return id;
+  }
 
+  test("adopt installs the proposed skill and revert removes it", () => {
+    const id = proposeSkill();
     const adopted = adoptProposal(cwd, id);
     expect(adopted.status).toBe("adopted");
     const installed = join(cwd, "kits", "_core", "skills", "missed-check", "SKILL.md");
@@ -216,6 +221,59 @@ describe("learn adopt / reject / revert", () => {
     expect(reverted.status).toBe("reverted");
     expect(reverted.removed).toEqual(["kits/_core/skills/missed-check/SKILL.md"]);
     expect(existsSync(installed)).toBe(false);
+  });
+
+  test("revert restores an overwritten skill byte for byte", () => {
+    const id = proposeSkill();
+    const installed = join(cwd, "kits", "_core", "skills", "missed-check", "SKILL.md");
+    const original = Buffer.from("# Original skill\r\n\r\nPreserve these spaces.  \r\n");
+    mkdirSync(join(cwd, "kits", "_core", "skills", "missed-check"), { recursive: true });
+    writeFileSync(installed, original);
+
+    adoptProposal(cwd, id);
+    expect(readFileSync(installed, "utf8")).toBe("# missed-check\n\nCatch the failure earlier.\n");
+
+    expect(revertProposal(cwd, id).removed).toEqual([]);
+    expect(readFileSync(installed)).toEqual(original);
+  });
+
+  test("revert removes a new learned artifact from active recall", () => {
+    const id = proposeSkill();
+    const memDir = join(cwd, ".graphkit", "memory");
+    const adopted = adoptProposal(cwd, id);
+    const recallIds = () => expandedRecall(memDir, "criterion").results.map((result) => result.id);
+    expect(recallIds()).toContain(id);
+
+    revertProposal(cwd, id);
+    expect(recallIds()).not.toContain(id);
+    expect(existsSync(join(memDir, adopted.artifact))).toBe(false);
+  });
+
+  test("revert restores a prior memory artifact instead of deleting it", () => {
+    const id = proposeSkill();
+    const memDir = join(cwd, ".graphkit", "memory");
+    const artifact = join(memDir, `${id}.md`);
+    const original = "---\nid: previous\ntype: knowledge\n---\nPrevious artifact.\n";
+    mkdirSync(memDir, { recursive: true });
+    writeFileSync(artifact, original);
+
+    adoptProposal(cwd, id);
+    expect(readFileSync(artifact, "utf8")).toContain("type: learned-artifact");
+
+    revertProposal(cwd, id);
+    expect(readFileSync(artifact, "utf8")).toBe(original);
+  });
+
+  test("revert removes legacy learned memory but leaves a skill with no snapshot in place", () => {
+    const id = proposeSkill();
+    const adopted = adoptProposal(cwd, id);
+    const doc = readProposal(id);
+    delete doc.adopted.undo;
+    writeProposal(id, doc);
+
+    expect(revertProposal(cwd, id).status).toBe("reverted");
+    expect(existsSync(join(cwd, adopted.installed[0]))).toBe(true);
+    expect(existsSync(join(cwd, ".graphkit", "memory", adopted.artifact))).toBe(false);
   });
 });
 
