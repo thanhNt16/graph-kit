@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- `gk selflearn record --stdin` now appends piped episode lines, skips blank lines, and reports empty input instead of ignoring stdin. `--record` remains supported and can be combined with stdin.
+
 ## [0.3.43] - 2026-10-12
 ### Fixed
 - CHANGELOG version heading aligned with the release tag (no code changes).

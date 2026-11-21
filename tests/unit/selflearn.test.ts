@@ -213,6 +213,44 @@ describe("index", () => {
   });
 });
 
+describe("selflearn record CLI", () => {
+  async function record(args: string[], input = "") {
+    const proc = Bun.spawn(
+      ["bun", join(import.meta.dir, "..", "..", "src", "index.ts"), "selflearn", "record", ...args],
+      { cwd, stdin: new Blob([input]), stdout: "pipe", stderr: "pipe" },
+    );
+    const output = JSON.parse(await new Response(proc.stdout).text());
+    return { output, exitCode: await proc.exited };
+  }
+
+  test("records piped lines and skips blank lines", async () => {
+    const result = await record(["--session", "stdin", "--stdin"], "first lesson\r\n\nsecond lesson\n");
+    expect(result.output).toEqual({ status: "ok", data: { appended: 2 } });
+    expect(result.exitCode).toBe(0);
+    expect(readEpisodeTail(cwd, "stdin")).toBe("first lesson\nsecond lesson\n");
+  });
+
+  test("keeps --record working alongside stdin", async () => {
+    const args = ["--session", "args", "--record", "argument lesson"];
+    expect((await record(args)).output).toEqual({ status: "ok", data: { appended: 1 } });
+    expect((await record([...args, "--stdin"], "piped lesson\n")).output).toEqual({
+      status: "ok",
+      data: { appended: 2 },
+    });
+    expect(readEpisodeTail(cwd, "args")).toBe("argument lesson\nargument lesson\npiped lesson\n");
+  });
+
+  test.each(["", " \r\n\t\n"])("rejects empty stdin %j without writing an episode", async (input) => {
+    const result = await record(["--session", "empty", "--stdin"], input);
+    expect(result.exitCode).toBe(1);
+    expect(result.output).toEqual({
+      status: "fail",
+      error: { code: "MISSING_ARG", message: "selflearn record requires --record <text> or non-empty --stdin" },
+    });
+    expect(readEpisodeTail(cwd, "empty")).toBe("");
+  });
+});
+
 describe("reflect trigger", () => {
   test("counter crosses SELFLEARN_REFLECT_EVERY_N → sticky reflect_due", () => {
     process.env.SELFLEARN_REFLECT_EVERY_N = "3";
