@@ -63,6 +63,12 @@ export const LearnProposalSchema = z.strictObject({
       kit_regen: z.string(),
       // The learned artifact landed in the memory store (.graphkit/memory/<id>.md).
       artifact: z.string().optional(),
+      undo: z
+        .strictObject({
+          skills: z.record(z.string(), z.base64().nullable()),
+          artifact: z.base64().nullable(),
+        })
+        .optional(),
       // Advisory lint findings recorded at adopt (hard findings blocked it).
       lint: z.array(LintFindingSchema).default([]),
     })

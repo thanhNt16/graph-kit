@@ -207,7 +207,7 @@ gk learn evaluate learn-<run-id>
 gk learn adopt learn-<run-id>     # only when status: evaluated and every
                                   # effective verdict passes (LEARN_FAILING)
 gk learn reject learn-<run-id> --reason "fix costs more than the failure"
-gk learn revert learn-<run-id>    # uninstall an adopted skill, status: reverted
+gk learn revert learn-<run-id>    # undo the skill install and learned memory change
 gk learn list                     # all proposals with status
 ```
 
@@ -226,8 +226,11 @@ gk learn list                     # all proposals with status
   `proposes.skill_path` installs to `kits/_core/skills/<name>/SKILL.md` and
   re-runs the kit generator when `scripts/gen-kits.ts` exists
   (`adopted.kit_regen` records `ok` / `failed:*` / `needed` / `skipped`).
-* `revert` removes the installed files and marks the proposal `reverted`, so
-  adoption is always undoable.
+* `revert` restores the previous canonical skill and live memory artifact,
+  or removes them if adoption created them, then marks the proposal
+  `reverted`. Adoptions recorded without an undo snapshot leave the skill
+  file in place because its previous state is unknown; revert still removes
+  the recorded live learned artifact.
 
 ## Learned-artifact lifecycle
 

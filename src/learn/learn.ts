@@ -374,11 +374,9 @@ export interface AdoptResult {
 /** Land the adopted proposal into `.graphkit/memory/<id>.md` — the store the
  *  adherence lifecycle bounds. First adoption anchors at the current recall
  *  request index; a re-adopt onto an existing file is a revision → patch++. */
-function upsertLearnedArtifact(cwd: string, proposal: LearnProposal, installed: string[], now: string): string {
-  const memDir = join(cwd, ".graphkit", "memory");
+function upsertLearnedArtifact(path: string, proposal: LearnProposal, installed: string[], now: string): void {
+  const memDir = dirname(path);
   mkdirSync(memDir, { recursive: true });
-  const file = `${proposal.id}.md`;
-  const path = join(memDir, file);
   const prior = existsSync(path) ? readMemoryFile(path) : null;
   const priorAdherence = prior ? AdherenceSchema.safeParse(prior.fm.adherence) : null;
   const adherence: Adherence =
@@ -412,7 +410,13 @@ function upsertLearnedArtifact(cwd: string, proposal: LearnProposal, installed: 
     .filter((l): l is string => l != null)
     .join("\n");
   writeMemoryFile(path, frontmatter, body);
-  return file;
+}
+
+const snapshotFile = (path: string): string | null => (existsSync(path) ? readFileSync(path).toString("base64") : null);
+
+function restoreFile(path: string, contents: string): void {
+  mkdirSync(dirname(path), { recursive: true });
+  writeFileSync(path, Buffer.from(contents, "base64"));
 }
 
 export function adoptProposal(cwd: string, id: string): AdoptResult {
@@ -458,6 +462,10 @@ export function adoptProposal(cwd: string, id: string): AdoptResult {
   }
 
   const installed: string[] = [];
+  const previousSkills: Record<string, string | null> = {};
+  const artifact = `${proposal.id}.md`;
+  const artifactPath = join(cwd, ".graphkit", "memory", artifact);
+  const previousArtifact = snapshotFile(artifactPath);
   let kitRegen = "skipped";
   const skillPath = proposal.proposes?.skill_path;
   if (skillPath) {
@@ -466,9 +474,11 @@ export function adoptProposal(cwd: string, id: string): AdoptResult {
       throw new GraphKitError("LEARN_SKILL_MISSING", `proposed skill file ${skillPath} does not exist`);
     const name = basename(src) === "SKILL.md" ? basename(dirname(src)) : slugify(basename(src).replace(/\.[^.]+$/, ""));
     const dest = join(cwd, "kits", "_core", "skills", name, "SKILL.md");
+    const rel = dest.slice(cwd.length + 1);
+    previousSkills[rel] = snapshotFile(dest);
     mkdirSync(dirname(dest), { recursive: true });
     cpSync(src, dest);
-    installed.push(dest.slice(cwd.length + 1));
+    installed.push(rel);
 
     kitRegen = "needed";
     const genScript = join(cwd, "scripts", "gen-kits.ts");
@@ -484,12 +494,19 @@ export function adoptProposal(cwd: string, id: string): AdoptResult {
   }
 
   const now = new Date().toISOString();
-  const artifact = upsertLearnedArtifact(cwd, proposal, installed, now);
+  upsertLearnedArtifact(artifactPath, proposal, installed, now);
 
   const next: LearnProposal = {
     ...proposal,
     status: "adopted",
-    adopted: { at: now, installed, kit_regen: kitRegen, artifact, lint },
+    adopted: {
+      at: now,
+      installed,
+      kit_regen: kitRegen,
+      artifact,
+      lint,
+      undo: { skills: previousSkills, artifact: previousArtifact },
+    },
   };
   recordVerdict(cwd, {
     proposal: id,
@@ -530,15 +547,28 @@ export function revertProposal(
       `proposal "${id}" is ${proposal.status} — only an adopted proposal can be reverted`,
       { status: proposal.status },
     );
+  const adopted = proposal.adopted;
   const removed: string[] = [];
-  for (const rel of proposal.adopted?.installed ?? []) {
+  for (const rel of adopted?.installed ?? []) {
+    const previous = adopted?.undo?.skills[rel];
+    if (previous === undefined) continue;
     const p = join(cwd, rel);
-    if (existsSync(p)) {
+    if (previous !== null) {
+      restoreFile(p, previous);
+    } else if (existsSync(p)) {
       rmSync(p, { force: true });
       removed.push(rel);
       // Drop the skill dir when the installed file was its only member.
       if (existsSync(dirname(p)) && readdirSync(dirname(p)).length === 0) rmSync(dirname(p), { recursive: true });
     }
+  }
+  const artifact = `${proposal.id}.md`;
+  const artifactPath = join(cwd, ".graphkit", "memory", artifact);
+  const previousArtifact = adopted?.undo?.artifact;
+  if (previousArtifact != null) {
+    restoreFile(artifactPath, previousArtifact);
+  } else if (adopted?.artifact === artifact) {
+    rmSync(artifactPath, { force: true });
   }
   const next: LearnProposal = {
     ...proposal,
