@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- Queue adds reject dependency cycles (including self-dependencies and transitive cycles on failed-task retries) with `QUEUE_DEP_CYCLE` and a cycle path, preserving the existing item on rejection.
+
 ## [0.3.43] - 2026-10-12
 ### Fixed
 - CHANGELOG version heading aligned with the release tag (no code changes).

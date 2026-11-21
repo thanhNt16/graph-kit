@@ -160,6 +160,45 @@ describe("queue store", () => {
     expect(readded.state).toBe("queued");
   });
 
+  test.each([
+    ["self", ["task-a"], ["task-a", "task-a"]],
+    ["direct", ["task-b"], ["task-a", "task-b", "task-a"]],
+    ["transitive", ["task-c"], ["task-a", "task-c", "task-b", "task-a"]],
+  ])("rejects %s dependency cycles on re-add without changing the failed item", (_name, deps, cycle) => {
+    addTask(dir, TASK_A);
+    addTask(dir, TASK_B);
+    addTask(dir, { id: "task-c", objective: "ship", depends_on: ["task-b"] });
+    const failed = failTask(dir, "task-a");
+    try {
+      addTask(dir, { ...TASK_A, depends_on: deps });
+      expect.unreachable();
+    } catch (e) {
+      expect((e as GraphKitError).code).toBe("QUEUE_DEP_CYCLE");
+      expect((e as GraphKitError).details?.cycle).toEqual(cycle);
+    }
+    expect(readItem(dir, "task-a")).toEqual(failed);
+    expect(claimTask(dir, "worker")).toBeNull();
+  });
+
+  test("re-add permits changed acyclic dependencies with shared ancestors", () => {
+    addTask(dir, TASK_A);
+    addTask(dir, { id: "root", objective: "root", depends_on: [] });
+    addTask(dir, { id: "left", objective: "left", depends_on: ["root"] });
+    addTask(dir, { id: "right", objective: "right", depends_on: ["root"] });
+    failTask(dir, "task-a");
+    expect(addTask(dir, { ...TASK_A, depends_on: ["left", "right"] }).depends_on).toEqual(["left", "right"]);
+  });
+
+  test("new tasks reject self-dependency as a cycle", () => {
+    try {
+      addTask(dir, { ...TASK_A, depends_on: ["task-a"] });
+      expect.unreachable();
+    } catch (e) {
+      expect((e as GraphKitError).code).toBe("QUEUE_DEP_CYCLE");
+      expect((e as GraphKitError).details?.cycle).toEqual(["task-a", "task-a"]);
+    }
+  });
+
   test("status reports counts, the item table, and blockers", () => {
     addTask(dir, TASK_A);
     addTask(dir, TASK_B);
