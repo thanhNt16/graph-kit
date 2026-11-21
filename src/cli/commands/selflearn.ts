@@ -1,4 +1,4 @@
-import { existsSync, readdirSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { CAC } from "cac";
 import { GraphKitError } from "../../errors.js";
@@ -119,8 +119,15 @@ export function registerSelflearnCommand(cli: CAC) {
         if (subcommand === "record") {
           if (!needSession()) return;
           const records = opts.record ? [String(opts.record)] : [];
-          if (!records.length) {
-            emit(fail("MISSING_ARG", "selflearn record requires --record <text>"));
+          if (opts.stdin) {
+            records.push(
+              ...readFileSync(0, "utf-8")
+                .split(/\r?\n/)
+                .filter((line) => line.trim()),
+            );
+          }
+          if (!records.some((record) => record.trim())) {
+            emit(fail("MISSING_ARG", "selflearn record requires --record <text> or non-empty --stdin"));
             return;
           }
           emit(ok({ appended: recordEpisode(cwd, String(opts.session), records) }));
