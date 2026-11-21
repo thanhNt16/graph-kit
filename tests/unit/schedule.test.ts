@@ -175,6 +175,14 @@ describe("schedule emitters", () => {
     expect(steps.some((r: string) => r.includes("gk exec 'graph.yaml'"))).toBe(true);
   });
 
+  test.each(["nightly: audit", 'audit "nightly" \\ reports', "nightly\naudit"])(
+    "github-actions preserves workflow name for graph %j",
+    (name) => {
+      const out = emitSchedule(schedule, "github-actions", "graph.yaml", name);
+      expect(YAML.parse(out).name).toBe(`gk scheduled — ${name}`);
+    },
+  );
+
   test("cron emits a 5-field crontab line plus command", () => {
     const out = emitSchedule(schedule, "cron", "graph.yaml", "nightly-audit");
     const line = out

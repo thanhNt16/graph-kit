@@ -169,7 +169,7 @@ export function assertScheduleRef(graphRef: string): void {
 const REPO_PLACEHOLDER = "/ABS/PATH/TO/REPO";
 
 function yamlQuote(s: string): string {
-  return `"${s.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
+  return JSON.stringify(s);
 }
 
 function emitGithubActions(schedule: Schedule, graphRef: string, graphName: string): string {
@@ -177,7 +177,7 @@ function emitGithubActions(schedule: Schedule, graphRef: string, graphName: stri
 # Commit as .github/workflows/gk-scheduled.yml.
 # Secrets and repo-specific setup (private registries, host-kit install,
 # service credentials) belong to the host repo — add them to env:/steps below.
-name: gk scheduled — ${graphName}
+name: ${yamlQuote(`gk scheduled — ${graphName}`)}
 
 on:
   schedule:
