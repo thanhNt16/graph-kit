@@ -175,7 +175,10 @@ Guarantees that make it safe to run unattended:
   may be re-queued.)
 * **Dependency order.** `claim` hands out the *oldest* queued item whose
   `depends_on` are all `done`; `depends_on` must reference known ids at add
-  time (`QUEUE_UNKNOWN_DEP`). A blocked head never starves later ready work.
+  time (`QUEUE_UNKNOWN_DEP`). Adds, including retries of failed tasks, reject
+  dependency cycles and self-dependencies (`QUEUE_DEP_CYCLE`); error details
+  include the closed task-id path in `cycle`. A rejected retry leaves the
+  failed item unchanged. A blocked head never starves later ready work.
 * **Atomic claims.** Read-modify-write runs inside the same mkdir lock the
   feature list uses, so two workers can never claim the same item. An empty
   queue is not an error: `claim` emits `{claimed: null}`.

@@ -174,7 +174,25 @@ export function addTask(dir: string, input: QueueTaskInput): QueueItem {
         existing_state: dupe.state,
       });
     }
-    const unknown = input.depends_on.filter((dep) => !items.some((i) => i.id === dep));
+    const byId = new Map(items.map((i) => [i.id, i]));
+    const visited = new Set<string>();
+    const path = [id];
+    const visit = (dep: string): void => {
+      path.push(dep);
+      if (dep === id) {
+        throw new GraphKitError("QUEUE_DEP_CYCLE", `dependency cycle: ${path.join(" -> ")}`, {
+          id,
+          cycle: [...path],
+        });
+      }
+      if (!visited.has(dep)) {
+        visited.add(dep);
+        for (const next of byId.get(dep)?.depends_on ?? []) visit(next);
+      }
+      path.pop();
+    };
+    for (const dep of input.depends_on) visit(dep);
+    const unknown = input.depends_on.filter((dep) => !byId.has(dep));
     if (unknown.length > 0) {
       throw new GraphKitError("QUEUE_UNKNOWN_DEP", `depends_on references unknown task ids: ${unknown.join(", ")}`, {
         id,
